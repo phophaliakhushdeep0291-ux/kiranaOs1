@@ -95,6 +95,14 @@ remote support read.
 - A finished sync announces itself on `kirana:local-data-changed`, the same
   channel a local edit uses. Treating that as fresh work schedules another sync,
   which announces itself — a loop. Filter on `detail.type === "sync"`.
+- So does every outbox status write a push makes, on `kirana:sync-queue-updated`:
+  `SYNCING` before the request, then `SYNCED`, `FAILED`, `CONFLICT` or a deferred
+  `PENDING`. Untagged, each one scheduled a cycle with nothing to send — two per
+  push attempt from the two listeners, twice the traffic against a server that was
+  already failing. They carry `type: "sync"` too, so the same filter skips them
+  while counts and pages still refresh. The exception is a write that leaves a row
+  due — `PENDING` with no deferral, a requeue — which is work, goes out untagged,
+  and must keep prompting a sync.
 - `shouldPassSharedThrottle` **consumes** its token when it passes. Take it only
   once you know you will do the work, or you lock every other tab out for the
   interval having done nothing.
