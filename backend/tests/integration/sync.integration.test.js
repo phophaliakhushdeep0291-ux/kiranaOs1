@@ -110,6 +110,20 @@ if (ctx.skip) {
       assert.equal(count, 1, "exactly one product should exist after the retried create");
     });
 
+    test("CREATE_PRODUCT under a name another product holds is still a conflict", async () => {
+      // A replay converges on its own product by client identity. That must not
+      // let a DIFFERENT offline product through under a name already taken.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      await createProduct(ctx.db, tenant.shop.id, { name: "Parle-G Biscuit" });
+      const data = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{ eventId: "create-product-taken-name", type: "CREATE_PRODUCT", payload: { localProductId: "local_prod_other", product: productPayload({ name: "Parle-G Biscuit" }), ownerPin: "1234" } }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      assert.equal(data.summary.conflicts, 1, JSON.stringify(data.results));
+      assert.equal(data.results[0].code, "PRODUCT_NAME_DUPLICATE");
+      assert.equal(await ctx.db.product.count({ where: { shopId: tenant.shop.id, name: "Parle-G Biscuit", deletedAt: null } }), 1);
+    });
+
     test("sync push CREATE_CUSTOMER works", async () => {
       const { ownerAuth, deviceHeaders } = await ownerCtx();
       const followup = { udharLimit: 1500.25, dueDate: "2026-09-15", promiseToPayDate: "2026-09-12", notes: "Offline follow-up" };

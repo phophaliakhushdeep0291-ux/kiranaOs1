@@ -125,21 +125,23 @@ if (ctx.skip) {
       }), 1);
     });
 
-    test("one offline product pushed twice at once converges on one product", async () => {
-      // The same queued product sent by two overlapping pushes under different
-      // event ids. The loser must resolve to the winner's product. A 409 here
-      // would be recorded as a sync conflict and parked for the shopkeeper.
+    // One product queued offline, and a push of it under a given event id. Two
+    // overlapping pushes send it under different event ids; the loser must
+    // resolve to the winner's product. A 409 here would be recorded as a sync
+    // conflict and parked for the shopkeeper.
+    async function queuedOfflineProduct(name) {
       const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
       const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
       const device = await activateDeviceViaApi(ctx, auth.accessToken, { deviceId: "race-device" });
       const options = { token: auth.accessToken, headers: { "x-device-id": device.deviceId } };
-      const product = productPayload({ name: "Race Rusk 200g" });
+      const product = productPayload({ name });
       const push = (eventId) => ctx.post("/api/sync/push", {
         events: [{ eventId, type: "CREATE_PRODUCT", payload: { localProductId: "local_prod_race", product, ownerPin: "1234" } }],
       }, options);
+      return { tenant, push };
+    }
 
-      const responses = await Promise.all([push("create-product-race-1"), push("create-product-race-2")]);
-
+    async function assertConvergedOnOneProduct(tenant, name, responses) {
       const serverIds = responses.map((response) => {
         const data = assertSuccess(response);
         assert.equal(data.summary.conflicts, 0, JSON.stringify(data.results));
@@ -148,7 +150,48 @@ if (ctx.skip) {
       });
       assert.ok(serverIds[0]);
       assert.equal(serverIds[1], serverIds[0], "both pushes must map the local product onto the same server product");
-      assert.equal(await ctx.db.product.count({ where: { shopId: tenant.shop.id, name: "Race Rusk 200g", deletedAt: null } }), 1);
+      assert.equal(await ctx.db.product.count({ where: { shopId: tenant.shop.id, name, deletedAt: null } }), 1);
+    }
+
+    test("one offline product pushed twice at once converges on one product", async () => {
+      const { tenant, push } = await queuedOfflineProduct("Race Rusk 200g");
+      const responses = await Promise.all([push("create-product-race-1"), push("create-product-race-2")]);
+      await assertConvergedOnOneProduct(tenant, "Race Rusk 200g", responses);
+    });
+
+    test("a push whose twin commits between its replay lookup and its name check converges", async () => {
+      // The schedule the race above only sometimes draws (release certification
+      // run 34493467939), forced. Push 1 looks its product up by client identity
+      // and finds nothing; push 2 then creates it; push 1's pre-transaction name
+      // check finds that product under the same name. The reads stay real reads:
+      // push 1's name check is only held until push 2 has committed.
+      const { tenant, push } = await queuedOfflineProduct("Held Rusk 200g");
+      const products = ctx.db.product;
+      const originalFindMany = products.findMany;
+      // createProduct's pre-transaction name check reads every active product's name.
+      const isNameCheck = (args) => args?.select?.name === true
+        && args.where?.shopId === tenant.shop.id
+        && args.where.deletedAt === null
+        && Object.keys(args.where).length === 2;
+      let twin = null;
+      products.findMany = async (args) => {
+        if (!twin && isNameCheck(args)) {
+          twin = push("create-product-held-2");
+          const outcome = await Promise.race([twin.then(() => "done"), delay(10_000, "timeout", { ref: false })]);
+          if (outcome === "timeout") throw new Error("push 2 never finished while push 1 waited at its name check");
+        }
+        return originalFindMany.call(products, args);
+      };
+
+      let first;
+      try {
+        first = await push("create-product-held-1");
+      } finally {
+        products.findMany = originalFindMany;
+      }
+
+      assert.ok(twin, "push 1 never reached its name check, so nothing was interleaved");
+      await assertConvergedOnOneProduct(tenant, "Held Rusk 200g", [first, await twin]);
     });
   });
 }
