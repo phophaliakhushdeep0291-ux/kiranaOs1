@@ -7,7 +7,7 @@ const storedDraft = z.object({
   draft: z.object({
     outputs: z.array(quantity).min(1).max(50), materials: z.record(z.array(quantity).min(1).max(50)),
     batch: z.string().max(80), manufacturedOn: z.string().max(10), expiresOn: z.string().max(10),
-    qcStatus: z.enum(["passed", "conditional"]), notes: z.string().max(1000),
+    qcStatus: z.enum(["passed", "conditional", "failed"]), notes: z.string().max(1000),
   }),
 });
 export type DraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;

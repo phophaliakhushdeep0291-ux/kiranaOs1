@@ -140,6 +140,7 @@ function stampServiceWorkerBuild() {
           "src/features/verticals/restaurant/pages/MenuPage.tsx",
           "src/features/verticals/restaurant/pages/KitchenStockPage.tsx",
         ],
+        manufacturing: ["src/features/verticals/manufacturing/pages/ManufacturingPage.tsx"],
       };
       const verticalAssets = Object.fromEntries(Object.entries(verticalEntries).map(([id, entries]) => {
         const assets = new Set<string>();
