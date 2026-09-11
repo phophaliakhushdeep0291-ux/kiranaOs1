@@ -29,6 +29,13 @@ dev.db
 .claude/
 .DS_Store
 
+# `vercel link` writes the linked project and organization ids here. It is local
+# linkage to a Vercel project rather than product source, and it lands untracked
+# in whichever directory the CLI was run from — the repository root or frontend/,
+# which is this project's Vercel Root Directory — where a `git add -A` sweeps it
+# into an unrelated commit. Unanchored so it matches at either depth.
+.vercel/
+
 # One-off local probes and deployment-trigger marker files are never product
 # source. Keep their reusable scripts under scripts/ instead.
 __qa_*
