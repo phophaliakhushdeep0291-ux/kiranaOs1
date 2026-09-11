@@ -11,8 +11,27 @@ import { createCustomer, createProduct, createStaff, createTenant, login, unique
 import { moneyShadows } from "../../src/utils/money.js";
 import { ENTITY_TYPES, FINDING_STATUS } from "../../src/modules/assurance/assurance.constants.js";
 import { flushAuditQueue, setTransactionTriggeredEnabled } from "../../src/modules/assurance/assurance.hooks.js";
+import { getQueue, isQueueEnabled } from "../../src/lib/queue.js";
+import { JOB_NAMES, QUEUE_NAMES } from "../../src/workers/queueNames.js";
+import { handleAssuranceJob } from "../../src/workers/assurance.worker.js";
 
 const ctx = await createIntegrationContext();
+
+// With Redis configured — as in CI and production — the post-commit hook hands
+// each evaluation to a durable BullMQ job instead of the in-process FIFO, and
+// nothing in this process consumes that queue. Run the jobs this shop's commit
+// actually enqueued through the worker's own handler, as the worker would.
+async function runDurableAssuranceJobs(shopId) {
+  const queue = isQueueEnabled() ? await getQueue(QUEUE_NAMES.assuranceQueue) : null;
+  if (!queue) return 0;
+  const jobs = (await queue.getJobs(["waiting", "delayed"], 0, -1))
+    .filter((job) => job.name === JOB_NAMES.RUN_TRANSACTION_ASSURANCE && job.data?.shopId === shopId);
+  for (const job of jobs) {
+    await handleAssuranceJob(job);
+    await job.remove();
+  }
+  return jobs.length;
+}
 
 if (ctx.skip) {
   test("assurance API integration tests skipped", { skip: ctx.reason }, () => {});
@@ -523,15 +542,15 @@ function runSuite() {
 
     // The response did not wait for the audit engine.
     await flushAuditQueue();
+    await runDurableAssuranceJobs(shop.id);
 
-    const run = await ctx.db.auditRun.findFirst({
-      where: { shopId: shop.id, runType: "TRANSACTION_TRIGGERED" },
-      orderBy: { createdAt: "desc" },
-    });
-    assert.ok(run, "a TRANSACTION_TRIGGERED run should have been created after the commit");
-    assert.equal(run.status, "COMPLETED");
+    // The in-process FIFO batches a commit's entities into one run; the durable
+    // path runs one job, and so one run, per entity. Look across both shapes.
+    const runs = await ctx.db.auditRun.findMany({ where: { shopId: shop.id, runType: "TRANSACTION_TRIGGERED" } });
+    assert.ok(runs.length > 0, "a TRANSACTION_TRIGGERED run should have been created after the commit");
+    for (const run of runs) assert.equal(run.status, "COMPLETED");
     const evaluation = await ctx.db.auditEvaluation.findFirst({
-      where: { auditRunId: run.id, sourceEntityType: ENTITY_TYPES.BILL, sourceEntityId: bill.id },
+      where: { auditRunId: { in: runs.map((run) => run.id) }, sourceEntityType: ENTITY_TYPES.BILL, sourceEntityId: bill.id },
     });
     assert.ok(evaluation, "the committed bill was evaluated");
     // A well-formed sale through the real API should be clean.

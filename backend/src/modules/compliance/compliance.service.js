@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { getDateRange } from "../../utils/dates.js";
@@ -53,7 +54,7 @@ export async function assignHsnToCategory(shopId, input, actor = {}, req = null)
   if (!validateHsn(input.hsn).valid) throw new AppError("HSN must contain 4, 6 or 8 digits", 400, "INVALID_HSN");
   const where = { shopId, deletedAt: null, category: input.category };
   const gstRate = Number(input.gstRate);
-  const result = await db.$transaction(async (tx) => {
+  const result = await serializableTransaction(async (tx) => {
     const updated = await tx.product.updateMany({ where, data: { hsn: input.hsn, gstRate } });
     if (updated.count === 0) throw new AppError("No active products were found in that category", 404, "PRODUCT_CATEGORY_EMPTY");
     await writeRequiredComplianceAudit(tx, {
@@ -66,7 +67,7 @@ export async function assignHsnToCategory(shopId, input, actor = {}, req = null)
       req,
     });
     return updated;
-  }, { isolationLevel: "Serializable" });
+  });
   return { updatedProducts: result.count, category: input.category, hsn: input.hsn, gstRate };
 }
 

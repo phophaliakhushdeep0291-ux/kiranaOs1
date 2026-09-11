@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { DEFAULT_REMINDER_TEMPLATES, validateTemplateVariables } from "./reminderFormatter.js";
@@ -49,32 +50,32 @@ export async function getReminderTemplate(shopId, id) {
 
 export async function createReminderTemplate(shopId, userId, data, { req = null } = {}) {
   validateTemplateVariables(data.templateText);
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const template = await tx.reminderTemplate.create({
       data: { shopId, createdByUserId: userId, active: data.active ?? true, name: data.name, channel: data.channel, templateText: data.templateText },
     });
     await writeRequiredReminderTemplateAudit(tx, { shopId, userId, action: "REMINDER_TEMPLATE_CREATED", entityType: "ReminderTemplate", entityId: template.id, metadata: { channel: template.channel, name: template.name }, req });
     return template;
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 export async function updateReminderTemplate(shopId, id, userId, data, { req = null } = {}) {
   if (data.templateText) validateTemplateVariables(data.templateText);
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const existing = await tx.reminderTemplate.findFirst({ where: { id, shopId, deletedAt: null } });
     if (!existing) throw appError("Reminder template not found", 404, "REMINDER_TEMPLATE_NOT_FOUND");
     const template = await tx.reminderTemplate.update({ where: { id: existing.id }, data });
     await writeRequiredReminderTemplateAudit(tx, { shopId, userId, action: "REMINDER_TEMPLATE_UPDATED", entityType: "ReminderTemplate", entityId: id, before: { channel: existing.channel, active: existing.active, name: existing.name }, after: { channel: template.channel, active: template.active, name: template.name }, req });
     return template;
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 export async function deleteReminderTemplate(shopId, id, userId, { req = null } = {}) {
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const existing = await tx.reminderTemplate.findFirst({ where: { id, shopId, deletedAt: null } });
     if (!existing) throw appError("Reminder template not found", 404, "REMINDER_TEMPLATE_NOT_FOUND");
     const template = await tx.reminderTemplate.update({ where: { id: existing.id }, data: { deletedAt: new Date(), active: false } });
     await writeRequiredReminderTemplateAudit(tx, { shopId, userId, action: "REMINDER_TEMPLATE_DELETED", entityType: "ReminderTemplate", entityId: id, before: { active: existing.active, deletedAt: existing.deletedAt }, after: { active: false, deletedAt: template.deletedAt }, metadata: { channel: existing.channel, softDelete: true }, req });
     return template;
-  }, { isolationLevel: "Serializable" });
+  });
 }

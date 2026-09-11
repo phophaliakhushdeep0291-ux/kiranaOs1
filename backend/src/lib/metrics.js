@@ -37,6 +37,7 @@ const KNOWN_METRICS = [
   "storage_ready_status",
   "worker_ready_status",
   "worker_heartbeat_age_ms",
+  "db_write_conflicts_total",
 ];
 
 const FORBIDDEN_LABELS = new Set(["shopId", "userId", "deviceId", "customerId", "token", "phone", "mobile", "email"]);
@@ -171,6 +172,12 @@ export function recordWebhookDelivery({ eventType, status, durationMs }) {
 
 export function recordWebhookQueueDispatch(status) {
   incrementMetric("webhook_queue_dispatch_total", { status });
+}
+
+// "retried" is PostgreSQL doing its job; a rising "exhausted" is a hot spot
+// answering 503 and worth finding.
+export function recordWriteConflict(outcome) {
+  incrementMetric("db_write_conflicts_total", { outcome });
 }
 
 export function getMetricsSnapshot() {

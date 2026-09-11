@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { evaluatePricing, RULE_TYPE_PRIORITY } from "./pricing-engine.js";
@@ -344,7 +345,7 @@ export async function createRule(shopId, input, actor = {}) {
   actor = normalizeActor(actor);
   validateRuleInput(input);
   const priority = input.priority ?? RULE_TYPE_PRIORITY[input.ruleType] ?? 0;
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     if (input.locationId) await assertLocationCapability({ shopId, userId: actor.userId, role: actor.role, locationId: input.locationId, capability: "inventory", client: tx });
     await assertRuleReferences(shopId, input, null, tx);
     const rule = await tx.pricingRule.create({
@@ -381,12 +382,12 @@ export async function createRule(shopId, input, actor = {}) {
       after: ruleAuditSnapshot(rule), metadata: { ruleType: rule.ruleType, name: rule.name },
     }, tx);
     return rule;
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 export async function updateRule(shopId, ruleId, input, actor = {}) {
   actor = normalizeActor(actor);
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const existing = await tx.pricingRule.findFirst({ where: { id: ruleId, shopId } });
     if (!existing) throw new AppError("Pricing rule not found", 404);
     const merged = { ...existing, ...input, ruleType: input.ruleType ?? existing.ruleType };
@@ -408,7 +409,7 @@ export async function updateRule(shopId, ruleId, input, actor = {}) {
       before: ruleAuditSnapshot(existing), after: ruleAuditSnapshot(rule), metadata: { changed: Object.keys(data) },
     }, tx);
     return rule;
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 /** Soft delete — archive (never hard-delete; historical bills reference rule ids). */

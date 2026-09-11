@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
@@ -91,7 +92,7 @@ export async function listCustomerOrders(shopId, { status, sourceChannel, paymen
 export async function updateCustomerOrderStatus(shopId, orderId, { status, paymentStatus, billId, acceptanceKey, locationId, actor = {} } = {}) {
   if (status && !ORDER_STATUSES.includes(status)) throw new AppError("Invalid order status", 400);
   if (paymentStatus && !PAYMENT_STATUSES.includes(paymentStatus)) throw new AppError("Invalid payment status", 400);
-  const result = await db.$transaction(async (tx) => {
+  const result = await serializableTransaction(async (tx) => {
     const existing = await tx.customerOrder.findFirst({ where: { id: orderId, shopId, ...(locationId ? { locationId } : {}) } });
     if (!existing) throw new AppError("Order not found", 404);
     // A persisted client operation key owns the local bill import. Do not expose
@@ -186,7 +187,7 @@ export async function updateCustomerOrderStatus(shopId, orderId, { status, payme
       updatedAt: updated.updatedAt,
     }, { client: tx });
     return { order: updated, deliveries };
-  }, { isolationLevel: "Serializable" });
+  });
 
   await dispatchIntegrationDeliveries(result.deliveries);
   return shapeOrder(result.order);

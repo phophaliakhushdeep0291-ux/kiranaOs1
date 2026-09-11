@@ -4,6 +4,7 @@ import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 import { recordReminderMetric, recordWhatsAppProviderError } from "../../lib/metrics.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 
@@ -249,7 +250,7 @@ function statusTimestampData(status, at) {
 }
 
 async function applyDeliveryEvent(event, fallbackReminderLogId = null) {
-  const outcome = await db.$transaction(async (tx) => {
+  const outcome = await serializableTransaction(async (tx) => {
     let reminder = await tx.reminderLog.findFirst({ where: { provider: event.provider, providerMessageId: event.providerMessageId } });
     const fallbackId = validReference(fallbackReminderLogId ?? event.reminderLogId);
     if (!reminder && fallbackId) {
@@ -290,7 +291,7 @@ async function applyDeliveryEvent(event, fallbackReminderLogId = null) {
       metadata: { customerId: reminder.customerId, channel: reminder.channel, provider: event.provider, status: event.status, errorCode: failureCode },
     });
     return { matched: true, advanced: true, reminderLogId: reminder.id, reminder, failureCode };
-  }, { isolationLevel: "Serializable" });
+  });
 
   if (!outcome.advanced) return outcome;
   recordReminderMetric({ status: event.status, provider: event.provider, channel: outcome.reminder.channel });

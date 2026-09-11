@@ -49,7 +49,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageShell, SyncBadge, TradeFocusStrip } from "@/components/shared";
 import { useAppLanguage } from "@/features/core/settings/i18n";
-import { useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { translateCategory, useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { getShopReportsProfile } from "@/features/core/settings/shop-reports";
 import { getExpenseSummary, listExpenses } from "@/features/core/expenses/api";
 import {
@@ -343,7 +343,7 @@ export default function ReportsPage() {
       },
       topCategory ? {
         tone: "amber" as const,
-        title: `${topCategory.name} contributes ${selected.sales ? Math.round((topCategory.revenue / selected.sales) * 100) : 0}% of total sales.`,
+        title: `${translateCategory(topCategory.name, t)} contributes ${selected.sales ? Math.round((topCategory.revenue / selected.sales) * 100) : 0}% of total sales.`,
         detail: "Review product margins and stock depth in this category.",
       } : null,
       {
@@ -352,7 +352,7 @@ export default function ReportsPage() {
         detail: "Follow up from Customers / Udhar to improve cash flow.",
       },
     ].filter(Boolean) as Array<{ tone: "green" | "amber" | "red"; title: string; detail: string }>;
-  }, [snapshot, selected, previous?.sales, paymentModes]);
+  }, [snapshot, selected, previous?.sales, paymentModes, t]);
 
   function exportReport() {
     if (!snapshot) return;
@@ -609,7 +609,7 @@ export default function ReportsPage() {
             <MobileReportRow
               key={row.productId}
               title={row.name}
-              subtitle={row.category}
+              subtitle={translateCategory(row.category, t)}
               value={fmt(row.revenue)}
               meta={`${row.quantitySold.toLocaleString("en-IN")} qty • ${row.marginPct.toFixed(1)}% margin`}
             />
@@ -666,7 +666,7 @@ export default function ReportsPage() {
 
       <section className="hidden items-start gap-4 md:grid xl:grid-cols-3">
         <DenseTable title={t(tradeProfile.topItemsKey)} action="View all" actionHref="/products" headers={["Product", "Category", "Qty Sold", "Sales (₹)", "Margin (%)"]} loading={loading} empty={!snapshot?.topProducts.length}>
-          {snapshot?.topProducts.slice(0, 5).map((row) => <tr key={row.productId}><Td strong>{row.name}</Td><Td>{row.category}</Td><Td right>{row.quantitySold}</Td><Td right strong>{fmt(row.revenue)}</Td><Td right>{row.marginPct.toFixed(1)}%</Td></tr>)}
+          {snapshot?.topProducts.slice(0, 5).map((row) => <tr key={row.productId}><Td strong>{row.name}</Td><Td>{translateCategory(row.category, t)}</Td><Td right>{row.quantitySold}</Td><Td right strong>{fmt(row.revenue)}</Td><Td right>{row.marginPct.toFixed(1)}%</Td></tr>)}
           {snapshot?.topProducts.length ? <tr className="font-bold"><Td>Total</Td><Td /><Td right>{snapshot.topProducts.reduce((sum, row) => sum + row.quantitySold, 0)}</Td><Td right>{fmt(snapshot.topProducts.reduce((sum, row) => sum + row.revenue, 0))}</Td><Td /></tr> : null}
         </DenseTable>
 

@@ -181,6 +181,39 @@ else {
     assert.equal((await ctx.db.inventoryLot.findUnique({ where: { id: f.lot.id } })).availableBaseQty, 20);
   });
 
+  test("an untracked product is refused when the order is created, not after it is confirmed", async () => {
+    const f = await fixture();
+    // The raw material has no batch tracking. Accepting it left an order that
+    // confirmed, then reported "insufficient batches" with the shelf full.
+    await assert.rejects(() => trade.createTradeOrder(f.shopId, { ...f.orderInput, orderNumber: "UNTRACKED", items: [{ productId: f.raw.id, quantity: 5, unitPrice: 10, lineDiscount: 0 }] }), { code: "TRADE_ORDER_BATCH_TRACKING_REQUIRED" });
+    assert.equal(await ctx.db.tradeOrder.count({ where: { shopId: f.shopId, orderNumber: "UNTRACKED" } }), 0);
+  });
+
+  test("tax invoice names the place of supply and splits GST by it; documents name each pack", async () => {
+    // Text runs are uncompressed; only PDF string escapes need undoing.
+    const pdfText = async (shopId, orderId, kind) => (await buildTradePdf(shopId, orderId, kind)).toString("latin1").replace(/\\([()\\])/g, "$1");
+    const local = await dispatchedFixture({ gstRate: 5 }); const actor = { ownerPinVerified: true, locationId: local.run.locationId };
+    await ctx.db.shop.update({ where: { id: local.shopId }, data: { gstNumber: "27AAPFU0939F1ZV" } });
+    const packing = await pdfText(local.shopId, local.order.id, "packing-list");
+    assert.match(packing, /\(bag\)/); assert.match(packing, /\(carton\)/);
+    await createTradeInvoice(local.shopId, local.order.id, { paymentMode: "bank", billType: "gst_invoice" }, actor);
+    const intrastate = await pdfText(local.shopId, local.order.id, "tax-invoice");
+    assert.match(intrastate, /Place of supply: 27 - Maharashtra/);
+    assert.match(intrastate, /CGST: INR 4\.50/); assert.match(intrastate, /SGST: INR 4\.50/);
+    assert.doesNotMatch(intrastate, /IGST: INR/);
+
+    const remote = await dispatchedFixture({ gstRate: 5 }); const remoteActor = { ownerPinVerified: true, locationId: remote.run.locationId };
+    await ctx.db.shop.update({ where: { id: remote.shopId }, data: { gstNumber: "27AAPFU0939F1ZV" } });
+    const buyer = await createCustomer(ctx.db, remote.shopId, { gstNumber: "29AABCS1429B1ZQ", stateCode: "29", address: "12 APMC Yard, Bengaluru" });
+    await createTradeInvoice(remote.shopId, remote.order.id, { paymentMode: "credit", billType: "gst_invoice", customerId: buyer.id }, remoteActor);
+    const interstate = await pdfText(remote.shopId, remote.order.id, "tax-invoice");
+    assert.match(interstate, /Place of supply: 29 - Karnataka/);
+    assert.match(interstate, /IGST: INR 9\.00/);
+    assert.doesNotMatch(interstate, /CGST: INR/);
+    // The buyer chosen at invoicing now supplies the packing list's ship-to.
+    assert.match(await pdfText(remote.shopId, remote.order.id, "packing-list"), /12 APMC Yard, Bengaluru/);
+  });
+
   test("counter payloads cannot skip stock and export accounting cannot silently book foreign prices as INR", async () => {
     const f = await dispatchedFixture(); const actor = { ownerPinVerified: true };
     await assert.rejects(() => confirmBill(f.shopId, {

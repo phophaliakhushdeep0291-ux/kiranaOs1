@@ -23,6 +23,7 @@ import { useListBills } from "@/features/core/bills/queries";
 import type { Bill, Product, ProductSellingUnit } from "@/lib/api/client";
 import { applyBindSheetPick, normalizeSearchText, productSearchText, productSellingPrice, resolveScanOutcome } from "../billing-calculations";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
+import { translateCategory } from "@/features/core/settings/business-types";
 import { ACTIVITY_EVENTS, trackEvent, useSearchTracking } from "@/lib/activity";
 import { lookupKnownProduct, type KnownProductDetails } from "@/features/core/products/product-knowledge";
 
@@ -681,7 +682,9 @@ export function BillingSearch({
               {visibleCategories.map((cat) => (
                 <CategoryChip
                   key={cat}
-                  label={cat}
+                  // Categories are stored as keys ("finished_goods"); the chip
+                  // printed the key, underscore and all, in either language.
+                  label={translateCategory(cat, t)}
                   active={selectedCategory === cat}
                   onClick={() => onSelectedCategoryChange(cat)}
                 />
