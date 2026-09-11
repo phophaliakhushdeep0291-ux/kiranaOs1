@@ -300,7 +300,19 @@ export async function createProduct(shopId, data, { identity = null, actor = {},
     if (existing) return deserializeProduct(existing);
   }
 
-  await assertNoActiveProductNameConflict(shopId, data.name);
+  try {
+    await assertNoActiveProductNameConflict(shopId, data.name);
+  } catch (error) {
+    // The product holding the name can be this request's own twin: the same
+    // queued product pushed under another event id, committed after the lookup
+    // above. Asked again, the identity finds it and the replay converges. With
+    // no identity, or a different product's identity, the refusal stands.
+    if (error?.code === "PRODUCT_NAME_DUPLICATE") {
+      const replayed = await findExistingProductByIdentity(db, shopId, productIdentity);
+      if (replayed) return deserializeProduct(replayed);
+    }
+    throw error;
+  }
 
   const { aliases, variantAxes, sellingUnits, attributes, baseUpdatedAt: _baseUpdatedAt, ...rawRest } = data;
   const normalizedUnits = normalizeSellingUnits(rawRest, sellingUnits);
