@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { manufacturingEn } from "@/features/core/settings/translations/manufacturing";
-import { completionPayload, initialCompletion, type RunDetails } from "@/features/verticals/manufacturing/production-run";
+import { completionPayload, initialCompletion, materialShortages, type RunDetails } from "@/features/verticals/manufacturing/production-run";
 
 function fixture(): RunDetails {
   return {
@@ -122,6 +122,33 @@ describe("production entry", () => {
     expect(() => completionPayload(details, draft)).toThrow("dates");
     draft.qcStatus = "passed";
     expect(() => completionPayload(details, draft)).toThrow("dates");
+  });
+});
+
+describe("planning against material stock", () => {
+  // The recipe makes 10 from 12 raw (+10% wastage) and 5 label, so a batch of
+  // 20 needs 26.4 raw and 10 label.
+  const bom = fixture().run.bom;
+  const stocked = (raw: number, label: number) => ([
+    { id: "raw", name: "Raw", baseUnit: "kg", stockBaseQty: raw },
+    { id: "label", name: "Label", baseUnit: "piece", stockBaseQty: label },
+  ] as RunDetails["products"]);
+
+  it("says nothing when the shop can cover the batch", () => {
+    expect(materialShortages(bom, 20, stocked(30, 10))).toEqual([]);
+  });
+  it("names each material that falls short, by how much", () => {
+    expect(materialShortages(bom, 20, stocked(20, 4))).toEqual([
+      { productId: "raw", name: "Raw", unit: "kg", needed: 26.4, available: 20, short: 6.4 },
+      { productId: "label", name: "Label", unit: "piece", needed: 10, available: 4, short: 6 },
+    ]);
+  });
+  it("treats a material the device has never cached as entirely missing", () => {
+    expect(materialShortages(bom, 10, [])).toMatchObject([{ productId: "raw", available: 0, short: 13.2 }, { productId: "label", available: 0, short: 5 }]);
+  });
+  it("stays quiet until there is a recipe and a real batch size to judge", () => {
+    expect(materialShortages(undefined, 20, stocked(0, 0))).toEqual([]);
+    for (const size of [0, -5, Number.NaN]) expect(materialShortages(bom, size, stocked(0, 0))).toEqual([]);
   });
 });
 

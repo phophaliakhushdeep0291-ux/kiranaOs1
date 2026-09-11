@@ -10,7 +10,7 @@ import { useOfflineStatus } from "@/features/core/sync";
 import { apiRequest } from "@/lib/api/http";
 import { useToast } from "@/hooks/use-toast";
 import type { Product } from "@/types/api";
-import { baseQuantity, completionPayload, newQuantityRow, plannedMaterial, totalQuantity, type CompletionDraft, type ProductionBom, type ProductionRun, type QuantityDraft, type RunDetails } from "../production-run";
+import { baseQuantity, completionPayload, materialShortages, newQuantityRow, plannedMaterial, totalQuantity, type CompletionDraft, type ProductionBom, type ProductionRun, type QuantityDraft, type RunDetails } from "../production-run";
 import { useProductionDraft } from "../use-production-draft";
 
 const selectClass = "h-11 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-sm font-normal";
@@ -63,7 +63,7 @@ export default function ProductionRuns({ runs, boms, products, loading }: { runs
       </article>)}
       {!runs.length && <p className="py-6 text-sm text-slate-500">{t(loading ? "manufacturing.production.loading" : "manufacturing.runs.empty")}</p>}
     </div>
-    <PlanRun open={planning} close={() => setPlanning(false)} boms={boms} outputUnit={outputUnit} saved={refreshed} />
+    <PlanRun open={planning} close={() => setPlanning(false)} boms={boms} products={products} outputUnit={outputUnit} saved={refreshed} />
     <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}><DialogContent className="max-h-[92vh] sm:max-w-2xl"><DialogHeader className="pr-10"><DialogTitle>{t("manufacturing.production.record")}</DialogTitle><DialogDescription>{selected?.runNumber} · {t("manufacturing.production.reviewActual")}</DialogDescription></DialogHeader>{selected && <LoadCompletion key={selected.id} run={selected} close={() => setSelected(null)} saved={refreshed} />}</DialogContent></Dialog>
     <Dialog open={!!releasing} onOpenChange={(open) => !open && !release.isPending && setReleasing(null)}><DialogContent><DialogHeader className="pr-8"><DialogTitle>{t("manufacturing.production.releaseTitle")}</DialogTitle><DialogDescription>{t("manufacturing.production.releaseHelp", { batch: releasing?.finishedBatchNumber || "" })}</DialogDescription></DialogHeader>
       <ErrorText error={release.error} />
@@ -76,7 +76,7 @@ export default function ProductionRuns({ runs, boms, products, loading }: { runs
   </section>;
 }
 
-function PlanRun({ open, close, boms, outputUnit, saved }: { open: boolean; close: () => void; boms: ProductionBom[]; outputUnit: (bomId: string) => string; saved: () => Promise<void> }) {
+function PlanRun({ open, close, boms, products, outputUnit, saved }: { open: boolean; close: () => void; boms: ProductionBom[]; products: Product[]; outputUnit: (bomId: string) => string; saved: () => Promise<void> }) {
   const { t } = useAppLanguage();
   const { isOnline } = useOfflineStatus();
   const [bomId, setBomId] = useState("");
@@ -86,11 +86,19 @@ function PlanRun({ open, close, boms, outputUnit, saved }: { open: boolean; clos
     mutationFn: () => apiRequest("/manufacturing/runs", { method: "POST", body: JSON.stringify({ bomId, runNumber: number.trim(), plannedOutputBaseQty: Number(amount) }) }),
     onSuccess: async () => { close(); setNumber(""); setAmount(""); setBomId(""); await saved(); },
   });
+  // Say up front what this batch size will run out of. Planning is still
+  // allowed: a shop routinely plans the run and then buys for it.
+  const shortages = materialShortages(boms.find((bom) => bom.id === bomId), Number(amount), products);
   return <Dialog open={open} onOpenChange={(value) => !value && !mutation.isPending && close()}><DialogContent><DialogHeader className="pr-8"><DialogTitle>{t("manufacturing.production.plan")}</DialogTitle><DialogDescription>{t("manufacturing.production.planHelp")}</DialogDescription></DialogHeader>
     <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}>
       <Field label={t("manufacturing.production.runNumber")}><Input value={number} onChange={(event) => setNumber(event.target.value)} required maxLength={64} className="h-11" /></Field>
       <Field label={t("manufacturing.production.recipe")}><select required className={selectClass} value={bomId} onChange={(event) => { setBomId(event.target.value); setAmount(String(boms.find((bom) => bom.id === event.target.value)?.outputQuantityBaseQty || "")); }}><option value="">{t("manufacturing.production.chooseRecipe")}</option>{boms.filter((bom) => bom.status === "active").map((bom) => <option key={bom.id} value={bom.id}>{bom.name}</option>)}</select></Field>
       <Field label={t("manufacturing.production.plannedOutput", { unit: outputUnit(bomId) })}><Input value={amount} onChange={(event) => setAmount(event.target.value)} type="number" step="0.01" min="0.01" max="1000000000" required className="h-11" /></Field>
+      {shortages.length > 0 && <div role="status" className="space-y-1 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+        <p className="font-bold">{t("manufacturing.production.shortageTitle")}</p>
+        <ul className="space-y-0.5">{shortages.map((row) => <li key={row.productId}>{t("manufacturing.production.shortageRow", { name: row.name, short: row.short, unit: row.unit, available: row.available, needed: row.needed })}</li>)}</ul>
+        <p>{t("manufacturing.production.shortageHelp")}</p>
+      </div>}
       <ErrorText error={mutation.error} />
       <Button type="submit" className="min-h-12 w-full gap-2" disabled={!isOnline || mutation.isPending || !number.trim() || !bomId || !(Number(amount) > 0)}>{mutation.isPending && <Loader2 size={16} className="animate-spin" />}{t("manufacturing.production.savePlan")}</Button>
     </form>

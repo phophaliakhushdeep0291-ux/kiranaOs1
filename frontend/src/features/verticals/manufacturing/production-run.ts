@@ -28,8 +28,28 @@ export function baseQuantity(product: Product | undefined, draft: QuantityDraft)
     : 1;
   return rounded(Number(draft.amount) * Number(multiplier));
 }
+export function scaledMaterial(item: ProductionBom["items"][number], plannedOutputBaseQty: number, recipeOutputBaseQty: number) {
+  return rounded(item.quantityBaseQty * plannedOutputBaseQty / recipeOutputBaseQty * (1 + (item.wastagePercent || 0) / 100));
+}
 export function plannedMaterial(run: RunDetails["run"], item: ProductionBom["items"][number]) {
-  return rounded(item.quantityBaseQty * run.plannedOutputBaseQty / run.bom.outputQuantityBaseQty * (1 + (item.wastagePercent || 0) / 100));
+  return scaledMaterial(item, run.plannedOutputBaseQty, run.bom.outputQuantityBaseQty);
+}
+
+export type MaterialShortage = { productId: string; name: string; unit: string; needed: number; available: number; short: number };
+/**
+ * Materials the recipe will run out of at this batch size. Advisory, not a
+ * block: a shop plans a run and then buys for it. Planning used to say nothing
+ * at all, so the shortage was found halfway through recording the output.
+ */
+export function materialShortages(bom: ProductionBom | undefined, plannedOutputBaseQty: number, products: Product[]): MaterialShortage[] {
+  if (!bom || !Number.isFinite(plannedOutputBaseQty) || plannedOutputBaseQty <= 0 || !(bom.outputQuantityBaseQty > 0)) return [];
+  return bom.items.flatMap((item) => {
+    const product = products.find((entry) => entry.id === item.materialProductId);
+    const needed = scaledMaterial(item, plannedOutputBaseQty, bom.outputQuantityBaseQty);
+    const available = rounded(Number(product?.stockBaseQty ?? 0));
+    if (!Number.isFinite(needed) || needed <= available) return [];
+    return [{ productId: item.materialProductId, name: product?.name ?? item.materialProductId, unit: product?.baseUnit ?? "", needed, available, short: rounded(needed - available) }];
+  });
 }
 export function newQuantityRow(product: Product | undefined, base?: number): QuantityRow {
   const unit = product?.packagingMode === "per_pack" ? product.sellingUnits?.find((entry) => entry.id && entry.isActive && entry.conversionToBase > 0) : undefined;
