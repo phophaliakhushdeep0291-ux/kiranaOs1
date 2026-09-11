@@ -128,6 +128,14 @@ a 5xx, a 408/425/429, `SYNC_DEPENDENCY_PENDING` and `SYNC_EVENT_IN_PROGRESS` are
 transient row of the table above while its neighbours in the batch settle
 normally. An explicit `retryable: false` always wins.
 
+The transient deferral has its own ladder — 1s doubling to a 30s cap — sized by
+the row's `transient_failures`, **never** by `retry_count`. A transient failure
+does not move `retry_count`, so sizing the wait from it pinned the deferral at 1s,
+and a till facing a 500ing server re-sent every scheduler tick for the length of
+the outage. `transient_failures` rises on each deferral and is zeroed by any
+verdict (`SYNCED`, `FAILED`, `CONFLICT`) or an explicit Retry. A reconnect lifts
+the wait but keeps the count, the same treatment it gives `retry_count`.
+
 Two consequences worth holding on to: a wifi blip no longer lights the "needs
 review" banner, and a rejected operation stops wasting twelve attempts against an
 endpoint that will keep saying no. Setting a row back to `PENDING` also sets

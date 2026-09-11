@@ -218,7 +218,12 @@ vi.mock("@/lib/offline/context", () => ({
   nowIso: () => "2026-06-06T11:00:00.000Z",
 }));
 
-vi.mock("@/lib/offline/db", () => {
+vi.mock("@/lib/offline/db", async () => {
+  // The real streak rule, not a copy: db.ts calls this same function, so the
+  // double cannot drift from what the device actually stores.
+  const { nextTransientFailureCount } = await vi.importActual<
+    typeof import("@/features/core/sync/sync-failure-classification")
+  >("@/features/core/sync/sync-failure-classification");
   const scopedRows = (table: string) =>
     dbState.rows(table).filter(dbState.matchesScope);
   const isPendingNow = (event: Row) => {
@@ -265,8 +270,15 @@ vi.mock("@/lib/offline/db", () => {
       ).length,
     ),
     updatePendingEventStatus: vi.fn(
-      async (clientEventIds: string[], status: string, errorMessage?: string, options?: { deferMs?: number }) => {
+      async (
+        clientEventIds: string[],
+        status: Parameters<typeof nextTransientFailureCount>[1],
+        errorMessage?: string,
+        options?: { deferMs?: number },
+      ) => {
         const idSet = new Set(clientEventIds);
+        const stampedAt = "2026-06-06T11:00:00.000Z";
+        const deferMs = options?.deferMs ?? 0;
         for (const event of dbState.rows("sync_outbox")) {
           if (!idSet.has(String(event.clientEventId)) || !dbState.matchesScope(event)) {
             continue;
@@ -275,6 +287,7 @@ vi.mock("@/lib/offline/db", () => {
             status === "FAILED"
               ? Number(event.retry_count ?? 0) + 1
               : Number(event.retry_count ?? 0);
+          event.transient_failures = nextTransientFailureCount(event, status, deferMs);
           event.status = status;
           event.sync_status =
             status === "SYNCING"
@@ -292,14 +305,18 @@ vi.mock("@/lib/offline/db", () => {
           event.attempts = retryCount;
           event.error_message = status === "SYNCED" ? null : (errorMessage ?? null);
           event.last_error = status === "SYNCED" ? null : (errorMessage ?? null);
-          event.last_attempt_at = "2026-06-06T11:00:00.000Z";
+          event.last_attempt_at = stampedAt;
           event.next_retry_at =
             status === "FAILED"
               ? "2026-06-06T10:59:00.000Z"
               // A transient failure defers the row without marking it FAILED, so
               // the double has to model that or it cannot tell the two apart.
-              : (options?.deferMs ?? 0) > 0
-                ? "2026-06-06T11:00:30.000Z"
+              // Stamped from last_attempt_at, so a test reads the wait off the
+              // row. The double does not make the row sit it out: getPendingEvents
+              // above hands a PENDING row back at once, so a test can replay a
+              // long outage without sleeping through it.
+              : deferMs > 0
+                ? new Date(Date.parse(stampedAt) + deferMs).toISOString()
                 : null;
         }
       },
@@ -309,6 +326,7 @@ vi.mock("@/lib/offline/db", () => {
   return {
     dexieDB,
     offlineDB,
+    MAX_AUTOMATIC_RETRY_ATTEMPTS: 12,
     rowMatchesCurrentScope: (row: Row) => dbState.matchesScope(row),
     filterRowsForCurrentScope: <T extends Row>(rows: T[]) =>
       rows.filter((row) => dbState.matchesScope(row)),
@@ -341,12 +359,29 @@ import {
   retryFailedSyncOperations,
   runSyncCycle,
 } from "@/features/core/sync/engine";
-import { repairResolvedSyncStatusNoise } from "@/features/core/sync/sync-status-repair";
+import {
+  clearRetryBackoffAfterReconnect,
+  repairResolvedSyncStatusNoise,
+} from "@/features/core/sync/sync-status-repair";
 
 const mockedSyncPush = vi.mocked(syncPushMock);
 
 function scopedRows(table: string) {
   return dbState.rows(table).filter(dbState.matchesScope);
+}
+
+function outboxRow(clientEventId = "op_product_1") {
+  return scopedRows("sync_outbox").find((row) => row.clientEventId === clientEventId);
+}
+
+/** How long the outbox parked a row, read off the row as it was stored. */
+function waitOf(row: Row | undefined): number | null {
+  if (!row?.next_retry_at) return null;
+  return Date.parse(String(row.next_retry_at)) - Date.parse(String(row.last_attempt_at));
+}
+
+function serverUnavailable() {
+  return Object.assign(new Error("Service unavailable"), { status: 503 });
 }
 
 function seedOutbox(overrides: Partial<Row> = {}) {
@@ -640,6 +675,161 @@ describe("sync engine reliability", () => {
     expect(byId.get("op_product_3")).toEqual(
       expect.objectContaining({ status: "FAILED", sync_status: "failed", retry_count: 1 }),
     );
+  });
+
+  it("waits longer each time the server fails a whole push, instead of re-sending every tick", async () => {
+    // A server outage, and a row the server has never refused. Its retry_count is
+    // 0 and — correctly — stays 0, which is why sizing the wait from it pinned the
+    // wait at 1s: the till re-sent on every 2.5s scheduler tick until the outage
+    // ended.
+    seedOutbox();
+    const waits: Array<number | null> = [];
+    for (let failure = 0; failure < 7; failure += 1) {
+      mockedSyncPush.mockRejectedValueOnce(serverUnavailable());
+      await pushPendingOutboxOperations();
+      waits.push(waitOf(outboxRow()));
+    }
+
+    expect(waits).toEqual([1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000]);
+    expect(outboxRow()).toEqual(
+      expect.objectContaining({
+        status: "PENDING",
+        sync_status: "pending_sync",
+        retry_count: 0,
+        attempts: 0,
+        transient_failures: 7,
+      }),
+    );
+  });
+
+  it("waits longer each time the server fails the same event inside a 200 push", async () => {
+    // The per-event path had the same flaw: one event the server keeps answering
+    // SERVER_ERROR was re-sent every tick, forever, with no attempt ever spent.
+    const event = seedOutbox();
+    const waits: Array<number | null> = [];
+    for (let failure = 0; failure < 7; failure += 1) {
+      mockedSyncPush.mockResolvedValueOnce({
+        results: [eventFailureResult(event, "SERVER_ERROR", true, "Service unavailable")],
+      });
+      await pushPendingOutboxOperations();
+      waits.push(waitOf(outboxRow()));
+    }
+
+    expect(waits).toEqual([1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000]);
+    expect(outboxRow()).toEqual(
+      expect.objectContaining({ status: "PENDING", retry_count: 0, attempts: 0, transient_failures: 7 }),
+    );
+  });
+
+  it("lets a sale rung up mid-outage join the backoff instead of resetting it", async () => {
+    // Sized by the longest-failing row in the batch. A fresh row would otherwise
+    // drag the whole batch back to 1s every time the shop made a sale.
+    seedOutbox({ transient_failures: 4 });
+    seedOutbox({
+      op_id: "op_product_2",
+      clientEventId: "op_product_2",
+      idempotency_key: "idem-product-2",
+      entity_id: "product_2",
+      payload: { id: "product_2", name: "Salt" },
+      createdAt: 2,
+    });
+    mockedSyncPush.mockRejectedValueOnce(serverUnavailable());
+
+    await pushPendingOutboxOperations();
+
+    expect(waitOf(outboxRow("op_product_1"))).toBe(16_000);
+    expect(waitOf(outboxRow("op_product_2"))).toBe(16_000);
+    // Each row still keeps its own streak.
+    expect(outboxRow("op_product_1")?.transient_failures).toBe(5);
+    expect(outboxRow("op_product_2")?.transient_failures).toBe(1);
+  });
+
+  it("ends the streak on a verdict, so the next outage starts again at one second", async () => {
+    const event = seedOutbox({ transient_failures: 5 });
+
+    // The server finally answers, and refuses it.
+    mockedSyncPush.mockResolvedValueOnce({
+      results: [eventFailureResult(event, "PERMISSION_DENIED", false, "Owner PIN required")],
+    });
+    await pushPendingOutboxOperations();
+    expect(outboxRow()).toEqual(
+      expect.objectContaining({ status: "FAILED", retry_count: 1, transient_failures: 0 }),
+    );
+
+    // Its ordinary retry meets a fresh outage: a first transient failure, not a
+    // sixth, and still no attempt spent on it.
+    mockedSyncPush.mockRejectedValueOnce(serverUnavailable());
+    await pushPendingOutboxOperations();
+    expect(outboxRow()).toEqual(
+      expect.objectContaining({ status: "PENDING", retry_count: 1, transient_failures: 1 }),
+    );
+    expect(waitOf(outboxRow())).toBe(1_000);
+
+    // And landing clears it.
+    mockedSyncPush.mockResolvedValueOnce({ results: [successResult(event)] });
+    await pushPendingOutboxOperations();
+    expect(outboxRow()).toEqual(expect.objectContaining({ status: "SYNCED", transient_failures: 0 }));
+  });
+
+  it("starts the backoff over when a person presses Retry", async () => {
+    // Six failures in, with half a minute still to wait. Retry outranks the wait,
+    // and if the server still cannot answer, the backoff begins again at 1s.
+    seedOutbox({
+      transient_failures: 6,
+      error_message: "Service unavailable",
+      next_retry_at: new Date(Date.now() + 30_000).toISOString(),
+    });
+    mockedSyncPush.mockRejectedValueOnce(serverUnavailable());
+
+    await retryFailedSyncOperations(["op_product_1"]);
+
+    expect(mockedSyncPush).toHaveBeenCalledTimes(1);
+    expect(outboxRow()).toEqual(
+      expect.objectContaining({ status: "PENDING", retry_count: 0, transient_failures: 1 }),
+    );
+    expect(waitOf(outboxRow())).toBe(1_000);
+  });
+
+  it("lifts a transient wait when the backend comes back, but keeps the streak", async () => {
+    const later = new Date(Date.now() + 30_000).toISOString();
+    seedOutbox({ transient_failures: 5, next_retry_at: later });
+    seedOutbox({
+      op_id: "op_product_failed",
+      clientEventId: "op_product_failed",
+      entity_id: "product_failed",
+      status: "FAILED",
+      sync_status: "failed",
+      retry_count: 3,
+      attempts: 3,
+      next_retry_at: later,
+      createdAt: 2,
+    });
+    seedOutbox({
+      op_id: "op_product_retired",
+      clientEventId: "op_product_retired",
+      entity_id: "product_retired",
+      status: "FAILED",
+      sync_status: "failed",
+      retry_count: 12,
+      attempts: 12,
+      next_retry_at: later,
+      createdAt: 3,
+    });
+
+    const cleared = await clearRetryBackoffAfterReconnect();
+
+    expect(cleared).toBe(2);
+    // The outage the wait was sitting out is over. The count survives so that, if
+    // the retry gets no verdict either, a backend flapping in and out of reach
+    // does not restart the ramp at one second each time it answers.
+    expect(outboxRow()).toEqual(
+      expect.objectContaining({ status: "PENDING", next_retry_at: null, retry_count: 0, transient_failures: 5 }),
+    );
+    expect(outboxRow("op_product_failed")).toEqual(
+      expect.objectContaining({ status: "FAILED", next_retry_at: null, retry_count: 3 }),
+    );
+    // A retired row stays retired.
+    expect(outboxRow("op_product_retired")?.next_retry_at).toBe(later);
   });
 
   it("retry reuses the same idempotency_key", async () => {

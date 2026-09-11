@@ -13,6 +13,7 @@ import { storeConflict } from "@/features/core/sync/sync-conflicts";
 import {
   isTransientSyncEventResult,
   isTransientSyncFailure,
+  transientFailureCount,
   transientRetryDelayMs,
 } from "@/features/core/sync/sync-failure-classification";
 import {
@@ -472,8 +473,11 @@ async function handlePushResults(
     // As FAILED, a dozen write conflicts on a busy shop retired a sale for good.
     // Nothing was rejected either, so an optimistic adjustment stays put.
     if (isTransientSyncEventResult(result)) {
+      // Paced by its own transient streak: retry_count never moves on this path,
+      // so reading it pinned the deferral at 1s for as long as the server kept
+      // failing this one event.
       await updateOutboxStatus([item.event], "PENDING", message, {
-        deferMs: transientRetryDelayMs(item.event.retry_count ?? item.event.attempts ?? 0),
+        deferMs: transientRetryDelayMs(transientFailureCount(item.event)),
       });
       deferred += 1;
       continue;
@@ -594,7 +598,9 @@ export async function pushPendingOutboxOperations(): Promise<{
     // was otherwise able to strand a morning of sales in about a dozen blips,
     // recoverable only from a screen nobody opens until something is wrong.
     if (isTransientSyncFailure(error)) {
-      const attempt = Math.max(0, ...events.map((event) => event.retry_count ?? event.attempts ?? 0));
+      // The row that has been failing longest sets the pace, so a sale rung up
+      // mid-outage joins the backoff instead of dragging the batch back to 1s.
+      const attempt = Math.max(0, ...events.map(transientFailureCount));
       await updateOutboxStatus(events, "PENDING", message, {
         deferMs: transientRetryDelayMs(attempt),
       });
