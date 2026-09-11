@@ -216,7 +216,7 @@ export default function ManufacturingPage() {
     setOrderProductId(""); setOrderUnitId(""); setOrderQty("1"); setOrderPrice("0");
   };
 
-  const openTradePdf = async (order: TradeOrder, kind: "tax-invoice" | "packing-list" | "shipping-label") => {
+  const openTradePdf = async (order: TradeOrder, kind: "tax-invoice" | "commercial-invoice" | "packing-list" | "shipping-label") => {
     try {
       const blob = await apiRequest<Blob>(`/manufacturing/trade-orders/${order.id}/documents/${kind}.pdf`, { responseType: "blob" });
       const url = URL.createObjectURL(blob); window.open(url, "_blank", "noopener,noreferrer"); window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -371,13 +371,12 @@ export default function ManufacturingPage() {
                 <div className="flex flex-wrap items-center gap-2 sm:col-span-3">
                   {order.status in tradeActionKey ? <Button size="sm" className="min-h-11" disabled={advanceTradeOrder.isPending} onClick={() => advanceTradeOrder.mutate(order)}>{t(tradeActionKey[order.status as keyof typeof tradeActionKey])}</Button> : null}
                   {order.status === "packed" ? <Button size="sm" className="min-h-11" onClick={() => { setDispatchOrderId(order.id); setDispatchNumber(`DSP-${order.orderNumber}`.slice(0, 64)); }}>{t("manufacturing.orders.action.packed")}</Button> : null}
-                  {order.status === "dispatched" && order.orderType === "domestic" ? <Button size="sm" className="min-h-11" onClick={() => setInvoiceOrderId(order.id)}>{t("manufacturing.invoice.create")}</Button> : null}
-                  {documents.invoice ? <Button size="sm" className="min-h-11" variant="outline" onClick={() => void openTradePdf(order, "tax-invoice")}>{t("manufacturing.orders.invoicePdf")}</Button> : null}
+                  {order.status === "dispatched" ? <Button size="sm" className="min-h-11" onClick={() => setInvoiceOrderId(order.id)}>{t("manufacturing.invoice.create")}</Button> : null}
+                  {documents.invoice ? <Button size="sm" className="min-h-11" variant="outline" onClick={() => void openTradePdf(order, order.orderType === "export" ? "commercial-invoice" : "tax-invoice")}>{t("manufacturing.orders.invoicePdf")}</Button> : null}
                   {documents.packingList ? <Button size="sm" className="min-h-11" variant="outline" onClick={() => void openTradePdf(order, "packing-list")}>{t("manufacturing.orders.packingPdf")}</Button> : null}
                   {documents.label ? <Button size="sm" className="min-h-11" variant="outline" onClick={() => void openTradePdf(order, "shipping-label")}>{t("manufacturing.orders.labelPdf")}</Button> : null}
                   {order.status === "invoiced" ? <Button size="sm" className="min-h-11" variant="destructive" onClick={() => setReturnOrderId(order.id)}>{t("manufacturing.orders.return")}</Button> : null}
                   {canCancelTradeOrder(order.status) ? <Button size="sm" className="min-h-11 text-rose-700" variant="ghost" disabled={cancelTradeOrder.isPending} onClick={() => setCancelOrderId(order.id)}>{t("manufacturing.orders.cancel")}</Button> : null}
-                  {order.status === "dispatched" && order.orderType === "export" ? <p className="basis-full text-xs leading-5 text-amber-800">{t("manufacturing.invoice.exportPending")}</p> : null}
                 </div>
               </div>;
             })}

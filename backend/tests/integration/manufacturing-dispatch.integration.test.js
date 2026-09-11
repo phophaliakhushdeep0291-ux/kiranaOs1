@@ -9,6 +9,8 @@ import { buildTradePdf } from "../../src/verticals/manufacturing/trade-documents
 import * as production from "../../src/verticals/manufacturing/manufacturing.service.js";
 import * as trade from "../../src/verticals/manufacturing/trade-orders.service.js";
 import { createTradeOrderSchema } from "../../src/verticals/manufacturing/manufacturing.schemas.js";
+import { buildInvoiceTaxSnapshot } from "../../src/modules/compliance/compliance.service.js";
+import { round2 } from "../../src/utils/money.js";
 const ctx = await createIntegrationContext();
 const day = (offset = 0) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
 let sequence = 8779091200;
@@ -222,9 +224,63 @@ else {
       items: [{ productId: f.finished.id, sellingUnitId: f.bag.id, quantity: 1, enteredUnit: "bag", ratePerRateUnit: 20, gstRate: 0 }],
     }, actor), /Insufficient stock/);
     assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
+    // An export must carry the facts its invoice is built from before anything is
+    // booked: without them the foreign price would land in the books as INR.
     await ctx.db.tradeOrder.update({ where: { id: f.order.id }, data: { orderType: "export", currencyCode: "USD", exchangeRate: 90 } });
-    await assert.rejects(() => createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank" }, actor), { code: "TRADE_EXPORT_INVOICE_UNAVAILABLE" });
-    await assert.rejects(() => buildTradePdf(f.shopId, f.order.id, "commercial-invoice"), { code: "TRADE_EXPORT_INVOICE_UNAVAILABLE" });
+    await assert.rejects(() => createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank" }, actor), { code: "TRADE_EXPORT_DESTINATION_REQUIRED" });
+    await ctx.db.tradeOrder.update({ where: { id: f.order.id }, data: { countryOfDestination: "Kenya", exchangeRate: 0 } });
+    await assert.rejects(() => createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank" }, actor), { code: "TRADE_EXPORT_EXCHANGE_RATE_REQUIRED" });
     assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
+    // A domestic order can never carry a foreign price either.
+    await ctx.db.tradeOrder.update({ where: { id: f.order.id }, data: { orderType: "domestic", exchangeRate: 90 } });
+    await assert.rejects(() => createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank" }, actor), { code: "TRADE_ORDER_CURRENCY_INVALID" });
+    assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
+  });
+
+  test("an export under LUT books INR at the exchange rate and charges no IGST", async () => {
+    const f = await dispatchedFixture({ gstRate: 18 });
+    // An export invoice is a tax invoice, so the seller must be GST registered.
+    await ctx.db.shop.update({ where: { id: f.shopId }, data: { gstNumber: "27AAPFU0939F1ZV" } });
+    await ctx.db.tradeOrder.update({ where: { id: f.order.id }, data: {
+      orderType: "export", currencyCode: "USD", exchangeRate: 90, countryOfDestination: "Kenya",
+      countryOfOrigin: "India", iec: "0388011156", lutBondReference: "AD2909230012345",
+      incoterm: "FOB", portOfLoading: "INNSA1", portOfDischarge: "KEMBA",
+    } });
+    const invoiced = await createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank" }, { ownerPinVerified: true });
+    assert.equal(invoiced.status, "invoiced");
+    const bill = await ctx.db.bill.findFirst({ where: { id: invoiced.billId }, include: { items: true } });
+    // 5 bags at $20 and 2 cartons at $40 is $180; at 90 that is Rs 16,200.
+    assert.equal(bill.grandTotal, 16200, "the books are INR, converted at the order's rate");
+    assert.equal(bill.gst, 0, "an LUT export is zero-rated without payment of IGST");
+    assert.equal(bill.billType, "gst_invoice", "an export is always invoiced as a tax invoice");
+    assert.equal(bill.buyerStateCode, "96", "an export leaves India, so place of supply is Other Country");
+    assert.deepEqual(bill.items.map(row => row.ratePerRateUnit).sort((a, b) => a - b), [1800, 3600]);
+    assert.equal(bill.items.every(row => Number(row.gstRate) === 0), true);
+    // The order keeps its own currency; only the accounting record is converted.
+    assert.equal(invoiced.currencyCode, "USD");
+    assert.equal(invoiced.items.reduce((sum, row) => sum + Number(row.lineTotal), 0), 180);
+    const pdf = await buildTradePdf(f.shopId, f.order.id, "commercial-invoice");
+    const text = pdf.toString("latin1");
+    assert.match(text, /EXPORT INVOICE/);
+    assert.match(text, /without payment of IGST/);
+  });
+
+  test("an export without an LUT charges IGST, never a CGST and SGST split", async () => {
+    const f = await dispatchedFixture({ gstRate: 18 });
+    await ctx.db.shop.update({ where: { id: f.shopId }, data: { gstNumber: "27AAPFU0939F1ZV" } });
+    await ctx.db.tradeOrder.update({ where: { id: f.order.id }, data: {
+      orderType: "export", currencyCode: "USD", exchangeRate: 90, countryOfDestination: "Kenya", iec: "0388011156",
+    } });
+    const invoiced = await createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank" }, { ownerPinVerified: true });
+    const bill = await ctx.db.bill.findFirst({ where: { id: invoiced.billId }, include: { items: true } });
+    assert.equal(bill.gst, 2916, "18% of Rs 16,200 is charged and reclaimed later");
+    assert.equal(bill.grandTotal, 19116);
+    const snapshot = buildInvoiceTaxSnapshot(bill, bill.sellerStateCode || "");
+    assert.equal(snapshot.lines.every(line => line.tax.supplyType === "interstate"), true);
+    assert.equal(snapshot.lines.every(line => line.tax.cgst === 0 && line.tax.sgst === 0), true);
+    assert.equal(round2(snapshot.lines.reduce((sum, line) => sum + line.tax.igst, 0)), 2916);
+    const text = (await buildTradePdf(f.shopId, f.order.id, "commercial-invoice")).toString("latin1");
+    assert.match(text, /on payment of IGST/);
+    assert.match(text, /Kenya/);
   });
 }
