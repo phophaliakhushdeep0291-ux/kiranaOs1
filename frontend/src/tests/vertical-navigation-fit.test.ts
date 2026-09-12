@@ -194,9 +194,14 @@ describe("navigation fits every shop type", () => {
         if (!(key in englishTranslations)) untranslated.push(`${businessType}: ${key} has no English entry`);
       }
       // Every category the trade ships with needs a word too, or the product
-      // form shows a raw key where the shop expects its own vocabulary.
+      // form shows a raw key where the shop expects its own vocabulary. The
+      // ENTRY is what matters, not just the key: `translateCategory` falls back
+      // to the stored value when the dictionary has nothing, so a forgotten
+      // category is a silent "finished_goods" on screen rather than a crash.
       for (const category of def.categories) {
-        if (!categoryLabelKey(category)) untranslated.push(`${businessType}: category "${category}" has no label key`);
+        const key = categoryLabelKey(category);
+        if (!key) untranslated.push(`${businessType}: category "${category}" has no label key`);
+        else if (!(key in englishTranslations)) untranslated.push(`${businessType}: category "${category}" has no English entry`);
       }
     }
     expect(untranslated).toEqual([]);

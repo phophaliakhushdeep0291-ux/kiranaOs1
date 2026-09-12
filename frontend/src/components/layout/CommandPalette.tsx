@@ -6,6 +6,7 @@ import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache } from "@/lib/offline/instant-cache";
 import { dedupeBillsForDisplay } from "@/features/core/sync/bill-reconciliation";
 import { cn } from "@/lib/utils";
+import { translateCategory } from "@/features/core/settings/business-types";
 
 type AnyRow = Record<string, unknown>;
 type ItemKind = "product" | "customer" | "bill";
@@ -99,14 +100,21 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     const q = query.trim().toLowerCase();
     const matched = (row: AnyRow, keys: string[]) => !q || keys.some((key) => field(row, [key]).toLowerCase().includes(q));
 
+    // A category is stored as a key, so it is matched on the key AND on the
+    // words the palette prints under the product name.
+    const categoryWords = (row: AnyRow) => {
+      const stored = field(row, ["category"]);
+      return stored ? translateCategory(stored, t) : "";
+    };
+
     const productItems: PaletteItem[] = products
-      .filter((row) => matched(row, ["name", "barcode", "sku", "category"]))
+      .filter((row) => matched(row, ["name", "barcode", "sku", "category"]) || (!!q && categoryWords(row).toLowerCase().includes(q)))
       .slice(0, MAX_PER_GROUP)
       .map((row) => ({
         kind: "product",
         id: field(row, ["id"]),
         title: field(row, ["name"]),
-        subtitle: field(row, ["category"]) || undefined,
+        subtitle: categoryWords(row) || undefined,
         route: "/products",
       }));
 
@@ -135,7 +143,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       }));
 
     return [...productItems, ...customerItems, ...billItems].filter((item) => item.id);
-  }, [query, products, customers, bills]);
+  }, [query, products, customers, bills, t]);
 
   useEffect(() => { setActive(0); }, [query]);
 

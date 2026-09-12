@@ -82,7 +82,7 @@ import {
 import { PageShell, StatCard, StatsGrid, TradeFocusStrip } from "@/components/shared";
 import { offlineDB } from "@/lib/offline/db";
 import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
-import { useBusinessType } from "@/features/core/settings/business-types";
+import { translateCategory, useBusinessType } from "@/features/core/settings/business-types";
 import { getShopInventoryProfile, tradeFirstUnits } from "@/features/core/settings/shop-inventory";
 
 const UNITS = [
@@ -210,6 +210,14 @@ function isLowStock(product: InventoryItem) {
   // Both sides are base units; no threshold (0) means never "low" — matches the backend filter.
   const threshold = Number(product.lowStockThreshold ?? 0);
   return threshold > 0 && Number(product.stockBaseQty ?? 0) <= threshold;
+}
+
+// Same rule as `movementLabel`: a plain function, not a hook, because the Export
+// handler calls it too. A category is stored as a key ("finished_goods"), so it
+// only becomes words here; a product filed under nothing reads as General.
+function categoryLabel(category: string | null | undefined, t: Translate) {
+  const stored = String(category ?? "").trim();
+  return stored ? translateCategory(stored, t) : t("products.filter.general");
 }
 
 function movementLabel(type: string, t: Translate) {
@@ -378,15 +386,20 @@ export default function InventoryPage() {
   }, [inventory.data, localProductRows, products.data]);
 
   const filterOptions = useMemo(() => ({
-    categories: [...new Set(allInventoryRows.map((item) => item.category?.trim()).filter(Boolean) as string[])].sort(),
+    // Sorted by the LABEL, not the stored key: a Hindi counter reading
+    // "राशन, डेयरी, पेय" expects them alphabetical in its own script, not in English.
+    categories: [...new Set(allInventoryRows.map((item) => item.category?.trim()).filter(Boolean) as string[])]
+      .sort((a, b) => categoryLabel(a, t).localeCompare(categoryLabel(b, t))),
     brands: [...new Set(allInventoryRows.map((item) => item.brand?.trim()).filter(Boolean) as string[])].sort(),
     units: [...new Set(allInventoryRows.map((item) => inventoryUnitLabel(item).trim()).filter(Boolean))].sort(),
-  }), [allInventoryRows]);
+  }), [allInventoryRows, t]);
 
   const inventoryRows = useMemo(() => {
     const q = search.toLowerCase();
     return allInventoryRows
-      .filter((item) => !q || [item.name, item.category, item.brand, item.barcode, item.sku, ...(item.aliases ?? [])].filter(Boolean).join(" ").toLowerCase().includes(q))
+      // The translated category is in the haystack as well as the stored key:
+      // the shop searches for the word it can see.
+      .filter((item) => !q || [item.name, item.category, item.category ? categoryLabel(item.category, t) : "", item.brand, item.barcode, item.sku, ...(item.aliases ?? [])].filter(Boolean).join(" ").toLowerCase().includes(q))
       .filter((item) => categoryFilter === "all" || item.category === categoryFilter)
       .filter((item) => brandFilter === "all" || item.brand === brandFilter)
       .filter((item) => unitFilter === "all" || inventoryUnitLabel(item) === unitFilter)
@@ -412,7 +425,7 @@ export default function InventoryPage() {
         if (stockFilter === "in") return qty > 0 && !isLowStock(item);
         return true;
       });
-  }, [allInventoryRows, brandFilter, categoryFilter, search, stockFilter, unitFilter]);
+  }, [allInventoryRows, brandFilter, categoryFilter, search, stockFilter, t, unitFilter]);
 
   const movementRows = useMemo(() => ((ledger.data?.entries ?? []) as MovementEntry[]), [ledger.data]);
 
@@ -606,7 +619,7 @@ export default function InventoryPage() {
       const qty = inventoryDisplayQuantity(item);
       const cost = inventoryAverageUnitCost(item);
       const status = Number(item.stockBaseQty ?? 0) <= 0 ? t("inventory.stock.outOfStock") : isLowStock(item) ? t("inventory.stock.lowStock") : t("inventory.stock.inStock");
-      return [item.name, item.sku ?? item.barcode ?? "", item.category ?? "", item.brand ?? "", unit, qty, cost, roundInventoryValue(qty * cost), status];
+      return [item.name, item.sku ?? item.barcode ?? "", item.category ? categoryLabel(item.category, t) : "", item.brand ?? "", unit, qty, cost, roundInventoryValue(qty * cost), status];
     });
     const csv = [header, ...lines]
       .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
@@ -879,7 +892,7 @@ export default function InventoryPage() {
                   </div>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  <InventoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} placeholder={t("products.filter.allCategories")} options={filterOptions.categories} />
+                  <InventoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} placeholder={t("products.filter.allCategories")} options={filterOptions.categories} optionLabel={(option) => categoryLabel(option, t)} />
                   <InventoryFilterSelect value={brandFilter} onChange={setBrandFilter} placeholder={t("inventory.page.allBrands")} options={filterOptions.brands} />
                   <InventoryFilterSelect value={unitFilter} onChange={setUnitFilter} placeholder={t("inventory.page.allUnits")} options={filterOptions.units} />
                   <Select value={stockFilter} onValueChange={setStockFilter}>
@@ -911,7 +924,7 @@ export default function InventoryPage() {
                         <span className="min-w-0">
                           <span className="block truncate text-[14px] font-extrabold text-[var(--brand-ink)]">{item.name}</span>
                           <span className="mt-1 block truncate text-[12px] font-medium text-[#52627d]">{t("inventory.page.skuLabel", { value: item.sku ?? item.barcode ?? "-" })}</span>
-                          <span className="mt-1 block truncate text-[12px] text-[#718096]">{t("inventory.page.categoryLabel", { value: item.category ?? t("products.filter.general") })}</span>
+                          <span className="mt-1 block truncate text-[12px] text-[#718096]">{t("inventory.page.categoryLabel", { value: categoryLabel(item.category, t) })}</span>
                         </span>
                         <span className="min-w-[88px] text-right">
                           <span className={cn("block text-[16px] font-black", out ? "text-[#ff304f]" : low ? "text-[#f08a00]" : "text-[var(--success-ink)]")}>{tracked ? `${qty.toLocaleString("en-IN")} ${unit}` : t("inventory.page.notTracked")}</span>
@@ -961,7 +974,7 @@ export default function InventoryPage() {
                         <tr onClick={() => openMovement("purchase", item)} className="cursor-pointer border-b border-[#eef2f6] text-[#243653] transition-colors last:border-0 hover:bg-[#f8fbff]">
                         <td className="px-4 py-2.5"><div className="flex min-w-[160px] items-center gap-2.5"><InventoryProductAvatar item={item} /><div className="min-w-0"><p className="truncate font-semibold text-[#13223f]">{item.name}</p><p className="truncate text-[10px] text-[#7a89a3]">{item.brand ?? t("inventory.page.unbranded")}</p></div></div></td>
                         <td className="px-3 py-2.5 font-mono text-[10px] text-[#52627d]">{item.sku ?? item.barcode ?? "-"}</td>
-                        <td className="px-3 py-2.5 text-[#52627d]">{item.category ?? t("products.filter.general")}</td>
+                        <td className="px-3 py-2.5 text-[#52627d]">{categoryLabel(item.category, t)}</td>
                         <td className="px-3 py-2.5 capitalize text-[#52627d]">{packRows.length > 0 ? t("inventory.page.sizesCount", { count: packRows.length }) : unit}</td>
                         <td className="px-3 py-2.5 text-right font-semibold">{tracked ? qty.toLocaleString("en-IN") : t("inventory.page.notTracked")}</td>
                         <td className="px-3 py-2.5 text-right text-[#52627d]">{fmtMoney(cost)}</td>
@@ -1282,11 +1295,14 @@ function InventoryActionCard({ label, detail, tone, icon, onClick }: { label: st
   );
 }
 
-function InventoryFilterSelect({ value, onChange, placeholder, options }: { value: string; onChange: (value: string) => void; placeholder: string; options: string[] }) {
+// `options` are the stored values — they are what the filter compares against.
+// `optionLabel` is how each one is read; without it the option IS its value,
+// which is right for a brand or a unit and wrong for a category key.
+function InventoryFilterSelect({ value, onChange, placeholder, options, optionLabel }: { value: string; onChange: (value: string) => void; placeholder: string; options: string[]; optionLabel?: (option: string) => string }) {
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger aria-label={placeholder} className="h-9 rounded-[8px] border-[#dfe6ef] text-[11px] font-medium"><SelectValue /></SelectTrigger>
-      <SelectContent><SelectItem value="all">{placeholder}</SelectItem>{options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+      <SelectContent><SelectItem value="all">{placeholder}</SelectItem>{options.map((option) => <SelectItem key={option} value={option}>{optionLabel ? optionLabel(option) : option}</SelectItem>)}</SelectContent>
     </Select>
   );
 }
