@@ -164,8 +164,5 @@
   "devDependencies": {
     "autocannon": "^8.0.0",
     "prisma": "5.14.0"
-  },
-  "overrides": {
-    "qs": "6.16.0"
   }
 }
