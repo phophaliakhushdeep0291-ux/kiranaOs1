@@ -194,8 +194,18 @@ function entitlementFeaturesFromPayload(payload: Record<string, unknown> | null)
   return null;
 }
 
+/**
+ * Save the server's subscription state for offline reads.
+ *
+ * `announcement` is the detail the write broadcasts on kirana:local-data-changed.
+ * A caller importing the server's own state — the cloud snapshot hydration — passes
+ * the sync tag, so the schedulers refresh counts and screens without reading the
+ * write as a local edit waiting to be pushed. `writeSubscriptionRequest` below is
+ * the opposite case: it queues a request of the shop's own, and says so untagged.
+ */
 export async function writeSubscriptionSnapshot(
   payload: Record<string, unknown>,
+  announcement?: Record<string, unknown>,
 ): Promise<void> {
   await dexieDB.open();
   const scope = getOfflineScope();
@@ -220,7 +230,7 @@ export async function writeSubscriptionSnapshot(
     sync_status: "synced",
     last_modified_by: null,
   });
-  emitLocalDataChanged();
+  emitLocalDataChanged(announcement);
 }
 
 export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnapshot> {

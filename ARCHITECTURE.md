@@ -103,6 +103,16 @@ hydration remains a catch-up path. The ack must keep firing regardless: it write
   while counts and pages still refresh. The exception is a write that leaves a row
   due — `PENDING` with no deferral, a requeue — which is work, goes out untagged,
   and must keep prompting a sync.
+- And so does the snapshot hydration, three times over: the subscription snapshot
+  it saves, the purchase history it imports, and the import as a whole. It only
+  ever writes server state, but announced itself outside the convention — typed
+  `"cloud-hydration"`, the subscription write untagged altogether — so each
+  hydration bought a cycle 450ms later, a forced queue recovery at 900ms and one
+  more 250ms later from `useMultiDeviceSync`; when the minute's snapshot had been
+  throttled, that last one ran a second whole hydration. All three carry
+  `type: "sync"` now, and `useMultiDeviceSync` filters the family rather than a
+  list of action names. Nothing a hydration says can be work: it enqueues no
+  outbox rows, because the rows it writes are the server's already.
 - `shouldPassSharedThrottle` **consumes** its token when it passes. Take it only
   once you know you will do the work, or you lock every other tab out for the
   interval having done nothing.

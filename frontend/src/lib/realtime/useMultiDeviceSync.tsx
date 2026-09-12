@@ -131,9 +131,14 @@ export function useMultiDeviceSync() {
     const onLocalDataChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ type?: string; action?: string }>).detail;
       // Avoid loops from sync's own announcements. `type: "sync"` is the whole
-      // family — our refresh, a pull, the push's result, cloud bootstrap — and is
-      // the rule useOfflineStatus applies too; listing actions one at a time left
-      // the push's out. The snapshot's direct import is typed "cloud-hydration".
+      // family — this hook's refresh, a pull, the push's result, the cloud
+      // bootstrap, a snapshot hydration — and is the rule useOfflineStatus applies
+      // too. Listing actions one at a time let through the push's own result, and
+      // two of the three announcements a snapshot makes (the purchase history it
+      // imports, the subscription snapshot it saves): each bought a cycle here
+      // 250ms later with nothing to send. The action name stays in the condition
+      // for a tab still running an older build, whose broadcast of a hydration
+      // arrives typed "cloud-hydration".
       if (detail?.type === "sync" || detail?.action === "direct-import") return;
       scheduleAfterLocalWrite();
     };
