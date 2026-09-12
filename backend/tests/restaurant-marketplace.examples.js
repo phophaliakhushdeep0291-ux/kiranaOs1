@@ -102,7 +102,7 @@ try {
 
   await check("migration enforces globally unique verified outlet bindings only", async () => {
     // db push does not create partial indexes; apply this exact migration index.
-    const migration = readFileSync(new URL("../prisma/migrations/20260912000000_restaurant_marketplace_foundation/migration.sql", import.meta.url), "utf8");
+    const migration = readFileSync(new URL("../prisma/migrations/20260912130000_restaurant_marketplace_foundation/migration.sql", import.meta.url), "utf8");
     const statement = migration.match(/CREATE UNIQUE INDEX "RestaurantMarketplaceConnection_verified_outlet_key"[\s\S]*?;/)?.[0];
     assert.ok(statement);
     await db.$executeRawUnsafe(statement.replace("CREATE UNIQUE INDEX", "CREATE UNIQUE INDEX IF NOT EXISTS"));
