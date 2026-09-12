@@ -5,9 +5,17 @@ import { decrementLocationInventory, resolveOperationalLocation, getVariantLocat
 import { createSaleReturn, getBill } from "../../modules/bills/bills.service.js";
 import { stockLedgerProvenance } from "../../modules/inventory/stock-ledger-provenance.js";
 import { formatDateInTimeZone } from "../../utils/dates.js";
-import { tradeReturnFulfilment } from "./trade-invoices.service.js";
+import { exportTaxTreatment, tradeReturnFulfilment } from "./trade-invoices.service.js";
 
-const detailInclude = { items: { include: { allocations: true } }, dispatch: true };
+const detailInclude = { items: { include: { allocations: true } }, dispatches: { orderBy: { dispatchDate: "asc" } } };
+/** Statuses whose open reservations still hold stock away from other orders. */
+const RESERVING_STATUSES = ["allocated", "packed", "partially_dispatched"];
+/** Base units of a line already shipped — an allocation tied to a consignment. */
+const shippedBaseQty = (item) => round2((item.allocations || []).filter((row) => row.dispatchId).reduce((sum, row) => sum + Number(row.quantityBaseQty), 0));
+/** What the buyer is still owed on a line once every consignment is counted. */
+const outstandingBaseQty = (item) => round2(Number(item.quantityBaseQty) - shippedBaseQty(item));
+/** Base units reserved for the consignment being prepared now. */
+const openBaseQty = (item) => round2((item.allocations || []).filter((row) => !row.dispatchId).reduce((sum, row) => sum + Number(row.quantityBaseQty), 0));
 const date = (value) => value ? new Date(`${value}T00:00:00.000Z`) : null;
 const today = () => date(formatDateInTimeZone(new Date()));
 function orderLocation(order, actor = {}) {
@@ -58,10 +66,13 @@ export async function confirmTradeOrder(shopId, id) {
 
 export async function allocateTradeOrder(shopId, id, input, actor = {}) {
   return db.$transaction(async (tx) => {
-    const order = await tx.tradeOrder.findFirst({ where: { id, shopId, status: { in: ["confirmed", "allocated"] } }, include: detailInclude });
+    // A partially dispatched order is still open: the rest of it is a back-order
+    // waiting for stock, and allocating again prepares the next consignment.
+    const allocatable = ["confirmed", "allocated", "partially_dispatched"];
+    const order = await tx.tradeOrder.findFirst({ where: { id, shopId, status: { in: allocatable } }, include: detailInclude });
     if (!order) throw new AppError("Confirm the order before allocating batches", 409, "TRADE_ORDER_NOT_CONFIRMABLE_FOR_ALLOCATION");
     orderLocation(order, actor);
-    const claimed = await tx.tradeOrder.updateMany({ where: { id, shopId, status: { in: ["confirmed", "allocated"] } }, data: { status: "allocating" } });
+    const claimed = await tx.tradeOrder.updateMany({ where: { id, shopId, status: { in: allocatable } }, data: { status: "allocating" } });
     if (claimed.count !== 1) throw new AppError("This order changed. Refresh before allocating", 409, "TRADE_ORDER_NOT_CONFIRMABLE_FOR_ALLOCATION");
     // Serialize reservations sharing a batch, without changing its quantity.
     // Deterministic lock order also avoids opposite-order batch lock cycles.
@@ -82,7 +93,9 @@ export async function allocateTradeOrder(shopId, id, input, actor = {}) {
       const lot = await tx.inventoryLot.findFirst({ where: { id: allocation.inventoryLotId, shopId, locationId: order.locationId, productId: item.productId, status: "active", expiresOn: { gte: today() } } });
       if (!lot) throw new AppError(`A selected batch is unavailable for ${item.description}`, 422, "TRADE_ALLOCATION_BATCH_INVALID");
       if (lot.sellingUnitId && lot.sellingUnitId !== item.sellingUnitId) throw new AppError(`The selected batch uses different packaging for ${item.description}`, 422, "TRADE_ALLOCATION_PACKAGING_MISMATCH");
-      const reserved = await tx.tradeOrderAllocation.aggregate({ where: { shopId, inventoryLotId: lot.id, orderItem: { order: { status: { in: ["allocated", "packed"] }, id: { not: order.id } } } }, _sum: { quantityBaseQty: true } });
+      // Only OPEN reservations hold stock back. A shipped allocation already
+      // decremented the lot, so counting it again would hide real availability.
+      const reserved = await tx.tradeOrderAllocation.aggregate({ where: { shopId, inventoryLotId: lot.id, dispatchId: null, orderItem: { order: { status: { in: RESERVING_STATUSES }, id: { not: order.id } } } }, _sum: { quantityBaseQty: true } });
       const available = round2(Number(lot.availableBaseQty) - Number(reserved._sum.quantityBaseQty || 0));
       const requested = round2((requestedByLot.get(lot.id) || 0) + Number(allocation.quantityBaseQty));
       if (requested > available) throw new AppError(`Batch ${lot.batchNumber} has only ${available} unreserved base units`, 409, "TRADE_ALLOCATION_STOCK_SHORT");
@@ -90,8 +103,16 @@ export async function allocateTradeOrder(shopId, id, input, actor = {}) {
       requestedByItem.set(item.id, round2(Number(requestedByItem.get(item.id) || 0) + Number(allocation.quantityBaseQty)));
       next.push({ shopId, orderItemId: item.id, inventoryLotId: lot.id, batchNumber: lot.batchNumber, quantityBaseQty: allocation.quantityBaseQty });
     }
-    for (const item of order.items) if (Math.abs(Number(requestedByItem.get(item.id) || 0) - Number(item.quantityBaseQty)) > 0.001) throw new AppError(`Allocate the full ordered quantity for ${item.description}`, 422, "TRADE_ALLOCATION_INCOMPLETE");
-    await tx.tradeOrderAllocation.deleteMany({ where: { orderItem: { orderId: order.id } } });
+    // A line may be reserved short — that is the whole point of a back-order —
+    // but never beyond what is still owed after earlier consignments.
+    for (const item of order.items) {
+      const requested = Number(requestedByItem.get(item.id) || 0);
+      const outstanding = outstandingBaseQty(item);
+      if (requested - outstanding > 0.001) throw new AppError(`Only ${outstanding} base units are still outstanding for ${item.description}`, 422, "TRADE_ALLOCATION_EXCEEDS_OUTSTANDING");
+    }
+    if (![...requestedByItem.values()].some((value) => Number(value) > 0.001)) throw new AppError("Allocate at least one batch before saving", 422, "TRADE_ALLOCATION_EMPTY");
+    // Only the open reservation is replaced; what has already shipped is history.
+    await tx.tradeOrderAllocation.deleteMany({ where: { orderItem: { orderId: order.id }, dispatchId: null } });
     await tx.tradeOrderAllocation.createMany({ data: next });
     return tx.tradeOrder.update({ where: { id: order.id }, data: { status: "allocated", allocatedAt: new Date() }, include: detailInclude });
   });
@@ -100,18 +121,19 @@ export async function allocateTradeOrder(shopId, id, input, actor = {}) {
 export async function autoAllocateTradeOrder(shopId, id, actor = {}) {
   const order = await getTradeOrder(shopId, id);
   orderLocation(order, actor);
-  if (!["confirmed", "allocated"].includes(order.status)) throw new AppError("Confirm the order before allocating batches", 409, "TRADE_ORDER_NOT_CONFIRMABLE_FOR_ALLOCATION");
+  if (!["confirmed", "allocated", "partially_dispatched"].includes(order.status)) throw new AppError("Confirm the order before allocating batches", 409, "TRADE_ORDER_NOT_CONFIRMABLE_FOR_ALLOCATION");
   const allocations = [];
   const usedByLot = new Map();
   for (const item of order.items) {
-    let remaining = Number(item.quantityBaseQty);
+    let remaining = outstandingBaseQty(item);
+    if (remaining <= 0.001) continue;
     const lots = await db.inventoryLot.findMany({
       where: { shopId, locationId: order.locationId, productId: item.productId, status: "active", availableBaseQty: { gt: 0 }, expiresOn: { gte: today() }, OR: [{ sellingUnitId: null }, { sellingUnitId: item.sellingUnitId ?? null }] },
       orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }],
     });
     for (const lot of lots) {
       const reserved = await db.tradeOrderAllocation.aggregate({
-        where: { shopId, inventoryLotId: lot.id, orderItem: { order: { status: { in: ["allocated", "packed"] }, id: { not: order.id } } } },
+        where: { shopId, inventoryLotId: lot.id, dispatchId: null, orderItem: { order: { status: { in: RESERVING_STATUSES }, id: { not: order.id } } } },
         _sum: { quantityBaseQty: true },
       });
       const available = Math.max(0, round2(Number(lot.availableBaseQty) - Number(reserved._sum.quantityBaseQty || 0) - (usedByLot.get(lot.id) || 0)));
@@ -123,21 +145,34 @@ export async function autoAllocateTradeOrder(shopId, id, actor = {}) {
       remaining = round2(remaining - quantityBaseQty);
       if (remaining <= 0.001) break;
     }
-    if (remaining > 0.001) throw new AppError(`Insufficient available batches for ${item.description}; short by ${remaining} base units`, 409, "TRADE_ALLOCATION_STOCK_SHORT");
   }
+  // Reserving less than the buyer ordered is normal now — the rest stays on the
+  // order as a back-order. Only a run that could reserve nothing at all is an
+  // error worth stopping for.
+  if (allocations.length === 0) throw new AppError("No available batches for any line on this order", 409, "TRADE_ALLOCATION_STOCK_SHORT");
   return allocateTradeOrder(shopId, id, { allocations }, actor);
 }
 
 export async function packTradeOrder(shopId, id, input) {
   return db.$transaction(async (tx) => {
-    const order = await tx.tradeOrder.findFirst({ where: { id, shopId, status: "allocated" }, include: { items: true } });
+    const order = await tx.tradeOrder.findFirst({ where: { id, shopId, status: "allocated" }, include: { items: { include: { allocations: true } } } });
     if (!order) throw new AppError("Allocate batches before packing", 409, "TRADE_ORDER_NOT_ALLOCATED");
     const claimed = await tx.tradeOrder.updateMany({ where: { id, shopId, status: "allocated" }, data: { status: "packing" } });
     if (claimed.count !== 1) throw new AppError("This order changed. Refresh before packing", 409, "TRADE_ORDER_NOT_ALLOCATED");
-    if (input.items.length !== order.items.length || new Set(input.items.map((row) => row.orderItemId)).size !== order.items.length) throw new AppError("Record each order line exactly once", 422, "TRADE_PACK_QUANTITY_MISMATCH");
+    // Only the lines in this consignment are packed. A line reserved short is
+    // packed short; a line with nothing reserved is not in this shipment at all.
+    const reserved = new Map(order.items.map((item) => [item.id, openBaseQty(item)]));
+    const inConsignment = order.items.filter((item) => reserved.get(item.id) > 0.001);
+    if (inConsignment.length === 0) throw new AppError("Allocate batches before packing", 409, "TRADE_ORDER_NOT_ALLOCATED");
+    if (new Set(input.items.map((row) => row.orderItemId)).size !== input.items.length) throw new AppError("Record each order line exactly once", 422, "TRADE_PACK_QUANTITY_MISMATCH");
     const packed = new Map(input.items.map((row) => [row.orderItemId, Number(row.packedQuantity)]));
-    for (const item of order.items) {
-      if (Math.abs(Number(packed.get(item.id) || 0) - Number(item.quantity)) > 0.001) throw new AppError(`Packed quantity must match the order for ${item.description}`, 422, "TRADE_PACK_QUANTITY_MISMATCH");
+    for (const row of input.items) if (!reserved.has(row.orderItemId) || reserved.get(row.orderItemId) <= 0.001) throw new AppError("A packed line is not part of this consignment", 422, "TRADE_PACK_QUANTITY_MISMATCH");
+    for (const item of inConsignment) {
+      // packedQuantity is in the line's own selling unit; the reservation is in
+      // base units, so compare on the base scale both sides share.
+      const perUnit = Number(item.quantityBaseQty) / Number(item.quantity);
+      const expected = round2(reserved.get(item.id) / perUnit);
+      if (Math.abs(Number(packed.get(item.id) ?? NaN) - expected) > 0.001) throw new AppError(`Packed quantity must match the batches reserved for ${item.description}`, 422, "TRADE_PACK_QUANTITY_MISMATCH");
       await tx.tradeOrderItem.update({ where: { id: item.id }, data: { packedQuantity: packed.get(item.id) } });
     }
     return tx.tradeOrder.update({ where: { id: order.id }, data: { status: "packed", packedAt: new Date() }, include: detailInclude });
@@ -152,13 +187,19 @@ export async function dispatchTradeOrder(shopId, id, input, actor = {}) {
     const claimed = await tx.tradeOrder.updateMany({ where: { id, shopId, status: "packed" }, data: { status: "dispatching" } });
     if (claimed.count !== 1) throw new AppError("This order changed. Refresh before dispatch", 409, "TRADE_ORDER_NOT_PACKED");
     const location = await resolveOperationalLocation(shopId, order.locationId, tx);
-    for (const item of order.items) {
+    const dispatch = await tx.tradeDispatch.create({ data: { shopId, orderId: order.id, dispatchNumber: input.dispatchNumber, dispatchDate: date(input.dispatchDate), transporterName: input.transporterName ?? null, transporterGstin: input.transporterGstin ?? null, vehicleNumber: input.vehicleNumber ?? null, lrAwbNumber: input.lrAwbNumber ?? null, ewayBillNumber: input.ewayBillNumber ?? null, shippingBillNumber: input.shippingBillNumber ?? null, shippingBillDate: date(input.shippingBillDate), containerNumber: input.containerNumber ?? null, packageCount: input.packageCount ?? null, netWeight: input.netWeight ?? null, grossWeight: input.grossWeight ?? null, sealNumber: input.sealNumber ?? null, notes: input.notes ?? null } });
+    // Only the lines reserved for this consignment ship; the rest stay owed.
+    const consignment = order.items.filter((item) => openBaseQty(item) > 0.001);
+    if (consignment.length === 0) throw new AppError("Allocate batches before dispatch", 409, "TRADE_ORDER_NOT_ALLOCATED");
+    for (const item of consignment) {
       const product = await tx.product.findFirst({ where: { id: item.productId, shopId, deletedAt: null }, include: { sellingUnits: true } });
       if (!product) throw new AppError(`Product unavailable: ${item.description}`, 409, "TRADE_DISPATCH_PRODUCT_UNAVAILABLE");
       const unit = item.sellingUnitId ? product.sellingUnits.find((row) => row.id === item.sellingUnitId && row.isActive) : null;
       if ((item.sellingUnitId && !unit) || (product.packagingMode === "per_pack" && !unit) || Math.abs(round2(Number(item.quantity) * Number(unit?.conversionToBase || 1)) - item.quantityBaseQty) > 0.001) throw new AppError(`Packaging changed for ${item.description}; review the order`, 409, "TRADE_DISPATCH_PACKAGING_CHANGED");
-      if (Math.abs(round2(item.allocations.reduce((sum, row) => sum + Number(row.quantityBaseQty), 0)) - Number(item.quantityBaseQty)) > 0.001) throw new AppError(`Allocate the full quantity for ${item.description}`, 409, "TRADE_ALLOCATION_INCOMPLETE");
-      for (const allocation of item.allocations) {
+      const shipping = item.allocations.filter((row) => !row.dispatchId);
+      const shippingBase = round2(shipping.reduce((sum, row) => sum + Number(row.quantityBaseQty), 0));
+      if (shippingBase - outstandingBaseQty(item) > 0.001) throw new AppError(`More is reserved than is outstanding for ${item.description}`, 409, "TRADE_ALLOCATION_EXCEEDS_OUTSTANDING");
+      for (const allocation of shipping) {
         const lot = await tx.inventoryLot.findFirst({ where: { id: allocation.inventoryLotId, shopId, locationId: location.id, productId: item.productId, status: "active", expiresOn: { gte: today() } } });
         if (!lot || Number(lot.availableBaseQty) < Number(allocation.quantityBaseQty)) throw new AppError(`Batch stock changed for ${allocation.batchNumber}; allocate again`, 409, "TRADE_DISPATCH_BATCH_STOCK_CHANGED");
         if (lot.sellingUnitId && lot.sellingUnitId !== item.sellingUnitId) throw new AppError(`Batch packaging changed for ${item.description}`, 409, "TRADE_ALLOCATION_PACKAGING_MISMATCH");
@@ -166,13 +207,21 @@ export async function dispatchTradeOrder(shopId, id, input, actor = {}) {
         if (movedLot.count !== 1) throw new AppError(`Batch stock changed for ${allocation.batchNumber}; allocate again`, 409, "TRADE_DISPATCH_BATCH_STOCK_CHANGED");
         await tx.inventoryLot.updateMany({ where: { id: lot.id, availableBaseQty: 0 }, data: { status: "depleted" } });
       }
-      const packs = unit ? new Map([[unit.id, { sellingUnit: unit, qty: item.quantity }]]) : null;
-      const moved = await decrementLocationInventory(tx, { shopId, location, product, quantityBase: item.quantityBaseQty, packs });
+      // The shipped quantity is this consignment's, not the whole line's.
+      const perUnit = Number(item.quantityBaseQty) / Number(item.quantity);
+      const shippingQty = round2(shippingBase / perUnit);
+      const packs = unit ? new Map([[unit.id, { sellingUnit: unit, qty: shippingQty }]]) : null;
+      const moved = await decrementLocationInventory(tx, { shopId, location, product, quantityBase: shippingBase, packs });
       if (unit && product.packagingMode === "per_pack" && await getVariantLocationQuantity(tx, shopId, location, product, unit.id) < 0) throw new AppError(`Insufficient selected packaging stock for ${item.description}`, 409, "TRADE_DISPATCH_PACK_STOCK_SHORT");
-      await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: product.id, productName: product.name, ...stockLedgerProvenance(actor), sellingUnitId: unit?.id ?? null, sellingUnitQty: unit ? item.quantity : null, action: "trade_dispatch", changeBaseQty: -item.quantityBaseQty, oldStockBaseQty: moved.oldStock, newStockBaseQty: moved.newStock, sourceType: "trade_order", sourceId: order.id, note: `Dispatch ${input.dispatchNumber} for ${order.orderNumber}` } });
+      // Scoped to the consignment, so an order shipped twice keeps two separate
+      // stock records and neither invoice can bill the other's goods.
+      await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: product.id, productName: product.name, ...stockLedgerProvenance(actor), sellingUnitId: unit?.id ?? null, sellingUnitQty: unit ? shippingQty : null, action: "trade_dispatch", changeBaseQty: -shippingBase, oldStockBaseQty: moved.oldStock, newStockBaseQty: moved.newStock, sourceType: "trade_dispatch", sourceId: dispatch.id, note: `Dispatch ${input.dispatchNumber} for ${order.orderNumber}` } });
+      await tx.tradeOrderAllocation.updateMany({ where: { id: { in: shipping.map((row) => row.id) } }, data: { dispatchId: dispatch.id } });
     }
-    await tx.tradeDispatch.create({ data: { shopId, orderId: order.id, dispatchNumber: input.dispatchNumber, dispatchDate: date(input.dispatchDate), transporterName: input.transporterName ?? null, transporterGstin: input.transporterGstin ?? null, vehicleNumber: input.vehicleNumber ?? null, lrAwbNumber: input.lrAwbNumber ?? null, ewayBillNumber: input.ewayBillNumber ?? null, shippingBillNumber: input.shippingBillNumber ?? null, shippingBillDate: date(input.shippingBillDate), containerNumber: input.containerNumber ?? null, packageCount: input.packageCount ?? null, netWeight: input.netWeight ?? null, grossWeight: input.grossWeight ?? null, sealNumber: input.sealNumber ?? null, notes: input.notes ?? null } });
-    return tx.tradeOrder.update({ where: { id: order.id }, data: { status: "dispatched", dispatchedAt: new Date() }, include: detailInclude });
+    // Anything still owed keeps the order open for a later consignment.
+    const remaining = order.items.reduce((sum, item) => sum + (consignment.includes(item) ? round2(outstandingBaseQty(item) - openBaseQty(item)) : outstandingBaseQty(item)), 0);
+    const status = remaining > 0.001 ? "partially_dispatched" : "dispatched";
+    return tx.tradeOrder.update({ where: { id: order.id }, data: { status, dispatchedAt: new Date() }, include: detailInclude });
   });
 }
 
@@ -206,6 +255,11 @@ export async function returnTradeOrder(shopId, id, input, actor = {}) {
 
 export async function tradeDocuments(shopId, id) {
   const order = await getTradeOrder(shopId, id);
-  const totals = order.items.reduce((acc, row) => ({ quantity: acc.quantity + Number(row.quantity), subtotal: acc.subtotal + Number(row.lineTotal), gst: acc.gst + (order.orderType === "domestic" ? Number(row.lineTotal) * Number(row.gstRate) / 100 : 0) }), { quantity: 0, subtotal: 0, gst: 0 });
-  return { order, packingList: { documentNumber: order.dispatch?.dispatchNumber || order.orderNumber, buyer: order.customerName, shipTo: order.shippingAddress, items: order.items.map((row) => ({ sku: row.sku, buyerProductCode: row.buyerProductCode, description: row.description, quantity: row.packedQuantity || row.quantity, batches: row.allocations.map((allocation) => allocation.batchNumber) })), packageCount: order.dispatch?.packageCount, netWeight: order.dispatch?.netWeight, grossWeight: order.dispatch?.grossWeight }, commercialInvoice: { invoiceReference: order.billId, orderNumber: order.orderNumber, buyerPoNumber: order.buyerPoNumber, currencyCode: order.currencyCode, exchangeRate: order.exchangeRate, incoterm: order.incoterm, destination: order.countryOfDestination, origin: order.countryOfOrigin, iec: order.iec, lutBondReference: order.lutBondReference, portOfLoading: order.portOfLoading, portOfDischarge: order.portOfDischarge, subtotal: round2(totals.subtotal), gst: round2(totals.gst), total: round2(totals.subtotal + totals.gst), paymentTerms: order.paymentTerms } };
+  const latestDispatch = order.dispatches?.at(-1);
+  const treatment = order.orderType === "export" ? exportTaxTreatment(order) : null;
+  // Zero only under an LUT. An export without one carries IGST at the item rate,
+  // which the exporter reclaims as a refund afterwards.
+  const taxRate = (row) => (treatment?.underLut ? 0 : Number(row.gstRate));
+  const totals = order.items.reduce((acc, row) => ({ quantity: acc.quantity + Number(row.quantity), subtotal: acc.subtotal + Number(row.lineTotal), gst: acc.gst + Number(row.lineTotal) * taxRate(row) / 100 }), { quantity: 0, subtotal: 0, gst: 0 });
+  return { order, packingList: { documentNumber: latestDispatch?.dispatchNumber || order.orderNumber, buyer: order.customerName, shipTo: order.shippingAddress, items: order.items.map((row) => ({ sku: row.sku, buyerProductCode: row.buyerProductCode, description: row.description, quantity: row.packedQuantity || row.quantity, batches: row.allocations.map((allocation) => allocation.batchNumber) })), packageCount: latestDispatch?.packageCount, netWeight: latestDispatch?.netWeight, grossWeight: latestDispatch?.grossWeight }, commercialInvoice: { invoiceReference: order.billId, orderNumber: order.orderNumber, buyerPoNumber: order.buyerPoNumber, currencyCode: order.currencyCode, exchangeRate: order.exchangeRate, incoterm: order.incoterm, destination: order.countryOfDestination, origin: order.countryOfOrigin, iec: order.iec, lutBondReference: order.lutBondReference, underLut: treatment?.underLut ?? false, declaration: treatment?.declaration ?? null, portOfLoading: order.portOfLoading, portOfDischarge: order.portOfDischarge, subtotal: round2(totals.subtotal), gst: round2(totals.gst), total: round2(totals.subtotal + totals.gst), paymentTerms: order.paymentTerms } };
 }

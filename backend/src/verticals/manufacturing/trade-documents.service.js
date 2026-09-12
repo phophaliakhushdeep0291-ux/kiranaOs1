@@ -5,6 +5,7 @@ import { getTradeOrder } from "./trade-orders.service.js";
 import { formatDateInTimeZone } from "../../utils/dates.js";
 import { buildInvoiceTaxSnapshot } from "../../modules/compliance/compliance.service.js";
 import { gstStateLabel } from "../../utils/gst.js";
+import { exportTaxTreatment } from "./trade-invoices.service.js";
 import { round2 } from "../../utils/money.js";
 
 const money = (value, currency = "INR") => `${currency} ${Number(value || 0).toFixed(2)}`;
@@ -35,7 +36,7 @@ function commonMeta({ shop, order, customer }) {
 }
 
 function transportLines(order) {
-  const dispatch = order.dispatch;
+  const dispatch = order.dispatches?.at(-1);
   return [
     `Transporter: ${dispatch?.transporterName || "-"}`, `Vehicle: ${dispatch?.vehicleNumber || "-"}`,
     `LR / AWB: ${dispatch?.lrAwbNumber || "-"}`, `E-way bill: ${dispatch?.ewayBillNumber || "-"}`,
@@ -60,12 +61,12 @@ function rows({ order, packNames }) {
 export async function buildTradePdf(shopId, orderId, kind) {
   const ctx = await context(shopId, orderId);
   const { shop, order } = ctx;
-  const dispatch = order.dispatch;
+  const dispatch = order.dispatches?.at(-1);
   const shared = { meta: commonMeta(ctx), footer: "System generated document. Verify statutory and marketplace data before dispatch." };
   if (kind === "packing-list") return buildPdf({ ...shared, title: "PACKING LIST", subtitle: `Dispatch ${dispatch?.dispatchNumber || "pending"} | ${dateOnly(dispatch?.dispatchDate)}`, sections: [{ heading: "Ship to", lines: [shipTo(ctx)] }, { heading: "Packed goods", columns: itemColumns, rows: rows(ctx) }, { heading: "Shipment", lines: [...transportLines(order), `Packages: ${dispatch?.packageCount || "-"}`, `Net weight: ${dispatch?.netWeight || "-"}`, `Gross weight: ${dispatch?.grossWeight || "-"}`, `Container / seal: ${dispatch?.containerNumber || "-"} / ${dispatch?.sealNumber || "-"}`] }] });
   if (kind === "shipping-label") return buildPdf({ ...shared, title: "SHIPPING LABEL", subtitle: "Seller generated - use the marketplace-issued label when platform logistics requires it", meta: [{ label: "Shipment / order", value: dispatch?.lrAwbNumber || order.orderNumber }, { label: "Dispatch", value: dispatch?.dispatchNumber || "pending" }, { label: "Seller", value: shop.name }, { label: "From", value: `${shop.address}, ${shop.city}` }, { label: "Deliver to", value: order.customerName }, { label: "Address", value: shipTo(ctx) }, { label: "Packages", value: String(dispatch?.packageCount || 1) }, { label: "Transporter / vehicle", value: `${dispatch?.transporterName || "-"} / ${dispatch?.vehicleNumber || "-"}` }, { label: "E-way bill", value: dispatch?.ewayBillNumber || "-" }], sections: [{ heading: "Contents", columns: [{ key: "sku", label: "Seller SKU", width: 150 }, { key: "description", label: "Item", width: 260 }, { key: "quantity", label: "Qty", width: 70, align: "right" }], rows: rows(ctx) }, { heading: "Handling", lines: ["Scan/verify shipment ID before handover.", "Keep proof of dispatch and proof of delivery with this order record."] }] });
   if (!["tax-invoice", "commercial-invoice"].includes(kind)) throw new AppError("Unknown trade document", 404, "TRADE_DOCUMENT_UNKNOWN");
-  if (order.orderType !== "domestic") throw new AppError("Export invoice accounting still needs currency and tax support", 409, "TRADE_EXPORT_INVOICE_UNAVAILABLE");
+  const isExport = order.orderType === "export";
   if (!order.billId) throw new AppError("Create this order's accounting invoice before downloading it", 409, "TRADE_ORDER_INVOICE_REQUIRED");
   const bill = await db.bill.findFirst({ where: { id: order.billId, shopId, status: "active", deletedAt: null }, include: { items: true } });
   if (!bill) throw new AppError("The order's accounting invoice is unavailable", 409, "TRADE_ORDER_INVOICE_REQUIRED");
@@ -76,7 +77,8 @@ export async function buildTradePdf(shopId, orderId, kind) {
     { label: "Seller", value: bill.sellerLegalName || shop.name }, { label: "Seller GSTIN", value: bill.sellerGstin || "Not registered" },
     { label: "Seller address", value: bill.sellerAddress || "-" }, { label: "Buyer", value: bill.customerName },
     { label: "Buyer GSTIN", value: bill.buyerGstin || "Unregistered" }, { label: "Buyer PO", value: order.buyerPoNumber || "-" },
-    { label: "Order number", value: order.orderNumber }, { label: "Currency", value: "INR" },
+    { label: "Order number", value: order.orderNumber },
+    { label: "Currency", value: isExport ? `INR (billed) / ${order.currencyCode} at ${Number(order.exchangeRate).toFixed(4)}` : "INR" },
     // A tax invoice names the place of supply; it is also what decides IGST
     // against CGST + SGST, so the split below and this line cannot disagree.
     ...(taxInvoice ? [{ label: "Place of supply", value: gstStateLabel(bill.buyerStateCode || bill.sellerStateCode) || "-" }] : []),
@@ -91,9 +93,26 @@ export async function buildTradePdf(shopId, orderId, kind) {
   const taxLines = !taxInvoice
     ? [`GST: ${money(gst)}`]
     : interstate ? [`IGST: ${money(gst)}`] : [`CGST: ${money(centralTax)}`, `SGST: ${money(round2(gst - centralTax))}`];
-  return buildPdf({ ...shared, title: taxInvoice ? "TAX INVOICE" : "SALES INVOICE", subtitle: `${bill.billNo} | ${dateOnly(bill.businessDate || bill.createdAt)}`, sections: [
+  const exportSection = isExport ? [{
+    heading: "Export declaration",
+    lines: [
+      exportTaxTreatment(order).declaration,
+      `Country of destination: ${order.countryOfDestination || "-"}`,
+      `Country of origin of goods: ${order.countryOfOrigin || "India"}`,
+      `IEC: ${order.iec || "-"}`,
+      `Incoterm / price basis: ${order.incoterm || "-"} / ${order.priceBasis || "-"}`,
+      `Port of loading: ${order.portOfLoading || "-"}`,
+      `Port of discharge: ${order.portOfDischarge || "-"}`,
+      `Payment terms: ${order.paymentTerms || "-"}`,
+      // The buyer contracted in their own currency; the books are INR. Both
+      // figures and the rate between them belong on the document.
+      `Order value: ${money(order.items.reduce((sum, row) => sum + Number(row.lineTotal), 0), order.currencyCode)} at ${Number(order.exchangeRate).toFixed(4)} INR`,
+    ],
+  }] : [];
+  return buildPdf({ ...shared, title: isExport ? "EXPORT INVOICE" : taxInvoice ? "TAX INVOICE" : "SALES INVOICE", subtitle: `${bill.billNo} | ${dateOnly(bill.businessDate || bill.createdAt)}`, sections: [
     { heading: "Bill to / ship to", lines: [bill.buyerAddress || bill.customerName, order.shippingAddress || bill.buyerAddress || "Address not recorded"] },
     itemSection,
+    ...exportSection,
     { heading: "Totals", lines: [`${taxInvoice ? "Taxable value" : "Subtotal"}: ${money(taxInvoice ? snapshot.taxableValue : bill.subtotal)}`, ...taxLines, `Invoice total: ${money(bill.grandTotal)}`, `Paid: ${money(bill.paidAmount)}`, `Credit recorded: ${money(bill.creditAmount)}`, `Dispatch: ${dispatch?.dispatchNumber || "-"}`, `E-way bill: ${dispatch?.ewayBillNumber || "-"}`, `Vehicle: ${dispatch?.vehicleNumber || "-"}`] },
   ] });
 }

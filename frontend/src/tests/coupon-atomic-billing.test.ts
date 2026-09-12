@@ -6,6 +6,44 @@ const billingQueries = readFileSync("src/features/core/billing/queries.ts", "utf
 const offerApi = readFileSync("src/features/core/offers/api.ts", "utf8");
 const billingTypes = readFileSync("src/features/core/billing/pages/billing-types.ts", "utf8");
 
+/**
+ * Top-level fields of the object literal passed to `call(`, as written
+ * (`cart`, `discount: safeDiscount`) — order-independent, and nested braces or
+ * brackets in a value do not end the object early.
+ *
+ * This used to be pinned as one long literal starting `writeBillingDraft({
+ * activeBillId, sourceOrderId, …`, which meant inserting an unrelated field
+ * (`tableId`) into the draft failed a test about coupon persistence while the
+ * coupon still persisted perfectly well. What this test is actually for is that
+ * `appliedOffer` is written to the draft and read back, so assert that and
+ * nothing about the order it is written in.
+ */
+function objectArgumentFields(source: string, call: string): string[] {
+  const start = source.indexOf(`${call}({`);
+  if (start === -1) throw new Error(`${call}({ … }) is no longer called in BillingPage — draft persistence is unverifiable.`);
+  const segments: string[] = [];
+  let current = "";
+  let depth = 1;
+  for (let i = source.indexOf("{", start) + 1; i < source.length; i += 1) {
+    const character = source[i];
+    if ("{[(".includes(character)) depth += 1;
+    else if ("}])".includes(character)) depth -= 1;
+    if (depth === 0) { segments.push(current); break; }
+    if (depth === 1 && character === ",") { segments.push(current); current = ""; continue; }
+    current += character;
+  }
+  return segments.map((segment) => segment.replace(/\s+/g, " ").trim()).filter(Boolean);
+}
+
+/** The dependency array of the effect that writes the draft. A field missing here persists stale. */
+function effectDependenciesAround(source: string, call: string): string[] {
+  const start = source.indexOf(`${call}({`);
+  const deps = source.indexOf("}, [", start);
+  const end = source.indexOf("]", deps);
+  if (start === -1 || deps === -1 || end === -1) throw new Error(`The effect wrapping ${call} no longer ends in a dependency array.`);
+  return source.slice(deps + "}, [".length, end).split(",").map((dependency) => dependency.trim()).filter(Boolean);
+}
+
 describe("atomic coupon billing client", () => {
   it("sends the server-verifiable offer reference with bill confirmation", () => {
     expect(billingPage).toContain("offerId: appliedOffer?.id");
@@ -24,11 +62,13 @@ describe("atomic coupon billing client", () => {
     expect(billingTypes).toContain("appliedOffer?: AppliedOffer | null");
     // Field order is not the contract. The draft gained `tableId` mid-list and an
     // exact-substring match went red while the coupon was still being saved, so
-    // assert the saved fields themselves.
-    const draftFields = (billingPage.match(/writeBillingDraft\(\{([^}]*)\}\)/)?.[1] ?? "").split(",").map((field) => field.trim());
+    // assert the saved fields themselves…
+    const draftFields = objectArgumentFields(billingPage, "writeBillingDraft");
     for (const field of ["activeBillId", "sourceOrderId", "sourceOrderFingerprint", "cart", "discount: safeDiscount", "discountReason", "appliedOffer"]) {
       expect(draftFields).toContain(field);
     }
+    // …that the effect re-runs when the coupon changes, or the draft saves a stale one…
+    expect(effectDependenciesAround(billingPage, "writeBillingDraft")).toContain("appliedOffer");
     // …and read back on both paths: a reload restores the draft, a switch resumes a held bill.
     expect(billingPage).toContain("setAppliedOffer(draft.appliedOffer ?? null)");
     expect(billingPage).toContain("setAppliedOffer(bill.appliedOffer ?? null)");

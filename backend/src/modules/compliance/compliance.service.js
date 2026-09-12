@@ -6,7 +6,7 @@ import { AppError } from "../../middleware/error.js";
 import { getDateRange } from "../../utils/dates.js";
 import { gspHttpReadiness, submitEInvoiceToGsp, submitEWayBillToGsp } from "./gsp-http.provider.js";
 import { createAuditLog } from "../audit/audit.service.js";
-import { allocateInvoiceDiscount, validateGstin, validateHsn } from "../../utils/gst.js";
+import { allocateInvoiceDiscount, GST_EXPORT_STATE_CODE, validateGstin, validateHsn } from "../../utils/gst.js";
 import { billSellerIdentity } from "../../utils/gstIdentity.js";
 
 export { validateGstin, validateHsn } from "../../utils/gst.js";
@@ -198,6 +198,19 @@ export function buildInvoiceTaxSnapshot(bill, sellerStateCode = "") {
   };
 }
 
+/** An export invoice names GST's foreign-country code as its place of supply. */
+function isExportPlaceOfSupply(code) {
+  return String(code ?? "").trim().padStart(2, "0") === GST_EXPORT_STATE_CODE;
+}
+
+/**
+ * Zero-rated either way: WPAY when IGST was charged on the export (and is claimed
+ * back as a refund), WOPAY when it left under an LUT or bond without IGST.
+ */
+function exportTypeFor(snapshot) {
+  return snapshot.lines.some((line) => line.tax.igst !== 0) ? "WPAY" : "WOPAY";
+}
+
 export async function getGstInvoiceRegister(shopId, query = {}) {
   const { start, end } = getDateRange(query.range === "custom" ? null : query.range, query.from, query.to, env.DAILY_CLOSING_TIMEZONE);
   const sellerFilter = query.sellerGstin ? { sellerGstin: query.sellerGstin } : {};
@@ -215,6 +228,14 @@ export async function getGstInvoiceRegister(shopId, query = {}) {
     ? await db.bill.findMany({ where: { shopId, id: { in: originalIds } }, select: { id: true, billNo: true, businessDate: true, buyerGstin: true, buyerStateCode: true, buyerAddress: true, customerName: true, grandTotal: true, sellerGstin: true, sellerStateCode: true, sellerLegalName: true, sellerTradeName: true, sellerAddress: true, sellerCity: true } })
     : [];
   const originalById = new Map(originalBills.map((bill) => [bill.id, bill]));
+  // Table 6A reports each export with the port and shipping bill it left India
+  // under. Those facts are recorded on the trade order and its dispatch, not on
+  // the bill, so fetch them only when the period holds an export.
+  const exportBillIds = bills.filter((bill) => bill.billType !== "sales_return" && isExportPlaceOfSupply(bill.buyerStateCode)).map((bill) => bill.id);
+  const exportShipments = exportBillIds.length > 0
+    ? await db.tradeDispatch.findMany({ where: { shopId, billId: { in: exportBillIds } }, select: { billId: true, shippingBillNumber: true, shippingBillDate: true, order: { select: { portOfLoading: true } } } })
+    : [];
+  const shipmentByBillId = new Map(exportShipments.map((row) => [row.billId, row]));
   const rows = [];
   for (const bill of bills) {
     const original = bill.returnOfBillId ? originalById.get(bill.returnOfBillId) : null;
@@ -233,6 +254,8 @@ export async function getGstInvoiceRegister(shopId, query = {}) {
     } : bill;
     const seller = billSellerIdentity(effectiveBill, shop);
     const snapshot = buildInvoiceTaxSnapshot(effectiveBill, seller.sellerStateCode || "");
+    const exportType = isExportPlaceOfSupply(effectiveBill.buyerStateCode) ? exportTypeFor(snapshot) : "";
+    const shipment = exportType ? shipmentByBillId.get(bill.id) : null;
     for (const { item, tax, discount, grossLineTotal, netLineTotal } of snapshot.lines) {
       rows.push({
         invoiceNumber: bill.billNo,
@@ -265,6 +288,10 @@ export async function getGstInvoiceRegister(shopId, query = {}) {
         discount,
         lineTotal: netLineTotal,
         paymentModes: [...new Set(bill.payments.map((payment) => payment.mode))].join("+"),
+        exportType,
+        portCode: shipment?.order?.portOfLoading || "",
+        shippingBillNumber: shipment?.shippingBillNumber || "",
+        shippingBillDate: shipment?.shippingBillDate ? shipment.shippingBillDate.toISOString().slice(0, 10) : "",
       });
     }
   }
@@ -362,6 +389,7 @@ function groupRegisterByDocument(register) {
       customerName: row.customerName,
       placeOfSupply: row.placeOfSupply,
       supplyType: row.supplyType,
+      exportType: row.exportType,
       originalInvoiceNumber: row.originalInvoiceNumber,
       originalInvoiceDate: row.originalInvoiceDate,
       originalInvoiceValue: row.originalInvoiceValue,
@@ -420,6 +448,7 @@ export function buildGstr1WorkingFromRegister(register) {
   const b2csMap = new Map();
   const cdnrMap = new Map();
   const cdnurMap = new Map();
+  const expMap = new Map();
   const hsnMap = new Map();
   const nilMap = new Map();
 
@@ -428,6 +457,7 @@ export function buildGstr1WorkingFromRegister(register) {
     documents
       .filter((doc) => doc.documentType !== "credit_note"
         && !doc.buyerGstin
+        && !doc.exportType
         && doc.supplyType === "interstate"
         && Math.abs(doc.invoiceValue) > B2CL_INVOICE_VALUE_THRESHOLD)
       .map((doc) => doc.invoiceNumber)
@@ -436,7 +466,13 @@ export function buildGstr1WorkingFromRegister(register) {
   for (const row of register.rows) {
     const isCreditNote = row.documentType === "credit_note";
     const isNilRated = Number(row.gstRate) === 0;
-    const cdnurEligible = isCreditNote && !row.buyerGstin && row.supplyType === "interstate" && Math.abs(Number(row.originalInvoiceValue ?? 0)) > 100000;
+    // Zero-rated exports are Table 6A, never a domestic B2C table and never the
+    // nil-rated disclosure: "zero rated" and "nil rated" are different reliefs.
+    const isExport = Boolean(row.exportType);
+    // A credit note against an export is reported invoice-wise whatever its size;
+    // the B2CL value threshold is a domestic rule.
+    const cdnurEligible = isCreditNote && !row.buyerGstin && row.supplyType === "interstate"
+      && (isExport || Math.abs(Number(row.originalInvoiceValue ?? 0)) > 100000);
     // A credit note reported invoice-wise in CDNR/CDNUR must NOT also reduce a
     // summary table, or the reduction is counted twice.
     const creditNoteReportedSeparately = isCreditNote && (row.buyerGstin || cdnurEligible);
@@ -448,7 +484,7 @@ export function buildGstr1WorkingFromRegister(register) {
     // Without this, a 0%-rated return fell through every table (not Table 8, not
     // B2CS because it is nil-rated, not CDNR/CDNUR because the buyer is
     // unregistered), overstating exempt turnover and contradicting the HSN table.
-    if (isNilRated && !creditNoteReportedSeparately) {
+    if (isNilRated && !creditNoteReportedSeparately && !isExport) {
       const key = nilRatedBucketKey(row);
       const bucket = nilMap.get(key) ?? { key, label: NIL_BUCKET_LABELS[key], nilRatedOrExempt: 0, nonGst: 0 };
       bucket.nilRatedOrExempt = money(bucket.nilRatedOrExempt + Number(row.lineTotal));
@@ -481,6 +517,16 @@ export function buildGstr1WorkingFromRegister(register) {
       const invoice = invoiceMap.get(row.invoiceNumber) ?? { invoiceNumber: row.invoiceNumber, invoiceDate: row.invoiceDate, buyerGstin: row.buyerGstin, customerName: row.customerName, placeOfSupply: row.placeOfSupply, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, postTaxDiscount: 0, invoiceValue: 0 };
       for (const key of ["taxableValue", "cgst", "sgst", "igst", "postTaxDiscount", "invoiceValue"]) invoice[key] = Number((invoice[key] + Number(key === "invoiceValue" ? row.lineTotal : key === "postTaxDiscount" ? row.discount : row[key])).toFixed(2));
       invoiceMap.set(row.invoiceNumber, invoice);
+    } else if (isExport && !isCreditNote) {
+      // Table 6A — one row per export invoice, carrying the shipping bill it left
+      // India under. WPAY means IGST was charged and is reclaimed as a refund.
+      const invoice = expMap.get(row.invoiceNumber) ?? {
+        invoiceNumber: row.invoiceNumber, invoiceDate: row.invoiceDate, exportType: row.exportType,
+        portCode: row.portCode, shippingBillNumber: row.shippingBillNumber, shippingBillDate: row.shippingBillDate,
+        gstRate: row.gstRate, taxableValue: 0, igst: 0, invoiceValue: 0,
+      };
+      for (const field of ["taxableValue", "igst", "invoiceValue"]) invoice[field] = Number((invoice[field] + Number(field === "invoiceValue" ? row.lineTotal : row[field])).toFixed(2));
+      expMap.set(row.invoiceNumber, invoice);
     } else if (!row.buyerGstin && b2clInvoiceNumbers.has(row.invoiceNumber)) {
       // Table 5 — inter-State supplies to unregistered persons above the
       // threshold are reported invoice-wise, not netted into B2CS.
@@ -506,7 +552,7 @@ export function buildGstr1WorkingFromRegister(register) {
   }
   return {
     schemaVersion: "artha-gstr1-working-v3",
-    filingWarning: "Accountant working papers only; review GSTN classification before filing. Registered credit notes are separated as CDNR; eligible large interstate unregistered notes as CDNUR; smaller B2C returns are netted into B2CS, and nil-rated B2C returns are netted into Table 8 so it reconciles with the HSN summary. Table 8 groups nil-rated and exempt supplies together — splitting nil / exempt / non-GST needs a per-item legal classification the catalogue does not carry. Heavy returns can net a bucket below zero; GSTN will not accept a negative disclosure, so review any negative figure before filing.",
+    filingWarning: "Accountant working papers only; review GSTN classification before filing. Registered credit notes are separated as CDNR; eligible large interstate unregistered notes as CDNUR; smaller B2C returns are netted into B2CS, and nil-rated B2C returns are netted into Table 8 so it reconciles with the HSN summary. Table 8 groups nil-rated and exempt supplies together — splitting nil / exempt / non-GST needs a per-item legal classification the catalogue does not carry. Heavy returns can net a bucket below zero; GSTN will not accept a negative disclosure, so review any negative figure before filing. Exports are reported in Table 6A (EXP) with their shipping bill; confirm the port code and shipping bill number against the customs record before filing, because a 6A row without them is rejected.",
     from: register.from,
     to: register.to,
     b2b: [...invoiceMap.values()],
@@ -514,6 +560,7 @@ export function buildGstr1WorkingFromRegister(register) {
     b2cs: [...b2csMap.values()],
     cdnr: [...cdnrMap.values()],
     cdnur: [...cdnurMap.values()],
+    exports: [...expMap.values()],
     nilRated: [...nilMap.values()],
     hsn: [...hsnMap.values()].map(finaliseHsnRow),
     documentSeries: buildDocumentSeries(register),
@@ -548,12 +595,22 @@ export function buildDocumentSeries(register) {
  */
 export function buildGstr3bFromRegister(register) {
   const outward = { taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
+  const zeroRated = { taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
   const nilRatedExempt = { value: 0 };
   const nonGst = { value: 0 };
   const interStateUnregistered = new Map();
 
   for (const row of register.rows) {
     const isNilRated = Number(row.gstRate) === 0;
+    // A zero-rated export is 3.1(b). It is not 3.1(a), and under an LUT it is not
+    // the nil-rated/exempt line either — those are different reliefs that a filer
+    // cannot net together. Table 3.2 is for unregistered buyers inside India, so
+    // an export never belongs there whatever its place of supply says.
+    if (row.exportType) {
+      zeroRated.taxableValue = money(zeroRated.taxableValue + Number(row.taxableValue));
+      zeroRated.igst = money(zeroRated.igst + Number(row.igst));
+      continue;
+    }
     if (isNilRated) {
       nilRatedExempt.value = money(nilRatedExempt.value + Number(row.lineTotal));
       continue;
@@ -574,21 +631,21 @@ export function buildGstr3bFromRegister(register) {
 
   return {
     schemaVersion: "artha-gstr3b-working-v1",
-    filingWarning: "Outward supplies only. Input tax credit (Table 4) must be reconciled against GSTR-2B from purchase invoices and is intentionally not derived from POS data.",
+    filingWarning: "Outward supplies only. Input tax credit (Table 4) must be reconciled against GSTR-2B from purchase invoices and is intentionally not derived from POS data. Zero-rated exports are shown at 3.1(b); IGST paid on a with-payment export is included in the liability here and is claimed back separately as a refund.",
     from: register.from,
     to: register.to,
     outwardSupplies: {
       "3.1(a)": { label: "Outward taxable supplies (other than zero rated, nil rated and exempted)", ...outward },
-      "3.1(b)": { label: "Outward taxable supplies (zero rated)", taxableValue: 0, igst: 0, cgst: 0, sgst: 0 },
+      "3.1(b)": { label: "Outward taxable supplies (zero rated)", ...zeroRated },
       "3.1(c)": { label: "Other outward supplies (nil rated, exempted)", taxableValue: nilRatedExempt.value, igst: 0, cgst: 0, sgst: 0 },
       "3.1(e)": { label: "Non-GST outward supplies", taxableValue: nonGst.value, igst: 0, cgst: 0, sgst: 0 },
     },
     interStateSuppliesToUnregistered: [...interStateUnregistered.values()],
     taxPayable: {
-      igst: outward.igst,
+      igst: money(outward.igst + zeroRated.igst),
       cgst: outward.cgst,
       sgst: outward.sgst,
-      total: money(outward.igst + outward.cgst + outward.sgst),
+      total: money(outward.igst + zeroRated.igst + outward.cgst + outward.sgst),
     },
   };
 }

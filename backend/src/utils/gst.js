@@ -30,8 +30,15 @@ const GST_STATE_NAMES = {
   "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra", "29": "Karnataka",
   "30": "Goa", "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry",
   "35": "Andaman and Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh",
-  "97": "Other Territory",
+  "96": "Other Country", "97": "Other Territory",
 };
+
+/**
+ * GST's place-of-supply code for a supply to a foreign country. An export invoice
+ * carries it as the buyer's state, which is what makes the supply inter-State
+ * (IGST, never CGST + SGST) and what the return builders recognise an export by.
+ */
+export const GST_EXPORT_STATE_CODE = "96";
 
 /** "29 - Karnataka" for a known code; the bare code otherwise. */
 export function gstStateLabel(code) {

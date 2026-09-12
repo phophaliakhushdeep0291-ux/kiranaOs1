@@ -70,14 +70,14 @@ stops waking the radio. `useMultiDeviceSync` keeps only what is uniquely its own
 the cross-tab BroadcastChannel, focus/online catch-up, and the 60s authoritative
 snapshot.
 
-**The incremental pull is currently inert.** Nothing in the backend writes
-`changeLog` — `sync.service.js` only ever reads it — so `/sync/pull` always
-returns an empty page and the stored cursor stays `"0"`. Real device-to-device
-propagation therefore rides on the 60s snapshot hydration, not the pull. Wiring
-`changeLog` on every mutation path is the change that would make cross-device
-sync genuinely incremental. Note the ack must keep firing regardless: it is what
-writes `lastSeenAt`/`lastActiveAt` on the device row, which device health and
-remote support read.
+**Database triggers populate the incremental feed.** Core mutations write
+`ChangeLog` in the same transaction; a rollback also rolls back its feed entries.
+PostgreSQL installs these through migrations (`000053`, `000076`, `000101`).
+SQLite schema push does not run migrations, so both local setup/reset and the
+test setup explicitly run `backend/scripts/install-sqlite-sync-triggers.js`.
+Use the repository's `db:push` command, not a bare Prisma push. The 60s snapshot
+hydration remains a catch-up path. The ack must keep firing regardless: it writes
+`lastSeenAt`/`lastActiveAt` on the device row for device health and remote support.
 
 - `useOfflineStatus` is a **subscription to one module-level engine**, not an
   engine per caller. Twenty components call it and most only want `isOnline`; when
@@ -95,15 +95,24 @@ remote support read.
 - A finished sync announces itself on `kirana:local-data-changed`, the same
   channel a local edit uses. Treating that as fresh work schedules another sync,
   which announces itself — a loop. Filter on `detail.type === "sync"`.
-- The snapshot hydration is that trap in a second costume. It only ever writes
-  server state, but announced itself outside the convention — typed
-  `"cloud-hydration"`, and the subscription snapshot it saves said nothing at all —
-  so each hydration bought a cycle 450ms later, a forced queue recovery at 900ms
-  and one more 250ms later from `useMultiDeviceSync`; when the minute's snapshot
-  had been throttled, that last one ran a second whole hydration. Its three
-  announcements carry `type: "sync"` now, and `useMultiDeviceSync` filters the
-  family rather than a list of action names. Nothing a hydration says is ever work:
-  it enqueues no outbox rows, because the rows it writes are the server's already.
+- So does every outbox status write a push makes, on `kirana:sync-queue-updated`:
+  `SYNCING` before the request, then `SYNCED`, `FAILED`, `CONFLICT` or a deferred
+  `PENDING`. Untagged, each one scheduled a cycle with nothing to send — two per
+  push attempt from the two listeners, twice the traffic against a server that was
+  already failing. They carry `type: "sync"` too, so the same filter skips them
+  while counts and pages still refresh. The exception is a write that leaves a row
+  due — `PENDING` with no deferral, a requeue — which is work, goes out untagged,
+  and must keep prompting a sync.
+- And so does the snapshot hydration, three times over: the subscription snapshot
+  it saves, the purchase history it imports, and the import as a whole. It only
+  ever writes server state, but announced itself outside the convention — typed
+  `"cloud-hydration"`, the subscription write untagged altogether — so each
+  hydration bought a cycle 450ms later, a forced queue recovery at 900ms and one
+  more 250ms later from `useMultiDeviceSync`; when the minute's snapshot had been
+  throttled, that last one ran a second whole hydration. All three carry
+  `type: "sync"` now, and `useMultiDeviceSync` filters the family rather than a
+  list of action names. Nothing a hydration says can be work: it enqueues no
+  outbox rows, because the rows it writes are the server's already.
 - `shouldPassSharedThrottle` **consumes** its token when it passes. Take it only
   once you know you will do the work, or you lock every other tab out for the
   interval having done nothing.

@@ -1,7 +1,7 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
-import { getLocationQuantity, resolveOperationalLocation, setLocationInventory } from "../stores/location-context.service.js";
+import { getLocationQuantitiesByProduct, resolveOperationalLocation, setLocationInventory } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { stockLedgerProvenance } from "./stock-ledger-provenance.js";
 import { reconcileInventoryLotsForCorrection } from "../inventory-lots/inventoryLots.service.js";
@@ -103,12 +103,23 @@ export async function createStockCount(shopId, locationId, data, actor = {}) {
           "STOCK_COUNT_PER_PACK_ONLY",
         );
       }
-      const snapshots = await Promise.all(countable.map(async (product) => ({
+      // One lookup for the whole count, on the transaction client so it reads the
+      // same snapshot the session is built from.
+      //
+      // This mattered more here than at the other call sites. A count with no
+      // productIds selects the ENTIRE catalogue — that is the ordinary "count
+      // everything" stock take — and the per-product form ran one query per
+      // product INSIDE the open write transaction. Promise.all did not help:
+      // Prisma puts a transaction's queries on one connection, so they queued
+      // rather than overlapping, and a 2,000-item shop held a write transaction
+      // open across 2,000 sequential round trips.
+      const expectedByProduct = await getLocationQuantitiesByProduct(tx, shopId, location, countable);
+      const snapshots = countable.map((product) => ({
         productId: product.id,
         productName: product.name,
         baseUnit: product.baseUnit,
-        expectedBaseQty: await getLocationQuantity(tx, shopId, location, product),
-      })));
+        expectedBaseQty: expectedByProduct.get(product.id) ?? 0,
+      }));
       const created = await tx.stockCountSession.create({
         data: {
           shopId,

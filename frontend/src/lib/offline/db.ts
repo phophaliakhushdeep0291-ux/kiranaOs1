@@ -1018,6 +1018,7 @@ class OfflineDBFacade {
     if (clientEventIds.length === 0) return;
     const now = nowIso();
     let changed = 0;
+    let madeDue = false;
     await dexieDB.transaction("rw", dexieDB.sync_outbox, async () => {
       for (const id of clientEventIds) {
         const row = await dexieDB.sync_outbox.get(id);
@@ -1032,7 +1033,7 @@ class OfflineDBFacade {
         // to survive until the push actually lands; a CONFLICT may still be re-pushed by
         // resolution. Once it is synced the authorisation is spent.
         const scrubbedPayload = status === "SYNCED" ? withoutOwnerSecrets(row.payload) : null;
-        await dexieDB.sync_outbox.put({
+        const next: PendingSyncEvent = {
           ...row,
           ...(isRecord(scrubbedPayload) ? { payload: scrubbedPayload } : {}),
           status,
@@ -1064,11 +1065,28 @@ class OfflineDBFacade {
             status === "FAILED" || retryDelayMs > 0
               ? new Date(Date.now() + retryDelayMs).toISOString()
               : null,
-        });
+        };
+        await dexieDB.sync_outbox.put(next);
+        // Asked of the push's own eligibility rule, so this cannot disagree with it.
+        if (isOutboxPendingNow(next)) madeDue = true;
         changed += 1;
       }
     });
-    if (changed > 0) emitSyncQueueUpdated({ action: "status_changed", status, count: changed });
+    if (changed === 0) return;
+    // A push writes here twice an attempt: SYNCING before the request, and the
+    // server's answer after it. Neither is new work — SYNCED is done; a deferred
+    // PENDING, FAILED and CONFLICT all wait — so the announcement is tagged
+    // `type: "sync"`, which both listeners that start syncs skip. Untagged, each
+    // write cost a cycle with nothing to send, two per attempt, doubling the
+    // traffic against a server that was already failing. Pages refresh on the
+    // event regardless. A write that leaves a row due — PENDING with no deferral,
+    // a requeue — is work, and goes out untagged so it still prompts a sync.
+    emitSyncQueueUpdated({
+      ...(madeDue ? {} : { type: "sync" }),
+      action: "status_changed",
+      status,
+      count: changed,
+    });
   }
 
   /**

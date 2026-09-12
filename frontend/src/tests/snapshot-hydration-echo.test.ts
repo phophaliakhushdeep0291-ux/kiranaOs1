@@ -27,6 +27,9 @@ import { calculateSyncQueueCounts } from "@/features/core/sync/sync-health";
  * Substituted: the network (answered by path, after a delay), the business-table
  * writes (accepted and dropped — none of them announces anything), the health
  * probe, the device license, and the tab coordinator.
+ *
+ * sync-status-write-echo.test.ts is the sibling of this file: the same rule, for the
+ * outbox status writes a push makes rather than for a snapshot's imports.
  */
 
 type Db = typeof import("@/lib/offline/db");

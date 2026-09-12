@@ -131,18 +131,26 @@ export function useMultiDeviceSync() {
     const onLocalDataChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ type?: string; action?: string }>).detail;
       // Avoid loops from sync's own announcements. `type: "sync"` is the whole
-      // family — this hook's refresh, a pull, a push, the cloud bootstrap, a
-      // snapshot hydration — and is the rule useOfflineStatus applies too. Listing
-      // actions one at a time missed the hydration's other two announcements (the
-      // purchase history it imports, the subscription snapshot it saves), so a
-      // snapshot still bought a cycle here 250ms later with nothing to send. The
-      // action name stays in the condition for a tab still running the previous
-      // build, whose broadcast arrives typed "cloud-hydration".
+      // family — this hook's refresh, a pull, the push's result, the cloud
+      // bootstrap, a snapshot hydration — and is the rule useOfflineStatus applies
+      // too. Listing actions one at a time let through the push's own result, and
+      // two of the three announcements a snapshot makes (the purchase history it
+      // imports, the subscription snapshot it saves): each bought a cycle here
+      // 250ms later with nothing to send. The action name stays in the condition
+      // for a tab still running an older build, whose broadcast of a hydration
+      // arrives typed "cloud-hydration".
       if (detail?.type === "sync" || detail?.action === "direct-import") return;
       scheduleAfterLocalWrite();
     };
 
-    const onSyncQueueUpdated = () => scheduleAfterLocalWrite();
+    // The push's own outbox status writes arrive tagged `type: "sync"` as well: the
+    // cycle that just ran recording its result, not new work. Running another one
+    // after them only re-asked the server with nothing to send. A requeue that
+    // makes a row due comes untagged, and still lands here.
+    const onSyncQueueUpdated = (event: Event) => {
+      if ((event as CustomEvent<{ type?: string }>).detail?.type === "sync") return;
+      scheduleAfterLocalWrite();
+    };
     const onOnline = () => {
       if (shouldPassSharedThrottle(focusThrottleKey, FOCUS_THROTTLE_MS)) void run("online", { force: true, snapshot: true });
     };

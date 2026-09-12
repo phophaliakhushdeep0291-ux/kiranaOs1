@@ -22,7 +22,7 @@ import { ProductAttributesSection } from "./ProductAttributesSection";
 import { ProductVoiceDictation } from "./ProductVoiceDictation";
 import { VariantGridEditor } from "./VariantGridEditor";
 import { VariantLocationSplit } from "./VariantLocationSplit";
-import { convertPackagingMode, type ProductFormData } from "../product-form-state";
+import { convertLooseMode, convertPackagingMode, type ProductFormData } from "../product-form-state";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { activeCategoryNames, loadCategories, mergeCategories, type ShopCategory } from "@/features/core/inventory/category-store";
@@ -579,6 +579,31 @@ export function ProductFormPanel({
   }
 
   /**
+   * Flip "Packed" / "Loose", carrying the unit and the shelf across with it.
+   *
+   * Writing `isLooseItem` on its own is what made this switch appear to do nothing:
+   * the product stayed typed "packet" while its pack size was dropped on save, and
+   * the server refuses a packet with no size — so the shop pressed Loose, pressed
+   * Save, and got the packet back. convertLooseMode restates the unit, the pack and
+   * the stock together; see the note on it for why the measure is the right unit to
+   * land on. The pack unit offered on the way back is one this trade actually sells
+   * in, so a chemist returns to strips rather than to a grocer's packet.
+   */
+  function switchLooseMode(loose: boolean) {
+    const next = convertLooseMode(
+      form.getValues(),
+      loose,
+      packSellingUnits.includes("packet") ? "packet" : (packSellingUnits[0] ?? "packet"),
+    );
+    form.setValue("isLooseItem", next.isLooseItem, { shouldDirty: true, shouldValidate: true });
+    form.setValue("unit", next.unit, { shouldDirty: true, shouldValidate: true });
+    form.setValue("packSizeValue", next.packSizeValue, { shouldDirty: true, shouldValidate: true });
+    form.setValue("packSizeUnit", next.packSizeUnit, { shouldDirty: true, shouldValidate: true });
+    form.setValue("stockQuantity", next.stockQuantity, { shouldDirty: true, shouldValidate: true });
+    form.setValue("lowStockAlert", next.lowStockAlert, { shouldDirty: true, shouldValidate: true });
+  }
+
+  /**
    * Let the packet fill in its own details.
    *
    * The shop already has a barcode lookup — scanning an unknown code at the till
@@ -857,8 +882,8 @@ export function ProductFormPanel({
               that changed its business type can still edit what it has. */}
           {showLooseChoice ? (
             <div className="mb-5 grid grid-cols-2 gap-2 rounded-[12px] border border-[#e6ecf4] bg-[#f7f9fc] p-1">
-              <TypeButton active={!isLoose} icon={<Package size={16} />} label={t("products.form.packedItem")} onClick={() => form.setValue("isLooseItem", false, { shouldDirty: true })} />
-              <TypeButton active={isLoose} icon={<Scale size={16} />} label={t("products.form.looseItem")} onClick={() => form.setValue("isLooseItem", true, { shouldDirty: true })} />
+              <TypeButton active={!isLoose} icon={<Package size={16} />} label={t("products.form.packedItem")} onClick={() => switchLooseMode(false)} />
+              <TypeButton active={isLoose} icon={<Scale size={16} />} label={t("products.form.looseItem")} onClick={() => switchLooseMode(true)} />
             </div>
           ) : null}
 

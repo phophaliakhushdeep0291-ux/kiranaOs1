@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { maskDatabaseUrl } from "./test-db-utils.js";
@@ -42,6 +43,10 @@ function runPrisma(args) {
 }
 
 console.log(`Updating local SQLite schema at ${maskDatabaseUrl(databaseUrl)} without destructive acceptance flags.`);
+// Prisma's SQLite engine on Windows can fail without a useful message when
+// the target file does not exist. Create it without truncating existing data.
+fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+fs.closeSync(fs.openSync(databasePath, "a"));
 runPrisma(["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"]);
 if (process.env.SKIP_LOCAL_PRISMA_GENERATE !== "true") {
   runPrisma(["generate", "--generator", "client", "--schema", "prisma/schema.prisma"]);

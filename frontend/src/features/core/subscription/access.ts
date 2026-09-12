@@ -10,7 +10,7 @@ import {
   FEATURE_LABELS,
   getPlan,
   getPlanForBusinessType,
-  getPlanForEntitlementSnapshot,
+  getPlanForSubscriptionDisplay,
   getRequiredPlanForFeature,
   type FeatureName,
   type PlanCode,
@@ -242,7 +242,7 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
   const now = Date.now();
   const license = await getLicenseEvaluation().catch(() => null);
   if (license?.token && license.state !== "missing") {
-    const plan = getPlanForEntitlementSnapshot(license.plan, getStoredBusinessType(), license.token.features);
+    const plan = getPlanForSubscriptionDisplay(license.plan, getStoredBusinessType(), license.token.features, payload?.plan);
     const graceActive = license.state === "grace";
     const isExpired =
       license.state === "expired" || license.state === "invalid";
@@ -309,10 +309,11 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
       payload.planCode ?? payload.plan_code ?? latest?.plan_code ?? "starter",
     ),
   ).code;
-  const plan = getPlanForEntitlementSnapshot(
+  const plan = getPlanForSubscriptionDisplay(
     planCode,
     getStoredBusinessType(),
     entitlementFeaturesFromPayload(payload),
+    payload.plan,
   );
   const rawStatus = String(payload.status ?? "active").toLowerCase();
   const status: SubscriptionState =
