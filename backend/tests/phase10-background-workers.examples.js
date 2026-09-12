@@ -98,7 +98,7 @@ for (const snippet of ["isQueueEnabled()", "addJob(", "RUN_TRANSACTION_ASSURANCE
   assert(assuranceHooks.includes(snippet), `assurance hook missing durable queue/fallback behavior: ${snippet}`);
 }
 assert(backupWorker.includes("processShopBackupArtifact") && backupWorker.includes("cleanupExpiredShopBackups"), "backup jobs must execute the real encrypted artifact lifecycle");
-for (const snippet of ["aes-256-gcm", "sha256", "Serializable", "credentialsExcluded", "MAX_UNCOMPRESSED_BYTES", "BACKUP_IN_PROGRESS"]) {
+for (const snippet of ["aes-256-gcm", "sha256", "serializableTransaction(", "credentialsExcluded", "MAX_UNCOMPRESSED_BYTES", "BACKUP_IN_PROGRESS"]) {
   assert(backupService.includes(snippet), `backup service missing production safety invariant: ${snippet}`);
 }
 for (const snippet of ["upsertJobScheduler", "CLEANUP_EXPIRED_BACKUPS", "BACKUP_CLEANUP_INTERVAL_HOURS", "shop-backup-expiry-cleanup-v1"]) {

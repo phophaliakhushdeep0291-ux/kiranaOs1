@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { addMoney, moneyShadows, multiplyMoney, round2, sumMoney } from "../../utils/money.js";
 import { validateGstin, validateHsn } from "../../utils/gst.js";
@@ -239,7 +240,7 @@ export async function createLocation(shopId, data, rawActor = {}) {
   const actor = normalizeActor(rawActor);
   await ensurePrimaryLocation(shopId);
   const limits = await getPlanLimits(shopId);
-  const location = await db.$transaction(async (tx) => {
+  const location = await serializableTransaction(async (tx) => {
     const [activeCount, shop] = await Promise.all([
       tx.storeLocation.count({ where: { shopId, active: true } }),
       tx.shop.findUnique({ where: { id: shopId } }),
@@ -265,7 +266,7 @@ export async function createLocation(shopId, data, rawActor = {}) {
       metadata: { registrationFormatValidated: registration.valid, portalVerified: false },
     }, tx);
     return created;
-  }, { isolationLevel: "Serializable" });
+  });
   return locationWithRegistrationStatus(location);
 }
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { buildGstr1WorkingFromRegister, buildInvoiceTaxSnapshot, buildMultiGstinFilingRun, calculateLineTaxBreakdown, filingRunToCsv, validateGstin, validateHsn } from "../src/modules/compliance/compliance.service.js";
+import { buildGstr1WorkingFromRegister, buildGstr3bFromRegister, buildInvoiceTaxSnapshot, buildMultiGstinFilingRun, calculateLineTaxBreakdown, filingRunToCsv, validateGstin, validateHsn } from "../src/modules/compliance/compliance.service.js";
 import { createCustomerSchema, updateCustomerSchema } from "../src/modules/customers/customers.schema.js";
 import { cancelTransferSchema, createLocationSchema, createTransferSchema, receiveTransferSchema, transferComplianceReviewSchema, updateLocationSchema } from "../src/modules/stores/stores.schema.js";
 import { billSellerIdentity, locationSellerIdentity } from "../src/utils/gstIdentity.js";
@@ -350,5 +350,42 @@ assert.match(filingCsv, /Reconciliation: balanced/);
 // The run must never be narrowed to one registration by a stray query parameter.
 assert.match(complianceService, /const \{ sellerGstin, \.\.\.unscoped \} = query/);
 assert.match(complianceService, /artha-gst-filing-run-v1/);
+
+// An export has no buyer GSTIN and is always inter-State, so before Table 6A
+// existed it was filed as a domestic B2C sale — or, under an LUT, disclosed as a
+// nil-rated supply. "Zero rated" and "nil rated" are different reliefs and a
+// filer cannot net them together.
+const exportRegister = {
+  from: "2026-07-01T00:00:00.000Z",
+  to: "2026-07-31T23:59:59.999Z",
+  rows: [
+    // Under LUT: no IGST charged at all.
+    { invoiceNumber: "EXP-1", invoiceDate: "2026-07-06", documentType: "invoice", customerName: "Nairobi Buyer", buyerGstin: "", placeOfSupply: "96", supplyType: "interstate", exportType: "WOPAY", portCode: "INNSA1", shippingBillNumber: "SB-99", shippingBillDate: "2026-07-05", originalInvoiceValue: 0, hsn: "7326", description: "Storage Rack", quantity: 5, unit: "piece", gstRate: 0, taxableValue: 16200, cgst: 0, sgst: 0, igst: 0, discount: 0, lineTotal: 16200 },
+    // With payment of IGST, and above the B2CL threshold so the domestic
+    // invoice-wise rule would have claimed it.
+    { invoiceNumber: "EXP-2", invoiceDate: "2026-07-07", documentType: "invoice", customerName: "Mombasa Buyer", buyerGstin: "", placeOfSupply: "96", supplyType: "interstate", exportType: "WPAY", portCode: "INMAA1", shippingBillNumber: "SB-100", shippingBillDate: "2026-07-06", originalInvoiceValue: 0, hsn: "7326", description: "Storage Rack", quantity: 100, unit: "piece", gstRate: 18, taxableValue: 300000, cgst: 0, sgst: 0, igst: 54000, discount: 0, lineTotal: 354000 },
+  ],
+};
+const exportWorking = buildGstr1WorkingFromRegister(exportRegister);
+assert.equal(exportWorking.exports.length, 2, "every export invoice is reported in Table 6A");
+assert.equal(exportWorking.b2cs.length, 0, "an export must never be summarised as a domestic B2C sale");
+assert.equal(exportWorking.b2cl.length, 0, "the B2CL value threshold is a domestic rule and cannot capture an export");
+assert.equal(exportWorking.nilRated.length, 0, "zero rated is not nil rated; an LUT export must stay out of Table 8");
+const [wopay, wpay] = exportWorking.exports;
+assert.equal(wopay.exportType, "WOPAY");
+assert.equal(wopay.igst, 0, "an LUT export carries no IGST");
+assert.equal(wopay.shippingBillNumber, "SB-99", "Table 6A is rejected without the shipping bill");
+assert.equal(wopay.portCode, "INNSA1");
+assert.equal(wpay.exportType, "WPAY");
+assert.equal(wpay.igst, 54000, "IGST paid on export is reported and reclaimed as a refund");
+assert.equal(wpay.invoiceValue, 354000);
+
+const exportSummary = buildGstr3bFromRegister(exportRegister);
+assert.equal(exportSummary.outwardSupplies["3.1(b)"].taxableValue, 316200, "zero-rated exports belong at 3.1(b)");
+assert.equal(exportSummary.outwardSupplies["3.1(b)"].igst, 54000);
+assert.equal(exportSummary.outwardSupplies["3.1(a)"].taxableValue, 0, "an export is not an ordinary taxable supply");
+assert.equal(exportSummary.outwardSupplies["3.1(c)"].taxableValue, 0, "an LUT export is not a nil-rated or exempt supply");
+assert.equal(exportSummary.interStateSuppliesToUnregistered.length, 0, "Table 3.2 covers unregistered buyers inside India only");
+assert.equal(exportSummary.taxPayable.igst, 54000, "IGST paid on a with-payment export is still a liability now");
 
 console.log("Compliance tax and HSN examples passed");

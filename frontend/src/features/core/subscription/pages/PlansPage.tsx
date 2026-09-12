@@ -30,7 +30,7 @@ export default function PlansPage() {
         description={businessType === "kirana"
           ? `${t(BUSINESS_TYPE_DEFS[businessType].labelKey)} pricing: self-serve software with no setup fee.`
           : `${t(BUSINESS_TYPE_DEFS[businessType].labelKey)} pricing: in-person setup, supported hardware configuration, training, support and software.`}
-        actions={snapshot ? <PlanBadge planCode={snapshot.planCode} status={snapshot.status} /> : null}
+        actions={snapshot ? <PlanBadge planCode={snapshot.planCode} status={snapshot.status} plan={snapshot.plan} /> : null}
       />
 
       {businessType === "kirana" ? (

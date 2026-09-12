@@ -1,6 +1,6 @@
 {
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm run build",
+  "buildCommand": "if [ \"$VERCEL_ENV\" = preview ] && [ -z \"$VITE_API_BASE_URL\" ]; then export VITE_API_BASE_URL=/api; fi; pnpm run build",
   "outputDirectory": "dist/public",
   "rewrites": [
     {

@@ -130,12 +130,22 @@ export function useMultiDeviceSync() {
 
     const onLocalDataChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ type?: string; action?: string }>).detail;
-      // Avoid loops from our own sync completion events.
-      if (detail?.action === "multi-device-refresh" || detail?.action === "pull" || detail?.action === "direct-import") return;
+      // Avoid loops from sync's own announcements. `type: "sync"` is the whole
+      // family — our refresh, a pull, the push's result, cloud bootstrap — and is
+      // the rule useOfflineStatus applies too; listing actions one at a time left
+      // the push's out. The snapshot's direct import is typed "cloud-hydration".
+      if (detail?.type === "sync" || detail?.action === "direct-import") return;
       scheduleAfterLocalWrite();
     };
 
-    const onSyncQueueUpdated = () => scheduleAfterLocalWrite();
+    // The push's own outbox status writes arrive tagged `type: "sync"` as well: the
+    // cycle that just ran recording its result, not new work. Running another one
+    // after them only re-asked the server with nothing to send. A requeue that
+    // makes a row due comes untagged, and still lands here.
+    const onSyncQueueUpdated = (event: Event) => {
+      if ((event as CustomEvent<{ type?: string }>).detail?.type === "sync") return;
+      scheduleAfterLocalWrite();
+    };
     const onOnline = () => {
       if (shouldPassSharedThrottle(focusThrottleKey, FOCUS_THROTTLE_MS)) void run("online", { force: true, snapshot: true });
     };

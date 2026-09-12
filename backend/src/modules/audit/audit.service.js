@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { isWriteConflict } from "../../lib/transactions.js";
 
 /**
  * Audit trail (§2 "Complete Audit Log").
@@ -139,6 +140,10 @@ export async function createAuditLog({
       },
     });
   } catch (error) {
+    // Inside a transaction, a write conflict has already aborted the caller's
+    // work on PostgreSQL. Swallowing it would turn a conflict that
+    // serializableTransaction can retry into "could not be audited".
+    if (client !== db && isWriteConflict(error)) throw error;
     // Audit failures should be visible to operators but must not make an
     // already-completed business action look failed to the user.
     console.error("Audit log failed", error);

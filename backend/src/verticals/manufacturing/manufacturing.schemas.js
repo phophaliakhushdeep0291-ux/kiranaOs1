@@ -35,7 +35,7 @@ export const completeRunSchema = z.object({
   actualOutputBaseQty: stockQty,
   finishedBatchNumber: z.string().trim().min(1).max(80),
   manufacturedOn: z.string().date(),
-  expiresOn: z.string().date(),
+  expiresOn: z.string().date().nullable().optional(),
   qcStatus: z.enum(["passed", "conditional", "failed"]),
   notes: z.string().trim().max(1000).nullable().optional(),
   consumptions: z.array(z.object({
@@ -49,8 +49,20 @@ export const completeRunSchema = z.object({
     sellingUnitId: id.nullable().optional(),
     packageCount: stockQty.nullable().optional(),
     quantityBaseQty: stockQty,
-  })).min(1).max(50),
-}).refine((value) => value.expiresOn > value.manufacturedOn, { path: ["expiresOn"], message: "Expiry must be after manufacturing date" });
+  })).max(50).default([]),
+}).superRefine((value, ctx) => {
+  const issue = (path, message) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+  if (value.qcStatus === "failed") {
+    // A scrapped batch never reaches a shelf, so it has no expiry and no packs.
+    // The reason is the only record of why the materials were written off.
+    if (value.outputs.length) issue("outputs", "A failed batch cannot be packed into finished stock");
+    if (!value.notes) issue("notes", "Record why the batch failed");
+    return;
+  }
+  if (!value.expiresOn) { issue("expiresOn", "Expiry is required for a batch entering stock"); return; }
+  if (value.expiresOn <= value.manufacturedOn) issue("expiresOn", "Expiry must be after manufacturing date");
+  if (!value.outputs.length) issue("outputs", "Record how the finished batch is packed");
+});
 
 export const traceQuerySchema = z.object({ batchNumber: z.string().trim().min(1).max(80) });
 

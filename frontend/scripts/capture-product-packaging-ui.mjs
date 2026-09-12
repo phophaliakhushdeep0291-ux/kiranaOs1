@@ -124,12 +124,21 @@ window.__qa = {
     const submit = [...box.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Add pack to product');
     return submit ? submit.parentElement : null;
   },
-  // A Field is a label followed by its control, so walk up from the label text.
+  /**
+   * The control under a caption, whatever element the caption happens to be.
+   *
+   * The product form's own Field stopped being a <label> when it was made to
+   * describe its control with aria-labelledby instead: it is now a <span> whose
+   * id the control points at, inside a role=group. Only the trade-attributes
+   * section still uses real labels, so a lookup over <label> alone found nine
+   * attribute captions and none of the fields this walkthrough fills in.
+   */
   field(root, labelText) {
-    const label = [...root.querySelectorAll('label')].find((l) => l.textContent.trim().startsWith(labelText));
-    if (!label) throw new Error('field not found: ' + labelText + ' | on screen: '
-      + [...root.querySelectorAll('label')].map((l) => l.textContent.trim()).join(' / '));
-    const holder = label.parentElement;
+    const captions = [...root.querySelectorAll('label, [id^="product-field-label-"]')];
+    const caption = captions.find((l) => l.textContent.trim().startsWith(labelText));
+    if (!caption) throw new Error('field not found: ' + labelText + ' | on screen: '
+      + captions.map((l) => l.textContent.trim()).join(' / '));
+    const holder = caption.closest('[role=group]') || caption.parentElement;
     return holder.querySelector('input, textarea, [role=combobox], button[role=combobox]');
   },
   fill(root, labelText, value) { this.set(this.field(root, labelText), value); },

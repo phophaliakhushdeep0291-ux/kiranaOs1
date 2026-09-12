@@ -74,7 +74,7 @@ export default function SubscriptionPage() {
         headingLevel={2}
         title="Subscription"
         description="Your plan, billing cycle, and store protection in one place."
-        actions={<PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
+        actions={<PlanBadge planCode={snapshot.planCode} status={snapshot.status} plan={snapshot.plan} />}
       />
 
       <Card className={`overflow-hidden rounded-[18px] shadow-[0_16px_42px_rgba(16,35,71,0.08)] ${snapshot.localOnlyAfterExpiry ? "border-amber-300" : "border-[#d7e3f3]"}`}>

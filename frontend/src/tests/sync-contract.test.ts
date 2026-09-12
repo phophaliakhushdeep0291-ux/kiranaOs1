@@ -702,6 +702,30 @@ describe("sync backend contract", () => {
     );
   });
 
+  it("a synced customer leaves exactly one local row", async () => {
+    // What billing writes when a shop types a new name onto an udhar sale: the
+    // customer is minted locally and queued as CREATE_CUSTOMER.
+    dbState.putInto("customers", {
+      id: "customer_local_1",
+      local_id: "customer_local_1",
+      server_id: null,
+      name: "Offline Sync 123456",
+      mobile: "9876500000",
+      type: "udhar",
+      sync_status: "pending_sync",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      created_at: "2026-06-06T12:00:00.000Z",
+      updated_at: "2026-06-06T12:00:00.000Z",
+    });
+
+    await applyIdMappingsFromResponse({ customers: { customer_local_1: "server_customer_1" } });
+
+    const live = scopedRows("customers").filter((row) => row.deleted_at == null && row.merged_into_id == null);
+    expect(live.map((row) => row.id)).toEqual(["server_customer_1"]);
+    expect(live).toHaveLength(1);
+  });
+
   it("ledgerEntries id mapping aliases do not create blank ledger rows", async () => {
     await applyIdMappingsFromResponse({
       ledgerEntries: {

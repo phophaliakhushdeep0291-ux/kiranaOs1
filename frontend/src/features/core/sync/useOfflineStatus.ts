@@ -227,11 +227,13 @@ function handleOffline() {
 
 function handleQueueUpdated(event?: Event) {
   void refreshCount();
-  // A finished sync announces itself on the same channel a local edit uses, so
-  // reacting to it scheduled another sync, which announced itself, and so on.
-  // `useMultiDeviceSync` already filters its own echo this way; this side did not,
-  // which is what turned two schedulers into a loop. Counts still refresh above —
-  // only the follow-up cycle is skipped.
+  // The sync engine's own announcements carry `type: "sync"`: a finished push or
+  // pull on kirana:local-data-changed, and every outbox status write a push makes
+  // on kirana:sync-queue-updated. None is new work. Reacting scheduled another
+  // cycle, which announced itself, and so on — that is what turned two schedulers
+  // into a loop — and each status write alone cost a cycle with nothing to send.
+  // Counts still refresh above; only the follow-up cycle is skipped. A requeue
+  // that makes a row due is announced without the tag.
   const detail = (event as CustomEvent | undefined)?.detail as { type?: string } | undefined;
   if (detail?.type === "sync") return;
   // New local work: whatever the idle ramp had drifted to, the next scheduled

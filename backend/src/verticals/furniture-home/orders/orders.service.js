@@ -1,4 +1,5 @@
 import db from "../../../db.js";
+import { isWriteConflict, serializableTransaction } from "../../../lib/transactions.js";
 import { AppError } from "../../../middleware/error.js";
 import { round2 } from "../../../utils/money.js";
 import { dateRangeForDateOnly, formatDateInTimeZone } from "../../../utils/dates.js";
@@ -212,13 +213,11 @@ export async function getReservations(shopId, { excludeOrderId = null } = {}, cl
 }
 
 async function withOrderTransaction(operation) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      return await db.$transaction(operation, { isolationLevel: "Serializable" });
-    } catch (error) {
-      if (error?.code !== "P2034") throw error;
-      if (attempt === 2) throw new AppError("Stock changed while saving. Check the order and try again.", 409, "ORDER_STOCK_CHANGED");
-    }
+  try {
+    return await serializableTransaction(operation);
+  } catch (error) {
+    if (!isWriteConflict(error)) throw error;
+    throw new AppError("Stock changed while saving. Check the order and try again.", 409, "ORDER_STOCK_CHANGED");
   }
 }
 

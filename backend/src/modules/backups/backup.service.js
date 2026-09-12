@@ -7,6 +7,7 @@ import db, { Prisma } from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { addJob, isQueueEnabled } from "../../lib/queue.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import {
   deleteObject,
   getObject,
@@ -326,16 +327,14 @@ export async function restoreShopBackup(shopId, artifactId, userId, confirmation
   let recoveryBackup = null;
   try {
     recoveryBackup = await createImmediateRecoveryBackup(shopId, userId);
-    const result = await db.$transaction(async (tx) => {
+    const result = await serializableTransaction(async (tx) => {
       const restored = await replaceRestorableShopData(tx, shopId, snapshot);
       await writeRequiredBackupAudit({
         shopId, userId, action: "SHOP_BACKUP_RESTORED", entityType: "BackupArtifact", entityId: artifactId,
         metadata: { recoveryArtifactId: recoveryBackup.id, schemaVersion: BACKUP_SCHEMA_VERSION, ...restored },
       }, tx);
       return restored;
-    }, {
-      isolationLevel: "Serializable", maxWait: 15_000, timeout: 180_000,
-    });
+    }, { maxWait: 15_000, timeout: 180_000 });
     return { ...result, artifact_id: artifactId, recovery_backup: recoveryBackup };
   } finally {
     await releaseShopMaintenanceLock(shopId, lock.token).catch(() => undefined);
@@ -414,9 +413,9 @@ export async function processShopBackupArtifact(artifactId, expectedShopId) {
     throw appError("Backup artifact is already being processed", 409, "BACKUP_IN_PROGRESS");
   }
   try {
-    const snapshot = await db.$transaction(
+    const snapshot = await serializableTransaction(
       (tx) => buildCompleteShopSnapshot(artifact.shopId, tx),
-      { isolationLevel: "Serializable", maxWait: 10_000, timeout: 120_000 },
+      { maxWait: 10_000, timeout: 120_000 },
     );
     const plain = Buffer.from(stringifySnapshot(snapshot), "utf8");
     if (plain.length > MAX_UNCOMPRESSED_BYTES) {

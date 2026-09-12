@@ -298,6 +298,10 @@ export async function retryFailedSyncOperations(
           // already bypasses the attempt cap, and the count is the history the
           // Sync Status screen shows ("Retries: 108").
           repair_requeues: 0,
+          // The transient streak IS reset: it only paces waiting, and a person
+          // pressing Retry has just said not to wait. If the push fails without
+          // a verdict again, the backoff starts over from one second.
+          transient_failures: 0,
         });
         const entityType = entityTypeFromOperation(row.operation_type, row.entity_type);
         const tableName = tableNameForEntity(entityType);

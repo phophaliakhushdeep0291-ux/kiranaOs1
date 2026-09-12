@@ -1232,7 +1232,7 @@ if (exists("src/workers/reminder.worker.js")) {
 
 if (exists("src/modules/backups/backup.service.js")) {
   const backupService = read("src/modules/backups/backup.service.js");
-  for (const snippet of ["aes-256-gcm", "sha256", "Serializable", "credentialsExcluded", "MAX_UNCOMPRESSED_BYTES", "BACKUP_IN_PROGRESS", "BACKUP_STORAGE_NOT_PRODUCTION_SAFE"]) {
+  for (const snippet of ["aes-256-gcm", "sha256", "serializableTransaction(", "credentialsExcluded", "MAX_UNCOMPRESSED_BYTES", "BACKUP_IN_PROGRESS", "BACKUP_STORAGE_NOT_PRODUCTION_SAFE"]) {
     if (!backupService.includes(snippet)) errors.push(`backup service missing production safety invariant: ${snippet}`);
   }
 }

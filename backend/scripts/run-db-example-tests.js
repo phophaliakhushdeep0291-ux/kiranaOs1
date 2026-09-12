@@ -12,11 +12,21 @@ if (files.length === 0) {
 
 const backendRoot = path.resolve(process.cwd());
 const testsRoot = path.resolve(backendRoot, "tests");
-const sourceSchemaPath = path.join(backendRoot, "prisma", "schema.prisma");
+const explicitDatabaseUrl = process.env.POSTGRES_TEST_DATABASE_URL || process.env.TEST_DATABASE_URL;
 const prismaClientVariant = process.env.PRISMA_CLIENT_VARIANT === "certification"
   ? "certification"
   : "integration";
-const generatedSchemaPath = path.join(backendRoot, "generated", `${prismaClientVariant}-prisma-client`, "schema.prisma");
+// Reuse is decided by the client this run will load (see db.js). A PostgreSQL
+// datasource loads the PostgreSQL client, so the SQLite variant client being
+// current says nothing about it.
+const postgresDatabase = /^postgres(?:ql)?:\/\//i.test(explicitDatabaseUrl || "");
+const sourceSchemaPath = path.join(backendRoot, postgresDatabase ? "prisma-postgres" : "prisma", "schema.prisma");
+const generatedSchemaPath = path.join(
+  backendRoot,
+  "generated",
+  postgresDatabase ? "postgres-prisma-client" : `${prismaClientVariant}-prisma-client`,
+  "schema.prisma",
+);
 const resolvedFiles = files.map((file) => {
   const absolute = path.resolve(backendRoot, file);
   const relative = path.relative(testsRoot, absolute);
@@ -27,7 +37,6 @@ const resolvedFiles = files.map((file) => {
   return absolute;
 });
 
-const explicitDatabaseUrl = process.env.POSTGRES_TEST_DATABASE_URL || process.env.TEST_DATABASE_URL;
 const isolatedDatabasePath = explicitDatabaseUrl
   ? null
   : path.join(backendRoot, "prisma", `db-example-${process.pid}-${Date.now()}.db`);

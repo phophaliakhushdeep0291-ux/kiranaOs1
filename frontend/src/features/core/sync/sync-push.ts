@@ -11,7 +11,9 @@ import { syncPush } from "@/features/core/sync/api";
 import { reconcileSyncedBillFromPush } from "@/features/core/sync/bill-reconciliation";
 import { storeConflict } from "@/features/core/sync/sync-conflicts";
 import {
+  isTransientSyncEventResult,
   isTransientSyncFailure,
+  transientFailureCount,
   transientRetryDelayMs,
 } from "@/features/core/sync/sync-failure-classification";
 import {
@@ -361,7 +363,7 @@ async function discardRejectedOptimisticAdjustment(
 async function handlePushResults(
   prepared: PreparedOperation[],
   results: SyncPushEventResult[],
-): Promise<{ pushed: number; failed: number; conflicts: number }> {
+): Promise<{ pushed: number; failed: number; conflicts: number; deferred: number }> {
   const byId = new Map<string, PreparedOperation>();
   prepared.forEach((item) => {
     collectPreparedIdentityKeys(item).forEach((key) => byId.set(key, item));
@@ -371,6 +373,7 @@ async function handlePushResults(
   let pushed = 0;
   let failed = 0;
   let conflicts = 0;
+  let deferred = 0;
 
   for (const result of results) {
     const resultIds = collectResultIdentityKeys(result);
@@ -460,12 +463,28 @@ async function handlePushResults(
       continue;
     }
 
+    const message = result.error_message ?? result.error ?? "Sync failed";
+
+    // The batch landed but the server did not judge this operation: a write
+    // conflict that outlasted its retries, a 503, the same event still being
+    // processed by an earlier request, a reference with no server id yet. That is
+    // the batch-level transient case one event at a time, and it gets the same
+    // treatment — back to PENDING, deferred, no attempt spent, reported as skipped.
+    // As FAILED, a dozen write conflicts on a busy shop retired a sale for good.
+    // Nothing was rejected either, so an optimistic adjustment stays put.
+    if (isTransientSyncEventResult(result)) {
+      // Paced by its own transient streak: retry_count never moves on this path,
+      // so reading it pinned the deferral at 1s for as long as the server kept
+      // failing this one event.
+      await updateOutboxStatus([item.event], "PENDING", message, {
+        deferMs: transientRetryDelayMs(transientFailureCount(item.event)),
+      });
+      deferred += 1;
+      continue;
+    }
+
     await discardRejectedOptimisticAdjustment(item.event, result);
-    await updateOutboxStatus(
-      [item.event],
-      "FAILED",
-      result.error_message ?? result.error ?? "Sync failed",
-    );
+    await updateOutboxStatus([item.event], "FAILED", message);
     failed += 1;
   }
 
@@ -498,7 +517,7 @@ async function handlePushResults(
     }
   }
 
-  return { pushed, failed, conflicts };
+  return { pushed, failed, conflicts, deferred };
 }
 
 /**
@@ -551,7 +570,7 @@ export async function pushPendingOutboxOperations(): Promise<{
     });
     await applyIdMappingsFromResponse(response.idMappings);
     const results = resultListFromPush(response);
-    const outcome = await handlePushResults(prepared, results);
+    const { deferred, ...outcome } = await handlePushResults(prepared, results);
     const nextCursor = nextCursorFromResponse(response);
     await setStoredCursor(nextCursor);
     await refreshBusinessCaches();
@@ -562,7 +581,9 @@ export async function pushPendingOutboxOperations(): Promise<{
       failed: outcome.failed,
       conflicts: outcome.conflicts,
     });
-    return { ...outcome, skipped };
+    // A deferred event is skipped, not failed — the same accounting as a batch
+    // that never got a verdict, so it does not light the "needs review" banner.
+    return { ...outcome, skipped: skipped + deferred };
   } catch (error) {
     const message =
       error instanceof Error
@@ -577,7 +598,9 @@ export async function pushPendingOutboxOperations(): Promise<{
     // was otherwise able to strand a morning of sales in about a dozen blips,
     // recoverable only from a screen nobody opens until something is wrong.
     if (isTransientSyncFailure(error)) {
-      const attempt = Math.max(0, ...events.map((event) => event.retry_count ?? event.attempts ?? 0));
+      // The row that has been failing longest sets the pace, so a sale rung up
+      // mid-outage joins the backoff instead of dragging the batch back to 1s.
+      const attempt = Math.max(0, ...events.map(transientFailureCount));
       await updateOutboxStatus(events, "PENDING", message, {
         deferMs: transientRetryDelayMs(attempt),
       });

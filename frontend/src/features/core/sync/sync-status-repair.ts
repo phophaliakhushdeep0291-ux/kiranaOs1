@@ -618,10 +618,17 @@ export async function repairRetryableBillValidationConflicts(): Promise<number> 
  * reaching for the Sync button — the queue is not stuck, it is serving a
  * sentence for an outage that is already over.
  *
+ * The same goes for a PENDING row a transient failure deferred. That wait grows
+ * with the row's run of transient failures, up to 30s, so without this a till
+ * whose backend had just come back could sit out half a minute for nothing.
+ *
  * Only `next_retry_at` is cleared. `retry_count` is deliberately preserved, so
  * the twelve-attempt cap still retires an operation the server genuinely refuses
  * (a validation failure, a missing owner PIN) instead of letting it loop forever
- * across a flapping connection.
+ * across a flapping connection. `transient_failures` is preserved too, for a
+ * gentler reason: the retry that follows is immediate either way, but if it also
+ * gets no verdict the server is still unwell, and a backend flapping in and out
+ * of reach should not restart the backoff at one second every time it answers.
  */
 export async function clearRetryBackoffAfterReconnect(): Promise<number> {
   await dexieDB.open();
@@ -631,8 +638,11 @@ export async function clearRetryBackoffAfterReconnect(): Promise<number> {
   const now = Date.now();
   let cleared = 0;
   for (const event of rows) {
-    if (!isFailedOutbox(event)) continue;
-    if ((event.retry_count ?? event.attempts ?? 0) >= MAX_AUTOMATIC_RETRY_ATTEMPTS) continue;
+    // A FAILED row walking the failure ladder, or a PENDING one a transient
+    // failure deferred. A retired row stays retired.
+    const failed = isFailedOutbox(event);
+    if (!failed && event.status !== "PENDING") continue;
+    if (failed && (event.retry_count ?? event.attempts ?? 0) >= MAX_AUTOMATIC_RETRY_ATTEMPTS) continue;
     const waitingUntil = event.next_retry_at ? new Date(event.next_retry_at).getTime() : 0;
     if (!Number.isFinite(waitingUntil) || waitingUntil <= now) continue;
     await dexieDB.sync_outbox.put({ ...event, next_retry_at: null });

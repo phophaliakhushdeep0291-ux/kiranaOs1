@@ -18,7 +18,7 @@ export type QuantityDraft = { amount: string; sellingUnitId: string; inventoryLo
 export type QuantityRow = QuantityDraft & { key: string };
 export type CompletionDraft = {
   outputs: QuantityRow[]; materials: Record<string, QuantityRow[]>; batch: string;
-  manufacturedOn: string; expiresOn: string; qcStatus: "passed" | "conditional"; notes: string;
+  manufacturedOn: string; expiresOn: string; qcStatus: "passed" | "conditional" | "failed"; notes: string;
 };
 
 const rounded = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -28,8 +28,28 @@ export function baseQuantity(product: Product | undefined, draft: QuantityDraft)
     : 1;
   return rounded(Number(draft.amount) * Number(multiplier));
 }
+export function scaledMaterial(item: ProductionBom["items"][number], plannedOutputBaseQty: number, recipeOutputBaseQty: number) {
+  return rounded(item.quantityBaseQty * plannedOutputBaseQty / recipeOutputBaseQty * (1 + (item.wastagePercent || 0) / 100));
+}
 export function plannedMaterial(run: RunDetails["run"], item: ProductionBom["items"][number]) {
-  return rounded(item.quantityBaseQty * run.plannedOutputBaseQty / run.bom.outputQuantityBaseQty * (1 + (item.wastagePercent || 0) / 100));
+  return scaledMaterial(item, run.plannedOutputBaseQty, run.bom.outputQuantityBaseQty);
+}
+
+export type MaterialShortage = { productId: string; name: string; unit: string; needed: number; available: number; short: number };
+/**
+ * Materials the recipe will run out of at this batch size. Advisory, not a
+ * block: a shop plans a run and then buys for it. Planning used to say nothing
+ * at all, so the shortage was found halfway through recording the output.
+ */
+export function materialShortages(bom: ProductionBom | undefined, plannedOutputBaseQty: number, products: Product[]): MaterialShortage[] {
+  if (!bom || !Number.isFinite(plannedOutputBaseQty) || plannedOutputBaseQty <= 0 || !(bom.outputQuantityBaseQty > 0)) return [];
+  return bom.items.flatMap((item) => {
+    const product = products.find((entry) => entry.id === item.materialProductId);
+    const needed = scaledMaterial(item, plannedOutputBaseQty, bom.outputQuantityBaseQty);
+    const available = rounded(Number(product?.stockBaseQty ?? 0));
+    if (!Number.isFinite(needed) || needed <= available) return [];
+    return [{ productId: item.materialProductId, name: product?.name ?? item.materialProductId, unit: product?.baseUnit ?? "", needed, available, short: rounded(needed - available) }];
+  });
 }
 export function newQuantityRow(product: Product | undefined, base?: number): QuantityRow {
   const unit = product?.packagingMode === "per_pack" ? product.sellingUnits?.find((entry) => entry.id && entry.isActive && entry.conversionToBase > 0) : undefined;
@@ -66,7 +86,10 @@ export function completionPayload(details: RunDetails, draft: CompletionDraft) {
     const date = new Date(`${day}T00:00:00Z`);
     return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === day;
   };
-  if (!validDay(draft.manufacturedOn) || !validDay(draft.expiresOn) || draft.expiresOn <= draft.manufacturedOn) throw new Error("dates");
+  // A scrapped batch is never stored, so it carries no expiry — only a reason.
+  const scrapped = draft.qcStatus === "failed";
+  if (!validDay(draft.manufacturedOn) || (!scrapped && (!validDay(draft.expiresOn) || draft.expiresOn <= draft.manufacturedOn))) throw new Error("dates");
+  if (scrapped && !draft.notes.trim()) throw new Error("reason");
   if (!draft.outputs.length || draft.outputs.length > 50) throw new Error("quantity");
   const outputUnits = new Set<string>();
   const outputs = draft.outputs.map((value) => {
@@ -106,7 +129,7 @@ export function completionPayload(details: RunDetails, draft: CompletionDraft) {
   if (consumptions.length > 1000) throw new Error("quantity");
   return {
     actualOutputBaseQty: outputTotal, finishedBatchNumber: draft.batch.trim(), manufacturedOn: draft.manufacturedOn,
-    expiresOn: draft.expiresOn, qcStatus: draft.qcStatus, notes: draft.notes.trim() || null,
-    consumptions, outputs,
+    expiresOn: scrapped ? null : draft.expiresOn, qcStatus: draft.qcStatus, notes: draft.notes.trim() || null,
+    consumptions, outputs: scrapped ? [] : outputs,
   };
 }

@@ -27,12 +27,20 @@ const isolatedClient = !isPostgres
 const useIsolatedClient = Boolean(isolatedClient);
 
 function assertCompatibleGeneratedClient() {
-  const generatedSchemaPath = useIsolatedClient
-    ? path.join(process.cwd(), "generated", isolatedClient.directory, "schema.prisma")
-    : path.join(process.cwd(), "node_modules", ".prisma", "client", "schema.prisma");
+  // Check the client db.js will actually load. PostgreSQL has its own
+  // directory (prisma-postgres/schema.prisma generates into it); @prisma/client
+  // holds the SQLite dev client, so checking it for a PostgreSQL run always
+  // found "sqlite" and refused.
+  const generatedDirectory = useIsolatedClient
+    ? path.join(process.cwd(), "generated", isolatedClient.directory)
+    : isPostgres
+      ? path.join(process.cwd(), "generated", "postgres-prisma-client")
+      : path.join(process.cwd(), "node_modules", ".prisma", "client");
+  const generatedSchemaPath = path.join(generatedDirectory, "schema.prisma");
+  const clientLabel = useIsolatedClient ? process.env.PRISMA_CLIENT_VARIANT : isPostgres ? "PostgreSQL" : "default";
   if (!fs.existsSync(generatedSchemaPath)) {
     throw new Error(
-      `SKIP_PRISMA_GENERATE=true requires an existing ${useIsolatedClient ? process.env.PRISMA_CLIENT_VARIANT : "default"} Prisma client. Generate that client first.`
+      `SKIP_PRISMA_GENERATE=true requires an existing ${clientLabel} Prisma client. Generate that client first.`
     );
   }
 
@@ -45,12 +53,12 @@ function assertCompatibleGeneratedClient() {
     );
   }
 
-  if (useIsolatedClient) {
-    const sourceSchemaPath = path.join(process.cwd(), "prisma", "schema.prisma");
-    const sourceSchema = fs.readFileSync(sourceSchemaPath, "utf8");
+  if (useIsolatedClient || isPostgres) {
+    const sourceSchemaFile = isPostgres ? "prisma-postgres/schema.prisma" : "prisma/schema.prisma";
+    const sourceSchema = fs.readFileSync(path.join(process.cwd(), sourceSchemaFile), "utf8");
     if (!prismaSchemasEquivalent(generatedSchema, sourceSchema)) {
       throw new Error(
-        `SKIP_PRISMA_GENERATE=true found a stale ${process.env.PRISMA_CLIENT_VARIANT} Prisma client. Regenerate it from prisma/schema.prisma first.`
+        `SKIP_PRISMA_GENERATE=true found a stale ${clientLabel} Prisma client. Regenerate it from ${sourceSchemaFile} first.`
       );
     }
   }

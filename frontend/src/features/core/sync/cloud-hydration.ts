@@ -4,6 +4,7 @@ import { getOfflineScope } from "@/lib/offline/context";
 import { writeInstantCache, emitLocalDataChanged } from "@/lib/offline/instant-cache";
 import { refreshBusinessCaches } from "@/features/core/sync/sync-reconcile";
 import { syncPull } from "@/features/core/sync/api";
+import { loadIdMap } from "@/features/core/sync/sync-id-mapping";
 import { loadPurchaseOverrideMatcher, rowMatchesPurchaseOverride } from "@/features/core/purchases/sync-guards";
 import { writeSubscriptionSnapshot } from "@/features/core/subscription/access";
 import type { Bill, BillListResult, Customer, Product } from "@/types/api";
@@ -56,9 +57,34 @@ const UNSYNCED_LOCAL_STATUSES = new Set(["pending_sync", "syncing", "failed", "c
 // so a re-import doesn't clobber a change that hasn't been accepted by the server yet — e.g. a
 // just-edited stock/price/barcode, or a bill moved to the recycle bin. Local rows win until they
 // sync (the incremental pull already conflict-protects edits; this guards the bulk path).
+/**
+ * Has the server already taken this row, under an id of its own?
+ *
+ * A row created on this device is keyed by the id the device minted. When sync
+ * accepts it the server answers with its own id, an id_mapping is recorded and the
+ * local row is replaced — but a bulk hydration racing that replacement reads the
+ * echo as ordinary pending work and preserves it beside the server's row. The shop
+ * then has the same customer twice, one copy stuck "pending" forever, and it
+ * survives a reload because this path writes it back to IndexedDB.
+ *
+ * A mapping for the row's own id is the proof it has been accepted. Rows that
+ * already carry a server id are left alone: those are pending EDITS to something
+ * the server knows about, and they must still win here.
+ */
+export function isSupersededLocalEcho(row: AnyRecord, idMap: Record<string, string>): boolean {
+  const serverId = row.server_id ?? row.serverId;
+  if (typeof serverId === "string" && serverId.length > 0) return false;
+  const id = typeof row.id === "string" ? row.id : null;
+  const localId = typeof row.local_id === "string" ? row.local_id : null;
+  return Boolean((id && idMap[id]) || (localId && idMap[localId]));
+}
+
 async function preserveLocalPending(table: string, serverRows: AnyRecord[], idKeys: string[]): Promise<AnyRecord[]> {
   const local = await offlineDB.getAll<AnyRecord>(table).catch(() => []);
-  const pending = local.filter((row) => UNSYNCED_LOCAL_STATUSES.has(String(row.sync_status ?? "synced").toLowerCase()));
+  const idMap = await loadIdMap().catch(() => ({}) as Record<string, string>);
+  const pending = local
+    .filter((row) => UNSYNCED_LOCAL_STATUSES.has(String(row.sync_status ?? "synced").toLowerCase()))
+    .filter((row) => !isSupersededLocalEcho(row, idMap));
   if (pending.length === 0) return serverRows;
   const pendingKeys = new Set<string>();
   for (const row of pending) for (const key of idKeys) {
