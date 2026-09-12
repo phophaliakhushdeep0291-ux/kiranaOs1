@@ -20,7 +20,7 @@
         "icons": "node scripts/generate-icons.mjs",
         "catalog:generate": "node scripts/generate-starter-catalog.mjs",
         "security:check": "npm run bundle:check && npm run app:check",
-        "prod:check": "npm run typecheck && npm run i18n:check && npm run test && npm run build && npm run security:check",
+        "prod:check": "npm run typecheck && npm run i18n:check && npm run build && npm run security:check && npm run test",
         "qa:product-packaging": "node scripts/capture-product-packaging-ui.mjs",
         "qa:purchase-receive": "node scripts/capture-purchase-receive-ui.mjs",
         "qa:supplier-settlement": "node scripts/capture-supplier-settlement-ui.mjs",
