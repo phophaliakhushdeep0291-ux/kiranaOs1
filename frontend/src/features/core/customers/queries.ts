@@ -8,6 +8,8 @@ import * as ledgerApi from "@/features/core/ledger/api";
 import { cacheAuthoritativeSummary } from "@/features/core/ledger/authoritative-balances";
 import { createCustomerLocalFirst, deleteCustomerLocalFirst, updateCustomerLocalFirst } from "@/features/core/customers/local-actions";
 import { getLocalUdharLedger, getLocalUdharSummary, getLocalUdharSummaryAsync, recordPaymentLocalFirst } from "@/features/core/payments/local-actions";
+import { loadIdMap } from "@/features/core/sync/sync-id-mapping";
+import { isSupersededLocalEcho } from "@/features/core/sync/cloud-hydration";
 import { getLedgerCustomerId, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 import type { Customer, CustomerInput, CustomerKhataResult, LedgerResult, QueryParams, UdharSummary } from "@/types/api";
 
@@ -72,16 +74,24 @@ export async function cacheCustomers(serverRows: Customer[]): Promise<Customer[]
       // Sync can remap/delete a local id while a customer request is in flight.
       // Reading the device rows inside this write transaction prevents an old
       // pending local echo from being reinserted after its server id is known.
-      const [current, ledger] = await Promise.all([
+      const [stored, ledger] = await Promise.all([
         offlineDB.getAll<Customer>("customers"),
         offlineDB.getAll<CustomerLedgerEntry>("customer_ledger"),
       ]);
+      // Reading inside the transaction is not enough on its own: until the server
+      // row has been written with the local id on it, the echo matches nothing in
+      // `fresh` and is written straight back as a row of its own. An id_mapping for
+      // the echo's own id is the proof the server has taken it, so drop it here.
+      // Filtering at the source keeps the echo out of both the identity index and
+      // the mergeCustomers() call below.
+      const idMap = await loadIdMap().catch(() => ({}) as Record<string, string>);
+      const current = stored.filter((row) => !isSupersededLocalEcho(row as unknown as Record<string, unknown>, idMap));
       const byIdentity = new Map<string, Customer>();
       for (const customer of current) {
         for (const identity of customerKeys(customer)) byIdentity.set(identity, customer);
       }
       // Index live pending movement once. Re-scanning the full ledger for each
-      // customer makes a refresh grow with customers × ledger history.
+      // customer makes a refresh grow with customers x ledger history.
       const pendingCustomerIds = new Set<string>();
       for (const entry of ledger) {
         if (entry.deleted_at != null || entry.deletedAt != null || entry.merged_into_id != null || entry.mergedIntoId != null) continue;
@@ -90,21 +100,21 @@ export async function cacheCustomers(serverRows: Customer[]): Promise<Customer[]
         if (customerId !== null) pendingCustomerIds.add(customerId);
       }
       const fresh = serverRows.map((row) => {
-        const stored = customerKeys(row).map((identity) => byIdentity.get(identity)).find(Boolean);
-        const identities = stored ? customerKeys(stored) : customerKeys(row);
+        const storedRow = customerKeys(row).map((identity) => byIdentity.get(identity)).find(Boolean);
+        const identities = storedRow ? customerKeys(storedRow) : customerKeys(row);
         const hasPendingFinancialWork = identities.some((identity) => pendingCustomerIds.has(identity));
-        if (!stored || !hasPendingFinancialWork || stored.balance_derived_from_local_ledger !== true) {
-          return { ...stored, ...row };
+        if (!storedRow || !hasPendingFinancialWork || storedRow.balance_derived_from_local_ledger !== true) {
+          return { ...storedRow, ...row };
         }
         // The server response cannot include ledger rows still queued on this
         // device. Preserve only the transaction-derived balance fields while
         // accepting all other current server data.
         return {
-          ...stored,
+          ...storedRow,
           ...row,
-          type: Number(stored.udharAmount ?? stored.totalUdhar ?? 0) > 0 ? "udhar" : row.type,
-          udharAmount: stored.udharAmount,
-          totalUdhar: stored.totalUdhar,
+          type: Number(storedRow.udharAmount ?? storedRow.totalUdhar ?? 0) > 0 ? "udhar" : row.type,
+          udharAmount: storedRow.udharAmount,
+          totalUdhar: storedRow.totalUdhar,
           balance_derived_from_local_ledger: true,
         } as Customer;
       });
@@ -146,6 +156,13 @@ function isDeviceOwnedCustomer(customer: Customer): boolean {
     ["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(String(row.sync_status ?? "").toLowerCase());
 }
 
+/** Has the server acknowledged this row, and given it an id of its own? */
+function isServerBackedCustomer(customer: Customer): boolean {
+  const row = customer as Customer & { server_id?: unknown; serverId?: unknown };
+  return (typeof row.server_id === "string" && row.server_id.length > 0)
+    || (typeof row.serverId === "string" && row.serverId.length > 0);
+}
+
 export function mergeCustomers(serverRows: Customer[], localRows: Customer[], retainSyncedLocal = false): Customer[] {
   const rows: Customer[] = [];
   const keyToIndex = new Map<string, number>();
@@ -157,7 +174,29 @@ export function mergeCustomers(serverRows: Customer[], localRows: Customer[], re
       keys.forEach((key) => keyToIndex.set(key, nextIndex));
       return;
     }
-    rows[index] = { ...rows[index], ...customer };
+    const existing = rows[index];
+    const merged = { ...existing, ...customer } as Customer & { server_id?: unknown; sync_status?: unknown };
+    /**
+     * A local echo must not take the server identity back off the row.
+     *
+     * A customer created on this device is keyed by the id the device minted and
+     * carries no server id; sync then writes the server's row (which remembers
+     * that local id) and drops the echo. The two therefore MATCH here, and
+     * spreading the echo last put `id` back to the local one, `server_id` back to
+     * null and the status back to pending — whereupon cacheCustomers wrote the
+     * result straight into IndexedDB under the local key, recreating the very row
+     * sync had just removed. The shop saw the same customer twice, one copy stuck
+     * "pending" forever, and it survived a reload.
+     *
+     * Only an echo with no server id of its own is overruled, so a pending EDIT to
+     * an already-synced customer still wins, which is what keeps offline changes.
+     */
+    if (isServerBackedCustomer(existing) && !isServerBackedCustomer(customer)) {
+      merged.id = existing.id;
+      merged.server_id = (existing as Customer & { server_id?: unknown }).server_id;
+      merged.sync_status = (existing as Customer & { sync_status?: unknown }).sync_status;
+    }
+    rows[index] = merged;
     customerKeys(rows[index]).forEach((key) => keyToIndex.set(key, index));
   };
   serverRows.forEach(add);
