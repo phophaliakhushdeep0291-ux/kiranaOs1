@@ -25,6 +25,7 @@ import {
   ArrowUpRight,
   Banknote,
   BarChart3,
+  BookOpenCheck,
   Box,
   CalendarDays,
   ChevronDown,
@@ -757,7 +758,7 @@ export default function ReportsPage() {
           </span>
           <span className="inline-flex shrink-0 items-center gap-2 text-[11px] font-bold text-[var(--brand)]">{controlsOpen ? "Hide controls" : "Open controls"}<ChevronDown size={15} className={cn("transition-transform", controlsOpen && "rotate-180")} /></span>
         </button>
-        {controlsOpen ? <div className="space-y-4 border-t border-[#e7edf5] bg-[#f7f9fc] p-3 sm:p-4 lg:p-5"><Link href="/channel-settlements" className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-indigo-950 transition hover:bg-indigo-100"><span className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-indigo-700 shadow-sm"><ReceiptIndianRupee size={18} /></span><span><span className="block text-sm font-black">Channel payout reconciliation</span><span className="block text-[11px] text-indigo-700">Match marketplace order IDs, deductions and paid net without automatic posting</span></span></span><span className="text-xs font-black text-indigo-700">Open →</span></Link><AccountingControlPanel from={range.from} to={range.to} /><BankReconciliationPanel from={range.from} to={range.to} /></div> : null}
+        {controlsOpen ? <div className="space-y-4 border-t border-[#e7edf5] bg-[#f7f9fc] p-3 sm:p-4 lg:p-5"><Link href="/accounting" className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-emerald-950 transition hover:bg-emerald-100"><span className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-emerald-700 shadow-sm"><BookOpenCheck size={18} /></span><span><span className="block text-sm font-black">{t("accounting.title")}</span><span className="block text-[11px] text-emerald-800">{t("accounting.entry.body")}</span></span></span><span className="text-xs font-black text-emerald-700">{t("accounting.entry.action")} →</span></Link><Link href="/channel-settlements" className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-indigo-950 transition hover:bg-indigo-100"><span className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-indigo-700 shadow-sm"><ReceiptIndianRupee size={18} /></span><span><span className="block text-sm font-black">Channel payout reconciliation</span><span className="block text-[11px] text-indigo-700">Match marketplace order IDs, deductions and paid net without automatic posting</span></span></span><span className="text-xs font-black text-indigo-700">Open →</span></Link><AccountingControlPanel from={range.from} to={range.to} /><BankReconciliationPanel from={range.from} to={range.to} /></div> : null}
       </section>
 
     </PageShell>
