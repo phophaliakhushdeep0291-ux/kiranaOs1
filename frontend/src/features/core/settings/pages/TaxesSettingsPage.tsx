@@ -1,5 +1,6 @@
 import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { translateCategory } from "@/features/core/settings/business-types";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -173,9 +174,11 @@ export default function TaxesSettingsPage() {
   const update = (partial: Partial<TaxConfig>) => commit({ ...tax, ...partial });
   const setText = (partial: Partial<TaxConfig>) => setTax((t) => ({ ...t, ...partial }));
   const flush = () => patch({ taxes: tax });
+  // `row.label` is the server's English stand-in for a product with no
+  // category; a real category arrives as the stored key and becomes words here.
   const hsnRows: HsnRow[] = (hsnSummaryQ.data?.categories ?? []).map((row) => ({
     category: row.category,
-    cat: row.label,
+    cat: row.category ? translateCategory(row.category, t) : t("reports.category.uncategorised"),
     rate: row.gstRate == null ? "Mixed" : `${row.gstRate}%`,
     hsn: row.hsn ?? (row.missingHsn > 0 ? "Missing" : "Mixed"),
     count: row.productCount,
@@ -409,7 +412,7 @@ export default function TaxesSettingsPage() {
                 {hsnSummaryQ.isLoading ? <tr><td colSpan={5} className="px-3 py-8 text-center text-[#64748b]">{t("settings.tax.loadingClassifications")}</td></tr> : null}
                 {!hsnSummaryQ.isLoading && hsnRows.length === 0 ? <tr><td colSpan={5} className="px-3 py-8 text-center text-[#64748b]">{t("settings.tax.addProductsFirst")}</td></tr> : null}
                 {hsnRows.map((row, i) => (
-                  <tr key={row.cat} className={i < hsnRows.length - 1 ? "border-b border-[#eef2f8]" : ""}>
+                  <tr key={row.category ?? "__uncategorised__"} className={i < hsnRows.length - 1 ? "border-b border-[#eef2f8]" : ""}>
                     <td className="px-3 py-2.5 font-bold text-[var(--brand-ink)]">{row.cat}</td>
                     <td className="px-3 py-2.5"><Badge tone={row.rate === "Mixed" ? "amber" : "gray"}>{row.rate}</Badge></td>
                     <td className="px-3 py-2.5 font-mono text-[#344668]"><span className="inline-flex items-center gap-2">{row.hsn}{!row.consistent ? <Badge tone="amber">{t("settings.tax.review")}</Badge> : <Badge tone="green">{t("settings.tax.valid")}</Badge>}</span></td>

@@ -162,6 +162,14 @@ export const reportsEn = {
   "reports.table.topCustomers": "Top Customers ({credit})",
   "reports.mobile.creditDue": "{credit} Due",
 
+  // Sales filed under no category: the product had none, or has since left the
+  // catalogue. A real category is shown in the shop's own words instead.
+  "reports.category.uncategorised": "Uncategorised",
+
+  // The category insight. The category arrives already in the reader's words.
+  "reports.insight.topCategory": "{category} contributes {percent}% of total sales.",
+  "reports.insight.topCategoryDetail": "Review product margins and stock depth in this category.",
+
   // Best-seller table, named after what the trade actually sells.
   "reports.table.topProducts": "Top Products",
   "reports.table.topStyles": "Top Styles",

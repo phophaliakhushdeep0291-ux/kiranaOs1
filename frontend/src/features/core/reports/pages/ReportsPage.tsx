@@ -49,11 +49,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageShell, SyncBadge, TradeFocusStrip } from "@/components/shared";
 import { useAppLanguage } from "@/features/core/settings/i18n";
-import { translateCategory, useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { getShopReportsProfile } from "@/features/core/settings/shop-reports";
 import { getExpenseSummary, listExpenses } from "@/features/core/expenses/api";
 import {
   buildLocalReportSnapshot,
+  reportCategoryLabel,
   toDateInputValue,
   type LocalReportSnapshot,
 } from "@/features/core/reports/local-reporting";
@@ -331,6 +332,13 @@ export default function ReportsPage() {
     return { ...point, expense: dayExpense, net: point.profit - dayExpense };
   }), [snapshot?.dailyTrend, expenseByDay]);
 
+  // The chart's own rows, carrying the category in the reader's words. The axis
+  // and the tooltip both read `label`; the stored key stays on `name`.
+  const categoryChart = useMemo(
+    () => (snapshot?.categoryPerformance ?? []).map((row) => ({ ...row, label: reportCategoryLabel(row.name, t) })),
+    [snapshot?.categoryPerformance, t],
+  );
+
   const insights = useMemo(() => {
     if (!snapshot || !selected) return [];
     const salesDelta = delta(selected.sales, previous?.sales ?? 0);
@@ -343,8 +351,11 @@ export default function ReportsPage() {
       },
       topCategory ? {
         tone: "amber" as const,
-        title: `${translateCategory(topCategory.name, t)} contributes ${selected.sales ? Math.round((topCategory.revenue / selected.sales) * 100) : 0}% of total sales.`,
-        detail: "Review product margins and stock depth in this category.",
+        title: t("reports.insight.topCategory", {
+          category: reportCategoryLabel(topCategory.name, t),
+          percent: selected.sales ? Math.round((topCategory.revenue / selected.sales) * 100) : 0,
+        }),
+        detail: t("reports.insight.topCategoryDetail"),
       } : null,
       {
         tone: "red" as const,
@@ -574,12 +585,12 @@ export default function ReportsPage() {
         </Panel>
 
         <Panel title="Category Performance" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
-          <ChartFrame loading={loading} empty={!snapshot?.categoryPerformance.length}>
+          <ChartFrame loading={loading} empty={!categoryChart.length}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={snapshot?.categoryPerformance ?? []} margin={{ top: 20, right: 8, left: -10, bottom: 2 }} barCategoryGap="28%">
+              <BarChart data={categoryChart} margin={{ top: 20, right: 8, left: -10, bottom: 2 }} barCategoryGap="28%">
                 <defs><linearGradient id="categoryBars" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--brand)" /><stop offset="100%" stopColor="#8bb5ff" /></linearGradient></defs>
                 <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" />
-                <XAxis dataKey="name" tickFormatter={(value) => shortText(String(value), 10)} tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false} interval={0} />
+                <XAxis dataKey="label" tickFormatter={(value) => shortText(String(value), 10)} tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false} interval={0} />
                 <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={50} />
                 <Tooltip content={<MoneyTooltip />} />
                 <Bar dataKey="revenue" name="Revenue" fill="url(#categoryBars)" radius={[3, 3, 0, 0]} maxBarSize={34}><LabelList dataKey="revenue" position="top" formatter={(value: unknown) => fmt(Number(value))} style={{ fontSize: 10, fontWeight: 700, fill: "#24385f" }} /></Bar>
@@ -609,7 +620,7 @@ export default function ReportsPage() {
             <MobileReportRow
               key={row.productId}
               title={row.name}
-              subtitle={translateCategory(row.category, t)}
+              subtitle={reportCategoryLabel(row.category, t)}
               value={fmt(row.revenue)}
               meta={`${row.quantitySold.toLocaleString("en-IN")} qty • ${row.marginPct.toFixed(1)}% margin`}
             />
@@ -666,7 +677,7 @@ export default function ReportsPage() {
 
       <section className="hidden items-start gap-4 md:grid xl:grid-cols-3">
         <DenseTable title={t(tradeProfile.topItemsKey)} action="View all" actionHref="/products" headers={["Product", "Category", "Qty Sold", "Sales (₹)", "Margin (%)"]} loading={loading} empty={!snapshot?.topProducts.length}>
-          {snapshot?.topProducts.slice(0, 5).map((row) => <tr key={row.productId}><Td strong>{row.name}</Td><Td>{translateCategory(row.category, t)}</Td><Td right>{row.quantitySold}</Td><Td right strong>{fmt(row.revenue)}</Td><Td right>{row.marginPct.toFixed(1)}%</Td></tr>)}
+          {snapshot?.topProducts.slice(0, 5).map((row) => <tr key={row.productId}><Td strong>{row.name}</Td><Td>{reportCategoryLabel(row.category, t)}</Td><Td right>{row.quantitySold}</Td><Td right strong>{fmt(row.revenue)}</Td><Td right>{row.marginPct.toFixed(1)}%</Td></tr>)}
           {snapshot?.topProducts.length ? <tr className="font-bold"><Td>Total</Td><Td /><Td right>{snapshot.topProducts.reduce((sum, row) => sum + row.quantitySold, 0)}</Td><Td right>{fmt(snapshot.topProducts.reduce((sum, row) => sum + row.revenue, 0))}</Td><Td /></tr> : null}
         </DenseTable>
 

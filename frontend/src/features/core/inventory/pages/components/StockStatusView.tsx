@@ -16,6 +16,7 @@ import {
 import { productMatchesSearch } from "@/features/core/products/product-reliability";
 import { StockMovementDialog } from "./StockMovementDialog";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { translateCategory } from "@/features/core/settings/business-types";
 
 const ROWS_PER_PAGE = 10;
 
@@ -263,7 +264,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
                         </div>
                       </td>
                       <td className="px-3 py-3">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ${categoryBadge(cat)}`}>{cat.replace(/_/g, " ")}</span>
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ${categoryBadge(cat)}`}>{translateCategory(cat, t)}</span>
                       </td>
                       <td className="px-3 py-3"><span className="font-mono text-[12px] text-[#45577a]">{packBarcode}</span></td>
                       <td className="px-3 py-3 capitalize text-[#45577a]">{row.label}</td>

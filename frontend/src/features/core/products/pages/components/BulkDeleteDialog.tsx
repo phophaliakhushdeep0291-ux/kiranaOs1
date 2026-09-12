@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAppLanguage } from "@/features/core/settings/i18n";
+import { translateCategory } from "@/features/core/settings/business-types";
 import {
   runBulkProductDelete,
   summariseBulkDelete,
@@ -31,6 +33,7 @@ function rupees(value: number) {
 
 export function BulkDeleteDialog({ open, onOpenChange, products, onDone }: BulkDeleteDialogProps) {
   const { toast } = useToast();
+  const { t } = useAppLanguage();
   const [ownerPin, setOwnerPin] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +131,7 @@ export function BulkDeleteDialog({ open, onOpenChange, products, onDone }: BulkD
             <div className="mt-2 flex flex-wrap gap-1.5">
               {summary.categories.map((category) => (
                 <span key={category.name} className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold capitalize">
-                  {category.name.replace(/[_-]/g, " ")} · {category.count}
+                  {translateCategory(category.name, t)} · {category.count}
                 </span>
               ))}
             </div>

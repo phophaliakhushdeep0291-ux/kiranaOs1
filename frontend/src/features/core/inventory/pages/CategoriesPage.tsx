@@ -12,6 +12,7 @@ import { isDeletedProduct } from "@/features/core/products/pages/product-pricing
 import { descendantIds, loadCategories, mergeCategories, newCategoryId, saveCategories, type ShopCategory } from "@/features/core/inventory/category-store";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { translateCategory } from "@/features/core/settings/business-types";
 
 const ROWS_PER_PAGE = 10;
 
@@ -82,6 +83,10 @@ export default function CategoriesPage() {
     void patchSettings({ categories: next });
   }
 
+  // A category record's `name` is what products store, so for a shipped
+  // category it is the key ("finished_goods") and not something to print.
+  const label = (name: string) => translateCategory(name, t);
+
   function productCount(name: string) {
     const n = name.trim().toLowerCase();
     return productList.filter((p) => ((p.category ?? "general").trim().toLowerCase()) === n).length;
@@ -92,9 +97,13 @@ export default function CategoriesPage() {
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return visibleCats
-      .filter((c) => !q || c.name.toLowerCase().includes(q) || (c.parentId && (nameById.get(c.parentId) ?? "").toLowerCase().includes(q)))
-      .sort((a, b) => (a.parentId === b.parentId ? a.name.localeCompare(b.name) : a.parentId ? 1 : -1));
-  }, [visibleCats, search, nameById]);
+      .filter((c) => !q
+        || c.name.toLowerCase().includes(q)
+        // The shop can search for the word it sees, not only the stored key.
+        || label(c.name).toLowerCase().includes(q)
+        || (c.parentId && (nameById.get(c.parentId) ?? "").toLowerCase().includes(q)))
+      .sort((a, b) => (a.parentId === b.parentId ? label(a.name).localeCompare(label(b.name)) : a.parentId ? 1 : -1));
+  }, [visibleCats, search, nameById, t]);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
   useEffect(() => { setPage(1); }, [search]);
@@ -210,12 +219,12 @@ export default function CategoriesPage() {
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-[#f4f7fb] text-[#536383]">
                         <FolderTree size={15} />
                       </span>
-                      <span className="font-extrabold capitalize text-[#14284e]">{c.name.replace(/_/g, " ")}</span>
+                      <span className="font-extrabold capitalize text-[#14284e]">{label(c.name)}</span>
                     </div>
                   </td>
                   <td className="px-3 py-3">
                     {c.parentId ? (
-                      <span className="capitalize text-[#45577a]">{(nameById.get(c.parentId) ?? "—").replace(/_/g, " ")}</span>
+                      <span className="capitalize text-[#45577a]">{nameById.has(c.parentId) ? label(nameById.get(c.parentId)!) : "—"}</span>
                     ) : (
                       <span className="text-[#9aa6bb]">—</span>
                     )}
@@ -231,7 +240,7 @@ export default function CategoriesPage() {
                     <div className="flex justify-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8] data-[state=open]:bg-[#eef4ff] data-[state=open]:text-[var(--brand)]" aria-label={`Actions for ${c.name}`}>
+                        <button className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8] data-[state=open]:bg-[#eef4ff] data-[state=open]:text-[var(--brand)]" aria-label={`Actions for ${label(c.name)}`}>
                           <MoreVertical size={16} />
                         </button>
                       </DropdownMenuTrigger>
@@ -322,7 +331,7 @@ function CategoryDialog({
             <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="none">{t("inventory.categories.none")}</SelectItem>
-              {parentOptions.map((c) => <SelectItem key={c.id} value={c.id} className="capitalize">{c.name.replace(/_/g, " ")}</SelectItem>)}
+              {parentOptions.map((c) => <SelectItem key={c.id} value={c.id} className="capitalize">{translateCategory(c.name, t)}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>

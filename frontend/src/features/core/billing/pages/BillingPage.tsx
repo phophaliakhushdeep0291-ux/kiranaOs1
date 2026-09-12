@@ -60,6 +60,7 @@ import { lookupGiftCard } from "@/features/core/gift-cards/api";
 import { startBackendTranscription, type BackendTranscriptionSession } from "@/features/core/voice/backend-transcription";
 import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity, showCustomerDisplayViaHardwareBridge, type HardwareCustomerDisplayState } from "@/features/core/hardware/local-hardware-bridge";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { translateCategory } from "@/features/core/settings/business-types";
 import { speechRecognitionLocale } from "@/features/core/voice/voice-recognition";
 import { Loader2 } from "lucide-react";
 import {
@@ -580,8 +581,13 @@ export default function Billing() {
       const category = product.category?.trim();
       if (category) set.add(category);
     });
-    return Array.from(set).sort((a, b) => a.localeCompare(b)).slice(0, 14);
-  }, [allProducts]);
+    // Ordered by the chip's WORDS, because the cut to fourteen decides which
+    // chips the counter can reach without opening "More" — ordering those by the
+    // stored key hands a Hindi counter an order it cannot read.
+    return Array.from(set)
+      .sort((a, b) => translateCategory(a, t).localeCompare(translateCategory(b, t)))
+      .slice(0, 14);
+  }, [allProducts, t]);
 
   const productById = useMemo(() => new Map(allProducts.map((product) => [product.id, product])), [allProducts]);
 
