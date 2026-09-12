@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import db from "../../../db.js";
 import { AppError } from "../../../middleware/error.js";
+import { serializableTransaction } from "../../../lib/transactions.js";
 import { createAuditLog } from "../../audit/audit.service.js";
 import { businessTypeFromSettings, parseShopSettings } from "../../../verticals/registry.js";
 import { marketplaceSetupSchema, marketplaceEventSchema, marketplaceCommandSchema } from "./schemas.js";
@@ -58,7 +59,7 @@ export function createRestaurantMarketplaceService({ client = db, adapterFor = r
   async function save({ shopId, provider, input, actor = {} }) {
     marketplaceProvider(provider);
     const values = marketplaceSetupSchema.parse(input);
-    return client.$transaction(async (tx) => {
+    return serializableTransaction(async (tx) => {
       await restaurantLocation(tx, shopId, values.locationId);
       const where = { shopId_provider_locationId: { shopId, provider, locationId: values.locationId } };
       const existing = await tx.restaurantMarketplaceConnection.findUnique({ where });
@@ -69,7 +70,7 @@ export function createRestaurantMarketplaceService({ client = db, adapterFor = r
       await requiredAudit(tx, { shopId, userId: actor.userId, action: "ORDER_MARKETPLACE_SETUP_SAVED", entityType: "RestaurantMarketplaceConnection", entityId: saved.id,
         before: existing ? publicConnection(existing) : undefined, after: publicConnection(saved), req: actor.req });
       return publicConnection(saved);
-    }, { isolationLevel: "Serializable" });
+    }, { client });
   }
 
   async function verify({ shopId, connectionId, actor = {} }) {
@@ -86,7 +87,7 @@ export function createRestaurantMarketplaceService({ client = db, adapterFor = r
       throw conflict("Provider did not verify this exact outlet and environment", "MARKETPLACE_OUTLET_NOT_VERIFIED");
     }
     try {
-      return await client.$transaction(async (tx) => {
+      return await serializableTransaction(async (tx) => {
         await restaurantLocation(tx, shopId, row.locationId);
         const existingBinding = await tx.restaurantMarketplaceConnection.findFirst({ where: {
           provider: row.provider, environment: row.environment, externalOutletId: row.externalOutletId,
@@ -101,7 +102,7 @@ export function createRestaurantMarketplaceService({ client = db, adapterFor = r
         const saved = await tx.restaurantMarketplaceConnection.findUniqueOrThrow({ where: { id: row.id } });
         await requiredAudit(tx, { shopId, userId: actor.userId, action: "ORDER_MARKETPLACE_OUTLET_VERIFIED", entityType: "RestaurantMarketplaceConnection", entityId: row.id, after: publicConnection(saved), req: actor.req });
         return publicConnection(saved);
-      }, { isolationLevel: "Serializable" });
+      }, { client });
     } catch (error) {
       if (error.code === "P2002") throw conflict("This provider outlet is already bound", "MARKETPLACE_OUTLET_ALREADY_BOUND");
       throw error;
@@ -115,7 +116,7 @@ export function createRestaurantMarketplaceService({ client = db, adapterFor = r
     // internal schema. No event-supplied shop id is ever trusted or accepted.
     const event = marketplaceEventSchema.parse(await adapter.authenticateAndNormalize({ rawBody, headers }));
     const payloadHash = hash(event);
-    return client.$transaction(async (tx) => {
+    return serializableTransaction(async (tx) => {
       const connection = await tx.restaurantMarketplaceConnection.findFirst({ where: {
         provider, externalOutletId: event.externalOutletId, environment: event.environment, status: "verified",
       } });
@@ -164,12 +165,12 @@ export function createRestaurantMarketplaceService({ client = db, adapterFor = r
         metadata: { provider, eventId: event.eventId, kind: event.kind, result } });
       // No stock, KOT, payment, bill or customer mutations occur at intake.
       return { duplicate: false, result, orderId: order.id };
-    }, { isolationLevel: "Serializable" });
+    }, { client });
   }
 
   async function queueCommand({ shopId, orderId, input, actor = {} }) {
     const command = marketplaceCommandSchema.parse(input);
-    return client.$transaction(async (tx) => {
+    return serializableTransaction(async (tx) => {
       const order = await tx.restaurantMarketplaceOrder.findFirst({ where: { id: orderId, shopId }, include: { connection: true } });
       if (!order) throw new AppError("Marketplace order not found", 404, "MARKETPLACE_ORDER_NOT_FOUND");
       await restaurantLocation(tx, shopId, order.connection.locationId);
@@ -188,13 +189,13 @@ export function createRestaurantMarketplaceService({ client = db, adapterFor = r
       const saved = await tx.restaurantMarketplaceCommand.create({ data: { shopId, connectionId: order.connectionId, orderId, requestKey: command.requestKey, action: command.action, requestJson: JSON.stringify(command) } });
       await requiredAudit(tx, { shopId, userId: actor.userId, action: "ORDER_MARKETPLACE_COMMAND_QUEUED", entityType: "RestaurantMarketplaceCommand", entityId: saved.id, metadata: { action: command.action }, req: actor.req });
       return saved;
-    }, { isolationLevel: "Serializable" });
+    }, { client });
   }
 
   async function dispatchCommand({ shopId, commandId }) {
     // Read the current order and claim delivery in one transaction. Two workers
     // cannot send the same command, and a pre-existing cancellation wins.
-    const claim = await client.$transaction(async (tx) => {
+    const claim = await serializableTransaction(async (tx) => {
       const row = await tx.restaurantMarketplaceCommand.findFirst({ where: { id: commandId, shopId }, include: { connection: true, order: true } });
       if (!row) throw new AppError("Marketplace command not found", 404, "MARKETPLACE_COMMAND_NOT_FOUND");
       if (row.status !== "pending") return { status: row.status };
@@ -209,7 +210,7 @@ export function createRestaurantMarketplaceService({ client = db, adapterFor = r
       if (claimed.count !== 1) return { status: "sending" };
       await requiredAudit(tx, { shopId, action: "ORDER_MARKETPLACE_COMMAND_CLAIMED", entityType: "RestaurantMarketplaceCommand", entityId: row.id });
       return { row };
-    }, { isolationLevel: "Serializable" });
+    }, { client });
     if (!claim.row) return { status: claim.status };
     const row = claim.row;
     const adapter = adapterFor(row.connection.provider);
@@ -226,7 +227,7 @@ export function createRestaurantMarketplaceService({ client = db, adapterFor = r
       await client.restaurantMarketplaceCommand.update({ where: { id: row.id }, data: { status: "needs_review", lastErrorCode: "PROVIDER_ACK_INVALID" } });
       return { status: "needs_review" };
     }
-    return client.$transaction(async (tx) => {
+    return serializableTransaction(async (tx) => {
       const current = await tx.restaurantMarketplaceOrder.findUniqueOrThrow({ where: { id: row.orderId } });
       const nextStatus = COMMAND_STATUS[row.action];
       const terminalConflict = TERMINAL.has(current.status) && current.status !== nextStatus;
@@ -234,7 +235,7 @@ export function createRestaurantMarketplaceService({ client = db, adapterFor = r
       if (!terminalConflict) await tx.restaurantMarketplaceOrder.update({ where: { id: row.orderId }, data: { status: nextStatus } });
       await requiredAudit(tx, { shopId, action: "ORDER_MARKETPLACE_COMMAND_ACKNOWLEDGED", entityType: "RestaurantMarketplaceCommand", entityId: row.id, metadata: { action: row.action, terminalConflict } });
       return { status: terminalConflict ? "needs_review" : "delivered" };
-    }, { isolationLevel: "Serializable" });
+    }, { client });
   }
 
   return { list, save, verify, ingest, queueCommand, dispatchCommand };
