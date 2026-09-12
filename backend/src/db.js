@@ -86,6 +86,20 @@ export const { PrismaClient } = prismaPackage;
  */
 export const Prisma = prismaPackage.Prisma;
 
+/**
+ * Which engine this process is actually talking to.
+ *
+ * Exported from here for the reason stated above the scheme parse: this file is
+ * the one place a wrong answer silently routes queries through the wrong client,
+ * so anything that has to branch on the engine should read the same answer
+ * rather than re-parse DATABASE_URL and drift from it.
+ */
+export const databaseEngine = postgresDatasource
+  ? "postgres"
+  : databaseUrl.startsWith("file:")
+    ? "sqlite"
+    : "unknown";
+
 // SQLite has exactly one writer, but Prisma still opens a pool of connections
 // against the file. When a second connection touches the database while an
 // interactive transaction is open, the 5.14 query engine panics

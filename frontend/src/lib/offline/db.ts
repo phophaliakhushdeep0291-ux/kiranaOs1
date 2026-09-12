@@ -2,6 +2,7 @@ import Dexie, { type Table } from "dexie";
 import type { SyncStatus } from "@/types/domain";
 import { getOfflineScope, nowIso, type OfflineScope } from "@/lib/offline/context";
 import { StorageFullError, isQuotaExceededError } from "@/lib/offline/storage-errors";
+import { nextTransientFailureCount } from "@/features/core/sync/sync-failure-classification";
 
 export interface OfflineRow {
   id: string;
@@ -75,6 +76,10 @@ export interface PendingSyncEvent {
   // How many times a repair sweep has re-queued this event after it failed
   // validation. Bounds the sweep↔push loop; see MAX_REPAIR_REQUEUES.
   repair_requeues?: number;
+  // Consecutive transient failures (no verdict: network, 5xx, a retryable event
+  // result). Paces the PENDING deferral and never retires anything — retry_count
+  // is the budget, and a transient failure spends none of it. Unindexed.
+  transient_failures?: number;
 }
 
 function isCriticalBillSyncEvent(event: PendingSyncEvent): boolean {
@@ -1013,6 +1018,7 @@ class OfflineDBFacade {
     if (clientEventIds.length === 0) return;
     const now = nowIso();
     let changed = 0;
+    let madeDue = false;
     await dexieDB.transaction("rw", dexieDB.sync_outbox, async () => {
       for (const id of clientEventIds) {
         const row = await dexieDB.sync_outbox.get(id);
@@ -1027,7 +1033,7 @@ class OfflineDBFacade {
         // to survive until the push actually lands; a CONFLICT may still be re-pushed by
         // resolution. Once it is synced the authorisation is spent.
         const scrubbedPayload = status === "SYNCED" ? withoutOwnerSecrets(row.payload) : null;
-        await dexieDB.sync_outbox.put({
+        const next: PendingSyncEvent = {
           ...row,
           ...(isRecord(scrubbedPayload) ? { payload: scrubbedPayload } : {}),
           status,
@@ -1049,6 +1055,9 @@ class OfflineDBFacade {
                       : row.sync_status,
           retry_count: retryCount,
           attempts: retryCount,
+          // What spaces a deferred row's retries out. The caller sized this
+          // deferral from the count as it stood; the row now carries one more.
+          transient_failures: nextTransientFailureCount(row, status, options?.deferMs ?? 0),
           error_message: status === "SYNCED" ? null : (errorMessage ?? null),
           last_error: status === "SYNCED" ? null : (errorMessage ?? null),
           last_attempt_at: now,
@@ -1056,11 +1065,28 @@ class OfflineDBFacade {
             status === "FAILED" || retryDelayMs > 0
               ? new Date(Date.now() + retryDelayMs).toISOString()
               : null,
-        });
+        };
+        await dexieDB.sync_outbox.put(next);
+        // Asked of the push's own eligibility rule, so this cannot disagree with it.
+        if (isOutboxPendingNow(next)) madeDue = true;
         changed += 1;
       }
     });
-    if (changed > 0) emitSyncQueueUpdated({ action: "status_changed", status, count: changed });
+    if (changed === 0) return;
+    // A push writes here twice an attempt: SYNCING before the request, and the
+    // server's answer after it. Neither is new work — SYNCED is done; a deferred
+    // PENDING, FAILED and CONFLICT all wait — so the announcement is tagged
+    // `type: "sync"`, which both listeners that start syncs skip. Untagged, each
+    // write cost a cycle with nothing to send, two per attempt, doubling the
+    // traffic against a server that was already failing. Pages refresh on the
+    // event regardless. A write that leaves a row due — PENDING with no deferral,
+    // a requeue — is work, and goes out untagged so it still prompts a sync.
+    emitSyncQueueUpdated({
+      ...(madeDue ? {} : { type: "sync" }),
+      action: "status_changed",
+      status,
+      count: changed,
+    });
   }
 
   /**

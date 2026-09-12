@@ -48,6 +48,7 @@ const OFFLINE_VERTICAL_BY_BUSINESS_TYPE: Partial<Record<BusinessType, string>> =
   clothing: "clothing", footwear: "footwear", auto_parts: "auto-parts",
   electronics: "electronics", pharmacy: "pharmacy", stationery: "stationery-books",
   furniture: "furniture-home", cosmetics: "beauty-cosmetics", restaurant: "restaurant",
+  manufacturing: "manufacturing",
 };
 
   if (typeof window === "undefined" || !("caches" in window)) return false;

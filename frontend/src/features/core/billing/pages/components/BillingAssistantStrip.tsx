@@ -92,7 +92,9 @@ export function BillingAssistantStrip({
         .filter((action) => action.action === "add_bill_lines")
         .flatMap((action) => action.payload?.lines ?? []);
       const added = onApplyLines(lines as StagedBillLine[]);
-      setNote(added > 0 ? t("assistant.till.applied") : t("assistant.till.nothingToAdd"));
+      setNote(result.requiresReview
+        ? t("assistant.outcomeUnknown")
+        : added > 0 ? t("assistant.till.applied") : t("assistant.till.nothingToAdd"));
       setTurn(null);
     } catch (caught) {
       const code = agentErrorCode(caught);

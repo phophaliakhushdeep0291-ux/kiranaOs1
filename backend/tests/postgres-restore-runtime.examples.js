@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { assertSafePostgresTestDatabaseUrl } from "../scripts/test-db-utils.js";
 import { assertSafeRestoreTarget, postgresCliUrl } from "../scripts/postgres-url-safety.js";
 import { openPostgresSnapshot, compareRestoreManifests, sha256File } from "../scripts/restore-fidelity.js";
+import { runCafeRestoreDrill } from "../scripts/cafe-restore-drill.js";
 
 const sourceUrl = process.env.POSTGRES_TEST_DATABASE_URL;
 const restoreUrl = process.env.RESTORE_TEST_DATABASE_URL;
@@ -109,10 +110,19 @@ try {
   assert.equal(report.fidelity.businessWorkloadVerified, true);
   assert.equal(report.fidelity.contentHashesMatched, true);
   assert.equal(report.cleanup.generatedBackupRemoved, true);
+  let cafeReport;
+  assert.equal(runCafeRestoreDrill({
+    env: { ...env, npm_execpath: "", DR_KEEP_BACKUP: "false", BACKUP_FILE: "unrelated-old.dump" },
+    args: [], emit: (payload) => { cafeReport = payload; },
+  }), 0, "cafe entry point must perform a fresh restore without relying on an npm parent process");
+  assert.equal(cafeReport.status, "passed");
+  assert.equal(cafeReport.fidelityVerified, true);
+  assert.equal(cafeReport.recoveryPoint.productionBackupCadenceVerified, false);
+  assert.equal(cafeReport.backup.generatedByThisProof, true);
   console.log(JSON.stringify({
-    type: "postgres_restore_runtime_tests", status: "passed", cases: 5, syntheticTenants: 2,
-    tests: ["populated multi-tenant restore", "concurrent source writes use exported snapshot", "same-count one-paise corruption rejected", "checksum rejection preserves target", "fresh restore content and read-only money verification"],
-    reportPath: passedPath, fidelity: report.fidelity,
+    type: "postgres_restore_runtime_tests", status: "passed", cases: 6, syntheticTenants: 2,
+    tests: ["populated multi-tenant restore", "concurrent source writes use exported snapshot", "same-count one-paise corruption rejected", "checksum rejection preserves target", "fresh restore content and read-only money verification", "cafe wrapper executes fresh snapshot proof without npm-specific environment"],
+    reportPath: passedPath, fidelity: report.fidelity, cafeReport,
   }));
 } finally {
   await snapshot?.close();

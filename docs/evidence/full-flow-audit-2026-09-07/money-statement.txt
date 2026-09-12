@@ -1,0 +1,107 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Cash & Payments" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Cash & Payments page loaded
+  - link "Net - Cash Balance ₹5 ₹120 received · ₹125 paid":
+    - /url: /money-statement?mode=cash
+    - generic: Net -
+    - paragraph: Cash Balance
+    - paragraph: ₹5
+    - paragraph: ₹120 received · ₹125 paid
+  - link "Net + UPI Balance ₹0 ₹0 received · ₹0 paid":
+    - /url: /money-statement?mode=upi
+    - generic: Net +
+    - paragraph: UPI Balance
+    - paragraph: ₹0
+    - paragraph: ₹0 received · ₹0 paid
+  - link "Net + Bank Balance ₹0 ₹0 received · ₹0 paid":
+    - /url: /money-statement?mode=bank
+    - generic: Net +
+    - paragraph: Bank Balance
+    - paragraph: ₹0
+    - paragraph: ₹0 received · ₹0 paid
+  - link "Net - Total Net ₹5 ₹120 in · ₹125 out":
+    - /url: /money-statement
+    - generic: Net -
+    - paragraph: Total Net
+    - paragraph: ₹5
+    - paragraph: ₹120 in · ₹125 out
+  - textbox:
+    - /placeholder: Search name, mobile or bill no
+  - button "today"
+  - button "week"
+  - button "month"
+  - textbox "From date": 2026-09-07
+  - textbox "To date": 2026-09-07
+  - button "Refresh":
+    - text: Refresh
+  - button "all"
+  - button "cash"
+  - button "upi"
+  - button "bank"
+  - button "All flow"
+  - button "Received"
+  - button "Paid"
+  - button "Export":
+    - text: Export
+  - heading "Cash, UPI & Bank Statement" [level=2]
+  - paragraph: Every received and paid entry with date, time, party, and payment mode.
+  - text: 4 rows
+  - button "QA Wholesale 07 Sep 2026 · 05:28 PM -₹75 cash Purchase payment QA-PURCHASE-01":
+    - paragraph: QA Wholesale
+    - paragraph: 07 Sep 2026 · 05:28 PM
+    - paragraph: "-₹75"
+    - generic: cash
+    - generic: Purchase payment
+    - generic: QA-PURCHASE-01
+  - button "QA Credit Customer 07 Sep 2026 · 05:25 PM +₹20 cash Udhar payment Udhar recovery":
+    - paragraph: QA Credit Customer
+    - paragraph: 07 Sep 2026 · 05:25 PM
+    - paragraph: +₹20
+    - generic: cash
+    - generic: Udhar payment
+    - generic: Udhar recovery
+  - button "Walk-in 07 Sep 2026 · 05:08 PM -₹50 cash Bill payment RET-2026-000001":
+    - paragraph: Walk-in
+    - paragraph: 07 Sep 2026 · 05:08 PM
+    - paragraph: "-₹50"
+    - generic: cash
+    - generic: Bill payment
+    - generic: RET-2026-000001
+  - button "Walk-in 07 Sep 2026 · 05:07 PM +₹100 cash Bill payment KOS-2026-000001":
+    - paragraph: Walk-in
+    - paragraph: 07 Sep 2026 · 05:07 PM
+    - paragraph: +₹100
+    - generic: cash
+    - generic: Bill payment
+    - generic: KOS-2026-000001
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

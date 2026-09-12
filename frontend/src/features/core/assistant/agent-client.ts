@@ -72,7 +72,9 @@ export interface AgentClientAction {
 export interface AgentExecutionResult {
   planId: string;
   allSucceeded: boolean;
-  results: Array<{ ref: string; ok: boolean; summary?: string; error?: string }>;
+  executionStatus: "executed" | "failed" | "uncertain";
+  requiresReview: boolean;
+  results: Array<{ ref: string; ok: boolean; summary?: string; error?: string; outcomeUnknown?: boolean; warning?: string }>;
   clientActions?: AgentClientAction[];
 }
 
@@ -110,6 +112,8 @@ export async function sendAgentMessage(
       ...(init?.cart?.length ? { cart: init.cart.slice(0, 40) } : {}),
     }),
     signal: init?.signal,
+    // Allow the server's 45-second turn deadline to return its useful timeout.
+    timeoutMs: 55_000,
   });
 }
 

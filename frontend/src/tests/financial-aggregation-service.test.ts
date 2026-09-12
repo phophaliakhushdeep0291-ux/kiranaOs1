@@ -3,6 +3,46 @@ import { aggregateFinancialRows } from "@/features/core/finance/services/Financi
 
 const date = "2026-06-06";
 
+describe("supplier settlement dates", () => {
+  const purchase = { id: "purchase-local", server_id: "purchase-server", billAmount: 1000, purchasePaidAmount: 600,
+    purchaseDueAmount: 400, purchasePaymentMode: "cash", createdAt: "2026-06-05T10:00:00.000" };
+  const settlements = [
+    { id: "cash-payment", kind: "supplier_payment", purchase_history_id: "purchase-server", amount: 200, mode: "cash", paid_at: "2026-06-06T11:00:00.000" },
+    { id: "upi-payment", kind: "supplier_payment", purchase_history_id: "purchase-server", amount: 300, mode: "upi", paid_at: "2026-06-07T11:00:00.000" },
+  ];
+  it("keeps the initial payment on purchase day and later mixed payments on their own dates", () => {
+    const input = { purchaseBills: [purchase], payments: settlements };
+    const initial = aggregateFinancialRows({ ...input, date: "2026-06-05" });
+    expect(initial.supplierCashPaidToday).toBe(100);
+    expect(initial.supplierUpiPaidToday).toBe(0);
+    const cashDay = aggregateFinancialRows({ ...input, date: "2026-06-06" });
+    expect(cashDay.supplierCashPaidToday).toBe(200);
+    expect(cashDay.cashDrawer.expectedClosingCash).toBe(-200);
+    const upiDay = aggregateFinancialRows({ ...input, date: "2026-06-07" });
+    expect(upiDay.supplierCashPaidToday).toBe(0);
+    expect(upiDay.supplierUpiPaidToday).toBe(300);
+  });
+  it("uses restored supplier ledger history and does not count local echoes twice", () => {
+    const purchases = [{ ...purchase, supplierPayments: settlements }];
+    const restored = aggregateFinancialRows({ date, purchaseBills: purchases });
+    const existing = aggregateFinancialRows({ date, purchaseBills: purchases, payments: settlements });
+    expect(restored.supplierCashPaidToday).toBe(200);
+    expect(existing.supplierCashPaidToday).toBe(200);
+  });
+  it("keeps equal supplier installments separate even when paid in the same minute", () => {
+    const payments = [settlements[0], { ...settlements[0], id: "second-installment" }];
+    const snapshot = aggregateFinancialRows({ date, payments });
+    expect(snapshot.supplierCashPaidToday).toBe(400);
+  });
+  it("returns reversed money to the drawer on the reversal date", () => {
+    const payments = [{ ...settlements[0], status: "reversed", reversed_at: "2026-06-08T10:00:00.000" }];
+    const purchaseBills = [{ ...purchase, purchasePaidAmount: 100, purchaseDueAmount: 900 }];
+    expect(aggregateFinancialRows({ date, purchaseBills, payments }).supplierCashPaidToday).toBe(200);
+    expect(aggregateFinancialRows({ date: "2026-06-08", purchaseBills, payments }).supplierCashPaidToday).toBe(-200);
+    expect(aggregateFinancialRows({ date: "2026-06-05", purchaseBills, payments }).supplierCashPaidToday).toBe(100);
+  });
+});
+
 function bill(id: string, overrides: Record<string, unknown> = {}) {
   return {
     id,
@@ -38,6 +78,40 @@ function payment(id: string, overrides: Record<string, unknown> = {}) {
 }
 
 describe("FinancialAggregationService", () => {
+  it("counts a collection once after sync replaces its client ledger reference with the server id", () => {
+    const snapshot = aggregateFinancialRows({
+      date,
+      payments: [payment("customer_1", {
+        customerId: "customer_1", amount: 20, ledgerEntryId: "server_ledger_1",
+        clientLedgerId: "server_ledger_1", idempotencyKey: "collection_1",
+      })],
+      ledger: [{
+        id: "server_ledger_1", customerId: "customer_1", type: "payment", amount: 20,
+        clientLedgerId: "local_ledger_1", sourceId: "local_ledger_1", sourceType: "udhar_payment",
+        mode: "cash", createdAt: `${date}T10:05:00.000`,
+      }],
+    });
+    expect(snapshot.cashUdharRecoveryToday).toBe(20);
+    expect(snapshot.totalCashCollectedToday).toBe(20);
+  });
+
+  it("nets returned units and costs using complete bill items despite duplicate child rows", () => {
+    const saleItem = { id: "sale_item", productId: "soap", quantity: 3, ratePerRateUnit: 50, costPerRateUnit: 30, lineTotal: 150 };
+    const returnItem = { ...saleItem, id: "return_item", quantity: -1, lineTotal: -50 };
+    const snapshot = aggregateFinancialRows({
+      date,
+      bills: [
+        bill("sale", { grandTotal: 150, items: [saleItem] }),
+        bill("return", { billType: "return", grandTotal: -50, items: [returnItem] }),
+      ],
+      billItems: [
+        { ...saleItem, billId: "sale" }, { ...saleItem, id: "local_sale_item", billId: "sale" },
+        { ...returnItem, billId: "return" }, { ...returnItem, id: "local_return_item", billId: "return" },
+      ],
+    });
+    expect(snapshot.profitByProduct).toEqual([expect.objectContaining({ quantity: 2, revenue: 100, cost: 60, profit: 40 })]);
+  });
+
   it("aggregates revenue, product profit, collections, udhar, and supplier dues from local rows", () => {
     const snapshot = aggregateFinancialRows({
       date,

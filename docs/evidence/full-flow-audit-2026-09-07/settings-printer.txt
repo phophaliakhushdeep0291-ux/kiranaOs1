@@ -1,0 +1,215 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Printer & Receipt" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Printer & Receipt page loaded
+  - heading "Default Printer Setup" [level=3]
+  - paragraph: Connect your receipt printer
+  - text: Ready
+  - group "Connection type":
+    - generic: Connection type
+    - combobox "Connection type":
+      - generic: Browser / system dialog
+  - group "Printer name / label":
+    - generic: Printer name / label
+    - textbox "Printer name / label": Browser / system printer
+  - group "Printer model":
+    - generic: Printer model
+    - textbox "Printer model":
+      - /placeholder: e.g. TVS RP3160
+  - group "Paper size":
+    - generic: Paper size
+    - combobox "Paper size":
+      - generic: 80mm thermal
+  - group "Copies per bill":
+    - generic: Copies per bill
+    - combobox "Copies per bill":
+      - generic: "1"
+  - button "Scan":
+    - text: Scan
+  - button "Connect":
+    - text: Connect
+  - button "Test Print":
+    - text: Test Print
+  - button "Set Default":
+    - text: Set Default
+  - heading "Print Settings" [level=3]
+  - paragraph: What happens when a bill is saved
+  - paragraph: Auto-print after billing
+  - paragraph: Open the receipt as soon as a bill is saved
+  - switch "Auto-print after billing" [checked]
+  - paragraph: Ask before printing
+  - paragraph: Confirm each print
+  - switch "Ask before printing"
+  - paragraph: Print customer copy
+  - switch "Print customer copy" [checked]
+  - paragraph: Print shop copy
+  - switch "Print shop copy"
+  - paragraph: Auto cut paper
+  - paragraph: Supported thermal printers
+  - switch "Auto cut paper" [checked]
+  - paragraph: Cash drawer pulse
+  - paragraph: Open the connected drawer after a direct bridge print
+  - generic: Bridge required
+  - paragraph: Customer display updates
+  - paragraph: Show the live item count and payable total through the paired bridge
+  - generic: Bridge required
+  - paragraph: Print logo
+  - switch "Print logo" [checked]
+  - paragraph: Show dynamic UPI QR at checkout
+  - paragraph: Uses the verified UPI ID saved in Store Profile
+  - switch "Show dynamic UPI QR at checkout" [checked]
+  - heading "Bill Template Preview" [level=3]
+  - paragraph: Live 80mm receipt
+  - button "Test print"
+  - iframe:
+    - banner:
+      - generic: Full Flow Audit Shop
+      - generic: Local QA counter
+      - generic: Jaipur
+      - generic: "Phone: 8778652604"
+    - generic: Sample receipt
+    - generic: Customer copy
+    - generic: Bill no
+    - strong: PREVIEW-001
+    - generic: Date
+    - strong: 7 Sept 2026, 9:20 pm
+    - generic: Customer
+    - strong: Walk-in customer
+    - generic: Mobile
+    - strong: "9876543210"
+    - generic: Cashier
+    - strong: Counter 1
+    - table:
+      - rowgroup:
+        - row "Item Qty Rate Amt":
+          - columnheader "Item"
+          - columnheader "Qty"
+          - columnheader "Rate"
+          - columnheader "Amt"
+      - rowgroup:
+        - row "1. Tata Salt 1kg 2 pkt Rs 28 Rs 56":
+          - cell "1. Tata Salt 1kg"
+          - cell "2 pkt"
+          - cell "Rs 28"
+          - cell "Rs 56"
+        - row "2. Aashirvaad Atta 5kg Less discount Rs 10 1 bag Rs 245 Rs 235":
+          - cell "2. Aashirvaad Atta 5kg Less discount Rs 10":
+            - text: 2. Aashirvaad Atta 5kg
+            - generic: Less discount Rs 10
+          - cell "1 bag"
+          - cell "Rs 245"
+          - cell "Rs 235"
+        - row "3. Amul Butter 100g no bag 3 pcs Rs 62 Rs 186":
+          - cell "3. Amul Butter 100g no bag":
+            - text: 3. Amul Butter 100g
+            - generic: no bag
+          - cell "3 pcs"
+          - cell "Rs 62"
+          - cell "Rs 186"
+    - generic: Subtotal
+    - strong: Rs 477
+    - generic: Discount
+    - strong: "-Rs 7"
+    - generic: Total
+    - strong: Rs 470
+    - generic: Paid
+    - strong: Rs 470
+    - generic: Due / Udhar
+    - strong: Rs 0
+    - generic: GST Breakup (CGST + SGST)
+    - generic: "@5% on Rs 277.14"
+    - strong: CGST Rs 6.93 · SGST Rs 6.93
+    - generic: "@12% on Rs 166.07"
+    - strong: CGST Rs 9.96 · SGST Rs 9.96
+    - generic: Total GST
+    - strong: Rs 23.02
+    - generic: Prices are GST-inclusive — total includes GST of Rs 23.02.
+    - generic: Payment
+    - generic: Cash
+    - strong: Rs 470
+    - contentinfo:
+      - strong: Thank you for shopping with us.
+      - generic: Powered by Artha - local-first counter billing.
+    - button "Print / Save PDF"
+  - heading "Bill Content Settings" [level=3]
+  - paragraph: Which details appear on the receipt
+  - paragraph: Show MRP
+  - switch "Show MRP"
+  - paragraph: Show discount
+  - switch "Show discount" [checked]
+  - paragraph: Show GST breakup
+  - switch "Show GST breakup" [checked]
+  - paragraph: Show HSN code
+  - switch "Show HSN code"
+  - paragraph: Show cashier name
+  - switch "Show cashier name" [checked]
+  - paragraph: Show customer phone
+  - switch "Show customer phone" [checked]
+  - paragraph: Show previous udhar
+  - switch "Show previous udhar"
+  - paragraph: Show total savings
+  - switch "Show total savings"
+  - paragraph: Show return policy
+  - switch "Show return policy"
+  - group "Footer note":
+    - generic: Footer note
+    - textbox "Footer note": Thank you for shopping with us.
+  - paragraph: Browser security allows direct printer scanning only for supported Bluetooth devices. For most thermal printers, install or pair the printer in Windows/Android and Artha will print through the system dialog.
+  - heading "Printer Queue" [level=3]
+  - paragraph: Print actions from this session
+  - button "Clear queue"
+  - generic: No print jobs yet. Use Test Print or Download Receipt to check the setup.
+  - button "Print sample":
+    - text: Print sample
+  - button "Download receipt":
+    - text: Download receipt
+  - heading "Hardware compatibility check" [level=3]
+  - paragraph: Capabilities detected on this device—not marketing claims
+  - generic: Available
+  - paragraph: System receipt printing
+  - paragraph: Print dialog and installed drivers
+  - generic: Available
+  - paragraph: Bluetooth browser API
+  - paragraph: Detected only; printing still uses the paired system queue
+  - generic: Available
+  - paragraph: USB browser API
+  - paragraph: Detected only; direct ESC/POS uses the local bridge
+  - generic: Available
+  - paragraph: Serial weighing scale
+  - paragraph: Web Serial capable browser; device protocol still required
+  - generic: Unavailable
+  - paragraph: Customer display
+  - paragraph: Configure a vendor adapter in Hardware Bridge Setup
+  - generic: Unavailable
+  - paragraph: Local hardware bridge
+  - paragraph: Direct printer, cutter, drawer, scale and display adapters
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

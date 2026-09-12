@@ -61,10 +61,20 @@ export function prescriptionBlockers(prescription, { now = Date.now(), validityD
   if (prescription.deletedAt) blockers.push("PRESCRIPTION_DELETED");
   if (prescription.status === "cancelled") blockers.push("PRESCRIPTION_CANCELLED");
 
-  // A slip already used up cannot authorise another sale. refillsAllowed is the
-  // number of REPEATS, so one dispense is always permitted: allowed 0 means the
-  // single original dispense and nothing after it.
-  if (prescription.status === "dispensed" && Number(prescription.refillsUsed ?? 0) > Number(prescription.refillsAllowed ?? 0)) {
+  // A slip already used up cannot authorise another sale.
+  //
+  // refillsAllowed counts REPEATS, and refillsUsed counts repeats taken — the
+  // first hand-over is not a refill, as the register's own doc says and as its
+  // dispense path, canDispense and the refillable summary all count it. So a
+  // slip that has reached status "dispensed" has already spent its original,
+  // and >= is the ceiling: allowed 0 / used 0 is a spent one-time slip, not a
+  // sale still to come.
+  //
+  // This read > for a while, one dispense looser than every other reader of the
+  // same two columns. The register would refuse a hand-over that the till, the
+  // only place that actually gates a sale, waved through — so a one-time slip
+  // handed over at the register could buy Schedule H again at the counter.
+  if (prescription.status === "dispensed" && Number(prescription.refillsUsed ?? 0) >= Number(prescription.refillsAllowed ?? 0)) {
     blockers.push("PRESCRIPTION_REFILLS_EXHAUSTED");
   }
 

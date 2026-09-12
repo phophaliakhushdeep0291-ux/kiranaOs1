@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { addJob, isQueueEnabled } from "../../lib/queue.js";
@@ -201,11 +202,11 @@ export async function getReminderStatus() {
 async function enqueueOrSkip(log, userId, req) {
   recordReminderMetric({ status: "requested", provider: log.provider, channel: log.channel });
   if (!isQueueEnabled()) {
-    const updated = await db.$transaction(async (tx) => {
+    const updated = await serializableTransaction(async (tx) => {
       const saved = await tx.reminderLog.update({ where: { id: log.id }, data: { status: "skipped", error: "JOB_QUEUE_DISABLED" } });
       await writeRequiredReminderAudit(tx, { shopId: log.shopId, userId, action: "REMINDER_PROVIDER_NOT_CONFIGURED", entityType: "ReminderLog", entityId: log.id, metadata: { customerId: log.customerId, channel: log.channel, status: "skipped", provider: log.provider, reason: "JOB_QUEUE_DISABLED" }, req });
       return saved;
-    }, { isolationLevel: "Serializable" });
+    });
     recordReminderMetric({ status: "skipped", provider: updated.provider, channel: updated.channel });
     return { log: updated, queued: false, code: "JOB_QUEUE_DISABLED" };
   }
@@ -217,11 +218,11 @@ async function enqueueOrSkip(log, userId, req) {
   }, { jobId: `whatsapp-reminder-${log.id}` });
   if (!queueResult.success) {
     const code = queueResult.code || "JOB_QUEUE_UNAVAILABLE";
-    const updated = await db.$transaction(async (tx) => {
+    const updated = await serializableTransaction(async (tx) => {
       const saved = await tx.reminderLog.update({ where: { id: log.id }, data: { status: "failed", error: code, failedAt: new Date(), lastStatusAt: new Date() } });
       await writeRequiredReminderAudit(tx, { shopId: log.shopId, userId, action: "REMINDER_FAILED", entityType: "ReminderLog", entityId: log.id, metadata: { customerId: log.customerId, channel: log.channel, status: "failed", provider: log.provider, reason: code }, req });
       return saved;
-    }, { isolationLevel: "Serializable" });
+    });
     recordReminderMetric({ status: "failed", provider: updated.provider, channel: updated.channel });
     return { log: updated, queued: false, code };
   }
@@ -231,7 +232,7 @@ async function enqueueOrSkip(log, userId, req) {
 async function reserveReminderDecision(shopId, user, input, { req = null, variables: extraVariables = {} } = {}) {
   const { customerId, channel, template, templateText, overrideCooldown } = input;
   const lockKey = `${shopId}:${customerId}:${channel}`;
-  return withReminderDecisionLock(lockKey, () => db.$transaction(async (tx) => {
+  return withReminderDecisionLock(lockKey, () => serializableTransaction(async (tx) => {
     // PostgreSQL's row lock closes the same race across app instances. The
     // in-process lock above provides deterministic parity for local SQLite.
     await lockReminderCustomer(tx, shopId, customerId);
@@ -267,7 +268,7 @@ async function reserveReminderDecision(shopId, user, input, { req = null, variab
       tx,
     );
     return { log, message, code: null, queued: true };
-  }, { isolationLevel: "Serializable" }));
+  }));
 }
 
 export async function sendReminder(shopId, user, input, { req = null, variables = {} } = {}) {
@@ -330,7 +331,7 @@ export async function sendStatementReminder(shopId, user, input, { req = null } 
  * of automatically sending the same customer message twice on retry.
  */
 export async function claimReminderForDispatch(reminderLogId) {
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const existing = await tx.reminderLog.findUnique({ where: { id: reminderLogId } });
     if (!existing) throw appError("Reminder log not found", 404, "REMINDER_LOG_NOT_FOUND");
     if (existing.status !== "queued") return { log: existing, claimed: false };
@@ -354,12 +355,12 @@ export async function claimReminderForDispatch(reminderLogId) {
       metadata: { customerId: claimed.customerId, channel: claimed.channel, claimedAt },
     });
     return { log: claimed, claimed: true };
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 export async function markReminderFromProvider(reminderLogId, result, { req = null } = {}) {
   const status = result?.success ? "accepted" : (result?.status === "skipped" ? "skipped" : "failed");
-  const transition = await db.$transaction(async (tx) => {
+  const transition = await serializableTransaction(async (tx) => {
     const existing = await tx.reminderLog.findUnique({ where: { id: reminderLogId } });
     if (!existing) throw appError("Reminder log not found", 404, "REMINDER_LOG_NOT_FOUND");
     const changed = await tx.reminderLog.updateMany({
@@ -388,7 +389,7 @@ export async function markReminderFromProvider(reminderLogId, result, { req = nu
       req,
     });
     return { updated, changed: true };
-  }, { isolationLevel: "Serializable" });
+  });
   const updated = transition.updated;
   if (!transition.changed) return updated;
   recordReminderMetric({ status, provider: updated.provider, channel: updated.channel });

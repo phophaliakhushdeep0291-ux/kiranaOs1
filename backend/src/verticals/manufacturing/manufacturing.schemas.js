@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const id = z.string().trim().min(1).max(64);
 const qty = z.coerce.number().positive().max(1_000_000_000);
+const stockQty = qty.refine((value) => Math.abs(value - Math.round(value * 100) / 100) < 0.0000001, "Use at most two decimal places for stock quantities");
 
 export const createBomSchema = z.object({
   finishedProductId: id,
@@ -31,25 +32,37 @@ export const createRunSchema = z.object({
 });
 
 export const completeRunSchema = z.object({
-  actualOutputBaseQty: qty,
+  actualOutputBaseQty: stockQty,
   finishedBatchNumber: z.string().trim().min(1).max(80),
   manufacturedOn: z.string().date(),
-  expiresOn: z.string().date(),
+  expiresOn: z.string().date().nullable().optional(),
   qcStatus: z.enum(["passed", "conditional", "failed"]),
   notes: z.string().trim().max(1000).nullable().optional(),
   consumptions: z.array(z.object({
     productId: id,
     inventoryLotId: id.nullable().optional(),
     sellingUnitId: id.nullable().optional(),
-    packageCount: qty.nullable().optional(),
-    actualBaseQty: qty,
-  })).min(1).max(100),
+    packageCount: stockQty.nullable().optional(),
+    actualBaseQty: stockQty,
+  })).min(1).max(1000),
   outputs: z.array(z.object({
     sellingUnitId: id.nullable().optional(),
-    packageCount: qty.nullable().optional(),
-    quantityBaseQty: qty,
-  })).min(1).max(50),
-}).refine((value) => value.expiresOn > value.manufacturedOn, { path: ["expiresOn"], message: "Expiry must be after manufacturing date" });
+    packageCount: stockQty.nullable().optional(),
+    quantityBaseQty: stockQty,
+  })).max(50).default([]),
+}).superRefine((value, ctx) => {
+  const issue = (path, message) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+  if (value.qcStatus === "failed") {
+    // A scrapped batch never reaches a shelf, so it has no expiry and no packs.
+    // The reason is the only record of why the materials were written off.
+    if (value.outputs.length) issue("outputs", "A failed batch cannot be packed into finished stock");
+    if (!value.notes) issue("notes", "Record why the batch failed");
+    return;
+  }
+  if (!value.expiresOn) { issue("expiresOn", "Expiry is required for a batch entering stock"); return; }
+  if (value.expiresOn <= value.manufacturedOn) issue("expiresOn", "Expiry must be after manufacturing date");
+  if (!value.outputs.length) issue("outputs", "Record how the finished batch is packed");
+});
 
 export const traceQuerySchema = z.object({ batchNumber: z.string().trim().min(1).max(80) });
 
@@ -92,6 +105,10 @@ export const dispatchTradeOrderSchema = z.object({
   packageCount: qty.nullable().optional(), netWeight: qty.nullable().optional(), grossWeight: qty.nullable().optional(),
   sealNumber: optionalText(80), notes: optionalText(1000),
 }).refine((value) => value.grossWeight == null || value.netWeight == null || value.grossWeight >= value.netWeight, { path: ["grossWeight"], message: "Gross weight cannot be below net weight" });
-export const attachTradeBillSchema = z.object({ billId: id });
+export const createTradeInvoiceSchema = z.object({
+  billType: z.enum(["normal_sale", "gst_invoice"]).default("normal_sale"),
+  paymentMode: z.enum(["cash", "upi", "bank", "credit"]),
+  customerId: id.optional(),
+}).strict();
 export const returnTradeOrderSchema = z.object({ reason: z.string().trim().min(3).max(500), refundMode: z.enum(["cash", "upi", "bank", "udhar", "gift_card"]).default("bank") });
 export const tradeOrderListQuerySchema = z.object({ status: z.enum(["all", "draft", "confirmed", "allocated", "packed", "dispatched", "invoiced", "returned", "cancelled"]).default("all"), limit: z.coerce.number().int().min(1).max(500).default(100) });

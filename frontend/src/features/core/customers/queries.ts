@@ -10,9 +10,11 @@ import { createCustomerLocalFirst, deleteCustomerLocalFirst, updateCustomerLocal
 import { getLocalUdharLedger, getLocalUdharSummary, getLocalUdharSummaryAsync, recordPaymentLocalFirst } from "@/features/core/payments/local-actions";
 import { loadIdMap } from "@/features/core/sync/sync-id-mapping";
 import { isSupersededLocalEcho } from "@/features/core/sync/cloud-hydration";
+import { getLedgerCustomerId, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 import type { Customer, CustomerInput, CustomerKhataResult, LedgerResult, QueryParams, UdharSummary } from "@/types/api";
 
 const CUSTOMERS_CACHE_KEY = "customers";
+const UNSYNCED_LEDGER_STATUSES = new Set(["pending_sync", "syncing", "failed", "local_only"]);
 
 export type ListCustomersParams = QueryParams;
 export type ListCustomersResponse = Customer[];
@@ -68,20 +70,54 @@ function filterCachedCustomers(customers: Customer[], params?: ListCustomersPara
 /** Cache raw server rows, never a caller's pre-request snapshot of local rows. */
 export async function cacheCustomers(serverRows: Customer[]): Promise<Customer[]> {
   try {
-    const merged = await offlineDB.transaction(["customers"], async (tx) => {
+    const merged = await offlineDB.transaction(["customers", "customer_ledger"], async (tx) => {
       // Sync can remap/delete a local id while a customer request is in flight.
       // Reading the device rows inside this write transaction prevents an old
       // pending local echo from being reinserted after its server id is known.
-      const stored = await offlineDB.getAll<Customer>("customers");
+      const [stored, ledger] = await Promise.all([
+        offlineDB.getAll<Customer>("customers"),
+        offlineDB.getAll<CustomerLedgerEntry>("customer_ledger"),
+      ]);
       // Reading inside the transaction is not enough on its own: until the server
       // row has been written with the local id on it, the echo matches nothing in
       // `fresh` and is written straight back as a row of its own. An id_mapping for
-      // the echo's own id is the proof the server has taken it, so drop it here —
-      // the acknowledged row is the one that belongs in the shop's list.
+      // the echo's own id is the proof the server has taken it, so drop it here.
+      // Filtering at the source keeps the echo out of both the identity index and
+      // the mergeCustomers() call below.
       const idMap = await loadIdMap().catch(() => ({}) as Record<string, string>);
       const current = stored.filter((row) => !isSupersededLocalEcho(row as unknown as Record<string, unknown>, idMap));
-      const byId = new Map(current.map((row) => [row.id, row]));
-      const fresh = serverRows.map((row) => ({ ...byId.get(row.id), ...row }));
+      const byIdentity = new Map<string, Customer>();
+      for (const customer of current) {
+        for (const identity of customerKeys(customer)) byIdentity.set(identity, customer);
+      }
+      // Index live pending movement once. Re-scanning the full ledger for each
+      // customer makes a refresh grow with customers x ledger history.
+      const pendingCustomerIds = new Set<string>();
+      for (const entry of ledger) {
+        if (entry.deleted_at != null || entry.deletedAt != null || entry.merged_into_id != null || entry.mergedIntoId != null) continue;
+        if (!UNSYNCED_LEDGER_STATUSES.has(String(entry.sync_status ?? "").toLowerCase())) continue;
+        const customerId = getLedgerCustomerId(entry);
+        if (customerId !== null) pendingCustomerIds.add(customerId);
+      }
+      const fresh = serverRows.map((row) => {
+        const storedRow = customerKeys(row).map((identity) => byIdentity.get(identity)).find(Boolean);
+        const identities = storedRow ? customerKeys(storedRow) : customerKeys(row);
+        const hasPendingFinancialWork = identities.some((identity) => pendingCustomerIds.has(identity));
+        if (!storedRow || !hasPendingFinancialWork || storedRow.balance_derived_from_local_ledger !== true) {
+          return { ...storedRow, ...row };
+        }
+        // The server response cannot include ledger rows still queued on this
+        // device. Preserve only the transaction-derived balance fields while
+        // accepting all other current server data.
+        return {
+          ...storedRow,
+          ...row,
+          type: Number(storedRow.udharAmount ?? storedRow.totalUdhar ?? 0) > 0 ? "udhar" : row.type,
+          udharAmount: storedRow.udharAmount,
+          totalUdhar: storedRow.totalUdhar,
+          balance_derived_from_local_ledger: true,
+        } as Customer;
+      });
       const rows = mergeCustomers(fresh, current).map(normaliseCustomerForCache);
       await tx.putMany("customers", rows);
       return rows;

@@ -142,7 +142,8 @@ export async function getTestersForProduct(shopId, productId) {
  * decrement twice.
  */
 export async function openTester(shopId, data, identity = {}) {
-  const product = await db.product.findFirst({
+  return db.$transaction(async (tx) => {
+  const product = await tx.product.findFirst({
     where: { id: data.productId, shopId, deletedAt: null },
     select: { id: true, name: true, costPerRateUnit: true, rateUnit: true, displayUnit: true, baseUnit: true },
   });
@@ -152,18 +153,16 @@ export async function openTester(shopId, data, identity = {}) {
   const openedOn = data.openedOn ? dayBounds(data.openedOn, "openedOn").start : new Date();
   // Snapshotted now: the point of the figure is what testers cost over a period,
   // and a later price change must not rewrite last quarter's number.
-  const costValue = data.costValue != null
+  let costValue = data.costValue != null
     ? round2(Number(data.costValue) || 0)
     : round2(Number(product.costPerRateUnit) || 0);
 
   let stockLedgerId = null;
   if (moveStock) {
-    // The key does two jobs. It makes a retried open idempotent — a double tap
-    // on a slow connection must not decrement the shelf twice — and it is the
-    // only way to find the row afterwards, because `recordDamage` returns the
-    // resulting balances rather than the ledger entry's id.
+    // Correlate the stock movement with this register entry. Both writes share
+    // this transaction, so a failed register save leaves shelf stock unchanged.
     const idempotencyKey = `tester:${randomUUID()}`;
-    await recordDamage(
+    const movement = await recordDamage(
       shopId,
       {
         productId: product.id,
@@ -174,12 +173,14 @@ export async function openTester(shopId, data, identity = {}) {
         locationId: data.locationId ?? null,
       },
       { ...identity, idempotencyKey },
+      tx,
     );
-    const ledger = await db.stockLedger.findFirst({ where: { shopId, idempotencyKey }, select: { id: true } });
+    if (data.costValue == null) costValue = movement.damageLossValue;
+    const ledger = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey }, select: { id: true } });
     stockLedgerId = ledger?.id ?? null;
   }
 
-  const tester = await db.testerUnit.create({
+  const tester = await tx.testerUnit.create({
     data: {
       shopId,
       productId: product.id,
@@ -195,6 +196,7 @@ export async function openTester(shopId, data, identity = {}) {
     },
   });
   return serializeTester(tester);
+  });
 }
 
 /**

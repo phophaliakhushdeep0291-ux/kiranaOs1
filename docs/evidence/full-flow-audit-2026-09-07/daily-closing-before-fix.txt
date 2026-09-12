@@ -1,0 +1,139 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Daily Closing" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Daily Closing page loaded
+  - heading "Daily Closing" [level=1]
+  - paragraph: Cash drawer and business summary from local data.
+  - link "Reports":
+    - /url: /reports
+    - text: Reports
+  - button "Print":
+    - text: Print
+  - button "Share":
+    - text: Share
+  - button "Refresh":
+    - text: Refresh
+  - text: Closing date
+  - textbox "Closing date": 2026-09-07
+  - paragraph: Expected cash in drawer tonight
+  - paragraph: ₹5
+  - paragraph: Opening float + cash sales + old udhar cash recovery + cash in - supplier cash paid - cash expenses - cash out
+  - text: Cash in ₹90
+  - text: UPI in ₹0
+  - text: Bank in ₹0
+  - text: Supplier cash -₹75
+  - paragraph: Cash, UPI, and bank split
+  - generic: Cash in
+  - generic: ₹90
+  - paragraph: 100%
+  - generic: UPI in
+  - generic: ₹0
+  - paragraph: 0%
+  - generic: Bank in
+  - generic: ₹0
+  - generic: Old udhar recovered ₹40
+  - paragraph: Opening float & cash in / out
+  - generic: Opening float for 2026-09-07
+  - spinbutton "Opening float for 2026-09-07"
+  - button "Save"
+  - paragraph: The change you put in the drawer this morning. Declared each day rather than carried over, so yesterday's shortage never hides inside today's expected cash.
+  - generic: Cash expenses today
+  - generic: ₹10
+  - paragraph: Cash-paid expenses only — UPI and bank expenses never leave the drawer.
+  - text: Record cash in / out
+  - spinbutton
+  - textbox "Reason (e.g. petrol, extra change)"
+  - button "Cash in":
+    - text: Cash in
+  - button "Cash out":
+    - text: Cash out
+  - paragraph: Nothing recorded for 2026-09-07. Log money you add to or take from the till so the count at closing can actually match.
+  - paragraph: Count the drawer — over / short
+  - generic: Counted cash for 2026-09-07
+  - spinbutton "Counted cash for 2026-09-07"
+  - button "Save" [disabled]
+  - paragraph: Saved on this device and kept for 90 days — repeated shorts on the same weekday are worth investigating.
+  - paragraph: Over / short history
+  - paragraph: No drawer counts saved yet. Count tonight's drawer to start the history.
+  - heading "Income today" [level=2]
+  - paragraph: Everything that came in
+  - paragraph: Total sales
+  - paragraph: All bills for the day
+  - paragraph: ₹100
+  - paragraph: Cash sales
+  - paragraph: ₹50
+  - paragraph: UPI sales
+  - paragraph: ₹0
+  - paragraph: Bank sales
+  - paragraph: ₹0
+  - paragraph: Old udhar recovered
+  - paragraph: Cash ₹40 / UPI ₹0 / Bank ₹0
+  - paragraph: ₹40
+  - heading "Credit & outgoing" [level=2]
+  - paragraph: What went out or remains due
+  - paragraph: Udhar given today
+  - paragraph: Credit extended to customers
+  - paragraph: ₹50
+  - paragraph: Supplier cash paid
+  - paragraph: ₹75
+  - paragraph: Supplier UPI paid
+  - paragraph: ₹0
+  - paragraph: Supplier bank paid
+  - paragraph: ₹0
+  - paragraph: Supplier due (unpaid)
+  - paragraph: Purchase bills not yet paid
+  - paragraph: ₹75
+  - heading "Top sold products" [level=2]
+  - table:
+    - rowgroup:
+      - row "Product Qty Sales":
+        - columnheader "Product"
+        - columnheader "Qty"
+        - columnheader "Sales"
+    - rowgroup:
+      - row "1 QA Soap 5 ₹50":
+        - cell "1 QA Soap":
+          - generic: "1"
+          - generic: QA Soap
+        - cell "5"
+        - cell "₹50"
+  - heading "Low-stock items" [level=2]
+  - generic: No low-stock items
+  - heading "Sync check before closing" [level=2]
+  - paragraph: Ensure all data is backed up to the cloud
+  - paragraph: "0"
+  - paragraph: Pending backup
+  - paragraph: "0"
+  - paragraph: Failed sync
+  - paragraph: "0"
+  - paragraph: Conflicts
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

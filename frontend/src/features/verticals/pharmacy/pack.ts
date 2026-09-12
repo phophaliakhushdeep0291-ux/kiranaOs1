@@ -38,7 +38,7 @@ export const pharmacyPack: VerticalPack = {
   // Contributes the prescription control to shared billing, so core never
   // imports pharmacy. Named rather than imported — see `VerticalSlotId`.
   // Server twin: shared/sale-guards.js.
-  billingSlots: ["pharmacy/prescription"],
+  billingSlots: ["pharmacy/prescription", "pharmacy/schedule-slip"],
   capabilities: [
     "BASIC_INVENTORY", "BATCH_TRACKING", "EXPIRY_TRACKING", "PRESCRIPTION_TRACKING",
     "MEDICINE_SUBSTITUTES", "SUPPLIER_RETURNS",

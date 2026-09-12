@@ -1,3 +1,4 @@
+import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -96,6 +97,7 @@ function mailSupport(subject: string, body: string) {
 }
 
 export default function AdvancedSettingsPage() {
+  const requestExport = useDataExport();
   const { toast } = useToast();
   const { prefs, patch, hydrated } = useSettingsPrefs();
   const { accent, setAccent } = useAppTheme();
@@ -214,7 +216,7 @@ export default function AdvancedSettingsPage() {
         exportedAt: new Date().toISOString(),
         tables: Object.fromEntries(entries),
       });
-      toast({ title: t("settings.sync.backupDownloaded"), description: t("settings.advanced.backupPrivate") });
+      toast({ title: t("settings.advanced.exportDownloaded"), description: t("settings.advanced.backupPrivate") });
     } catch {
       toast({ title: t("settings.advanced.backupFailed"), description: t("settings.advanced.backupFailedHelp"), variant: "destructive" });
     }
@@ -406,10 +408,10 @@ export default function AdvancedSettingsPage() {
             {[
               { label: t("settings.advanced.export.import"), icon: Upload, run: () => { window.location.href = "/products?import=1"; } },
               { label: t("settings.advanced.export.template"), icon: Download, run: () => downloadCsvTemplate("artha-customers-template.csv", ["name", "mobile", "address", "openingBalance"]) },
-              { label: t("settings.advanced.export.products"), icon: Download, run: () => void exportTable("products", "artha-products.json") },
-              { label: t("settings.advanced.export.customers"), icon: Download, run: () => void exportTable("customers", "artha-customers.json") },
-              { label: t("settings.advanced.export.bills"), icon: Download, run: () => void exportTable("bills", "artha-bills.json") },
-              { label: t("settings.advanced.export.full"), icon: Download, run: () => void exportFullBackup() },
+              { label: t("settings.advanced.export.products"), icon: Download, run: () => requestExport({ reportType: "products", format: "json" }, () => exportTable("products", "artha-products.json")) },
+              { label: t("settings.advanced.export.customers"), icon: Download, run: () => requestExport({ reportType: "customers", format: "json" }, () => exportTable("customers", "artha-customers.json")) },
+              { label: t("settings.advanced.export.bills"), icon: Download, run: () => requestExport({ reportType: "bills", format: "json" }, () => exportTable("bills", "artha-bills.json")) },
+              { label: t("settings.advanced.export.full"), icon: Download, run: () => requestExport({ reportType: "local_records", format: "json" }, exportFullBackup) },
             ].map((b) => (
               <Button key={b.label} variant="outline" className="h-10 justify-start gap-2 rounded-[9px] text-[12px] font-bold" onClick={b.run}>
                 <b.icon size={14} /> {b.label}

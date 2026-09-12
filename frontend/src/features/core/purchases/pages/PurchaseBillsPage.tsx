@@ -1,3 +1,4 @@
+import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
@@ -27,6 +28,7 @@ import { usePanelResize, PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { TradeFocusStrip } from "@/components/shared";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { Fld } from "@/features/core/settings/ui";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { getShopPurchasesProfile } from "@/features/core/settings/shop-purchases";
 import { cn } from "@/lib/utils";
@@ -137,6 +139,7 @@ function emptyPurchaseLine(key: number): PurchaseLine {
 }
 
 export default function PurchaseBillsPage() {
+  const requestExport = useDataExport();
   const { t } = useAppLanguage();
   // Receiving is where a trade's second record gets made — the lot, the serial,
   // the size run — and this screen is the last moment the delivery is in hand.
@@ -653,7 +656,7 @@ export default function PurchaseBillsPage() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button onClick={exportCsv} disabled={filtered.length === 0} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
+              <Button onClick={() => requestExport({ reportType: "purchases", format: "csv" }, exportCsv)} disabled={filtered.length === 0} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
                 <Upload size={13} className="rotate-180" /> Export
               </Button>
               <Button onClick={() => setPanelOpen(true)} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
@@ -1380,18 +1383,18 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
         <section className="app-table-scroll purchase-lines">
           <h3>Products</h3>
           <div className="purchase-lines-head">
-            <span>Product</span><span>Qty</span><span>Unit Cost</span><span className="text-right">Total</span><span />
+            <span id="purchase-product-label">Product</span><span id="purchase-qty-label">Qty</span><span id="purchase-cost-label">Unit Cost</span><span className="text-right">Total</span><span />
           </div>
           {lines.map((line) => (
             <div key={line.key} className="purchase-line">
               <Select value={line.productId} onValueChange={(v) => setLine(line.key, { productId: v })}>
-                <SelectTrigger className="h-9 text-[12px]"><SelectValue placeholder="Select product" /></SelectTrigger>
+                <SelectTrigger aria-labelledby="purchase-product-label" className="h-9 text-[12px]"><SelectValue placeholder="Select product" /></SelectTrigger>
                 <SelectContent>
                   {products.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Input className="h-9 px-2 text-[12px]" type="number" min="0" placeholder="0" value={line.qty} onChange={(e) => setLine(line.key, { qty: e.target.value })} />
-              <Input className="h-9 px-2 text-[12px]" type="number" min="0" step="0.01" placeholder="₹0" value={line.cost} onChange={(e) => setLine(line.key, { cost: e.target.value })} />
+              <Input aria-labelledby="purchase-qty-label" className="h-9 px-2 text-[12px]" type="number" min="0" placeholder="0" value={line.qty} onChange={(e) => setLine(line.key, { qty: e.target.value })} />
+              <Input aria-labelledby="purchase-cost-label" className="h-9 px-2 text-[12px]" type="number" min="0" step="0.01" placeholder="₹0" value={line.cost} onChange={(e) => setLine(line.key, { cost: e.target.value })} />
               <span className="truncate text-right text-[12px] font-bold text-[var(--brand-ink)]">{fmt(lineTotal(line))}</span>
               <button onClick={() => setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== line.key) : prev))} className="purchase-line-remove" aria-label="Remove line"><Trash2 size={13} /></button>
               {lineNeedsBatch(products, line) && (
@@ -1527,15 +1530,6 @@ function PageBtn({ children, active, disabled, onClick }: { children: React.Reac
         active ? "bg-[var(--brand)] text-white" : "text-[#52627e] hover:bg-[#eef2f8] disabled:opacity-40 disabled:hover:bg-transparent")}>
       {children}
     </button>
-  );
-}
-
-function Fld({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{label}</Label>
-      {children}
-    </div>
   );
 }
 

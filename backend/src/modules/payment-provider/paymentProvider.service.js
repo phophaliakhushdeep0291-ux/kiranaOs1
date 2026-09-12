@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -76,7 +77,7 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
   let transaction;
   let createdNow = false;
   try {
-    transaction = await db.$transaction(async (tx) => {
+    transaction = await serializableTransaction(async (tx) => {
       const created = await tx.paymentTransaction.create({
         data: {
           id: transactionId,
@@ -105,7 +106,7 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
         req,
       });
       return created;
-    }, { isolationLevel: "Serializable" });
+    });
     createdNow = true;
   } catch (error) {
     if (error?.code !== "P2002") throw error;
@@ -164,7 +165,7 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
   assertRecoveredRazorpayOrder(order, transaction);
 
   const safeOrder = sanitizePayload(order);
-  transaction = await db.$transaction(async (tx) => {
+  transaction = await serializableTransaction(async (tx) => {
     const fresh = await tx.paymentTransaction.findUnique({ where: { id: transaction.id } });
     if (!fresh || fresh.shopId !== shopId) throw checkoutIdempotencyConflictError();
     assertCheckoutReplayMatches(fresh, checkoutFingerprint);
@@ -198,7 +199,7 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
     return updated;
 
 
-  }, { isolationLevel: "Serializable" });
+  });
 
 
   return buildSubscriptionCheckoutResponse({ transaction, orderId: order.id, planCode, billingCycle, coupon, baseAmountPaise, idempotent: !createdNow });
@@ -467,7 +468,7 @@ export async function verifySubscriptionPayment({ shopId, userId, input, req = n
 
   let result;
   try {
-    result = await db.$transaction(async (tx) => {
+    result = await serializableTransaction(async (tx) => {
       const freshTransaction = await tx.paymentTransaction.findFirst({
         where: { id: transaction.id, shopId, provider: "razorpay" },
       });
@@ -539,7 +540,7 @@ export async function verifySubscriptionPayment({ shopId, userId, input, req = n
       });
 
       return { transaction: paidTransaction, ...activation };
-    }, { isolationLevel: "Serializable" });
+    });
   } catch (error) {
     if (error?.code === "P2002") throw providerPaymentAlreadyUsedError(razorpay_payment_id);
     throw error;
@@ -748,7 +749,7 @@ async function processPaymentSuccessWebhook(payload, event) {
   }
 
   try {
-    return await db.$transaction(async (tx) => {
+    return await serializableTransaction(async (tx) => {
       const existingTransaction = await tx.paymentTransaction.findFirst({
         where: { id: transactionId, provider: "razorpay" },
       });
@@ -875,7 +876,7 @@ async function processPaymentSuccessWebhook(payload, event) {
       });
 
       return { activated: true, transactionId: paidTransaction.id, subscriptionId: activation.subscription.id };
-    }, { isolationLevel: "Serializable" });
+    });
   } catch (error) {
     if (error?.code === "P2002") throw providerPaymentAlreadyUsedError(paymentId);
     throw error;
@@ -894,7 +895,7 @@ async function processPaymentFailureWebhook(payload, event) {
     return { activated: false, paymentFailed: true, reason: "Failure webhook missing local transaction id" };
   }
 
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const transaction = await tx.paymentTransaction.findFirst({ where: { id: transactionId, provider: "razorpay" } });
     if (!transaction) {
       await tx.paymentProviderEvent.update({ where: { id: event.id }, data: { processedAt: new Date() } });
@@ -959,7 +960,7 @@ async function processPaymentFailureWebhook(payload, event) {
       metadata: { provider: "razorpay", eventId: event.eventId, razorpayPaymentId: payment?.id, reason },
     });
     return { activated: false, paymentFailed: true };
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 async function processRefundWebhook(payload, event) {
@@ -1073,7 +1074,7 @@ async function markProviderEventFailed(id, error) {
 }
 
 async function markPaymentFailed(transactionId, reason, payload, audit = {}) {
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const current = await tx.paymentTransaction.findUnique({ where: { id: transactionId } });
     if (!current || current.status === "paid") return current;
     const failed = await tx.paymentTransaction.update({
@@ -1093,7 +1094,7 @@ async function markPaymentFailed(transactionId, reason, payload, audit = {}) {
       });
     }
     return failed;
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 async function markProviderEventDuplicate(event, req) {

@@ -34,7 +34,7 @@ export default function SettingsPage() {
   const { t } = useAppLanguage();
   const { user } = useAuth();
   const { snapshot } = useSubscriptionSnapshot();
-  const { isOnline, isSyncing } = useOfflineStatus();
+  const { isOnline, isSyncing, pendingCount, failedCount, conflictCount, queueStatus } = useOfflineStatus();
   const shop = useGetShop();
   const [printer, setPrinter] = useState<PrinterConfig>(DEFAULT_PRINTER_CONFIG);
   const [gst, setGst] = useState({ mode: "Exclusive (Add to price)", rate: "18%" });
@@ -163,7 +163,7 @@ export default function SettingsPage() {
         </Card>
 
         <Card>
-          <CardHead icon={<CreditCard size={15} />} title={t("settings.hub.billingSubscription")} action={<Manage href="/settings/billing" label={t("settings.hub.managePlanAction")} />} />
+          <CardHead icon={<CreditCard size={15} />} title={t("settings.hub.billingSubscription")} action={<Manage href="/subscription" label={t("settings.hub.managePlanAction")} />} />
           <div className="px-5 pb-4">
             <div className="mb-4 flex items-center gap-2">
               <Badge tone="amber">{t("settings.store.planBadge", { plan: planName })}</Badge>
@@ -181,7 +181,7 @@ export default function SettingsPage() {
                 <p className="text-[11px] text-[#64748b]">{t("settings.hub.usageThisMonth")}</p>
                 <p className="font-display text-[18px] font-black text-[var(--brand-ink)]">{snapshot?.status === "active" ? t("settings.hub.subscriptionActive") : "—"}</p>
                 <p className="mt-1 text-[11px] text-[#64748b]">{t("settings.hub.managePlanAction")}</p>
-                <Link href="/settings/billing" className="mt-3 inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.hub.viewPlan")} <ChevronRight size={13} /></Link>
+                <Link href="/subscription" className="mt-3 inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.hub.viewPlan")} <ChevronRight size={13} /></Link>
               </div>
             </div>
           </div>
@@ -255,7 +255,7 @@ export default function SettingsPage() {
           <CardHead icon={<Cloud size={15} />} title={t("settings.hub.syncBackup")} action={<Manage href="/settings/sync" label={t("settings.hub.viewLogs")} />} />
           <div className="px-5 pb-4">
             <div className="flex items-center gap-1.5 text-[13px] font-bold text-emerald-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{isOnline ? (isSyncing ? "Syncing…" : "All synced") : "Offline"}
+              <span className={`h-1.5 w-1.5 rounded-full ${queueStatus === "ready" && pendingCount + failedCount + conflictCount === 0 ? "bg-emerald-500" : "bg-amber-500"}`} />{queueStatus !== "ready" ? t(queueStatus === "error" ? "sync.local.unavailable" : "sync.local.checking") : failedCount + conflictCount > 0 ? "Review sync" : pendingCount > 0 ? `${pendingCount} pending` : isOnline ? (isSyncing ? "Syncing…" : "All synced") : "Offline"}
             </div>
             <p className="mt-2 text-[11px] text-[#64748b]">{t("settings.hub.syncHelp")}</p>
           </div>

@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { roundMoney } from "@/lib/money";
+import { mergeSupplierPaymentHistory } from "@/features/core/finance/services/supplier-payment-history";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
 import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/core/sync/bill-reconciliation";
 import type { Bill, Customer, Expense, PurchaseBill, Supplier } from "@/types/api";
@@ -319,7 +320,7 @@ function buildEmbeddedBillPayments(bill: Record<string, unknown>): Array<{ mode:
       amount: firstNumber(payment, ["amount", "paidAmount", "paid_amount"]),
       id: rowId(payment, "bill-payment", index),
     }))
-    .filter((payment): payment is { mode: MoneyStatementMode; amount: number; id: string } => Boolean(payment.mode) && payment.amount > 0);
+    .filter((payment): payment is { mode: MoneyStatementMode; amount: number; id: string } => Boolean(payment.mode) && payment.amount !== 0);
   if (rows.length > 0) return rows;
 
   const fallbackRows: Array<{ mode: MoneyStatementMode; amount: number; id: string }> = [];
@@ -333,7 +334,7 @@ function buildEmbeddedBillPayments(bill: Record<string, unknown>): Array<{ mode:
 
   const mode = normaliseMoneyMode(bill.paymentMode ?? bill.payment_mode);
   const total = firstNumber(bill, ["paidAmount", "paid_amount", "buyerPaidAmount", "buyer_paid_amount", "grandTotal", "grand_total", "totalAmount", "total_amount"]);
-  return mode && total > 0 ? [{ mode, amount: total, id: mode }] : [];
+  return mode && total !== 0 ? [{ mode, amount: total, id: mode }] : [];
 }
 
 function dedupePurchaseBills(rows: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
@@ -378,14 +379,33 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
     billIdentityKeys(bill).forEach((key) => billsById.set(key, bill));
   });
 
-  const payments = dedupePaymentsForDisplay((input.payments ?? []).filter((row) => !isDeleted(row)));
+  const payments = dedupePaymentsForDisplay(mergeSupplierPaymentHistory(input.payments ?? [], input.purchaseBills ?? []).filter((row) => !isDeleted(row)
+    && !["reversed", "cancelled", "voided"].includes(String(row.status ?? "").toLowerCase())));
+  const supplierPaidByPurchase = new Map<string, number>();
   const paymentBillIds = new Set<string>();
   const paymentIds = new Set<string>();
   payments.forEach((payment, index) => {
     const mode = normaliseMoneyMode(payment.mode ?? payment.paymentMode ?? payment.payment_mode);
     const amount = firstNumber(payment, ["amount", "paidAmount", "paid_amount"]);
-    if (!mode || amount <= 0) return;
+    if (!mode || amount === 0) return;
     paymentIdentityKeys(payment).forEach((key) => paymentIds.add(key));
+    if (payment.kind === "supplier_payment") {
+      const purchaseKeys = rowKeys(payment, ["purchase_history_id", "purchaseHistoryId", "purchase_bill_id", "purchaseBillId", "local_purchase_history_id", "localPurchaseHistoryId"]);
+      purchaseKeys.forEach((key) => supplierPaidByPurchase.set(key, (supplierPaidByPurchase.get(key) ?? 0) + amount));
+      const supplier = suppliers.get(firstString(payment, ["supplier_id", "supplierId"]));
+      const occurredAt = dateValue(payment, ["paid_at", "paidAt", "created_at", "createdAt"]);
+      rows.push({
+        id: `payment:${rowId(payment, "supplier-payment", index)}`,
+        occurredAt, dateLabel: dateLabel(occurredAt), timeLabel: timeLabel(occurredAt),
+        partyName: firstString(supplier ?? {}, ["name"]) || firstString(payment, ["supplier_name", "supplierName"]) || "Supplier",
+        source: "Purchase payment",
+        reference: firstString(payment, ["invoice_number", "invoiceNumber", "reference"]) || "Purchase",
+        mode, direction: amount > 0 ? "out" : "in", amount: Math.abs(amount),
+        status: firstString(payment, ["sync_status", "status"]),
+        note: firstString(payment, ["reference", "note"]),
+      });
+      return;
+    }
     const relatedBillId = firstString(payment, ["billId", "bill_id", "billLocalId", "bill_local_id", "billServerId", "bill_server_id"]);
     const relatedBill = relatedBillId ? billsById.get(relatedBillId) : undefined;
     if (relatedBillId) paymentBillIds.add(relatedBillId);
@@ -409,8 +429,8 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
       source: relatedBillId ? "Bill payment" : "Udhar payment",
       reference: firstString(payment, ["billNo", "billNumber", "reference", "description"]) || (relatedBill ? compactBillReference(relatedBill) : relatedBillId ? "Bill payment" : "Udhar recovery"),
       mode,
-      direction: "in",
-      amount,
+      direction: amount < 0 ? "out" : "in",
+      amount: Math.abs(amount),
       status: firstString(payment, ["sync_status", "status"]) || firstString(relatedBill ?? {}, ["sync_status", "paymentStatus", "payment_status", "status"]),
       note: firstString(payment, ["note", "remarks", "description"]),
       detail: relatedBill
@@ -485,8 +505,8 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
         source: "Bill payment",
         reference: compactBillReference(bill),
         mode: payment.mode,
-        direction: "in",
-        amount: payment.amount,
+        direction: payment.amount < 0 ? "out" : "in",
+        amount: Math.abs(payment.amount),
         status: firstString(bill, ["paymentStatus", "payment_status", "status"]),
         detail: billDetail(bill, itemsByBillId, productsById, undefined),
       });
@@ -494,8 +514,10 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
   });
 
   dedupePurchaseBills(input.purchaseBills ?? []).forEach((purchase, index) => {
-    const mode = normaliseMoneyMode(purchase.paymentMode ?? purchase.payment_mode);
-    const amount = firstNumber(purchase, ["paidAmount", "paid_amount", "amountPaid", "amount_paid"]);
+    const mode = normaliseMoneyMode(purchase.paymentMode ?? purchase.payment_mode ?? purchase.purchasePaymentMode ?? purchase.purchase_payment_mode);
+    const separatePaid = Math.max(0, ...rowKeys(purchase, ["id", "server_id", "local_id", "purchaseHistoryId", "purchaseBillId", "localPurchaseHistoryId"])
+      .map((key) => supplierPaidByPurchase.get(key) ?? 0));
+    const amount = Math.max(0, firstNumber(purchase, ["purchasePaidAmount", "purchase_paid_amount", "paidAmount", "paid_amount", "amountPaid", "amount_paid"]) - separatePaid);
     if (!mode || amount <= 0) return;
     const sid = firstString(purchase, ["supplierId", "supplier_id"]);
     const supplier = suppliers.get(sid);
@@ -517,7 +539,8 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
     });
   });
 
-  (input.expenses ?? []).filter((row) => !isDeleted(row)).forEach((expense, index) => {
+  (input.expenses ?? []).filter((row) => !isDeleted(row)
+    && !["pending", "unpaid", "cancelled", "voided"].includes(String(row.status ?? "paid").toLowerCase())).forEach((expense, index) => {
     const mode = normaliseMoneyMode(expense.paymentMode ?? expense.payment_mode ?? expense.mode);
     const amount = firstNumber(expense, ["amount", "totalAmount", "total_amount"]);
     if (!mode || amount <= 0) return;

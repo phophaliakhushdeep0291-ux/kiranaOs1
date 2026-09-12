@@ -313,6 +313,7 @@ vi.mock("@/features/core/sync/api", () => ({
   syncPull: syncPullMock,
   acknowledgeSyncSequence: vi.fn(async () => ({ acknowledgement: { accepted: true } })),
   getSyncStatus: vi.fn(async () => ({ allowed: true })),
+  getSyncFleet: vi.fn(async () => null),
   requestSyncRetry: requestSyncRetryMock,
   listSyncConflicts: listSyncConflictsMock,
 }));
@@ -333,6 +334,8 @@ import {
   retryFailedSyncOperations,
 } from "@/features/core/sync/engine";
 import { readSyncSnapshot } from "@/features/core/sync/pages/SyncStatusPage";
+import { readSyncQueueCounts } from "@/features/core/sync/sync-status-repair";
+import { offlineDB } from "@/lib/offline/db";
 
 const mockedSyncPush = vi.mocked(syncPushMock);
 
@@ -649,5 +652,238 @@ describe("sync failure handling", () => {
       local_snapshot: { customer: { name: "Device B name" } },
       server_snapshot: { id: "customer_shared", name: "Device A name", updatedAt: "2026-08-01T09:50:34.538Z" },
     }));
+  });
+});
+
+describe("what the queue counts call one rejected operation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal("navigator", { onLine: true });
+    dbState.reset();
+    syncPullMock.mockResolvedValue({ changes: [], cursor: "cursor-empty" });
+    listSyncConflictsMock.mockResolvedValue({ conflicts: [], summary: { open: 0, resolved: 0, dismissed: 0 }, pagination: { hasMore: false, nextCursor: null, limit: 100 } });
+  });
+
+  /**
+   * A pharmacy refuses one Schedule H1 line. The server says no, and that single
+   * refusal writes two rows: the outbox event flips to CONFLICT and a
+   * `sync_conflicts` record lands naming the same event. Counting both told the
+   * shop "2 changes need review" over one bill, and the Sync Status screen the
+   * banner sends them to listed one — a number that could not be worked down to
+   * zero by fixing the thing that was wrong.
+   */
+  function seedRejectedBill() {
+    seedEntity("bills", "bill_h1_refused", { total: 45, billNo: "B-H1" });
+    const event = seedOutbox("CREATE_BILL", "bill", "bill_h1_refused", {
+      status: "CONFLICT",
+      sync_status: "conflict",
+      error_message: "Alprax 0.5 mg is Schedule H1 and cannot be sold without a valid prescription",
+      last_error: "Alprax 0.5 mg is Schedule H1 and cannot be sold without a valid prescription",
+    });
+    dbState.putInto("sync_conflicts", {
+      id: `conflict_bill_bill_h1_refused_${event.op_id}`,
+      entity_type: "bill",
+      entity_id: "bill_h1_refused",
+      source_event_id: event.op_id,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "conflict",
+      resolution: "unresolved",
+      error_message: "Alprax 0.5 mg is Schedule H1 and cannot be sold without a valid prescription",
+    });
+    return event;
+  }
+
+  it("counts one bill once, not once per row it left behind", async () => {
+    seedRejectedBill();
+
+    const counts = await readSyncQueueCounts();
+
+    expect(counts.conflict).toBe(1);
+    expect(counts.totalBlocking).toBe(1);
+  });
+
+  it.each(["sync_outbox", "sync_conflicts"])("does not report zero queue counts when %s cannot be read", async (table) => {
+    const getAll = vi.mocked(offlineDB.getAll);
+    const original = getAll.getMockImplementation()!;
+    getAll.mockImplementation(async (name) => {
+      if (name === table) throw new Error(`unreadable:${table}`);
+      return original(name);
+    });
+    try {
+      await expect(readSyncQueueCounts()).rejects.toThrow(`unreadable:${table}`);
+    } finally { getAll.mockImplementation(original); }
+    expect((await readSyncQueueCounts()).totalBlocking).toBe(0);
+  });
+
+  it.each(["sync_outbox", "sync_conflicts", "sync_cursor", "products", "customers", "bills", "payments", "inventory_movements", "suppliers"])("rejects an incomplete Sync Status snapshot when %s fails", async (table) => {
+    const getAll = vi.mocked(offlineDB.getAll);
+    const original = getAll.getMockImplementation()!;
+    getAll.mockImplementation(async (name) => {
+      if (name === table) throw new Error(`unreadable:${table}`);
+      return original(name);
+    });
+    try {
+      await expect(readSyncSnapshot({ localOnly: true })).rejects.toThrow(`unreadable:${table}`);
+    } finally { getAll.mockImplementation(original); }
+    expect((await readSyncSnapshot({ localOnly: true })).localReadError).toBe(false);
+  });
+
+  it("rejects a stale healthy snapshot if the conflict reread fails after cloud diagnostics", async () => {
+    const getAll = vi.mocked(offlineDB.getAll);
+    const original = getAll.getMockImplementation()!;
+    let reads = 0;
+    getAll.mockImplementation(async (name) => {
+      if (name === "sync_conflicts" && ++reads > 1) throw new Error("reread failed");
+      return original(name);
+    });
+    try {
+      await expect(readSyncSnapshot()).rejects.toThrow("reread failed");
+    } finally { getAll.mockImplementation(original); }
+  });
+
+  it("shows an outbox-only rejection in both the header counts and review page", async () => {
+    const event = seedRejectedBill();
+    dbState.tables.sync_conflicts = [];
+
+    const counts = await readSyncQueueCounts();
+    const snapshot = await readSyncSnapshot();
+
+    expect(counts.conflict).toBe(1);
+    expect(snapshot.conflicts).toHaveLength(1);
+    expect(snapshot.conflicts[0]).toEqual(expect.objectContaining({
+      source_event_id: event.op_id,
+      entity_id: event.entity_id,
+      local_snapshot: event.payload,
+    }));
+  });
+
+  it("can paint locally stored reviews without waiting for cloud diagnostics", async () => {
+    seedRejectedBill();
+    listSyncConflictsMock.mockImplementation(() => new Promise(() => undefined));
+
+    const snapshot = await readSyncSnapshot({ localOnly: true });
+
+    expect(snapshot.conflicts).toHaveLength(1);
+    expect(listSyncConflictsMock).not.toHaveBeenCalled();
+  });
+
+  it("re-reads the queue after diagnostics so old failures cannot return", async () => {
+    const event = seedOutbox("UPDATE_PRODUCT", "product", "edited-product", { status: "FAILED", sync_status: "failed" });
+    listSyncConflictsMock.mockImplementationOnce(async () => {
+      dbState.putInto("sync_outbox", { ...event, status: "SYNCED", sync_status: "synced" });
+      return { conflicts: [], pagination: { hasMore: false, nextCursor: null, limit: 100 } };
+    });
+
+    const snapshot = await readSyncSnapshot();
+
+    expect(snapshot.failedOperations).toHaveLength(0);
+    expect(snapshot.pendingOperations).toHaveLength(0);
+  });
+
+  it("shows one review, not a review plus pending upload, when retrying its operation", async () => {
+    const event = seedRejectedBill();
+    dbState.putInto("sync_outbox", { ...event, status: "PENDING", sync_status: "pending_sync" });
+
+    expect(await readSyncQueueCounts()).toEqual(expect.objectContaining({ pending: 0, conflict: 1, totalBlocking: 1 }));
+    const snapshot = await readSyncSnapshot();
+    expect(snapshot.conflicts).toHaveLength(1);
+    expect(snapshot.pendingOperations).toHaveLength(0);
+  });
+
+  it("keeps an orphaned conflict open until there is positive resolution evidence", async () => {
+    // A pull conflict or another device's review need not have a local outbox
+    // event. Queue absence must never substitute for an owner's decision.
+    dbState.putInto("sync_conflicts", {
+      id: "conflict_bill_bill_orphaned_op_create_bill_gone",
+      entity_type: "bill",
+      entity_id: "bill_orphaned",
+      source_event_id: "op_create_bill_gone",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "conflict",
+      resolution: "unresolved",
+    });
+
+    const counts = await readSyncQueueCounts();
+
+    expect(counts.conflict).toBe(1);
+    expect(scopedRows("sync_conflicts")[0]).toEqual(expect.objectContaining({
+      resolution: "unresolved",
+    }));
+  });
+
+  it("does not clear a cloud review just because its local event was acknowledged", async () => {
+    const event = seedRejectedBill();
+    dbState.putInto("sync_outbox", { ...event, status: "SYNCED", sync_status: "synced" });
+    const conflict = scopedRows("sync_conflicts")[0];
+    dbState.putInto("sync_conflicts", { ...conflict, server_conflict_id: "cloud-review-1" });
+
+    expect((await readSyncQueueCounts()).conflict).toBe(1);
+    expect(scopedRows("sync_conflicts")[0].resolution).toBe("unresolved");
+  });
+
+  it("clears a local-only rejection after that exact event is acknowledged", async () => {
+    const event = seedRejectedBill();
+    dbState.putInto("sync_outbox", { ...event, status: "SYNCED", sync_status: "synced" });
+
+    expect((await readSyncQueueCounts()).totalBlocking).toBe(0);
+    expect(scopedRows("sync_conflicts")[0].resolution).toBe("auto_resolved");
+  });
+
+  it("does not use an acknowledgement for a different operation on the same bill", async () => {
+    const event = seedRejectedBill();
+    dbState.tables.sync_outbox = [];
+    dbState.putInto("sync_outbox", {
+      ...event, op_id: "other-event", clientEventId: "other-event",
+      status: "SYNCED", sync_status: "synced",
+    });
+
+    expect((await readSyncQueueCounts()).conflict).toBe(1);
+    expect(scopedRows("sync_conflicts")[0].resolution).toBe("unresolved");
+  });
+
+  it("counts a separate review even when another action on the same bill is pending", async () => {
+    const event = seedRejectedBill();
+    dbState.tables.sync_outbox = [];
+    dbState.putInto("sync_outbox", {
+      ...event, op_id: "other-event", clientEventId: "other-event",
+      status: "PENDING", sync_status: "pending_sync",
+    });
+
+    expect(await readSyncQueueCounts()).toEqual(expect.objectContaining({
+      pending: 1, conflict: 1, totalBlocking: 2,
+    }));
+  });
+
+  it("keeps two rejected bills as two review items", async () => {
+    // Collapsing by identity must stay per-operation. Two refusals are two
+    // things to look at, and a rule that folded them into one would hide work
+    // just as surely as the double count invented it.
+    seedRejectedBill();
+    seedEntity("bills", "bill_h1_refused_second", { total: 88, billNo: "B-H1-2" });
+    const second = seedOutbox("CREATE_BILL", "bill", "bill_h1_refused_second", {
+      status: "CONFLICT",
+      sync_status: "conflict",
+      error_message: "Amoxicillin 500 is Schedule H and cannot be sold without a valid prescription",
+    });
+    dbState.putInto("sync_conflicts", {
+      id: `conflict_bill_bill_h1_refused_second_${second.op_id}`,
+      entity_type: "bill",
+      entity_id: "bill_h1_refused_second",
+      source_event_id: second.op_id,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "conflict",
+      resolution: "unresolved",
+    });
+
+    const counts = await readSyncQueueCounts();
+
+    expect(counts.conflict).toBe(2);
+    expect(counts.totalBlocking).toBe(2);
   });
 });

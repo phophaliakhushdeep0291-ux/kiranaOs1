@@ -59,7 +59,7 @@ describe("cloud hydration direct import wiring", () => {
     expect(manualSync.indexOf("sync = await runSyncCycle()")).toBeLessThan(
       manualSync.indexOf("const snapshot = await hydrateFromBackendSnapshot()"),
     );
-    expect(offlineStatus).toContain("if (hydrate) await runManualSyncCycle()");
+    expect(offlineStatus).toContain("hydrate ? await runManualSyncCycle() : await runSyncCycle()");
     expect(offlineStatus).toContain("syncNow({ manual: true, hydrate: false })");
     expect(syncBanner).toContain("await runManualSyncCycle()");
     expect(manualSync).toContain("syncError = error instanceof Error");

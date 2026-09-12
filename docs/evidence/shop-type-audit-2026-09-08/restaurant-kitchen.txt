@@ -1,0 +1,40 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Kitchen" [level=1]
+  - generic: QA restaurant Workflow · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: Kitchen page loaded
+  - heading "Kitchen" [level=1]
+  - paragraph: Tickets fired from the tables screen. Move each one along as it is cooked and served.
+  - paragraph: Kitchen tickets are shared with the counter and refresh every five seconds while connected.
+  - button "Tables":
+    - text: Tables
+  - paragraph: Nothing on the pass
+  - paragraph: Fire an order from a table and it lands here.
+  - heading "Served" [level=2]:
+    - text: Served
+  - generic: "#1 · QA Table"
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

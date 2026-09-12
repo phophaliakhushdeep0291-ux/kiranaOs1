@@ -6,6 +6,7 @@ import { useListProducts } from "@/features/core/products/queries";
 import { bindProductBarcodeLocalFirst } from "@/features/core/products/local-actions";
 import type { KnownProductDetails } from "@/features/core/products/product-knowledge";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
+import { Button } from "@/components/ui/button";
 import { createProductLocalFirst } from "@/features/core/products/local-actions";
 import { formToInput, productToForm } from "@/features/core/products/pages/product-form-state";
 import { useAuth } from "@/features/core/auth/useAuth";
@@ -23,7 +24,8 @@ import { OpenBillsBar, type OpenBillChip } from "./components/OpenBillsBar";
 import { BillingOrderQrButton } from "@/features/core/customer-order/BillingOrderQrButton";
 import { BILLING_DRAFT_KEY, formatHeldBillAge, HELD_BILLS_KEY, isHeldBillStale, newBillId, pruneExpiredHeldBills } from "./open-bills";
 import { firstSettleWarning, type SettleWarning } from "../settle-checks";
-import { takeStagedBillLines, type StagedBillLine } from "../assistant-staging";
+import { recoverAssistantBillingDraft, type StagedBillLine } from "../assistant-staging";
+import { mergeAssistantCart } from "../assistant-cart";
 import { commitBillingWorkspace, prepareNewBillWorkspace, prepareResumeBillWorkspace } from "./billing-workspace";
 import { updateCustomerOrder } from "@/features/core/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
@@ -45,6 +47,7 @@ import { toInventoryBaseQty } from "@/features/core/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 import { billingSlotsFor } from "@/features/core/billing/billing-slots";
+import { takeQueuedProducts } from "@/features/core/billing/pending-cart-additions";
 import { productConfiguratorFor, type ProductConfigurator } from "@/features/core/billing/product-configurators";
 import { SPLIT_PAYMENT, addonUnitPrice, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceNewProductLine, type VoiceParsedDraft } from "./billing-types";
 import { createRetailPaymentQr, getRetailPaymentReadiness, verifyRetailPayment, type RetailQrCheckout } from "../retail-payment";
@@ -58,6 +61,7 @@ import { startBackendTranscription, type BackendTranscriptionSession } from "@/f
 import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity, showCustomerDisplayViaHardwareBridge, type HardwareCustomerDisplayState } from "@/features/core/hardware/local-hardware-bridge";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { speechRecognitionLocale } from "@/features/core/voice/voice-recognition";
+import { Loader2 } from "lucide-react";
 import {
   ACTIVITY_EVENTS,
   matchSearchSuggestions,
@@ -130,10 +134,10 @@ function readBillingDraft(): BillingDraft {
   return billingDraftCache;
 }
 
-async function loadBillingDraft(): Promise<BillingDraft> {
-  const draft = await offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY).catch(() => null);
-  billingDraftCache = draft ?? {};
-  return billingDraftCache;
+async function loadBillingDraft(products: Map<string, Product>, shouldRecover: () => boolean) {
+  const result = await recoverAssistantBillingDraft(BILLING_DRAFT_KEY, products, shouldRecover);
+  if (result && shouldRecover()) billingDraftCache = result.draft;
+  return result;
 }
 
 function writeBillingDraft(draft: BillingDraft) {
@@ -158,6 +162,15 @@ async function loadSettingList<T>(key: string, fallback: T[]): Promise<T[]> {
 function saveSettingList<T>(key: string, rows: T[]) {
   void offlineDB.setSetting(key, rows).catch(() => undefined);
 }
+
+/**
+ * How long a billing lock may be held before a fresh tap is allowed through.
+ *
+ * Long enough that a real commit — local write, queue, and a slow network round
+ * trip behind it — is never interrupted. Short enough that a lock which never
+ * came off costs the counter one pause rather than the rest of the day.
+ */
+const STALE_BILLING_LOCK_MS = 15_000;
 
 export default function Billing() {
   const { t, language } = useAppLanguage();
@@ -210,7 +223,19 @@ export default function Billing() {
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
   const [activeBillId, setActiveBillId] = useState<string>(() => readBillingDraft().activeBillId ?? newBillId());
   const openBillTransitionLockRef = useRef(false);
+  /** Same timing, for the lock that guards switching between open bills. */
+  const openBillTransitionLockAtRef = useRef(0);
   const billingCommitLockRef = useRef(false);
+  /**
+   * When the commit lock went on.
+   *
+   * The lock exists to swallow a double-tap in the same frame, and swallowing
+   * is right for that. It is wrong for a lock that never came off: the confirm
+   * button then does nothing, for ever, with no toast, no console line and no
+   * way back except reloading — the till has silently stopped billing and the
+   * counter cannot tell why. Timing the lock is what separates the two.
+   */
+  const billingCommitLockAtRef = useRef(0);
   const [openBillTransitionPending, setOpenBillTransitionPending] = useState(false);
   // If the workspace bill came from a customer QR order, its id — so finalizing marks that order
   // fulfilled + links the bill. Mirrored into a ref so the save-success callback reads it live.
@@ -228,6 +253,8 @@ export default function Billing() {
   const [lastPrintableBill, setLastPrintableBill] = useState<PrintableBill | null>(null);
   const [summaryWidth, setSummaryWidth] = useState(() => readBillSummaryWidth());
   const [draftHydrated, setDraftHydrated] = useState(false);
+  const [draftLoadError, setDraftLoadError] = useState(false);
+  const [draftLoadAttempt, setDraftLoadAttempt] = useState(0);
   const [draftRestored, setDraftRestored] = useState(false);
   const [hardwareConfigVersion, setHardwareConfigVersion] = useState(0);
   const [sensitivePinOpen, setSensitivePinOpen] = useState(false);
@@ -324,10 +351,18 @@ export default function Billing() {
   const resolvedBuyerStateCode = resolvedCustomerRecord?.stateCode ?? undefined;
   const resolvedBuyerAddress = resolvedCustomerRecord?.address ?? undefined;
   const hasCreditCustomerIdentity = Boolean(resolvedCustomerId || (typedCustomerName && typedCustomerMobile));
+  // Half the trades never get loyalty on any plan — a pharmacy's growth tier is
+  // advanced_inventory, full stop — and /loyalty/program is gated server-side by
+  // the same entitlement. Asking regardless meant every billing screen in those
+  // shops answered a question it already knew the answer to with a permanent 403,
+  // several per load, burying the console errors that matter. `decideFeature`
+  // reads the same plan feature list the server's requireFeatureAccess does, so
+  // the two agree; the /loyalty route is already gated this way.
+  const loyaltyFeature = useFeature("loyalty_program");
   const loyaltyProgram = useQuery({
     queryKey: ["loyalty-program"],
     queryFn: getLoyaltyProgram,
-    enabled: isOnline,
+    enabled: isOnline && loyaltyFeature.allowed,
     staleTime: 5 * 60_000,
     retry: false,
   });
@@ -679,10 +714,13 @@ export default function Billing() {
 
 
   useEffect(() => {
+    if (draftHydrated || (products.isLoading && productById.size === 0)) return;
     let active = true;
-    void Promise.all([loadBillingDraft(), loadSettingList<HeldBill>(HELD_BILLS_KEY, [])])
-      .then(([draft, held]) => {
-        if (!active) return;
+    setDraftLoadError(false);
+    void Promise.all([loadBillingDraft(productById, () => active), loadSettingList<HeldBill>(HELD_BILLS_KEY, [])])
+      .then(([recovery, held]) => {
+        if (!active || !recovery) return;
+        const { draft } = recovery;
         if (Object.keys(draft).length > 0) {
           if (draft.activeBillId) setActiveBillId(draft.activeBillId);
           // The floor screen writes the draft straight to storage and navigates here,
@@ -720,17 +758,58 @@ export default function Billing() {
           saveSettingList(HELD_BILLS_KEY, kept);
           toast({ title: archived === 1 ? t("billing.page.parkedBillsCleared", { count: archived }) : t("billing.page.parkedBillsClearedPlural", { count: archived }), description: t("billing.page.parkedBillsClearedDetail") });
         }
+        if (recovery.added > 0) toast({ title: t("billing.page.addedToCart"), description: t("billing.page.addedToCartDetail") });
+        if (recovery.remaining > 0) toast({ title: t("billing.assistant.itemsPending"), description: t("billing.assistant.itemsPendingDetail"), variant: "destructive" });
+        setDraftHydrated(true);
       })
-      .finally(() => {
-        if (active) setDraftHydrated(true);
+      .catch(() => {
+        if (active) setDraftLoadError(true);
       });
     return () => { active = false; };
-  }, []);
+    // Hydration owns the cart until its queue and draft commit together.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftHydrated, productById, products.isLoading, draftLoadAttempt]);
+
+  /**
+   * Ring up whatever another screen sent over.
+   *
+   * The parts trade's fitment book hands a part to the till this way, so a
+   * counter that has just found the right box does not have to search the
+   * catalogue again from memory. Billing does not learn what a fitment is: it
+   * is handed product ids and rings them up the ordinary way, which is what
+   * keeps pricing, packs and batches in one place.
+   *
+   * Waits for the draft, or the line lands on the workspace a moment before the
+   * restored cart overwrites it. Waits for the catalogue too, because addToCart
+   * needs the real product to price it.
+   */
+  useEffect(() => {
+    if (!draftHydrated || productById.size === 0) return;
+    let active = true;
+    void takeQueuedProducts().then((queued) => {
+      if (!active || queued.length === 0) return;
+      const missing: string[] = [];
+      for (const entry of queued) {
+        const product = productById.get(entry.productId);
+        if (product) addToCart(product);
+        else missing.push(entry.name || entry.productId);
+      }
+      // Say so once. The queue is already cleared, so an unfindable part cannot
+      // re-announce itself on every bill for the rest of the day.
+      if (missing.length > 0) {
+        toast({ title: t("billing.pending.notFound"), description: t("billing.pending.notFoundDetail", { names: missing.join(", ") }), variant: "destructive" });
+      }
+    });
+    return () => { active = false; };
+    // addToCart is redeclared every render and deliberately left out: the queue
+    // is cleared as it is read, so a re-run finds nothing and cannot double-add.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftHydrated, productById]);
 
   useEffect(() => {
     if (!draftHydrated) return;
-    writeBillingDraft({ activeBillId, sourceOrderId, sourceOrderFingerprint, cart, discount: safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, upiReference, allowAdvancePayment });
-  }, [draftHydrated, activeBillId, sourceOrderId, sourceOrderFingerprint, cart, safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, upiReference, allowAdvancePayment]);
+    writeBillingDraft({ activeBillId, tableId: activeTableId, sourceOrderId, sourceOrderFingerprint, cart, discount: safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, upiReference, allowAdvancePayment });
+  }, [draftHydrated, activeBillId, activeTableId, sourceOrderId, sourceOrderFingerprint, cart, safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, upiReference, allowAdvancePayment]);
 
   // Re-price the cart when a pricing input changes (customer, group, payment
   // mode, or the shop's rules). Manual/custom lines keep the cashier's price;
@@ -1225,64 +1304,16 @@ export default function Billing() {
    * bill. Returns how many actually landed, so a caller can say so honestly.
    */
   function mergeAssistantLines(lines: StagedBillLine[]): number {
-    const resolved = lines
-      .map((line) => ({ line, product: productById.get(line.productId) }))
-      .filter((entry): entry is { line: StagedBillLine; product: Product } => entry.product != null);
-    if (resolved.length === 0) return 0;
-
-    setCart((previous) => {
-      let next = [...previous];
-      for (const { line, product } of resolved) {
-        const sellingUnit = activeSellingUnits(product).find((unit) =>
-          [unit.name, unit.unitType, unit.packSizeUnit].filter(Boolean).some((value) => String(value).toLowerCase() === line.unit.toLowerCase()),
-        ) ?? defaultSellingUnit(product);
-        const candidate: CartItem = {
-          product,
-          quantity: line.quantity,
-          rate: line.rate,
-          unit: sellingUnit?.name ?? line.unit,
-          sellingUnit,
-          manualRate: true,
-        };
-        const candidateKey = cartItemKey(candidate);
-        const existing = next.find((item) => cartItemKey(item) === candidateKey);
-        if (existing) {
-          next = next.map((item) => cartItemKey(item) === candidateKey
-            ? { ...item, quantity: roundQuantity(item.quantity + line.quantity), rate: line.rate, unit: candidate.unit, sellingUnit, manualRate: true }
-            : item);
-        } else {
-          next.push(candidate);
-        }
-      }
-      return next;
-    });
-
-    for (const { product } of resolved) {
-      rememberRecentProduct(product.id);
-      trackEvent(ACTIVITY_EVENTS.PRODUCT_ADDED_TO_BILL, { productId: product.id, productName: product.name, via: "assistant" });
+    const resolved = mergeAssistantCart([], lines, productById).applied;
+    if (!resolved.length) return 0;
+    setCart(previous => mergeAssistantCart(previous, resolved, productById).cart);
+    for (const line of resolved) {
+      rememberRecentProduct(line.productId);
+      trackEvent(ACTIVITY_EVENTS.PRODUCT_ADDED_TO_BILL, { productId: line.productId, productName: line.name, via: "assistant" });
     }
     if (billingStartedAtRef.current === null) billingStartedAtRef.current = Date.now();
     return resolved.length;
   }
-
-  // Items the assistant resolved while the shopkeeper was on another screen.
-  //
-  // Waits for the catalogue, since a staged line is an id until there is a
-  // Product to hang it on, and takeStagedBillLines clears as it reads so a
-  // remount cannot bill the same items twice.
-  useEffect(() => {
-    if (allProducts.length === 0) return;
-    let cancelled = false;
-    void (async () => {
-      const staged = await takeStagedBillLines();
-      if (cancelled || staged.length === 0) return;
-      if (mergeAssistantLines(staged) > 0) {
-        toast({ title: t("billing.page.addedToCart"), description: t("billing.page.addedToCartDetail") });
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allProducts.length, productById, t]);
 
   function addVoiceDraftToCart() {
     if (!voiceDraft) return;
@@ -1767,6 +1798,18 @@ export default function Billing() {
     approvalOverride?: NonNullable<typeof sensitiveApproval>,
   ) {
     // Block taps/shortcuts in the same frame, before React renders pending state.
+    //
+    // Silently, because a double-tap is not worth a message — the button is
+    // already showing its spinner. But only while the lock is fresh: one held
+    // for seconds is not a second tap, it is a commit that never settled, and
+    // leaving it set turns the till's main action into a button that does
+    // nothing and says nothing. Let a stale one go and take the tap.
+    if (billingCommitLockRef.current && Date.now() - billingCommitLockAtRef.current > STALE_BILLING_LOCK_MS) {
+      billingCommitLockRef.current = false;
+    }
+    if (openBillTransitionLockRef.current && Date.now() - openBillTransitionLockAtRef.current > STALE_BILLING_LOCK_MS) {
+      openBillTransitionLockRef.current = false;
+    }
     if (billingCommitLockRef.current || openBillTransitionLockRef.current) return;
     if (!newBillingFeature.allowed) {
       toast({ title: t("billing.page.billingLocked"), description: newBillingFeature.reason, variant: "destructive" });
@@ -1832,7 +1875,7 @@ export default function Billing() {
     const acknowledged = settleAckRef.current?.billId === activeBillId
       && settleAckRef.current.lines === cart.length;
     if (!acknowledged) {
-      void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart }).then((warning) => {
+      void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart, slotValues: billingSlotValues }).then((warning) => {
         if (warning) {
           setSettleWarning({ warning, billType: overrideBillType, printDecision, approval: approvalOverride });
           return;
@@ -1903,6 +1946,7 @@ export default function Billing() {
     }
 
     billingCommitLockRef.current = true;
+    billingCommitLockAtRef.current = Date.now();
     confirmBill.mutate({
       data: {
         // Both local and online saves preserve this identity through retries.
@@ -2042,6 +2086,7 @@ export default function Billing() {
       return false;
     }
     openBillTransitionLockRef.current = true;
+    openBillTransitionLockAtRef.current = Date.now();
     setOpenBillTransitionPending(true);
     try {
       await commitBillingWorkspace(offlineDB, transition.snapshot, (snapshot) => {
@@ -2088,6 +2133,7 @@ export default function Billing() {
     if (!transition.ok) return;
 
     openBillTransitionLockRef.current = true;
+    openBillTransitionLockAtRef.current = Date.now();
     setOpenBillTransitionPending(true);
     try {
       await commitBillingWorkspace(offlineDB, transition.snapshot, (snapshot) => {
@@ -2207,7 +2253,7 @@ export default function Billing() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (billingCommitLockRef.current) return;
+      if (!draftHydrated || billingCommitLockRef.current) return;
       if (event.repeat) return;
       // Settings → Advanced → Keyboard shortcuts. Escape-to-clear stays on
       // because it is a browser convention, not an app hotkey.
@@ -2261,6 +2307,14 @@ export default function Billing() {
    * changed a total the cashier might be reading at that moment.
    */
   const counterBills = heldBills.filter((entry) => entry.id !== activeBillId && !entry.tableId);
+
+  if (!draftHydrated) return (
+    <div className="mx-auto flex max-w-lg flex-col items-start gap-3 p-5" role={draftLoadError ? "alert" : "status"}>
+      <h1 className="text-lg font-bold">{t(draftLoadError ? "billing.assistant.recoveryFailed" : "billing.assistant.recovering")}</h1>
+      <p className="text-sm leading-6 text-slate-600">{t(draftLoadError ? "billing.assistant.recoveryFailedDetail" : "billing.assistant.recoveringDetail")}</p>
+      {draftLoadError ? <Button className="min-h-11" onClick={() => setDraftLoadAttempt(value => value + 1)}>{t("billing.assistant.retryRecovery")}</Button> : <Loader2 className="animate-spin" aria-hidden="true" />}
+    </div>
+  );
 
   return (
     <fieldset disabled={confirmBill.isPending} aria-busy={confirmBill.isPending} className="min-w-0 min-h-[calc(100dvh-var(--app-mobile-topbar-height)-var(--app-mobile-nav-height))] border-0 bg-white p-0 lg:h-[calc(100dvh-var(--app-desktop-topbar-height)-var(--app-banner-height))] lg:min-h-0 lg:overflow-hidden">
@@ -2362,7 +2416,7 @@ export default function Billing() {
             className="inline-flex h-11 items-center justify-center rounded-xl border border-[#dce5f1] px-4 text-[13px] font-black text-[#42526e]"
             aria-label={t("billing.page.closeCheckout")}
           >
-            Back
+            {t("billing.bills.back")}
           </button>
         </div>
         <div className="flex min-h-0 flex-1 overflow-y-auto p-2 pb-[var(--app-mobile-checkout-panel-clearance)] overscroll-contain lg:overflow-visible lg:p-0">
@@ -2498,8 +2552,10 @@ export default function Billing() {
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-bold text-[#7C7566]">
-                {cart.length} item{cart.length === 1 ? "" : "s"}
-                {creditAmount > 0 ? " · udhar" : ""}
+                {cart.length === 1
+                  ? t("billing.cart.itemCountOne", { count: cart.length })
+                  : t("billing.cart.itemCountMany", { count: cart.length })}
+                {creditAmount > 0 ? ` · ${t("billing.cart.udharTag")}` : ""}
               </div>
               <div className="font-display text-[20px] font-black leading-tight text-[var(--brand-ink)]">
                 ₹{grandTotal.toLocaleString("en-IN")}

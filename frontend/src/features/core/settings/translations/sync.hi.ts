@@ -8,6 +8,13 @@
 import type { syncEn } from "./sync";
 
 export const syncHi: Record<keyof typeof syncEn, string> = {
+  "sync.local.setupNeeded": "ऑफ़लाइन सेटअप ज़रूरी है",
+  "sync.local.reviewNeeded": "समीक्षा ज़रूरी है",
+  "sync.local.checking": "लोकल डेटा जाँचा जा रहा है",
+  "sync.local.unavailable": "लोकल डेटा की पुष्टि नहीं हो सकी",
+  "sync.local.unavailableBody": "लोकल डेटाबेस पढ़ा नहीं जा सका। सिंक स्थिति और कुल रकम की पुष्टि नहीं हुई है। आगे बढ़ने से पहले दोबारा जाँचें या रिकवरी मोड खोलें।",
+  "sync.local.retry": "लोकल जाँच दोबारा करें",
+  "sync.local.recovery": "रिकवरी मोड खोलें",
   // ── Page header ──
   "sync.title": "क्लाउड बैकअप",
   "sync.action.retryFailed": "फिर कोशिश करें",
@@ -25,6 +32,25 @@ export const syncHi: Record<keyof typeof syncEn, string> = {
   // ── Status badge ──
   "sync.badge.failed": "{count} बैकअप नाकाम",
   "sync.badge.pending": "{count} बैकअप बाकी",
+
+  // The top-of-app banner. Three states, because a queue that is emptying is not
+  // a fault: loading the starter catalogue queues hundreds of rows at once, and
+  // wearing the warning colour through all of it made a healthy first run look
+  // broken.
+  "sync.banner.reviewTitle.one": "1 बदलाव देखना है",
+  "sync.banner.reviewTitle": "{count} बदलाव देखने हैं",
+  "sync.banner.reviewBody": "आपका डेटा इसी डिवाइस पर सुरक्षित है। फिर से कोशिश करें, या सिंक स्टेटस खोलकर देखें।",
+  "sync.banner.backingUpTitle.one": "1 बदलाव बैकअप हो रहा है...",
+  "sync.banner.backingUpTitle": "{count} बदलाव बैकअप हो रहे हैं...",
+  "sync.banner.backingUpBody": "क्लाउड पर सेव हो रहा है। आप काम करते रहें।",
+  "sync.banner.waitingTitle.one": "1 बदलाव बैकअप बाकी",
+  "sync.banner.waitingTitle": "{count} बदलाव बैकअप बाकी",
+  "sync.banner.waitingBody": "कनेक्शन ठीक होते ही अपने आप फिर कोशिश होगी।",
+  "sync.banner.retry": "फिर से कोशिश करें",
+  "sync.banner.retrying": "कोशिश हो रही है...",
+  "sync.banner.view": "देखें",
+  "sync.banner.retryFailedTitle": "कोशिश नाकाम",
+  "sync.banner.retryFailedBody": "अपना कनेक्शन जांचकर फिर कोशिश करें।",
   "sync.badge.offline": "ऑफलाइन",
 
   // ── Top alerts ──

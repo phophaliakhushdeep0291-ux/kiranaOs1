@@ -1,0 +1,52 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Audit Logs" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Audit Logs page loaded
+  - heading "Audit Logs" [level=1]
+  - generic: Every sensitive shop action is saved locally first and backed up during sync.
+  - text: 17 actions
+  - generic: 1 pending backup
+  - text: 5 PIN actions
+  - text: 1 conflicts
+  - generic: Search audit logs
+  - searchbox "Search audit logs" [active]: Data Exported
+  - combobox:
+    - generic: All actions
+  - button "Refresh":
+    - text: Refresh
+  - region "0 audit entries":
+    - heading "0 audit entries" [level=2]:
+      - text: 0 audit entries
+    - generic "No audit logs found":
+      - paragraph: No audit logs found
+      - paragraph: Sensitive actions will appear here after they are recorded.
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

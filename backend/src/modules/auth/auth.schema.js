@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BUSINESS_TYPES } from "../../verticals/profile.js";
 
 const trimmedString = (min, message) => z.preprocess((value) => {
   if (typeof value !== "string") return value;
@@ -62,7 +63,9 @@ export const registerSchema = z.object({
   phone:     optionalTrimmedString,
   // Current clients always send this. The default keeps older installed/offline
   // clients compatible during rollout; their historical behavior was kirana.
-  businessType: z.enum(["kirana", "clothing", "footwear", "auto_parts", "electronics", "pharmacy", "stationery", "furniture", "cosmetics", "restaurant", "other"]).default("kirana"),
+  // Read from the registry's list: a hand-copied enum missed "manufacturing", so
+  // signup offered the trade and then refused it.
+  businessType: z.enum(BUSINESS_TYPES).default("kirana"),
   device:    deviceMetadataSchema.optional(),
 });
 
@@ -114,6 +117,7 @@ export const resetPasswordSchema = z.object({
 
 export const setPinSchema = z.object({
   pin: z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits"),
+  currentPassword: z.string().min(1, "Current login password is required"),
 });
 
 export const verifyPinSchema = z.object({

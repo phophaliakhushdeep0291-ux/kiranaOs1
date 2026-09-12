@@ -3,6 +3,15 @@
 import type { billingEn } from "./billing";
 
 export const billingHi: Record<keyof typeof billingEn, string> = {
+  "billing.assistant.queueFailed": "सहायक के आइटम लोड नहीं हो सके",
+  "billing.assistant.queueRetry": "फिर कोशिश करने के लिए बिल दोबारा खोलें। भुगतान लेने से पहले कार्ट जांच लें।",
+  "billing.assistant.itemsPending": "सहायक के कुछ आइटम अभी बाकी हैं",
+  "billing.assistant.itemsPendingDetail": "पेमेंट लेने से पहले कार्ट जांच लें।",
+  "billing.assistant.recoveryFailed": "बिल ड्राफ्ट वापस नहीं आ सका",
+  "billing.assistant.recovering": "बिल ड्राफ्ट वापस आ रहा है",
+  "billing.assistant.recoveryFailedDetail": "सेव किया हुआ ड्राफ्ट लोड नहीं हो सका। नया बिल शुरू करने से पहले दोबारा कोशिश करें।",
+  "billing.assistant.recoveringDetail": "सेव किए हुए आइटम वापस लाए जा रहे हैं।",
+  "billing.assistant.retryRecovery": "फिर कोशिश करें",
   "billing.openBills": "खुले बिल",
   "billing.openBills.current": "यही बिल चालू है",
   "billing.openBills.switchTo": "{name} पर जाएं",
@@ -13,6 +22,11 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.cart.empty": "कार्ट खाली है",
   "billing.cart.itemCountOne": "{count} चीज़",
   "billing.cart.itemCountMany": "{count} चीज़ें",
+  // Read on the counter's own screen, so they follow the counter's language.
+  "billing.cart.udharTag": "उधार",
+  "billing.suggest.combo": "अक्सर साथ में जाता है",
+  "billing.suggest.usual": "इस समय आप आमतौर पर यही बेचते हैं",
+  "billing.search.trendingBadge": "लोकप्रिय",
   "billing.cart.emptyHint": "बाईं तरफ से {items} चुनकर जोड़ें",
   "billing.cart.sellingUnitFor": "{name} की बिक्री यूनिट",
   "billing.cart.guestItemProtected": "स्वीकृत QR आइटम · मूल मात्रा और हिस्सा सुरक्षित है",
@@ -92,9 +106,10 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.pay.dynamicQr.imageAlt": "UPI से ₹{amount} देने के लिए स्कैन करें",
   "billing.pay.dynamicQr.waiting": "बैंक की पुष्टि का इंतजार",
   "billing.pay.dynamicQr.waitingHelp": "ग्राहक के स्क्रीनशॉट या आवाज भर पर बिल सेव न करें। साइन किए webhook या प्रोवाइडर API की पुष्टि के बाद ही KiranaOS इसे खोलेगा।",
+  "billing.pay.dynamicQr.expiredChecking": "स्कैन करने का समय खत्म हो गया है। भुगतान की पुष्टि अभी जाँची जा रही है। पहले प्रयास का मिलान किए बिना ग्राहक से दोबारा भुगतान न लें।",
   "billing.pay.dynamicQr.confirmed": "पेमेंट प्रोवाइडर से पक्का हुआ",
   "billing.pay.dynamicQr.unavailable": "यह QR अब इस्तेमाल नहीं हो सकता",
-  "billing.pay.dynamicQr.unavailableHelp": "नई जांच शुरू करें। इस बिल से कोई पेमेंट नहीं जोड़ा गया है।",
+  "billing.pay.dynamicQr.unavailableHelp": "इस बिल से अभी कोई भुगतान नहीं जोड़ा गया है। बैंक की पुष्टि देर से आ सकती है। दोबारा पैसे लेने से पहले प्रोवाइडर से पहले भुगतान की स्थिति जाँचें।",
   "billing.pay.dynamicQr.safety": "एक बार · तय रकम · ब्रांच से जुड़ा · अपने-आप समाप्त",
   "billing.pay.dynamicQr.statusFailed": "प्रोवाइडर पेमेंट की स्थिति नहीं मिल सकी।",
   "billing.pay.dynamicQr.closeFailed": "पेमेंट QR बंद नहीं हो सका।",
@@ -333,6 +348,9 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.page.parkedBillsCleared": "{count} पुराना रुका बिल हटाया",
   "billing.page.parkedBillsClearedPlural": "{count} पुराने रुके बिल हटाए",
   "billing.page.parkedBillsClearedDetail": "हफ्ते भर से रुके बिल हटा दिए ताकि खुले बिल की पट्टी साफ रहे।",
+  // A part sent over from another screen that billing could not find.
+  "billing.pending.notFound": "इस बिल में नहीं जोड़ पाए",
+  "billing.pending.notFoundDetail": "{names} अभी लोड की गई सूची में नहीं है। नाम से खोजें।",
   "billing.page.printWindowClosed": "प्रिंट विंडो बंद हो गई",
   "billing.page.printWindowClosedDetail": "बिल सेव हो गया। पिछला बिल छापने के लिए प्रिंट दबाएं।",
   "billing.page.billSaved": "बिल {billNo} सेव हो गया",
@@ -459,6 +477,8 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.page.closeCheckout": "पेमेंट बंद करें",
   "billing.page.reviewCollectPayment": "जांचें और पेमेंट लें",
   "billing.summary.roundOff": "राउंड ऑफ",
+  // Seen after every completed sale.
+  "billing.summary.startNewBill": "नया बिल शुरू करें",
   "billing.page.markDone": "पूरा हुआ",
   "billing.page.originalCustomerCopy": "ग्राहक की असली कॉपी",
   "billing.page.estimateCopy": "कच्चे बिल की कॉपी",
@@ -665,4 +685,7 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.pay.upi.utrPlaceholder": "जैसे 412345678901",
   "billing.pay.upi.utrHelp": "वैकल्पिक, अपने भुगतान अलर्ट से। दिन के अंत में यही इस बिल को आपके बैंक स्टेटमेंट से मिलाता है।",
   "billing.pay.upi.utrInvalid": "कम से कम 6 अक्षर या अंक डालें, या रेफ़रेंस खाली छोड़ें।",
+  "billing.search.emptyCategory": "इस कैटेगरी में कोई सामान नहीं है",
+  "billing.search.resetFilters": "खोज और फ़िल्टर हटाएँ",
+  "billing.search.openProducts": "सामान की सूची खोलें",
 };

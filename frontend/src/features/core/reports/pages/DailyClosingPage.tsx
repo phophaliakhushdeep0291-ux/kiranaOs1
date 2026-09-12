@@ -1,3 +1,4 @@
+import { LocalDataUnavailable } from "@/features/core/sync/LocalDataUnavailable";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarDays, CheckCircle2, CreditCard, MessageCircle, Printer, RefreshCw, ShieldAlert, TrendingUp, Wallet, XCircle } from "lucide-react";
@@ -95,6 +96,8 @@ export default function DailyClosingPage() {
   const [date, setDate] = useState(toDateInputValue(new Date()));
   const [report, setReport] = useState<DailyClosingReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [readError, setReadError] = useState(false);
+  const loadGeneration = useRef(0);
   const [drawerCounts, setDrawerCounts] = useState<DrawerCount[]>([]);
   const [countedDraft, setCountedDraft] = useState("");
   const [savingCount, setSavingCount] = useState(false);
@@ -113,19 +116,31 @@ export default function DailyClosingPage() {
   }, [report]);
 
   const load = useCallback(async (options?: { showLoader?: boolean }) => {
+    const generation = ++loadGeneration.current;
     const showLoader = options?.showLoader ?? !reportRef.current;
     if (showLoader) setLoading(true);
     try {
       // The float and till movements live on this device; cash expenses are server-backed,
       // so they are fetched and handed to the same drawer calculation.
-      const [drawer, expenseCash] = await Promise.all([
+      const [drawer, expenseCash, counts, floats, movements] = await Promise.all([
         loadDrawerAdjustments(date),
         loadCashExpenseTotal(date),
+        loadDrawerCounts(),
+        loadOpeningFloats(),
+        loadCashMovements(),
       ]);
+      const next = await buildDailyClosingReport(date, { ...drawer, cashExpenses: expenseCash });
+      if (generation !== loadGeneration.current) return;
       setCashExpenses(expenseCash);
-      setReport(await buildDailyClosingReport(date, { ...drawer, cashExpenses: expenseCash }));
+      setReport(next);
+      setDrawerCounts(counts);
+      setOpeningFloats(floats);
+      setCashMovements(movements);
+      setReadError(false);
+    } catch {
+      if (generation === loadGeneration.current) setReadError(true);
     }
-    finally { if (showLoader) setLoading(false); }
+    finally { if (generation === loadGeneration.current) setLoading(false); }
   }, [date]);
 
   useEffect(() => {
@@ -141,6 +156,7 @@ export default function DailyClosingPage() {
     window.addEventListener("kirana:local-data-changed", refresh);
     window.addEventListener("kirana:sync-queue-updated", refresh);
     return () => {
+      loadGeneration.current += 1;
       if (refreshTimer.current) {
         window.clearTimeout(refreshTimer.current);
         refreshTimer.current = null;
@@ -151,10 +167,7 @@ export default function DailyClosingPage() {
   }, [load]);
 
   useEffect(() => {
-    void loadDrawerCounts().then(setDrawerCounts);
     if (navigator.onLine) void refreshDrawerCountsFromCloud().then(setDrawerCounts).catch(() => undefined);
-    void loadOpeningFloats().then(setOpeningFloats);
-    void loadCashMovements().then(setCashMovements);
   }, []);
 
   // Re-prime the float box when the date changes; typing must not be overwritten.
@@ -170,22 +183,28 @@ export default function DailyClosingPage() {
   async function saveFloatForDate() {
     const amount = Number(floatDraft);
     if (floatDraft.trim() === "" || !Number.isFinite(amount) || amount < 0) return;
-    setOpeningFloats(await saveOpeningFloat(buildOpeningFloat(date, amount)));
-    await load({ showLoader: false });
+    try {
+      setOpeningFloats(await saveOpeningFloat(buildOpeningFloat(date, amount)));
+      await load({ showLoader: false });
+    } catch { setReadError(true); }
   }
 
   async function addCashMovement(kind: CashMovementKind) {
     const amount = Number(movementAmount);
     if (!Number.isFinite(amount) || amount <= 0) return;
-    setCashMovements(await saveCashMovement(buildCashMovement(date, kind, amount, movementNote)));
-    setMovementAmount("");
-    setMovementNote("");
-    await load({ showLoader: false });
+    try {
+      setCashMovements(await saveCashMovement(buildCashMovement(date, kind, amount, movementNote)));
+      setMovementAmount("");
+      setMovementNote("");
+      await load({ showLoader: false });
+    } catch { setReadError(true); }
   }
 
   async function deleteCashMovement(id: string) {
-    setCashMovements(await removeCashMovement(id));
-    await load({ showLoader: false });
+    try {
+      setCashMovements(await removeCashMovement(id));
+      await load({ showLoader: false });
+    } catch { setReadError(true); }
   }
 
   // Prefill the count input when switching to a date that was already counted.
@@ -219,6 +238,8 @@ export default function DailyClosingPage() {
         adjustments,
       ));
       countedDraftDirty.current = false;
+    } catch {
+      setReadError(true);
     } finally {
       setSavingCount(false);
     }
@@ -227,6 +248,8 @@ export default function DailyClosingPage() {
   const totalIncomingTender = (report?.cashReceived ?? 0) + (report?.upiReceived ?? 0) + (report?.bankReceived ?? 0);
   const cashPct = totalIncomingTender > 0 ? Math.round(((report?.cashReceived ?? 0) / totalIncomingTender) * 100) : 0;
   const upiPct = totalIncomingTender > 0 ? Math.round(((report?.upiReceived ?? 0) / totalIncomingTender) * 100) : 0;
+
+  if (readError || !report) return <LocalDataUnavailable checking={!readError && loading} onRetry={() => void load()} />;
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-5 p-4 sm:p-5 lg:p-6">

@@ -1,0 +1,102 @@
+[
+  {
+    "file": "billing-375x667.png",
+    "sha256": "a364209afc6e54730f8cdaa781e3c09ba36d25bdc37253abcee8d65e85aa2ae9"
+  },
+  {
+    "file": "billing-390x844.png",
+    "sha256": "8ca5be78f3fa6b197a9f403c93128807c73fb5c0329b8bc7c2078c590c504f87"
+  },
+  {
+    "file": "billing-430x932.png",
+    "sha256": "e07a826a630309ada96cc7b682e52001c783664da756539a0ea9314906a403c4"
+  },
+  {
+    "file": "billing-768x1024.png",
+    "sha256": "d398b2cd5f1443afe515ac225bd04b51acf469f88ffffdb27f6e4ee95da1e76a"
+  },
+  {
+    "file": "customers-375x667.png",
+    "sha256": "a8b605515d763af718f527ad32c36f2ba05e9716e67629c79786fbbbc0b393fb"
+  },
+  {
+    "file": "customers-390x844.png",
+    "sha256": "11905205c5273e3b791a34d8573f98b0cbc5548092175f9f3c833a9ae6fa2066"
+  },
+  {
+    "file": "customers-430x932.png",
+    "sha256": "73d0b52efd8bb7d77382e89e461970349febe11e483bd2790093d0f4a38ab14a"
+  },
+  {
+    "file": "customers-768x1024.png",
+    "sha256": "dffc31ead883bd9f91827a7151e87e5228f62a4d53259f0de3bf7a8e8df84555"
+  },
+  {
+    "file": "dashboard-375x667.png",
+    "sha256": "9af420099ecdada22f5de81554d99bbbc52ce4b9942ea8da3be890906e2343ab"
+  },
+  {
+    "file": "dashboard-390x844.png",
+    "sha256": "085371d4fdbb914a5da81ef35f13e92d3d42f263ea576091ec82e5aa0060f460"
+  },
+  {
+    "file": "dashboard-430x932.png",
+    "sha256": "a60da7aa74c0d6b0f4075664b7748beadadff94b42128f617bc3353b6d814ece"
+  },
+  {
+    "file": "dashboard-768x1024.png",
+    "sha256": "776214b88144e1de94386127fe4f0dc1486d0afa32eee7f6dbb5761b199f69f1"
+  },
+  {
+    "file": "desktop-1440.png",
+    "sha256": "cc36d1d9b84994d4bd6ac77fb16ffc9b8a5eb0e5d5e47bccf0a8635d1a545623"
+  },
+  {
+    "file": "hindi-dashboard-390x844.png",
+    "sha256": "1d088055dbe0b0c77404eec138c9468f10db96870607dd27edbb91f76a61962f"
+  },
+  {
+    "file": "inventory-375x667.png",
+    "sha256": "577815c91f0304dfee7dc7e9023432b8e44304626f1bac3f0fc33ed541451fbd"
+  },
+  {
+    "file": "inventory-390x844.png",
+    "sha256": "ad8e4b9cc807f1ce54d70180ee8824325890feeee79683c5d8d85259c135a78e"
+  },
+  {
+    "file": "inventory-430x932.png",
+    "sha256": "209746abd0cd4bc052447dfe262de1a1f1b70c0c4001c84bd32fad41d200b456"
+  },
+  {
+    "file": "inventory-768x1024.png",
+    "sha256": "1e56327cd9bf45562f16398a19346d7c925ab1b836ae2d126e29865ad500ee25"
+  },
+  {
+    "file": "more-390.png",
+    "sha256": "df82040b81f8f1ec033bc3517fa9334ab10ef6e9b17fd0501f5a38c86ab3987f"
+  },
+  {
+    "file": "populated-dashboard-375x667.png",
+    "sha256": "9af420099ecdada22f5de81554d99bbbc52ce4b9942ea8da3be890906e2343ab"
+  },
+  {
+    "file": "populated-dashboard-390x844.png",
+    "sha256": "166efc97bcd1e0df1611fb97f14dd4fc5be7eab7b003fb2c021aa0429eb4c2d2"
+  },
+  {
+    "file": "populated-dashboard-430x932.png",
+    "sha256": "a60da7aa74c0d6b0f4075664b7748beadadff94b42128f617bc3353b6d814ece"
+  },
+  {
+    "file": "populated-dashboard-768x1024.png",
+    "sha256": "d4b7bc433ec4418701c13c613d66004bf1823ec1d7c4a44e011be7068a79a8a3"
+  },
+  {
+    "file": "report.json",
+    "sha256": "7d6a2a588fd3263d04132eca6535e1f48e66200eddb8edc1037e446bcacc444e"
+  },
+  {
+    "file": "small-phone-dashboard-360x740.png",
+    "sha256": "fa1ee4f3971153a554dc98e01123823968690957631900b0fde53504f9570e17"
+  }
+]

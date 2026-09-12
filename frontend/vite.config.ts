@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import fs from "node:fs";
@@ -140,6 +140,7 @@ function stampServiceWorkerBuild() {
           "src/features/verticals/restaurant/pages/MenuPage.tsx",
           "src/features/verticals/restaurant/pages/KitchenStockPage.tsx",
         ],
+        manufacturing: ["src/features/verticals/manufacturing/pages/ManufacturingPage.tsx"],
       };
       const verticalAssets = Object.fromEntries(Object.entries(verticalEntries).map(([id, entries]) => {
         const assets = new Set<string>();
@@ -162,12 +163,23 @@ function stampServiceWorkerBuild() {
   };
 }
 
+function requireProductionApi(): Plugin {
+  return {
+    name: "artha-require-production-api",
+    configResolved(config) {
+      if (config.command === "build" && !String(config.env.VITE_API_BASE_URL || "").trim()) {
+        throw new Error("Set VITE_API_BASE_URL before building (for example /api for a same-origin deployment). The production app cannot start without its API address.");
+      }
+    },
+  };
+}
+
 export default defineConfig({
   base: basePath,
   define: {
     __KIRANA_BUILD_ID__: JSON.stringify(buildId),
   },
-  plugins: [react(), tailwindcss(), stampServiceWorkerBuild()],
+  plugins: [requireProductionApi(), react(), tailwindcss(), stampServiceWorkerBuild()],
   resolve: {
     alias: {
       "@": path.resolve(projectRoot, "src"),

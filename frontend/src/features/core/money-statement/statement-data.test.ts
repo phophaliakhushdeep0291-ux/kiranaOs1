@@ -2,6 +2,51 @@ import { describe, expect, it } from "vitest";
 import { buildMoneyStatement, normaliseMoneyMode } from "./statement-data";
 
 describe("money statement", () => {
+  it("keeps unpaid expenses out of cash movement until payment is recorded", () => {
+    const at = "2026-09-07T10:00:00Z";
+    const result = buildMoneyStatement({ expenses: [
+      { id: "paid", status: "paid", amount: 10.25, paymentMode: "cash", spentAt: at },
+      { id: "pending", status: "pending", amount: 100, paymentMode: "cash", spentAt: at },
+    ] });
+    expect(result.rows).toHaveLength(1);
+    expect(result.totals.cashOut).toBe(10.25);
+  });
+
+  it("reconciles a cash sale, refund, udhar recovery and partial supplier settlement", () => {
+    const at = "2026-09-07T10:00:00.000Z";
+    const result = buildMoneyStatement({
+      payments: [
+        { id: "sale", billId: "bill_1", mode: "cash", amount: 100, paidAt: at },
+        { id: "refund", billId: "return_1", mode: "cash", amount: -50, paidAt: at },
+        { id: "recovery", customerId: "customer_1", mode: "cash", amount: 20, paidAt: at },
+        { id: "supplier", kind: "supplier_payment", purchase_history_id: "purchase_1", supplier_id: "supplier_1", mode: "cash", amount: 75, paid_at: at },
+      ],
+      suppliers: [{ id: "supplier_1", name: "QA Wholesale" }],
+      purchaseBills: [{ id: "purchase_1", purchasePaidAmount: 75, purchasePaymentMode: "cash", createdAt: at }],
+    });
+    expect(result.rows).toHaveLength(4);
+    expect(result.totals).toMatchObject({ cashIn: 120, cashOut: 125, cashNet: -5 });
+    expect(result.rows.find((row) => row.partyName === "QA Wholesale")).toMatchObject({ source: "Purchase payment", direction: "out", amount: 75 });
+  });
+
+  it("retains a refund from the bill snapshot when the payment cache is absent", () => {
+    const result = buildMoneyStatement({ bills: [{ id: "return", billType: "sales_return", payments: [{ mode: "cash", amount: -50 }], createdAt: "2026-09-07T10:00:00Z" }] });
+    expect(result.totals).toMatchObject({ cashIn: 0, cashOut: 50 });
+  });
+
+  it("keeps split supplier payments on their own dates and excludes reversed entries", () => {
+    const result = buildMoneyStatement({
+      purchaseBills: [{ id: "purchase_1", paidAmount: 100, paymentMode: "cash", createdAt: "2026-09-06T10:00:00Z" }],
+      payments: [
+        { id: "cash", kind: "supplier_payment", purchase_history_id: "purchase_1", amount: 25, mode: "cash", paid_at: "2026-09-06T10:00:00Z" },
+        { id: "upi", kind: "supplier_payment", purchase_history_id: "purchase_1", amount: 75, mode: "upi", paid_at: "2026-09-07T10:00:00Z" },
+        { id: "reversed", kind: "supplier_payment", purchase_history_id: "purchase_1", amount: 10, mode: "cash", status: "reversed", paid_at: "2026-09-07T10:00:00Z" },
+      ],
+    }, { from: "2026-09-07", to: "2026-09-07" });
+    expect(result.rows).toHaveLength(1);
+    expect(result.totals).toMatchObject({ upiOut: 75, cashOut: 0 });
+  });
+
   it("normalises owner payment modes into cash upi and bank", () => {
     expect(normaliseMoneyMode("cash")).toBe("cash");
     expect(normaliseMoneyMode("UPI")).toBe("upi");

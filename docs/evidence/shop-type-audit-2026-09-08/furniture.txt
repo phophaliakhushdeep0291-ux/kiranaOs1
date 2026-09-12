@@ -1,0 +1,63 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Order Book" [level=1]
+  - generic: QA furniture Workflow · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: Order Book page loaded
+  - paragraph: Open orders
+  - paragraph: "0"
+  - paragraph: Past the promised date
+  - paragraph: "0"
+  - paragraph: Advances held
+  - paragraph: ₹0
+  - paragraph: Still to collect
+  - paragraph: ₹80
+  - heading "Order book" [level=3]
+  - paragraph: Quote, advance, make, deliver, install — and what is still owed at every step.
+  - button "New Order":
+    - text: New Order
+  - button "Open"
+  - button "Quotes"
+  - button "Being made"
+  - button "Ready"
+  - button "Delivered"
+  - button "Everything" [active]
+  - button "Late only"
+  - textbox "Customer, order no., item"
+  - button "QA Buyer SO-000001 1 item":
+    - paragraph: QA Buyer
+    - paragraph:
+      - generic: SO-000001
+      - generic: 1 item
+  - generic: Delivered
+  - paragraph: ₹120
+  - paragraph: ₹80 due
+  - button "Installed":
+    - text: Installed
+  - button "Take payment":
+    - text: Take payment
+  - button "Delete SO-000001":
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

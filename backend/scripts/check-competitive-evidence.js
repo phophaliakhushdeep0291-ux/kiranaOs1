@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { validateCompetitiveEvidence } from "./competitive-evidence-validation.js";
 
 const backendDir = process.cwd();
 const repoRoot = path.resolve(backendDir, "..");
@@ -28,6 +29,12 @@ if (!fs.existsSync(matrixPath)) {
 let matrix;
 try { matrix = JSON.parse(fs.readFileSync(matrixPath, "utf8")); }
 catch (error) { fail(`matrix is not valid JSON: ${error.message}`); }
+
+errors.push(...validateCompetitiveEvidence(matrix, { repoRoot }));
+if (errors.length) {
+  console.error(JSON.stringify({ type: "competitive_evidence", status: "failed", errorCount: errors.length, errors }, null, 2));
+  process.exit(1);
+}
 
 if (matrix) {
   if (matrix.schemaVersion !== 1) fail("schemaVersion must be 1");

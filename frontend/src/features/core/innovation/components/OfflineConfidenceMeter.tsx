@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { readOfflineConfidenceSnapshot, type OfflineConfidenceSnapshot } from "@/features/core/sync/offline-confidence";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 
 function formatAgo(value: string | null) {
   if (!value) return "No cloud backup yet";
@@ -26,21 +27,27 @@ function formatStorage(snapshot: OfflineConfidenceSnapshot | null) {
   return `${Math.round(snapshot.storageUsageRatio * 100)}% used`;
 }
 export function OfflineConfidenceMeter({ compact = false }: { compact?: boolean }) {
+  const { t } = useAppLanguage();
   const [snapshot, setSnapshot] = useState<OfflineConfidenceSnapshot | null>(null);
 
   useEffect(() => {
-    const refresh = () => void readOfflineConfidenceSnapshot().then(setSnapshot);
+    let generation = 0;
+    const refresh = () => {
+      const request = ++generation;
+      void readOfflineConfidenceSnapshot().then((next) => { if (request === generation) setSnapshot(next); });
+    };
     refresh();
     window.addEventListener("kirana:local-data-changed", refresh);
     window.addEventListener("kirana:sync-queue-updated", refresh);
     return () => {
+      generation += 1;
       window.removeEventListener("kirana:local-data-changed", refresh);
       window.removeEventListener("kirana:sync-queue-updated", refresh);
     };
   }, []);
 
-  const dbHealthy = snapshot?.dbHealthy ?? true;
-  const hasWarning = Boolean(snapshot?.warning);
+  const dbHealthy = snapshot?.dbHealthy === true;
+  const hasWarning = !dbHealthy || Boolean(snapshot?.warning);
   const offlineReady = snapshot?.readinessState === "ready";
 
   return (
@@ -51,7 +58,7 @@ export function OfflineConfidenceMeter({ compact = false }: { compact?: boolean 
             {dbHealthy ? <ShieldCheck className="h-5 w-5 text-emerald-600" /> : <AlertTriangle className="h-5 w-5 text-destructive" />}
             Offline confidence meter
           </CardTitle>
-          <Badge variant={offlineReady ? "secondary" : dbHealthy ? "outline" : "destructive"}>{offlineReady ? "Ready for offline billing" : dbHealthy ? "Offline setup needed" : "Check recovery"}</Badge>
+          <Badge variant={offlineReady ? "secondary" : dbHealthy ? "outline" : "destructive"}>{!snapshot ? t("sync.local.checking") : offlineReady ? "Ready for offline billing" : dbHealthy ? t("sync.local.setupNeeded") : "Check recovery"}</Badge>
         </div>
       </CardHeader>
       <CardContent className={compact ? "p-4 pt-0" : "space-y-4"}>
@@ -60,15 +67,15 @@ export function OfflineConfidenceMeter({ compact = false }: { compact?: boolean 
         <div className={`mt-3 grid gap-3 ${compact ? "grid-cols-2" : "sm:grid-cols-4"}`}>
           <div className="rounded-xl border bg-background p-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground"><Cloud className="h-3.5 w-3.5" /> Pending backup</div>
-            <div className="mt-1 text-xl font-black">{snapshot?.pendingSyncCount ?? 0}</div>
+            <div className="mt-1 text-xl font-black">{snapshot?.pendingSyncCount ?? "—"}</div>
           </div>
           <div className="rounded-xl border bg-background p-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground"><AlertTriangle className="h-3.5 w-3.5" /> Failed/conflict</div>
-            <div className="mt-1 text-xl font-black">{(snapshot?.failedSyncCount ?? 0) + (snapshot?.conflictCount ?? 0)}</div>
+            <div className="mt-1 text-xl font-black">{snapshot?.failedSyncCount != null && snapshot.conflictCount != null ? snapshot.failedSyncCount + snapshot.conflictCount : "—"}</div>
           </div>
           <div className="rounded-xl border bg-background p-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground"><CheckCircle2 className="h-3.5 w-3.5" /> Last cloud backup</div>
-            <div className="mt-1 text-sm font-semibold">{formatAgo(snapshot?.lastCloudBackupAt ?? null)}</div>
+            <div className="mt-1 text-sm font-semibold">{dbHealthy ? formatAgo(snapshot?.lastCloudBackupAt ?? null) : "Backup time unavailable"}</div>
           </div>
           <div className="rounded-xl border bg-background p-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground"><Database className="h-3.5 w-3.5" /> Offline grace</div>

@@ -190,7 +190,7 @@ export default function NewReturnPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [location, navigate] = useLocation();
-  const { pendingCount, failedCount } = useOfflineStatus();
+  const { pendingCount, failedCount, conflictCount, queueStatus } = useOfflineStatus();
   const billsQuery = useListBills({ limit: 1000 }, { query: { staleTime: 60_000 } });
   const productsQuery = useListProducts({ limit: 1000 });
   const customersQuery = useListCustomers({ limit: 2000 });
@@ -248,9 +248,11 @@ export default function NewReturnPage() {
     allBills.forEach((bill) => billIdentityKeys(bill).forEach((key) => originalById.set(key, bill)));
     const salesRows = allBills.filter(isReturnBill).filter((bill) => returnType(bill) === "sales").map((bill) => {
       const keys = new Set(billIdentityKeys(bill));
-      const billItems = items.filter((item) => keys.has(itemBillId(item)));
+      const billItems = items.filter((item) => item.deletedAt == null && item.deleted_at == null && keys.has(itemBillId(item)));
       const embedded = Array.isArray(bill.items) ? bill.items.filter((item): item is RecordLike => Boolean(item && typeof item === "object")) : [];
-      const returnItems = billItems.length > 0 ? billItems : embedded;
+      // The bill snapshot is one complete version. The separate child table can
+      // temporarily contain both device and server copies during reconciliation.
+      const returnItems = embedded.length > 0 ? embedded : billItems;
       const record = bill as Bill & RecordLike;
       const originalId = String(record.returnOfBillId ?? record.return_of_bill_id ?? record.originalBillId ?? "");
       const original = originalById.get(originalId);
@@ -351,7 +353,7 @@ export default function NewReturnPage() {
   return (
     <PageShell className="space-y-4 bg-white p-4 sm:p-5 2xl:p-6">
       <section className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between 2xl:fixed 2xl:right-[276px] 2xl:top-[18px] 2xl:z-[60] 2xl:w-auto 2xl:flex-row 2xl:gap-3">
-        <SyncBadge status={failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={failedCount > 0 ? "Review sync" : pendingCount > 0 ? `${pendingCount} pending` : "Synced · Just now"} />
+        <SyncBadge status={queueStatus !== "ready" ? "failed" : failedCount + conflictCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={queueStatus !== "ready" ? (queueStatus === "error" ? "Cannot verify local data" : "Checking local data") : failedCount + conflictCount > 0 ? "Review sync" : pendingCount > 0 ? `${pendingCount} pending` : "Synced · Just now"} />
         <div className="flex flex-wrap items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>

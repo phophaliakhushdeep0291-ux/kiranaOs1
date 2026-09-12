@@ -27,6 +27,16 @@ export interface SettleCheckContext {
   /** Set when the bill is a table's tab rather than a counter sale. */
   tableId?: string;
   cart: CartItem[];
+  /**
+   * Whatever this trade's own billing controls are holding, keyed by slot id.
+   *
+   * A check usually has to ask whether the control that would satisfy it has
+   * been filled in. A pharmacy's question is not "is there a Schedule H line?"
+   * but "is there one with no prescription attached?", and only the pharmacy's
+   * own slot knows what attached looks like. Core carries the bag across
+   * without opening it.
+   */
+  slotValues?: Record<string, unknown>;
 }
 
 /**

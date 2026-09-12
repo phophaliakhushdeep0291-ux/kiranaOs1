@@ -1,3 +1,4 @@
+import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import {
@@ -14,7 +15,6 @@ import {
   Wallet,
 } from "lucide-react";
 import { format } from "date-fns";
-import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { listExpenses } from "@/features/core/expenses/api";
 import { buildMoneyStatement, loadMoneyStatementInput, type MoneyStatementDirection, type MoneyStatementMode, type MoneyStatementRow } from "@/features/core/money-statement/statement-data";
 import { cn } from "@/lib/utils";
@@ -25,13 +25,7 @@ type PeriodPreset = "today" | "week" | "month";
 const CARD = "rounded-[18px] border border-[#e3eaf4] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]";
 
 function money(value: number) {
-  return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-}
-
-function miniTrend(value: number): Array<{ value: number }> {
-  const base = Math.max(Math.abs(value), 1);
-  const direction = value >= 0 ? 1 : -1;
-  return [0.72, 0.8, 0.74, 0.88, 0.82, 0.95, 1].map((step) => ({ value: base * step * direction }));
+  return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
 function todayKey() {
@@ -78,6 +72,7 @@ function downloadCsv(rows: MoneyStatementRow[]) {
 }
 
 export default function MoneyStatementPage() {
+  const requestExport = useDataExport();
   useReportView("money_statement", "Money statement");
   const [preset, setPreset] = useState<PeriodPreset>("today");
   const [range, setRange] = useState(() => presetRange("today"));
@@ -177,7 +172,7 @@ export default function MoneyStatementPage() {
   return (
     <div className="min-h-full bg-white p-4 font-sans sm:p-5 2xl:p-6">
       <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-4">
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
           {modeCards.map((card) => (
             <Link
               key={card.label}
@@ -188,31 +183,17 @@ export default function MoneyStatementPage() {
                 else if (card.label.startsWith("Bank")) setMode("bank");
                 else setMode("all");
               }}
-              className={cn(CARD, "block min-h-[132px] p-4 transition hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_14px_34px_rgba(32,55,92,0.08)]")}
+              className={cn(CARD, "block min-w-0 p-3 transition hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_14px_34px_rgba(32,55,92,0.08)] sm:p-4")}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className={cn("grid h-11 w-11 place-items-center rounded-[12px] border", card.bg)}>{card.icon}</div>
-                <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-black", card.value >= 0 ? "bg-[#e8f9ee] text-[var(--success-ink)]" : "bg-[#ffecef] text-[#ef3340]")}>
+              <div className="flex items-start justify-between gap-1 sm:gap-3">
+                <div className={cn("grid h-8 w-8 place-items-center rounded-[10px] border sm:h-11 sm:w-11", card.bg)}>{card.icon}</div>
+                <span className={cn("rounded-full px-2 py-1 text-[10px] font-black sm:text-[11px]", card.value >= 0 ? "bg-[#e8f9ee] text-[var(--success-ink)]" : "bg-[#ffecef] text-[#be123c]")}>
                   {card.value >= 0 ? "Net +" : "Net -"}
                 </span>
               </div>
-              <p className="mt-3 text-[12px] font-bold text-[#62708a]">{card.label}</p>
-              <p className="mt-1 font-display text-[25px] font-black tracking-tight text-[#071333]">{money(Math.abs(card.value))}</p>
+              <p className="mt-2 text-[12px] font-bold text-[#62708a]">{card.label}</p>
+              <p className="mt-1 break-words font-display text-[22px] font-black tracking-tight text-[#071333] sm:text-[25px]">{money(card.value)}</p>
               <p className="mt-2 text-[11px] font-semibold text-[#718096]">{card.sub}</p>
-              <div className="mt-3 h-8">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={miniTrend(card.value)} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id={`money-${card.label.replace(/\W+/g, "-").toLowerCase()}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={card.color} stopOpacity={0.28} />
-                        <stop offset="70%" stopColor={card.color} stopOpacity={0.08} />
-                        <stop offset="100%" stopColor={card.color} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <Area type="monotone" dataKey="value" stroke={card.color} strokeWidth={2} fill={`url(#money-${card.label.replace(/\W+/g, "-").toLowerCase()})`} dot={false} isAnimationActive={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
             </Link>
           ))}
         </section>
@@ -268,7 +249,7 @@ export default function MoneyStatementPage() {
             </div>
             <button
               type="button"
-              onClick={() => downloadCsv(statement.rows)}
+              onClick={() => requestExport({ reportType: "money_statement", format: "csv", rowCount: statement.rows.length }, () => downloadCsv(statement.rows))}
               disabled={statement.rows.length === 0}
               className="inline-flex h-11 items-center gap-2 rounded-[11px] bg-[var(--brand)] px-4 text-[12px] font-black text-white shadow-[0_12px_24px_rgba(7,95,255,0.22)] disabled:opacity-50 lg:mouse:h-10"
             >

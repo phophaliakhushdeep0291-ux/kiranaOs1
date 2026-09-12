@@ -102,7 +102,7 @@ describeLive("frontend live API smoke", () => {
 
     const loggedIn = await login({ mobile, password });
     storeSession(loggedIn);
-    await setOwnerPin(ownerPin);
+    await setOwnerPin(ownerPin, password);
     await activateDevice("Frontend smoke device", deviceId);
   }, 30_000);
 

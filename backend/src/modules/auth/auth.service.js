@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import db from "../../db.js";
 import { env } from "../../config/env.js";
+import { isWriteConflict, serializableTransaction } from "../../lib/transactions.js";
 import { signToken } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error.js";
 import { canAddStaff, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
@@ -165,7 +166,7 @@ export async function registerShop({ shopName, ownerName, city, address, mobile,
 }
 
 async function rollbackNewRegistration(shopId, userId) {
-  await db.$transaction(async (tx) => {
+  await serializableTransaction(async (tx) => {
     await tx.deviceLicense.deleteMany({ where: { shopId } });
     await tx.session.deleteMany({ where: { shopId } });
     await tx.deviceReplacementChallenge.deleteMany({ where: { shopId } });
@@ -174,7 +175,7 @@ async function rollbackNewRegistration(shopId, userId) {
     await tx.auditLog.deleteMany({ where: { shopId } });
     await tx.user.deleteMany({ where: { id: userId, shopId } });
     await tx.shop.delete({ where: { id: shopId } });
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 export async function login({ mobile, email, identifier, password, shopId }, reqMeta = {}) {
@@ -274,7 +275,7 @@ export async function googleLogin({ credential, shopId }, reqMeta = {}) {
 }
 
 export async function verifyEmail(token, reqMeta = {}) {
-  await db.$transaction(async (tx) => {
+  await serializableTransaction(async (tx) => {
     const authToken = await consumeAuthToken(token, "email_verification", tx);
     const user = await tx.user.findFirst({ where: { id: authToken.userId, shopId: authToken.shopId } });
     if (!user) throw new AppError("User not found", 404, "USER_NOT_FOUND");
@@ -290,7 +291,7 @@ export async function verifyEmail(token, reqMeta = {}) {
       after: { emailVerifiedAt: verifiedAt },
       req: auditReqShim(reqMeta),
     });
-  }, { isolationLevel: "Serializable" });
+  });
   return { success: true, message: "Email verified successfully" };
 }
 
@@ -322,7 +323,7 @@ export async function requestPasswordReset(input) {
 
 export async function resetPassword({ token, newPassword }, reqMeta = {}) {
   const passwordHash = await bcrypt.hash(newPassword, 10);
-  await db.$transaction(async (tx) => {
+  await serializableTransaction(async (tx) => {
     const authToken = await consumeAuthToken(token, "password_reset", tx);
     await tx.user.update({ where: { id: authToken.userId }, data: { passwordHash } });
     const revokedAt = new Date();
@@ -339,7 +340,7 @@ export async function resetPassword({ token, newPassword }, reqMeta = {}) {
       metadata: { sessionsRevoked: revoked.count, authTokenId: authToken.id },
       req: auditReqShim(reqMeta),
     });
-  }, { isolationLevel: "Serializable" });
+  });
   return { success: true, sessionsRevoked: true };
 }
 
@@ -547,24 +548,45 @@ export async function getMe(userId, shopId) {
 
 // ── PIN management ──────────────────────────────────────────
 
-export async function setPin(userId, shopId, pin, reqMeta = {}) {
+export async function setPin(userId, shopId, pin, reqMeta = {}, currentPassword) {
   const user = await db.user.findFirst({ where: { id: userId, shopId, disabledAt: null } });
   if (!user) throw new AppError("User not found", 404);
   if (user.role !== "owner") throw new AppError("Only owner can set a PIN", 403);
+  if (typeof currentPassword !== "string" || !currentPassword || !await bcrypt.compare(currentPassword, user.passwordHash)) {
+    throw new AppError("Current login password is incorrect", 403, "OWNER_REAUTH_FAILED");
+  }
 
   const pinHash = await bcrypt.hash(pin, 10);
-  await db.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: userId }, data: { pinHash } });
-    await writeRequiredAuthAudit(tx, {
-      shopId,
-      userId,
-      action: user.pinHash ? "PIN_CHANGED" : "PIN_SET",
-      entityType: "user",
-      entityId: userId,
-      metadata: { previouslyConfigured: Boolean(user.pinHash) },
-      req: auditReqShim(reqMeta),
+  const credentialsChanged = () => new AppError("Owner credentials changed. Try again.", 409, "OWNER_CREDENTIALS_CHANGED");
+  try {
+    await serializableTransaction(async (tx) => {
+      // Password resets, disabled owners and simultaneous PIN changes revoke
+      // an older check. Check the credential versions inside the write transaction.
+      const changed = await tx.user.updateMany({
+        where: { id: userId, shopId, role: "owner", disabledAt: null, passwordHash: user.passwordHash, pinHash: user.pinHash },
+        data: { pinHash },
+      });
+      if (changed.count !== 1) throw credentialsChanged();
+      await writeRequiredAuthAudit(tx, {
+        shopId,
+        userId,
+        action: user.pinHash ? "PIN_CHANGED" : "PIN_SET",
+        entityType: "user",
+        entityId: userId,
+        metadata: { previouslyConfigured: Boolean(user.pinHash) },
+        req: auditReqShim(reqMeta),
+      });
     });
-  }, { isolationLevel: "Serializable" });
+  } catch (error) {
+    // SQLite serializes writers, so the losing change reaches the guarded
+    // update and matches no row. PostgreSQL instead aborts the losing
+    // Serializable transaction (P2034); the retry then reaches the same
+    // guard, still holding the credential version read above. A conflict that
+    // outlasts the retries is treated the same way: this request checked a
+    // credential version that is no longer safe to rely on.
+    if (isWriteConflict(error)) throw credentialsChanged();
+    throw error;
+  }
   return { success: true, message: "PIN set successfully" };
 }
 
@@ -848,7 +870,7 @@ export async function changePassword(userId, shopId, { currentPassword, newPassw
   if (!ok) throw new AppError("Current password is incorrect", 401);
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
-  await db.$transaction(async (tx) => {
+  await serializableTransaction(async (tx) => {
     await tx.user.update({ where: { id: userId }, data: { passwordHash } });
     const revoked = await tx.session.updateMany({
       where: { userId, shopId, revokedAt: null },
@@ -863,7 +885,7 @@ export async function changePassword(userId, shopId, { currentPassword, newPassw
       metadata: { sessionsRevoked: revoked.count },
       req: auditReqShim(reqMeta),
     });
-  }, { isolationLevel: "Serializable" });
+  });
   return { success: true, sessionsRevoked: true };
 }
 
@@ -893,7 +915,7 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
   };
   const bound = deviceId
     ? await createDeviceBoundLoginSession({ user, reqMeta, sessionData })
-    : await db.$transaction(async (tx) => {
+    : await serializableTransaction(async (tx) => {
         const session = await tx.session.create({ data: { ...sessionData, userId: user.id, shopId: user.shopId } });
         await writeRequiredAuthAudit(tx, {
           shopId: user.shopId,
@@ -907,7 +929,7 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
           req: auditReqShim(reqMeta),
         });
         return { device: null, session };
-      }, { isolationLevel: "Serializable" });
+      });
   const { device, session } = bound;
   const accessToken = signDeviceAccessToken(user, session, device);
 

@@ -1,0 +1,11 @@
+- dialog "Counter locked":
+  - heading "Counter locked" [level=1]
+  - paragraph: QA Owner, enter the owner PIN to get back to the counter. This lock follows your Settings → Security session rules.
+  - textbox "Owner PIN" [active]:
+    - /placeholder: ••••
+  - button "Unlock counter":
+    - text: Unlock counter
+  - button "Sign out instead":
+    - text: Sign out instead
+- region "Notifications (F8)":
+  - list

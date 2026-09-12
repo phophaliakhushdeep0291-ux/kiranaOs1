@@ -269,6 +269,9 @@ export const shopTypesEn = {
   // The entries each vertical pack adds. Keys rather than words for the same
   // reason as above: a pack is a module-level constant too.
   "shopType.nav.fitment": "Part Finder",
+  // Sends the part it found to the till, so the counter does not search the
+  // catalogue again for a name it was just looking at.
+  "shopType.fitment.sell": "Bill this part",
   "shopType.nav.fitment.helper": "Find what fits a customer's vehicle",
   "shopType.nav.testers": "Testers",
   "shopType.nav.testers.helper": "What is open on the counter, and what it costs",
@@ -283,6 +286,12 @@ export const shopTypesEn = {
   "shopType.nav.manufacturing": "Manufacturing",
   "shopType.nav.manufacturing.helper": "BOMs, production, packaging, batches and export dispatch",
   "shopType.nav.prescriptions": "Prescriptions",
+  // Asked at the counter, while the customer is still there. The server refuses
+  // a Schedule H sale with no slip, but it only sees the bill after it syncs —
+  // long after the strip has left the shop.
+  "shopType.pharmacy.settle.noPrescriptionTitle": "Schedule {schedule} with no prescription",
+  "shopType.pharmacy.settle.noPrescriptionBody": "{items} may not be handed over without a doctor's slip, and the sale has to be recorded. Attach one, or go ahead if you are filing it yourself.",
+  "shopType.pharmacy.settle.noPrescriptionConfirm": "Sell anyway",
   "shopType.nav.prescriptions.helper": "Record what was dispensed, and on whose slip",
   "shopType.nav.tables": "Tables",
   "shopType.nav.tables.helper": "Seat a table and open its order",

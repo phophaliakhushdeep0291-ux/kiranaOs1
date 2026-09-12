@@ -1,0 +1,74 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Device Settings" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Device Settings page loaded
+  - heading "Devices" [level=1]
+  - generic: Registered phones, computers, and counters that can access this shop.
+  - generic "Rs 999 Business - trial": Rs 999 Business
+  - button "Refresh":
+    - text: Refresh
+  - generic: Current plan
+  - paragraph: Business
+  - paragraph: 10 registered device slots
+  - generic: Devices used
+  - paragraph: 1 / 10
+  - paragraph: Backend verified
+  - generic: Slots remaining
+  - paragraph: "9"
+  - paragraph: Ready for a new sign-in
+  - generic: This device
+  - paragraph: Chrome on Windows
+  - paragraph: Current browser installation
+  - heading "Signed in now" [level=2]
+  - paragraph: Devices with someone logged in right now. Logging out keeps a slot. Removing a device frees it and revokes access immediately.
+  - generic: 1 signed in
+  - article:
+    - heading "Chrome on Windows" [level=3]
+    - generic: This device
+    - generic: active
+    - paragraph: Chrome on Windows
+    - paragraph: Registered 7 Sept 2026, 5:02 pm
+    - paragraph: Last active
+    - paragraph: less than a minute ago
+    - paragraph: Last login
+    - paragraph: about 4 hours ago
+    - paragraph: Signed in
+    - paragraph: QA Owner
+    - text: Last sync less than a minute ago
+    - button "Rename device":
+    - button "Block device" [disabled]:
+    - button "Log out & remove":
+      - text: Log out & remove
+  - alert:
+    - generic: Device access is enforced by the backend
+    - generic: Refresh tokens are rotated and hashed. Removing or blocking a device revokes its sessions; unsynced offline records are never automatically deleted.
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

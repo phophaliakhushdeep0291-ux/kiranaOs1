@@ -1,0 +1,106 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Setup" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Setup page loaded
+  - text: Setup in progress
+  - generic: 0 of 8 checks complete
+  - heading "Merchant setup" [level=2]
+  - paragraph: A production shop should not discover missing GST, printer, product, or udhar setup while serving a customer. This checklist uses real local data and only marks important items ready after they are actually configured or confirmed.
+  - paragraph: Next best action
+  - paragraph: Store profile
+  - paragraph: Add shop name, phone, and address
+  - button "Continue setup":
+    - text: Continue setup
+  - heading "Launch checklist" [level=3]
+  - paragraph: Checking local data...
+  - heading "Store profile" [level=3]
+  - generic: Needed
+  - paragraph: Shop name, mobile number, city, and address used on bills and customer QR ordering.
+  - paragraph: Add shop name, phone, and address
+  - button "Open profile"
+  - heading "Tax and bill rules" [level=3]
+  - generic: Needed
+  - paragraph: GST mode, invoice naming, round-off, and kacha/estimate bill behavior.
+  - paragraph: Review once and mark ready
+  - button "Mark ready"
+  - button "Open tax settings"
+  - heading "Billing preferences" [level=3]
+  - generic: Needed
+  - paragraph: Receipt defaults, payment modes, print preview, and owner approval rules.
+  - paragraph: Review payment and bill defaults
+  - button "Mark ready"
+  - button "Open billing"
+  - heading "Printer setup" [level=3]
+  - generic: Needed
+  - paragraph: Thermal receipt format, test print, and print-after-bill behavior.
+  - paragraph: Connect or confirm manual printing
+  - button "Mark ready"
+  - button "Open printer"
+  - heading "Products and stock" [level=3]
+  - generic: Needed
+  - paragraph: Import or add sellable products with price, unit, pack size, and stock.
+  - paragraph: No products added yet
+  - button "Import products"
+  - heading "Customers and udhar" [level=3]
+  - generic: Optional
+  - paragraph: Add frequent customers before using credit, reminders, and statements.
+  - paragraph: Optional before first sale
+  - button "Not needed"
+  - button "Open customers"
+  - heading "Suppliers and purchases" [level=3]
+  - generic: Optional
+  - paragraph: Add main suppliers before tracking purchase dues and stock-in purchase history.
+  - paragraph: Optional before first sale
+  - button "Not needed"
+  - button "Open suppliers"
+  - heading "First sale" [level=3]
+  - generic: Optional
+  - paragraph: Record your first real sale, then check totals, stock, udhar, and the receipt. Saved sales affect your shop records.
+  - paragraph: Run after products are ready
+  - button "Open billing"
+  - heading "Readiness summary" [level=3]
+  - paragraph: Actual local counts, not demo numbers.
+  - generic: Products
+  - generic: "0"
+  - generic: Customers
+  - generic: "0"
+  - generic: Suppliers
+  - generic: "0"
+  - generic: Bills created
+  - generic: "0"
+  - heading "Production guardrails" [level=3]
+  - paragraph: What this setup prevents.
+  - paragraph: Bills without shop identity or mobile number.
+  - paragraph: Products missing units, pack sizes, or import review.
+  - paragraph: Wrong receipt behavior at the counter.
+  - paragraph: Udhar or purchase workflows used before owner review.
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

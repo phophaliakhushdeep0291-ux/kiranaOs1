@@ -1,0 +1,51 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Recycle Bin" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Recycle Bin page loaded
+  - heading "Recycle Bin" [level=1]
+  - generic: Deleted shop records stay safe locally. Restore needs owner approval.
+  - text: 0 deleted records
+  - generic: 0 financial records
+  - generic: 0 pending sync
+  - generic: "Safety rule: financial records are soft-deleted only. Permanent delete is disabled for normal staff and should be enforced by backend retention policy."
+  - generic: Search recycle bin
+  - searchbox "Search recycle bin"
+  - combobox:
+    - generic: All deleted records
+  - button "Refresh":
+    - text: Refresh
+  - region "0 deleted records":
+    - heading "0 deleted records" [level=2]
+    - generic "Recycle bin is empty":
+      - paragraph: Recycle bin is empty
+      - paragraph: Soft-deleted shop records will appear here.
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

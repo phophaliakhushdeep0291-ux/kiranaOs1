@@ -1,0 +1,228 @@
+- link:
+  - /url: "#main-content"
+  - text: Skip to main content
+- banner:
+  - link:
+    - /url: /dashboard
+  - heading [level=1]: Manufacturing
+  - generic: Factory split QA · Synced
+  - button:
+  - link:
+    - /url: /sync-status
+- main:
+  - status: Manufacturing page loaded
+  - heading [level=1]: Factory operations
+  - generic: Convert traceable raw-material batches into QC-controlled finished batches, then package and dispatch them to wholesale or export buyers.
+  - generic: Manufacturing vertical
+  - button:
+    - text: New BOM
+  - paragraph: Active BOMs
+  - paragraph: "1"
+  - paragraph: Planned runs
+  - paragraph: "1"
+  - paragraph: In production
+  - paragraph: "0"
+  - paragraph: QC hold / recall
+  - paragraph: "0"
+  - heading [level=2]: Production runs
+  - paragraph: Plan a run, record actual material use and output, then release batches after QC. Open runs appear first.
+  - button:
+    - text: Plan production
+  - article:
+    - heading [level=3]: QA-SPLIT-RUN-01
+    - generic: Planned
+    - paragraph: QA Split recipe
+    - paragraph: "Planned: 20 base units"
+    - button:
+      - text: Record production
+  - heading [level=2]: Create BOM version
+  - paragraph: Add every ingredient and packaging material for the standard output. Saving creates a new recipe version and keeps older production history.
+  - text: BOM name
+  - textbox
+  - text: Finished good
+  - combobox
+  - text: Standard output (base units)
+  - spinbutton: "1"
+  - generic: Material 1
+  - text: Raw / packaging material
+  - combobox
+  - text: Material quantity (base units)
+  - spinbutton: "1"
+  - text: Expected wastage %
+  - spinbutton: "0"
+  - button [disabled]:
+    - text: Add another material
+  - button: Create controlled BOM version
+  - heading [level=2]: Batch genealogy
+  - paragraph: Search either a supplier batch or a finished batch.
+  - textbox:
+    - /placeholder: Batch number
+  - button [disabled]:
+    - text: Trace
+  - paragraph: Produce
+  - paragraph: Consume approved material lots and record actual yield and process loss.
+  - paragraph: Package
+  - paragraph: Split finished output across pouch, box and carton SKUs.
+  - paragraph: Dispatch
+  - paragraph: Use released batches for domestic wholesale or export invoices.
+  - heading [level=2]: BOM register
+  - table:
+    - rowgroup:
+      - row:
+        - columnheader: BOM
+        - columnheader: Finished good
+        - columnheader: Version
+        - columnheader: Materials
+        - columnheader: Status
+    - rowgroup:
+      - row:
+        - cell: BOM QA Split recipe
+        - cell: Finished good QA Finished spice
+        - cell: Version v1
+        - cell: Materials 2
+        - cell: Status active
+  - heading [level=2]:
+    - text: New wholesale / export order
+  - paragraph: Capture the buyer PO first. Batch allocation, packing and dispatch follow without posting revenue early.
+  - text: Internal order number
+  - textbox
+  - text: Buyer PO number
+  - textbox
+  - text: Buyer name
+  - textbox
+  - text: Order type
+  - combobox
+  - text: Finished product
+  - combobox
+  - text: Order quantity
+  - spinbutton: "1"
+  - text: Unit price
+  - spinbutton: "0"
+  - button [disabled]: Add product line
+  - button [disabled]: Create trade order
+  - heading [level=2]:
+    - text: Wholesale and export order register
+  - generic: No wholesale or export orders yet.
+  - heading [level=2]: Official Flipkart documents
+  - paragraph: Add Flipkart Seller API credentials on the server to enable official documents.
+  - textbox:
+    - /placeholder: Flipkart shipment ID
+  - button [disabled]: Official invoice
+  - button [disabled]: Official label
+- navigation:
+  - link:
+    - /url: /dashboard
+    - generic: Home
+  - link:
+    - /url: /billing
+    - generic: Sell
+  - link:
+    - /url: /inventory
+    - generic: Stock
+  - link:
+    - /url: /customers
+    - generic: Customers
+  - button:
+    - generic: More
+- button:
+- list
+- dialog "Record production":
+  - heading "Record production" [level=2]
+  - paragraph: QA-SPLIT-RUN-01 · Review the quantities actually used and produced.
+  - status: Draft saved on this device. Stock changes only when you save production. Your previous entry was restored. Review the current source stock before saving.
+  - heading "Finished output" [level=3]
+  - paragraph: QA Finished spice
+  - paragraph: Enter the actual count of each packaging type. All rows belong to the same finished batch.
+  - group "Output 1":
+    - generic: Output 1
+    - text: Actual quantity
+    - spinbutton "Actual quantity": "5"
+    - text: Unit / packaging
+    - combobox "Unit / packaging":
+      - option "Choose packaging" [disabled]
+      - option "Finished bag 2 units" [selected]
+    - paragraph: "Total: 10 piece"
+    - button "Remove output 1":
+      - text: Remove row
+  - group "Output 2":
+    - generic: Output 2
+    - text: Actual quantity
+    - spinbutton "Actual quantity": "2"
+    - text: Unit / packaging
+    - combobox "Unit / packaging":
+      - option "Choose packaging" [disabled]
+      - option "Finished carton 5 units" [selected]
+    - paragraph: "Total: 10 piece"
+    - button "Remove output 2":
+      - text: Remove row
+  - button "Add another output pack" [disabled]:
+    - text: Add another output pack
+  - paragraph: "Finished total: 20 piece"
+  - text: Finished batch number
+  - textbox "Finished batch number": QA-SPLIT-FINISHED-01
+  - text: Manufacturing date
+  - textbox "Manufacturing date": 2026-09-09
+  - text: Expiry date
+  - textbox "Expiry date": 2027-09-09
+  - heading "Materials used" [level=3]
+  - paragraph: Enter actual consumption, including wastage. Expected quantities are based on the planned run.
+  - group "QA Raw spice":
+    - generic: QA Raw spice
+    - paragraph: "Expected: 20 piece"
+    - group "Source 1":
+      - generic: Source 1
+      - text: Actual quantity
+      - spinbutton "Actual quantity": "6"
+      - text: Unit / packaging
+      - combobox "Unit / packaging":
+        - option "Choose packaging" [disabled]
+        - option "Raw bag 2 units" [selected]
+      - paragraph: "Total: 12 piece"
+      - text: Source batch
+      - combobox "Source batch":
+        - option "Choose a source batch"
+        - option "QA-RAW-A · 60 available · expires 2027-09-09" [selected]
+      - button "Remove source 1 for QA Raw spice":
+        - text: Remove row
+    - group "Source 2":
+      - generic: Source 2
+      - text: Actual quantity
+      - spinbutton "Actual quantity": "4"
+      - text: Unit / packaging
+      - combobox "Unit / packaging":
+        - option "Choose packaging" [disabled]
+        - option "Raw bag 2 units" [selected]
+      - paragraph: "Total: 8 piece"
+      - text: Source batch
+      - combobox "Source batch":
+        - option "Choose a source batch"
+        - option "QA-RAW-B · 40 available · expires 2027-09-09" [selected]
+      - button "Remove source 2 for QA Raw spice":
+        - text: Remove row
+    - paragraph: "Actual material total: 20 piece"
+    - button "Add another source batch or pack" [disabled]:
+      - text: Add another source batch or pack
+  - group "QA Labels":
+    - generic: QA Labels
+    - paragraph: "Expected: 10 piece"
+    - group "Source 1":
+      - generic: Source 1
+      - text: Actual quantity
+      - spinbutton "Actual quantity": "10"
+      - text: Unit / packaging
+      - combobox "Unit / packaging":
+        - option "Base units (piece)" [selected]
+      - paragraph: "Total: 10 piece"
+    - paragraph: "Actual material total: 10 piece"
+  - text: Quality check
+  - combobox "Quality check":
+    - option "Hold for QC — keep unavailable for sale"
+    - option "QC passed — available for sale" [selected]
+  - text: Production notes (optional)
+  - textbox "Production notes (optional)": "Mobile recovery check: two sources and two pack sizes."
+  - paragraph: Saving consumes the materials and makes this finished batch available for sale and dispatch.
+  - button "Cancel"
+  - button "Save production":
+    - text: Save production
+  - button "Close" [active]:
+    - generic: Close

@@ -99,7 +99,7 @@ assert.ok(
   "order submission must re-price from the shop catalog instead of trusting client prices",
 );
 assert.ok(
-  publicService.includes("customerOrder.create") && publicService.includes("db.$transaction"),
+  publicService.includes("customerOrder.create") && publicService.includes("serializableTransaction("),
   "order submission must write a CustomerOrder row",
 );
 assert.ok(

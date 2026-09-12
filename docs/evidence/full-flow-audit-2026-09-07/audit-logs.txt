@@ -1,0 +1,212 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Audit Logs" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Audit Logs page loaded
+  - heading "Audit Logs" [level=1]
+  - generic: Every sensitive shop action is saved locally first and backed up during sync.
+  - text: 10 actions
+  - generic: 1 pending backup
+  - text: 2 PIN actions
+  - text: 1 conflicts
+  - generic: Search audit logs
+  - searchbox "Search audit logs"
+  - combobox:
+    - generic: All actions
+  - button "Refresh":
+    - text: Refresh
+  - region "10 audit entries":
+    - heading "10 audit entries" [level=2]:
+      - text: 10 audit entries
+    - region "Scrollable data table":
+      - table:
+        - rowgroup:
+          - row "Action User / Device Entity Reason Time Sync":
+            - columnheader "Action"
+            - columnheader "User / Device"
+            - columnheader "Entity"
+            - columnheader "Reason"
+            - columnheader "Time"
+            - columnheader "Sync"
+        - rowgroup:
+          - row "Sync Conflict Sync engine bill004-qa-browser-20260820 product product Server changed an entity that has unsynced local changes 7/9/2026, 5:27:44 pm conflict":
+            - cell "Sync Conflict":
+              - generic: Sync Conflict
+            - cell "Sync engine bill004-qa-browser-20260820":
+              - generic: Sync engine
+              - generic: bill004-qa-browser-20260820
+            - cell "product product":
+              - generic: product
+              - generic: product
+            - cell "Server changed an entity that has unsynced local changes":
+              - generic: Server changed an entity that has unsynced local changes
+              - generic "Old/new values"
+            - cell "7/9/2026, 5:27:44 pm"
+            - cell "conflict":
+              - generic: conflict
+          - row "Stock Adjusted QA Owner bill004-qa-browser-20260820 inventory movement QA Soap purchase 7/9/2026, 5:27:43 pm synced":
+            - cell "Stock Adjusted":
+              - generic: Stock Adjusted
+            - cell "QA Owner bill004-qa-browser-20260820":
+              - generic: QA Owner
+              - generic: bill004-qa-browser-20260820
+            - cell "inventory movement QA Soap":
+              - generic: inventory movement
+              - generic: QA Soap
+            - cell "purchase":
+              - generic: purchase
+              - generic "Old/new values"
+            - cell "7/9/2026, 5:27:43 pm"
+            - cell "synced":
+              - generic: synced
+          - row "Supplier Created Local user bill004-qa-browser-20260820 supplier QA Wholesale Supplier QA Wholesale created 7/9/2026, 5:26:45 pm synced":
+            - cell "Supplier Created":
+              - generic: Supplier Created
+            - cell "Local user bill004-qa-browser-20260820":
+              - generic: Local user
+              - generic: bill004-qa-browser-20260820
+            - cell "supplier QA Wholesale":
+              - generic: supplier
+              - generic: QA Wholesale
+            - cell "Supplier QA Wholesale created":
+              - generic: Supplier QA Wholesale created
+              - generic "Old/new values"
+            - cell "7/9/2026, 5:26:45 pm"
+            - cell "synced":
+              - generic: synced
+          - row "Payment Recorded Local user bill004-qa-browser-20260820 payment QA Credit Customer Payment ₹20 recorded from QA Credit Customer 7/9/2026, 5:25:57 pm synced":
+            - cell "Payment Recorded":
+              - generic: Payment Recorded
+            - cell "Local user bill004-qa-browser-20260820":
+              - generic: Local user
+              - generic: bill004-qa-browser-20260820
+            - cell "payment QA Credit Customer":
+              - generic: payment
+              - generic: QA Credit Customer
+            - cell "Payment ₹20 recorded from QA Credit Customer":
+              - generic: Payment ₹20 recorded from QA Credit Customer
+              - generic "Old/new values"
+            - cell "7/9/2026, 5:25:57 pm"
+            - cell "synced":
+              - generic: synced
+          - row "Bill Created Local user bill004-qa-browser-20260820 bill PENDING-898312 Bill PENDING-898312 created for ₹50 7/9/2026, 5:24:53 pm synced":
+            - cell "Bill Created":
+              - generic: Bill Created
+            - cell "Local user bill004-qa-browser-20260820":
+              - generic: Local user
+              - generic: bill004-qa-browser-20260820
+            - cell "bill PENDING-898312":
+              - generic: bill
+              - generic: PENDING-898312
+            - cell "Bill PENDING-898312 created for ₹50":
+              - generic: Bill PENDING-898312 created for ₹50
+              - generic "Old/new values"
+            - cell "7/9/2026, 5:24:53 pm"
+            - cell "synced":
+              - generic: synced
+          - row "Customer Created Local user bill004-qa-browser-20260820 customer QA Credit Customer Customer QA Credit Customer created 7/9/2026, 5:09:47 pm synced":
+            - cell "Customer Created":
+              - generic: Customer Created
+            - cell "Local user bill004-qa-browser-20260820":
+              - generic: Local user
+              - generic: bill004-qa-browser-20260820
+            - cell "customer QA Credit Customer":
+              - generic: customer
+              - generic: QA Credit Customer
+            - cell "Customer QA Credit Customer created":
+              - generic: Customer QA Credit Customer created
+              - generic "Old/new values"
+            - cell "7/9/2026, 5:09:47 pm"
+            - cell "synced":
+              - generic: synced
+          - row "Sale Return Owner PIN Local user bill004-qa-browser-20260820 bill RET-EC6866 Local QA return 7/9/2026, 5:08:46 pm synced":
+            - cell "Sale Return Owner PIN":
+              - generic: Sale Return
+              - generic: Owner PIN
+            - cell "Local user bill004-qa-browser-20260820":
+              - generic: Local user
+              - generic: bill004-qa-browser-20260820
+            - cell "bill RET-EC6866":
+              - generic: bill
+              - generic: RET-EC6866
+            - cell "Local QA return":
+              - generic: Local QA return
+              - generic "Old/new values"
+            - cell "7/9/2026, 5:08:46 pm"
+            - cell "synced":
+              - generic: synced
+          - row "Bill Created Local user bill004-qa-browser-20260820 bill PENDING-A0F6C2 Bill PENDING-A0F6C2 created for ₹100 7/9/2026, 5:07:15 pm synced":
+            - cell "Bill Created":
+              - generic: Bill Created
+            - cell "Local user bill004-qa-browser-20260820":
+              - generic: Local user
+              - generic: bill004-qa-browser-20260820
+            - cell "bill PENDING-A0F6C2":
+              - generic: bill
+              - generic: PENDING-A0F6C2
+            - cell "Bill PENDING-A0F6C2 created for ₹100":
+              - generic: Bill PENDING-A0F6C2 created for ₹100
+              - generic "Old/new values"
+            - cell "7/9/2026, 5:07:15 pm"
+            - cell "synced":
+              - generic: synced
+          - row "Product Created Owner PIN Local user bill004-qa-browser-20260820 product QA Soap Product QA Soap created 7/9/2026, 5:04:05 pm synced":
+            - cell "Product Created Owner PIN":
+              - generic: Product Created
+              - generic: Owner PIN
+            - cell "Local user bill004-qa-browser-20260820":
+              - generic: Local user
+              - generic: bill004-qa-browser-20260820
+            - cell "product QA Soap":
+              - generic: product
+              - generic: QA Soap
+            - cell "Product QA Soap created":
+              - generic: Product QA Soap created
+              - generic "Old/new values"
+            - cell "7/9/2026, 5:04:05 pm"
+            - cell "synced":
+              - generic: synced
+          - row "Staff Login QA Owner bill004-qa-browser-20260820 staff QA Owner QA Owner logged in 7/9/2026, 5:02:11 pm synced":
+            - cell "Staff Login":
+              - generic: Staff Login
+            - cell "QA Owner bill004-qa-browser-20260820":
+              - generic: QA Owner
+              - generic: bill004-qa-browser-20260820
+            - cell "staff QA Owner":
+              - generic: staff
+              - generic: QA Owner
+            - cell "QA Owner logged in":
+              - generic: QA Owner logged in
+              - generic "Old/new values"
+            - cell "7/9/2026, 5:02:11 pm"
+            - cell "synced":
+              - generic: synced
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

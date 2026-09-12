@@ -1,0 +1,46 @@
+prisma:query SELECT `main`.`Shop`.`id` FROM `main`.`Shop` WHERE (`main`.`Shop`.`name` = ? AND `main`.`Shop`.`phone` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`ProductionRun`.`id`, `main`.`ProductionRun`.`shopId`, `main`.`ProductionRun`.`locationId`, `main`.`ProductionRun`.`bomId`, `main`.`ProductionRun`.`runNumber`, `main`.`ProductionRun`.`status`, `main`.`ProductionRun`.`plannedOutputBaseQty`, `main`.`ProductionRun`.`actualOutputBaseQty`, `main`.`ProductionRun`.`finishedBatchNumber`, `main`.`ProductionRun`.`manufacturedOn`, `main`.`ProductionRun`.`expiresOn`, `main`.`ProductionRun`.`qcStatus`, `main`.`ProductionRun`.`notes`, `main`.`ProductionRun`.`startedAt`, `main`.`ProductionRun`.`completedAt`, `main`.`ProductionRun`.`createdAt`, `main`.`ProductionRun`.`updatedAt` FROM `main`.`ProductionRun` WHERE (`main`.`ProductionRun`.`shopId` = ? AND `main`.`ProductionRun`.`runNumber` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`ProductionConsumption`.`id`, `main`.`ProductionConsumption`.`shopId`, `main`.`ProductionConsumption`.`runId`, `main`.`ProductionConsumption`.`productId`, `main`.`ProductionConsumption`.`inventoryLotId`, `main`.`ProductionConsumption`.`plannedBaseQty`, `main`.`ProductionConsumption`.`actualBaseQty`, `main`.`ProductionConsumption`.`sourceBatchNumber`, `main`.`ProductionConsumption`.`createdAt` FROM `main`.`ProductionConsumption` WHERE `main`.`ProductionConsumption`.`runId` IN (?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`ProductionOutput`.`id`, `main`.`ProductionOutput`.`shopId`, `main`.`ProductionOutput`.`runId`, `main`.`ProductionOutput`.`productId`, `main`.`ProductionOutput`.`sellingUnitId`, `main`.`ProductionOutput`.`inventoryLotId`, `main`.`ProductionOutput`.`packagingSku`, `main`.`ProductionOutput`.`quantityBaseQty`, `main`.`ProductionOutput`.`packageCount`, `main`.`ProductionOutput`.`batchNumber`, `main`.`ProductionOutput`.`createdAt` FROM `main`.`ProductionOutput` WHERE `main`.`ProductionOutput`.`runId` IN (?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Product`.`id`, `main`.`Product`.`name`, `main`.`Product`.`stockBaseQty` FROM `main`.`Product` WHERE (`main`.`Product`.`shopId` = ? AND `main`.`Product`.`name` IN (?,?)) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`InventoryLot`.`id`, `main`.`InventoryLot`.`batchNumber`, `main`.`InventoryLot`.`status`, `main`.`InventoryLot`.`availableBaseQty` FROM `main`.`InventoryLot` WHERE (`main`.`InventoryLot`.`shopId` = ? AND `main`.`InventoryLot`.`producedByRunId` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`StockLedger`.`id`, `main`.`StockLedger`.`action`, `main`.`StockLedger`.`changeBaseQty` FROM `main`.`StockLedger` WHERE (`main`.`StockLedger`.`shopId` = ? AND `main`.`StockLedger`.`sourceId` = ?) LIMIT ? OFFSET ?
+{
+  "run": {
+    "number": "QA-MOBILE-RUN-02",
+    "status": "quarantined",
+    "qc": "conditional",
+    "planned": 10,
+    "actual": 9,
+    "consumed": [
+      12.5
+    ]
+  },
+  "products": [
+    {
+      "name": "QA manufacturing item",
+      "stockBaseQty": 29
+    },
+    {
+      "name": "QA raw material",
+      "stockBaseQty": 87.5
+    }
+  ],
+  "lots": [
+    {
+      "batchNumber": "QA-MOBILE-BATCH-02",
+      "status": "quarantined",
+      "availableBaseQty": 9
+    }
+  ],
+  "ledger": [
+    {
+      "action": "production_use",
+      "changeBaseQty": -12.5
+    },
+    {
+      "action": "production_output",
+      "changeBaseQty": 9
+    }
+  ]
+}

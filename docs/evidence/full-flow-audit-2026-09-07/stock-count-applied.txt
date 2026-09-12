@@ -1,0 +1,83 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Stock Counts" [level=1]
+  - generic: Full Flow Audit Shop · Syncing...
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Stock Counts page loaded
+  - text: Audited branch inventory control
+  - heading "Stock counts without guesswork" [level=1]
+  - paragraph: Count the shelf without seeing system quantities, review variances with an owner, then post one protected adjustment to the branch ledger.
+  - button "Start stock count":
+    - text: Start stock count
+  - paragraph: Branch status
+  - text: Ready
+  - paragraph: Only one open count per location
+  - paragraph: Count progress
+  - paragraph: —
+  - progressbar
+  - paragraph: Applied history
+  - paragraph: "1"
+  - paragraph: Most recent 30 sessions shown
+  - complementary:
+    - heading "Count sessions" [level=2]
+    - paragraph: Current branch only
+    - button "QA shelf count applied 7/9/2026, 10:36:13 pm 1/1 products counted":
+      - paragraph: QA shelf count
+      - generic: applied
+      - paragraph: 7/9/2026, 10:36:13 pm
+      - paragraph: 1/1 products counted
+  - main:
+    - heading "QA shelf count" [level=2]
+    - generic: applied
+    - text: Blind
+    - paragraph: Full Flow Audit Shop - Main · started 7/9/2026, 10:36:13 pm
+    - generic: 1 counted
+    - generic: 100%
+    - progressbar
+    - textbox "Search product…"
+    - paragraph: Showing 1 of 1
+    - table:
+      - rowgroup:
+        - row "Product Expected Counted Variance Note":
+          - columnheader "Product"
+          - columnheader "Expected"
+          - columnheader "Counted"
+          - columnheader "Variance"
+          - columnheader "Note"
+      - rowgroup:
+        - 'row "QA Soap Base unit: piece 23 23 0 —"':
+          - 'cell "QA Soap Base unit: piece"':
+            - paragraph: QA Soap
+            - paragraph: "Base unit: piece"
+          - cell "23"
+          - cell "23"
+          - cell "0"
+          - cell "—"
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

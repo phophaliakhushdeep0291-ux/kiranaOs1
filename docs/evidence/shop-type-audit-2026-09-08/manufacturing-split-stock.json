@@ -1,0 +1,185 @@
+{
+  "run": {
+    "id": "cmtu1yvnj000ol9szuajfjy87",
+    "shopId": "cmtu1yvi70000l9szru5aly2a",
+    "locationId": "cmtu1yvnf000ml9szy4a1506l",
+    "bomId": "cmtu1yvn9000il9szfpacbrr4",
+    "runNumber": "QA-SPLIT-RUN-01",
+    "status": "completed",
+    "plannedOutputBaseQty": 20,
+    "actualOutputBaseQty": 20,
+    "finishedBatchNumber": "QA-SPLIT-FINISHED-01",
+    "manufacturedOn": "2026-09-09T00:00:00.000Z",
+    "expiresOn": "2027-09-09T00:00:00.000Z",
+    "qcStatus": "passed",
+    "notes": "Mobile recovery check: two sources and two pack sizes.",
+    "startedAt": "2026-09-09T18:54:06.415Z",
+    "completedAt": "2026-09-09T18:54:06.415Z",
+    "createdAt": "2026-09-09T12:06:30.080Z",
+    "updatedAt": "2026-09-09T18:54:06.351Z",
+    "consumptions": [
+      {
+        "id": "cmtugj299000n2fnqlwwq1oj1",
+        "shopId": "cmtu1yvi70000l9szru5aly2a",
+        "runId": "cmtu1yvnj000ol9szuajfjy87",
+        "productId": "cmtu1yvmc0006l9szk5ytp91d",
+        "inventoryLotId": "cmtu1yvnm000ql9szoj24p1tm",
+        "plannedBaseQty": 12,
+        "actualBaseQty": 12,
+        "sourceBatchNumber": "QA-RAW-A",
+        "createdAt": "2026-09-09T18:54:06.351Z"
+      },
+      {
+        "id": "cmtugj29o000r2fnq4o3dvwfn",
+        "shopId": "cmtu1yvi70000l9szru5aly2a",
+        "runId": "cmtu1yvnj000ol9szuajfjy87",
+        "productId": "cmtu1yvmc0006l9szk5ytp91d",
+        "inventoryLotId": "cmtu1yvnq000sl9sz5cqbt0lz",
+        "plannedBaseQty": 8,
+        "actualBaseQty": 8,
+        "sourceBatchNumber": "QA-RAW-B",
+        "createdAt": "2026-09-09T18:54:06.351Z"
+      },
+      {
+        "id": "cmtugj29w000v2fnq8clk2brq",
+        "shopId": "cmtu1yvi70000l9szru5aly2a",
+        "runId": "cmtu1yvnj000ol9szuajfjy87",
+        "productId": "cmtu1yvmh0008l9sz3kwjuz19",
+        "inventoryLotId": null,
+        "plannedBaseQty": 10,
+        "actualBaseQty": 10,
+        "sourceBatchNumber": null,
+        "createdAt": "2026-09-09T18:54:06.351Z"
+      }
+    ],
+    "outputs": [
+      {
+        "id": "cmtugj29y000z2fnqk2yyhyel",
+        "shopId": "cmtu1yvi70000l9szru5aly2a",
+        "runId": "cmtu1yvnj000ol9szuajfjy87",
+        "productId": "cmtu1yvml000al9sz3fok7miv",
+        "sellingUnitId": "cmtu1yvmz000el9sziqje0unk",
+        "inventoryLotId": "cmtugj29x000x2fnq0gu8hlkc",
+        "packagingSku": "finished-bag-2-units",
+        "quantityBaseQty": 10,
+        "packageCount": 5,
+        "batchNumber": "QA-SPLIT-FINISHED-01",
+        "createdAt": "2026-09-09T18:54:06.351Z"
+      },
+      {
+        "id": "cmtugj2a100112fnqaza2hmom",
+        "shopId": "cmtu1yvi70000l9szru5aly2a",
+        "runId": "cmtu1yvnj000ol9szuajfjy87",
+        "productId": "cmtu1yvml000al9sz3fok7miv",
+        "sellingUnitId": "cmtu1yvn2000gl9sz0ugmx1xp",
+        "inventoryLotId": "cmtugj29x000x2fnq0gu8hlkc",
+        "packagingSku": "finished-carton-5-units",
+        "quantityBaseQty": 10,
+        "packageCount": 2,
+        "batchNumber": "QA-SPLIT-FINISHED-01",
+        "createdAt": "2026-09-09T18:54:06.351Z"
+      }
+    ]
+  },
+  "products": [
+    {
+      "id": "cmtu1yvmc0006l9szk5ytp91d",
+      "name": "QA Raw spice",
+      "stockBaseQty": 80,
+      "sellingUnits": [
+        {
+          "name": "Raw bag 2 units",
+          "onHandQty": 40,
+          "conversionToBase": 2
+        }
+      ]
+    },
+    {
+      "id": "cmtu1yvmh0008l9sz3kwjuz19",
+      "name": "QA Labels",
+      "stockBaseQty": 40,
+      "sellingUnits": []
+    },
+    {
+      "id": "cmtu1yvml000al9sz3fok7miv",
+      "name": "QA Finished spice",
+      "stockBaseQty": 20,
+      "sellingUnits": [
+        {
+          "name": "Finished bag 2 units",
+          "onHandQty": 5,
+          "conversionToBase": 2
+        },
+        {
+          "name": "Finished carton 5 units",
+          "onHandQty": 2,
+          "conversionToBase": 5
+        }
+      ]
+    }
+  ],
+  "lots": [
+    {
+      "batchNumber": "QA-RAW-A",
+      "availableBaseQty": 48,
+      "status": "active"
+    },
+    {
+      "batchNumber": "QA-RAW-B",
+      "availableBaseQty": 32,
+      "status": "active"
+    },
+    {
+      "batchNumber": "QA-SPLIT-FINISHED-01",
+      "availableBaseQty": 20,
+      "status": "active"
+    }
+  ],
+  "ledger": [
+    {
+      "productName": "QA Raw spice",
+      "action": "production_use",
+      "sellingUnitId": "cmtu1yvmw000cl9szlqwiy1zo",
+      "sellingUnitQty": 6,
+      "changeBaseQty": -12,
+      "oldStockBaseQty": 100,
+      "newStockBaseQty": 88
+    },
+    {
+      "productName": "QA Raw spice",
+      "action": "production_use",
+      "sellingUnitId": "cmtu1yvmw000cl9szlqwiy1zo",
+      "sellingUnitQty": 4,
+      "changeBaseQty": -8,
+      "oldStockBaseQty": 88,
+      "newStockBaseQty": 80
+    },
+    {
+      "productName": "QA Labels",
+      "action": "production_use",
+      "sellingUnitId": null,
+      "sellingUnitQty": null,
+      "changeBaseQty": -10,
+      "oldStockBaseQty": 50,
+      "newStockBaseQty": 40
+    },
+    {
+      "productName": "QA Finished spice",
+      "action": "production_output",
+      "sellingUnitId": "cmtu1yvmz000el9sziqje0unk",
+      "sellingUnitQty": 5,
+      "changeBaseQty": 10,
+      "oldStockBaseQty": 0,
+      "newStockBaseQty": 10
+    },
+    {
+      "productName": "QA Finished spice",
+      "action": "production_output",
+      "sellingUnitId": "cmtu1yvn2000gl9sz0ugmx1xp",
+      "sellingUnitQty": 2,
+      "changeBaseQty": 10,
+      "oldStockBaseQty": 10,
+      "newStockBaseQty": 20
+    }
+  ]
+}

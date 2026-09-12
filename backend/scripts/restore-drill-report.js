@@ -8,6 +8,7 @@
  * backup was — and they are unit-tested, so the parts that need a live server
  * are only the ones that genuinely do.
  */
+import { assertSafeRestoreTarget } from "./postgres-url-safety.js";
 
 /** Everything a drill needs before it is allowed to touch a database. */
 export const DRILL_REQUIREMENTS = [
@@ -36,6 +37,14 @@ export function missingRequirements(env = {}) {
       missing.push({ ...requirement, reason: `set to "${value}", expected "true"` });
     }
   }
+  if (missing.length === 0) {
+    try {
+      assertSafeRestoreTarget({ sourceUrl: env.DATABASE_URL, restoreUrl: env.RESTORE_TEST_DATABASE_URL,
+        allowFlag: String(env.ALLOW_RESTORE_TEST_DB).toLowerCase() === "true" });
+    } catch (error) {
+      missing.push({ key: "RESTORE_TEST_DATABASE_URL", why: "Source and restore URLs must pass the database identity guard.", reason: error.message });
+    }
+  }
   return missing;
 }
 
@@ -51,7 +60,13 @@ export function recoveryPoint({ backupTakenAt, now = Date.now(), objectiveHours 
   if (!Number.isFinite(takenAt)) {
     return { known: false, withinObjective: false, reason: "backup timestamp is unreadable" };
   }
-  const ageMs = Math.max(0, now - takenAt);
+  if (!Number.isFinite(now) || !Number.isFinite(objectiveHours) || objectiveHours <= 0) {
+    return { known: false, withinObjective: false, reason: "current time and a positive finite recovery objective are required" };
+  }
+  if (takenAt > now) {
+    return { known: false, withinObjective: false, reason: "backup timestamp is in the future; verify clock alignment" };
+  }
+  const ageMs = now - takenAt;
   const ageHours = ageMs / 3_600_000;
   return {
     known: true,
@@ -80,26 +95,36 @@ export function recoveryPoint({ backupTakenAt, now = Date.now(), objectiveHours 
 export function reconcile(source = {}, restored = {}) {
   const keys = [...new Set([...Object.keys(source), ...Object.keys(restored)])].sort();
   const variances = [];
+  if (keys.length === 0) {
+    return { matched: false, compared: 0, variances: [{ metric: "metrics", source: null, restored: null, note: "no measurements to compare" }] };
+  }
+  const integer = (value) => {
+    if (typeof value === "bigint") return value;
+    if (typeof value === "number") return Number.isSafeInteger(value) ? BigInt(value) : null;
+    if (typeof value === "string" && /^-?\d+$/.test(value)) return BigInt(value);
+    return null;
+  };
+  const jsonValue = (value) => typeof value === "bigint" ? String(value) : value;
 
   for (const key of keys) {
     const before = source[key];
     const after = restored[key];
     if (before === undefined) {
-      variances.push({ metric: key, source: null, restored: after, note: "present only after restore" });
+      variances.push({ metric: key, source: null, restored: jsonValue(after), note: "present only after restore" });
       continue;
     }
     if (after === undefined) {
-      variances.push({ metric: key, source: before, restored: null, note: "lost in restore" });
+      variances.push({ metric: key, source: jsonValue(before), restored: null, note: "lost in restore" });
       continue;
     }
-    if (typeof before === "bigint" || typeof after === "bigint") {
-      if (BigInt(before) !== BigInt(after)) {
-        variances.push({ metric: key, source: String(before), restored: String(after), note: "differs" });
-      }
+    const beforeInteger = integer(before);
+    const afterInteger = integer(after);
+    if (beforeInteger === null || afterInteger === null) {
+      variances.push({ metric: key, source: jsonValue(before), restored: jsonValue(after), note: "measurement is not an exact integer" });
       continue;
     }
-    if (Number(before) !== Number(after)) {
-      variances.push({ metric: key, source: before, restored: after, note: "differs" });
+    if (beforeInteger !== afterInteger) {
+      variances.push({ metric: key, source: jsonValue(before), restored: jsonValue(after), note: "differs" });
     }
   }
 

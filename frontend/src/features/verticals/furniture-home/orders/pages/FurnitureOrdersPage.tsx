@@ -168,11 +168,11 @@ export default function FurnitureOrdersPage() {
       <div className="space-y-4">
         {!isOnline && (
           <div role="status" className="rounded-[12px] border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] font-semibold text-amber-900">
-            Showing the order book last saved on this device. Writing an order or an advance needs a connection, so two desks can never promise the same piece.
+            Showing the order book last saved on this device. Connect to save changes and check stock against other confirmed orders.
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <Kpi icon={<NotebookPen size={16} />} label="Open orders" value={String(summary?.openOrders ?? 0)} tone="blue" />
           <Kpi
             icon={<AlertTriangle size={16} />}

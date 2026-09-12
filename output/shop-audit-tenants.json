@@ -1,0 +1,74 @@
+[
+  {
+    "trade": "kirana",
+    "mobile": "8778090800",
+    "shopId": "cmts6s8i00000jin6lljc6kw4",
+    "productId": "cmts6s8m00006jin63lhmhwdv"
+  },
+  {
+    "trade": "clothing",
+    "mobile": "8778090801",
+    "shopId": "cmts6s8m70007jin6uzsrapsq",
+    "productId": "cmts6s8py000djin6nnqa18ta"
+  },
+  {
+    "trade": "footwear",
+    "mobile": "8778090802",
+    "shopId": "cmts6s8q3000ejin6cq8q82uh",
+    "productId": "cmts6s8tt000kjin6sr0wl5xk"
+  },
+  {
+    "trade": "auto_parts",
+    "mobile": "8778090803",
+    "shopId": "cmts6s8ty000ljin6f1j7k7m6",
+    "productId": "cmts6s8xp000rjin62m18ogl6"
+  },
+  {
+    "trade": "electronics",
+    "mobile": "8778090804",
+    "shopId": "cmts6s8xv000sjin6b0jykqwu",
+    "productId": "cmts6s91l000yjin601x401by"
+  },
+  {
+    "trade": "pharmacy",
+    "mobile": "8778090805",
+    "shopId": "cmts6s91s000zjin6ji6q7n7g",
+    "productId": "cmts6s95k0015jin67aefmpgd"
+  },
+  {
+    "trade": "stationery",
+    "mobile": "8778090806",
+    "shopId": "cmts6s95p0016jin69y7dbm0w",
+    "productId": "cmts6s99g001cjin6hg75l5h7"
+  },
+  {
+    "trade": "furniture",
+    "mobile": "8778090807",
+    "shopId": "cmts6s99l001djin69cpjg4d7",
+    "productId": "cmts6s9da001jjin6ieaweue1"
+  },
+  {
+    "trade": "cosmetics",
+    "mobile": "8778090808",
+    "shopId": "cmts6s9de001kjin6kiznf3s5",
+    "productId": "cmts6s9h4001qjin6ejpj6iqu"
+  },
+  {
+    "trade": "restaurant",
+    "mobile": "8778090809",
+    "shopId": "cmts6s9h8001rjin63q95943n",
+    "productId": "cmts6s9l0001xjin6kcyjy6jf"
+  },
+  {
+    "trade": "manufacturing",
+    "mobile": "8778090810",
+    "shopId": "cmts6s9l6001yjin6l52g3vjz",
+    "productId": "cmts6s9ow0024jin6lni4pt7e"
+  },
+  {
+    "trade": "other",
+    "mobile": "8778090811",
+    "shopId": "cmts6s9p10025jin66bppyi68",
+    "productId": "cmts6s9sq002bjin61h6lpscf"
+  }
+]

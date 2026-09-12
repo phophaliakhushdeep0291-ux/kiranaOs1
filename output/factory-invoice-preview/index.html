@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- interactive-widget=resizes-content makes the layout viewport (and every
+         100dvh panel) shrink when the on-screen keyboard opens, instead of
+         leaving action rows stranded underneath it. Chrome honours this;
+         iOS Safari does not, which is what useKeyboardInset covers. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#5463AB" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="application-name" content="Artha" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Artha" />
+    <title>Artha — Smart POS for Every Business</title>
+    <meta name="description" content="Offline-first POS for billing, credit, inventory, reports and cloud backup — built for every retail business." />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content="Artha — Smart POS for Every Business" />
+    <meta property="og:description" content="Offline-first POS for billing, credit, inventory, reports and cloud backup — built for every retail business." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Artha — Smart POS for Every Business" />
+    <meta name="twitter:description" content="Offline-first POS for billing, credit, inventory, reports and cloud backup — built for every retail business." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..900;1,14..32,400..900&family=Plus+Jakarta+Sans:wght@700;800;900&display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <script type="module" crossorigin src="/assets/index-DtTTo2f-.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-data-BaHBZjtO.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-react-CdF70ZyV.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-ui-CIi-vqR6.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-validation-C84QDzN5.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-C-nn0uN8.css">
+  </head>
+  <body>
+    <div id="root">
+      <div id="artha-boot-wait" role="status" aria-live="polite" style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:24rem;margin:22vh auto 0;padding:0 1.25rem;text-align:center;color:#3D4354">
+        <div style="font-size:2rem;font-weight:900;letter-spacing:-0.06em;color:#5463AB">Artha</div>
+        <p style="font-size:0.95rem;font-weight:700;margin:0.65rem 0 0.2rem">Opening your counter&hellip;</p>
+        <p style="font-size:0.78rem;color:#7C7566;margin:0">Your saved shop data stays available while the app starts.</p>
+      </div>
+    </div>
+    <script>
+      // Runtime polyfills (ES5) for APIs missing on iOS Safari < 15.4. esbuild
+      // transpiles syntax for the build target but never polyfills these methods,
+      // so old iPhones/iPads used as counter terminals crash without them. Covers
+      // our own code AND third-party bundles that assume a modern runtime.
+      (function () {
+        function def(obj, name, value) {
+          if (obj && typeof obj[name] !== "function") {
+            try { Object.defineProperty(obj, name, { value: value, writable: true, configurable: true }); }
+            catch (e) { obj[name] = value; }
+          }
+        }
+        function atImpl(n) {
+          var len = this.length;
+          n = Math.trunc(n) || 0;
+          if (n < 0) n += len;
+          if (n < 0 || n >= len) return undefined;
+          return this[n];
+        }
+        def(Array.prototype, "at", atImpl);
+        def(String.prototype, "at", atImpl);
+        if (typeof Object.hasOwn !== "function") {
+          Object.hasOwn = function (o, p) { return Object.prototype.hasOwnProperty.call(o, p); };
+        }
+        if (typeof window.structuredClone !== "function") {
+          window.structuredClone = function (v) {
+            // Best-effort fallback; adequate for the plain data this app clones.
+            return v === undefined ? v : JSON.parse(JSON.stringify(v));
+          };
+        }
+      })();
+    </script>
+    <script>
+      // Boot guard (ES5 on purpose): if the module bundle fails to parse or run
+      // (old WebKit SyntaxError, stale cached chunk, storage failure), the page
+      // stays blank with no feedback — especially on iOS where users can't open
+      // a console. Show a recoverable error screen instead of a white screen.
+      (function () {
+        var shown = false;
+        function rootEmpty() {
+          var root = document.getElementById("root");
+          var wait = document.getElementById("artha-boot-wait");
+          return !root || root.childNodes.length === 0 || (wait && wait.parentNode === root && root.childNodes.length === 1);
+        }
+        function show(detail) {
+          if (shown || !rootEmpty()) return;
+          shown = true;
+          var root = document.getElementById("root");
+          if (!root) return;
+          root.innerHTML =
+            '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:26rem;margin:18vh auto 0;padding:0 1.25rem;text-align:center;color:#3D4354">' +
+            '<div style="font-size:44px;line-height:1">&#9888;&#65039;</div>' +
+            '<h1 style="font-size:1.15rem;margin:0.75rem 0 0.35rem">Artha could not start</h1>' +
+            '<p style="font-size:0.85rem;color:#7C7566;margin:0 0 1rem">Your browser may be outdated or holding a stale copy of the app. Try reloading; if it repeats, clear the cached copy below.</p>' +
+            '<button onclick="location.reload()" style="display:block;width:100%;padding:0.7rem;border-radius:10px;border:0;background:#5463AB;color:#fff;font-weight:700;font-size:0.9rem;margin-bottom:0.5rem">Reload app</button>' +
+            '<button id="artha-boot-clear" style="display:block;width:100%;padding:0.7rem;border-radius:10px;border:1px solid #E6E0D4;background:#FAF8F4;color:#3D4354;font-weight:700;font-size:0.9rem">Clear cached app &amp; reload</button>' +
+            '<p style="font-size:0.7rem;color:#A9A395;margin-top:1rem;word-break:break-word">' + String(detail || "").slice(0, 200) + "</p>" +
+            "</div>";
+          var clearBtn = document.getElementById("artha-boot-clear");
+          if (clearBtn) {
+            clearBtn.onclick = function () {
+              // /login is deliberately outside service-worker caching. Going
+              // through it prevents a damaged older worker from immediately
+              // serving the same stale shell after its caches are cleared.
+              var done = function () { location.replace("/login?recover=" + Date.now()); };
+              try {
+                var work = [];
+                if (window.caches && caches.keys) {
+                  work.push(caches.keys().then(function (keys) {
+                    return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                  }));
+                }
+                if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+                  work.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
+                    return Promise.all(regs.map(function (r) { return r.unregister(); }));
+                  }));
+                }
+                Promise.all(work).then(done, done);
+                setTimeout(done, 3000);
+              } catch (e) { done(); }
+            };
+          }
+        }
+        window.addEventListener("error", function (event) {
+          // Only react while the app has not mounted; later errors are the app's business.
+          if (rootEmpty()) show(event.message || (event.error && event.error.message));
+        });
+        window.addEventListener("unhandledrejection", function (event) {
+          var reason = event && event.reason;
+          if (rootEmpty()) show(reason && reason.message ? reason.message : String(reason || ""));
+        });
+        // Old engines ignore type=module scripts entirely — no error event at all.
+        setTimeout(function () { show("The app did not finish loading (timeout)."); }, 20000);
+      })();
+    </script>
+  </body>
+</html>

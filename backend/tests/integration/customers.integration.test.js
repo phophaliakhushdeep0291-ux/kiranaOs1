@@ -18,6 +18,28 @@ if (ctx.skip) {
   }
 
   describe("customer and udhar integration", () => {
+    test("credit limit and follow-up fields persist, retain on partial edit, and clear explicitly", async () => {
+      const { ownerAuth } = await ownerCtx();
+      const options = { token: ownerAuth.accessToken };
+      const fields = { udharLimit: 1500.25, dueDate: "2026-09-15", promiseToPayDate: "2026-09-12", notes: "Collect after delivery" };
+      const created = assertSuccess(await ctx.post("/api/customers", { ...customerPayload(), ...fields }, options), 201);
+      for (const [key, value] of Object.entries(fields)) assert.equal(created[key], value);
+      assertSuccess(await ctx.patch(`/api/customers/${created.id}`, { name: "Updated buyer" }, options));
+      const loaded = assertSuccess(await ctx.get(`/api/customers/${created.id}`, options));
+      for (const [key, value] of Object.entries(fields)) assert.equal(loaded[key], value);
+      const cleared = Object.fromEntries(Object.keys(fields).map((key) => [key, null]));
+      assertSuccess(await ctx.patch(`/api/customers/${created.id}`, cleared, options));
+      const reloaded = assertSuccess(await ctx.get(`/api/customers/${created.id}`, options));
+      for (const key of Object.keys(fields)) assert.equal(reloaded[key], null);
+    });
+
+    test("customer rejects invalid follow-up dates and negative credit limits", async () => {
+      const { ownerAuth } = await ownerCtx();
+      for (const fields of [{ dueDate: "2026-02-30" }, { promiseToPayDate: "invalid" }, { udharLimit: -1 }]) {
+        assertFailure(await ctx.post("/api/customers", { ...customerPayload(), ...fields }, { token: ownerAuth.accessToken }), 400);
+      }
+    });
+
     test("customer create works", async () => {
       const { ownerAuth } = await ownerCtx();
       const data = assertSuccess(await ctx.post("/api/customers", customerPayload({ name: "Ramesh" }), { token: ownerAuth.accessToken }), 201);

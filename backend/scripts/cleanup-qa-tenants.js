@@ -34,10 +34,19 @@ const backupPath = path.resolve(process.cwd(), "prisma", `dev.before-qa-cleanup-
 fs.copyFileSync(databasePath, backupPath, fs.constants.COPYFILE_EXCL);
 
 try {
-  const deleted = await db.shop.deleteMany({ where: { id: { in: candidates.map((shop) => shop.id) } } });
+  const ids = candidates.map((shop) => shop.id);
+  await db.$executeRawUnsafe("PRAGMA foreign_keys = OFF");
+  const tables = await db.$queryRawUnsafe("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
+  for (const { name } of tables) {
+    const columns = await db.$queryRawUnsafe(`PRAGMA table_info(\"${name.replaceAll('"', '""')}\")`);
+    if (!columns.some((column) => column.name === "shopId")) continue;
+    for (const id of ids) await db.$executeRawUnsafe(`DELETE FROM \"${name.replaceAll('"', '""')}\" WHERE shopId = ?`, id);
+  }
+  for (const id of ids) await db.$executeRawUnsafe("DELETE FROM Shop WHERE id = ?", id);
+  await db.$executeRawUnsafe("PRAGMA foreign_keys = ON");
   const violations = await db.$queryRawUnsafe("PRAGMA foreign_key_check");
   if (violations.length) throw new Error(`Foreign-key verification found ${violations.length} violation(s)`);
-  console.log(JSON.stringify({ deleted: deleted.count, backupPath, foreignKeyViolations: 0 }));
+  console.log(JSON.stringify({ deleted: candidates.length, backupPath, foreignKeyViolations: 0 }));
 } catch (error) {
   console.error(`Cleanup failed; the unchanged backup is available at ${backupPath}`);
   throw error;

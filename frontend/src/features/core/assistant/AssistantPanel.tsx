@@ -54,6 +54,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
   const [pending, setPending] = useState<AgentTurn | null>(null);
   const [planState, setPlanState] = useState<PlanState>({ status: "idle" });
   const [pin, setPin] = useState("");
+  const planRequestBusy = useRef(false);
   const [showTrace, setShowTrace] = useState(false);
   const [mic, setMic] = useState<"idle" | "listening" | "transcribing">("idle");
   const micSession = useRef<BackendTranscriptionSession | null>(null);
@@ -70,7 +71,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
 
   const ask = useCallback(async (text: string) => {
     const question = text.trim();
-    if (!question || busy) return;
+    if (!question || busy || planRequestBusy.current) return;
 
     setError(null);
     setDraft("");
@@ -94,7 +95,8 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
     } catch (caught) {
       const code = agentErrorCode(caught);
       setError(
-        code === "AI_KEY_MISSING" ? t("assistant.unavailable")
+        code === "AI_TURN_TIMEOUT" ? t("assistant.timeout")
+          : code === "AI_KEY_MISSING" ? t("assistant.unavailable")
           : code === "AI_RATE_LIMITED" ? t("assistant.busy")
             : t("assistant.failed"),
       );
@@ -104,22 +106,28 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
   }, [busy, messages, t, language]);
 
   const applyPlan = useCallback(async (ownerPin?: string) => {
-    if (!pending?.planId) return;
+    if (!pending?.planId || planRequestBusy.current) return;
+    planRequestBusy.current = true;
     setPlanState({ status: "working" });
     try {
       const result = await confirmAgentPlan(pending.planId, ownerPin);
       // Lines the server resolved are not on the bill yet — the till owns the
       // cart. Stage them and offer the trip rather than claiming it is done.
       let staged = 0;
+      const unresolved: string[] = [];
       for (const action of result.clientActions ?? []) {
         if (action.action !== "add_bill_lines") continue;
         staged += await stageBillLines(action.payload?.lines ?? []);
+        unresolved.push(...(action.payload?.problems ?? []).map((problem) => problem.query));
       }
       setStagedCount(staged);
       setPlanState({
         status: "done",
-        ok: result.allSucceeded,
-        message: result.allSucceeded ? undefined : t("assistant.partialFailure"),
+        ok: result.allSucceeded && !result.requiresReview && unresolved.length === 0,
+        message: result.requiresReview
+          ? t("assistant.outcomeUnknown")
+          : unresolved.length ? `${t("assistant.itemsUnresolved")} ${unresolved.join(", ")}`
+            : result.allSucceeded ? undefined : t("assistant.partialFailure"),
       });
       setPending(null);
       setPin("");
@@ -131,24 +139,37 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
       }
       // A rejected PIN comes back from the same middleware every other sensitive
       // action uses, so the message is the shared one rather than a new claim.
-      if (ownerPin) {
+      if (ownerPin && (code === "OWNER_PIN_INVALID" || code === "OWNER_PIN_INVALID_FORMAT")) {
         setPlanState({ status: "pin", wrong: true });
         return;
       }
-      setPlanState({ status: "done", ok: false, message: t("assistant.failed") });
+      if (code === "AI_PLAN_ALREADY_RESOLVED") setPending(null);
+      setPlanState({ status: "done", ok: false, message: code === "OWNER_PIN_LOCKED" ? t("assistant.pinLocked") : t("assistant.outcomeUnknown") });
+    } finally {
+      planRequestBusy.current = false;
     }
   }, [pending, t]);
 
   const decline = useCallback(async () => {
-    if (!pending?.planId) return;
+    if (!pending?.planId || planRequestBusy.current) return;
+    planRequestBusy.current = true;
+    setPlanState({ status: "working" });
     try {
-      await rejectAgentPlan(pending.planId);
-    } catch {
-      // The plan expires unexecuted regardless; a failed decline is not worth
-      // an error the shopkeeper has to dismiss.
+      const result = await rejectAgentPlan(pending.planId);
+      if (result.status !== "rejected") {
+        setPlanState({ status: "done", ok: false, message: t("assistant.outcomeUnknown") });
+        setPending(null);
+        return;
+      }
+      setPending(null);
+      setPlanState({ status: "done", ok: true, message: t("assistant.rejected") });
+    } catch (caught) {
+      const resolved = agentErrorCode(caught) === "AI_PLAN_ALREADY_RESOLVED";
+      if (resolved) setPending(null);
+      setPlanState({ status: "done", ok: false, message: t(resolved ? "assistant.outcomeUnknown" : "assistant.cancelFailed") });
+    } finally {
+      planRequestBusy.current = false;
     }
-    setPending(null);
-    setPlanState({ status: "done", ok: true, message: t("assistant.rejected") });
   }, [pending, t]);
 
   const labelAnswer = useCallback(async (index: number, actionLogId: string, outcome: AiFeedbackOutcome) => {
@@ -376,7 +397,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
 
           {planState.status === "done" ? (
             <p className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold ${planState.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>
-              <Check size={15} /> {planState.message ?? t("assistant.confirmed")}
+              {planState.ok ? <Check size={15} /> : <AlertTriangle size={15} />} {planState.message ?? t("assistant.confirmed")}
             </p>
           ) : null}
 
@@ -442,7 +463,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
           />
           <button
             type="submit"
-            disabled={busy || !draft.trim()}
+            disabled={busy || planState.status === "working" || !draft.trim()}
             aria-label={t("assistant.send")}
             className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--brand)] text-white disabled:opacity-40"
           >

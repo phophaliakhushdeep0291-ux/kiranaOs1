@@ -1,19 +1,21 @@
 import {
   dexieDB,
   offlineDB,
+  filterRowsForCurrentScope,
   type OfflineRow,
   type PendingSyncEvent,
   type SyncCursorRow,
 } from "@/lib/offline/db";
 import { getCurrentSubscriptionSnapshot } from "@/features/core/subscription/access";
 import { readOfflineReadiness, type OfflineReadinessState } from "@/features/core/sync/offline-readiness";
+import { calculateSyncQueueCounts } from "@/features/core/sync/sync-health";
 
 export interface OfflineConfidenceSnapshot {
   dbHealthy: boolean;
-  pendingSyncCount: number;
-  failedSyncCount: number;
-  conflictCount: number;
-  localBusinessRows: number;
+  pendingSyncCount: number | null;
+  failedSyncCount: number | null;
+  conflictCount: number | null;
+  localBusinessRows: number | null;
   lastCloudBackupAt: string | null;
   offlineGraceUntil: string | null;
   cloudSyncAllowed: boolean;
@@ -27,8 +29,7 @@ export interface OfflineConfidenceSnapshot {
 
 async function getLastCloudBackupAt(): Promise<string | null> {
   const cursors = await offlineDB
-    .getAll<SyncCursorRow>("sync_cursor")
-    .catch(() => []);
+    .getAll<SyncCursorRow>("sync_cursor");
   const cursor = cursors.find((row) => row.id === "global");
   const cursorTime = cursor?.last_pulled_at ?? cursor?.updated_at ?? null;
   const syncedRows = await offlineDB
@@ -37,8 +38,7 @@ async function getLastCloudBackupAt(): Promise<string | null> {
       rows.filter(
         (row) => row.status === "SYNCED" || row.sync_status === "synced",
       ),
-    )
-    .catch(() => []);
+    );
   const outboxTimes = syncedRows
     .map((row) => row.last_attempt_at ?? row.client_created_at)
     .filter(
@@ -55,28 +55,22 @@ async function countLocalBusinessRows(): Promise<number> {
   const counts = await Promise.all([
     offlineDB
       .getAll<OfflineRow>("products")
-      .then((rows) => rows.length)
-      .catch(() => 0),
+      .then((rows) => filterRowsForCurrentScope(rows).length),
     offlineDB
       .getAll<OfflineRow>("customers")
-      .then((rows) => rows.length)
-      .catch(() => 0),
+      .then((rows) => filterRowsForCurrentScope(rows).length),
     offlineDB
       .getAll<OfflineRow>("bills")
-      .then((rows) => rows.length)
-      .catch(() => 0),
+      .then((rows) => filterRowsForCurrentScope(rows).length),
     offlineDB
       .getAll<OfflineRow>("payments")
-      .then((rows) => rows.length)
-      .catch(() => 0),
+      .then((rows) => filterRowsForCurrentScope(rows).length),
     offlineDB
       .getAll<OfflineRow>("customer_ledger")
-      .then((rows) => rows.length)
-      .catch(() => 0),
+      .then((rows) => filterRowsForCurrentScope(rows).length),
     offlineDB
       .getAll<OfflineRow>("inventory_movements")
-      .then((rows) => rows.length)
-      .catch(() => 0),
+      .then((rows) => filterRowsForCurrentScope(rows).length),
   ]);
   return counts.reduce((sum, count) => sum + count, 0);
 }
@@ -92,28 +86,18 @@ export async function readOfflineConfidenceSnapshot(): Promise<OfflineConfidence
       subscription,
       readiness,
     ] = await Promise.all([
-      offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
-      offlineDB.getAll<OfflineRow>("sync_conflicts").catch(() => []),
+      offlineDB.getAll<PendingSyncEvent>("sync_outbox"),
+      offlineDB.getAll<OfflineRow>("sync_conflicts"),
       getLastCloudBackupAt(),
       countLocalBusinessRows(),
-      getCurrentSubscriptionSnapshot().catch(() => null),
+      getCurrentSubscriptionSnapshot(),
       readOfflineReadiness(),
     ]);
+    if (!readiness.databaseAvailable) throw new Error("Local readiness database check failed");
 
-    const pendingSyncCount = allOperations.filter(
-      (row) =>
-        row.status === "PENDING" ||
-        row.status === "SYNCING" ||
-        row.sync_status === "pending_sync" ||
-        row.sync_status === "syncing",
-    ).length;
-    const failedSyncCount = allOperations.filter(
-      (row) => row.status === "FAILED" || row.sync_status === "failed",
-    ).length;
-    const conflictCount = conflicts.filter(
-      (row) =>
-        row.sync_status === "conflict" || row.resolution === "unresolved",
-    ).length;
+    const { pending: pendingSyncCount, failed: failedSyncCount, conflict: conflictCount } = calculateSyncQueueCounts(
+      filterRowsForCurrentScope(allOperations), filterRowsForCurrentScope(conflicts),
+    );
     const cloudSyncAllowed = subscription?.cloudSyncAllowed ?? true;
 
     const warning =
@@ -151,10 +135,10 @@ export async function readOfflineConfidenceSnapshot(): Promise<OfflineConfidence
   } catch {
     return {
       dbHealthy: false,
-      pendingSyncCount: 0,
-      failedSyncCount: 0,
-      conflictCount: 0,
-      localBusinessRows: 0,
+      pendingSyncCount: null,
+      failedSyncCount: null,
+      conflictCount: null,
+      localBusinessRows: null,
       lastCloudBackupAt: null,
       offlineGraceUntil: null,
       cloudSyncAllowed: false,

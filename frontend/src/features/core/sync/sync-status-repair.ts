@@ -3,14 +3,9 @@ import { dexieDB, filterRowsForCurrentScope, MAX_AUTOMATIC_RETRY_ATTEMPTS, offli
 import { nowIso } from "@/lib/offline/context";
 import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
 import { buildBackendSyncOperation } from "@/features/core/sync/sync-operation-normalizer";
+import { calculateSyncQueueCounts, type SyncQueueCounts } from "@/features/core/sync/sync-health";
 
-export interface SyncQueueCounts {
-  pending: number;
-  failed: number;
-  conflict: number;
-  retryable: number;
-  totalBlocking: number;
-}
+export type { SyncQueueCounts } from "@/features/core/sync/sync-health";
 
 type MutableRow = Record<string, unknown>;
 const STALE_SYNCING_TIMEOUT_MS = 2 * 60 * 1000;
@@ -612,50 +607,6 @@ export async function repairRetryableBillValidationConflicts(): Promise<number> 
   return repaired;
 }
 
-function conflictIdentitySet(conflict: OfflineRow): Set<string> {
-  const ids = new Set<string>();
-  addString(ids, conflict.id);
-  addString(ids, conflict.entity_id);
-  addString(ids, conflict.sourceId);
-  addString(ids, conflict.source_id);
-  addString(ids, conflict.sourceEventId);
-  addString(ids, conflict.source_event_id);
-  const local = isRecord(conflict.local_snapshot) ? conflict.local_snapshot : {};
-  const server = isRecord(conflict.server_snapshot) ? conflict.server_snapshot : {};
-  [local, server].forEach((row) => {
-    ["id", "local_id", "localId", "server_id", "serverId", "entity_id", "entityId", "billId", "bill_id", "customerId", "customer_id", "productId", "product_id"].forEach((key) => addString(ids, row[key]));
-  });
-  return ids;
-}
-
-async function repairResolvedStoredConflicts(): Promise<number> {
-  await dexieDB.open();
-  const conflicts = filterRowsForCurrentScope(
-    await offlineDB.getAll<OfflineRow>("sync_conflicts").catch(() => []),
-  ).filter((row) => row.sync_status === "conflict" || row.resolution === "unresolved");
-  if (conflicts.length === 0) return 0;
-  const activeOutbox = filterRowsForCurrentScope(
-    await offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
-  ).filter((event) => !isSyncedOutbox(event));
-  const activeIds = activeOutbox.map(eventIdentitySet);
-  const now = nowIso();
-  let repaired = 0;
-  for (const conflict of conflicts) {
-    const ids = conflictIdentitySet(conflict);
-    const stillBlocked = activeIds.some((outboxIds) => intersects(ids, outboxIds));
-    if (stillBlocked) continue;
-    await dexieDB.sync_conflicts.put({
-      ...conflict,
-      resolution: "auto_resolved",
-      sync_status: "synced",
-      resolved_at: now,
-      updated_at: now,
-    });
-    repaired += 1;
-  }
-  return repaired;
-}
-
 /**
  * Drops the retry backoff on failed operations when the connection comes back.
  *
@@ -667,10 +618,17 @@ async function repairResolvedStoredConflicts(): Promise<number> {
  * reaching for the Sync button — the queue is not stuck, it is serving a
  * sentence for an outage that is already over.
  *
+ * The same goes for a PENDING row a transient failure deferred. That wait grows
+ * with the row's run of transient failures, up to 30s, so without this a till
+ * whose backend had just come back could sit out half a minute for nothing.
+ *
  * Only `next_retry_at` is cleared. `retry_count` is deliberately preserved, so
  * the twelve-attempt cap still retires an operation the server genuinely refuses
  * (a validation failure, a missing owner PIN) instead of letting it loop forever
- * across a flapping connection.
+ * across a flapping connection. `transient_failures` is preserved too, for a
+ * gentler reason: the retry that follows is immediate either way, but if it also
+ * gets no verdict the server is still unwell, and a backend flapping in and out
+ * of reach should not restart the backoff at one second every time it answers.
  */
 export async function clearRetryBackoffAfterReconnect(): Promise<number> {
   await dexieDB.open();
@@ -680,8 +638,11 @@ export async function clearRetryBackoffAfterReconnect(): Promise<number> {
   const now = Date.now();
   let cleared = 0;
   for (const event of rows) {
-    if (!isFailedOutbox(event)) continue;
-    if ((event.retry_count ?? event.attempts ?? 0) >= MAX_AUTOMATIC_RETRY_ATTEMPTS) continue;
+    // A FAILED row walking the failure ladder, or a PENDING one a transient
+    // failure deferred. A retired row stays retired.
+    const failed = isFailedOutbox(event);
+    if (!failed && event.status !== "PENDING") continue;
+    if (failed && (event.retry_count ?? event.attempts ?? 0) >= MAX_AUTOMATIC_RETRY_ATTEMPTS) continue;
     const waitingUntil = event.next_retry_at ? new Date(event.next_retry_at).getTime() : 0;
     if (!Number.isFinite(waitingUntil) || waitingUntil <= now) continue;
     await dexieDB.sync_outbox.put({ ...event, next_retry_at: null });
@@ -713,8 +674,7 @@ export async function repairResolvedSyncStatusNoise(options: {
   const financialRepaired = await hardenLocalFinancialData().then((result) => result.total).catch(() => 0);
   const billRepaired = await repairStaleSyncedBillOutboxFailures().catch(() => 0);
   const duplicateKeyRepaired = await repairResolvedDuplicateKeyOutboxFailures().catch(() => 0);
-  const conflictsRepaired = await repairResolvedStoredConflicts().catch(() => 0);
-  const repaired = staleSyncingRepaired + retryableValidationRepaired + retryablePurchaseAndLedgerRepaired + cancellationRepaired + financialRepaired + billRepaired + duplicateKeyRepaired + conflictsRepaired;
+  const repaired = staleSyncingRepaired + retryableValidationRepaired + retryablePurchaseAndLedgerRepaired + cancellationRepaired + financialRepaired + billRepaired + duplicateKeyRepaired;
   if (repaired > 0 && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
   }
@@ -761,22 +721,8 @@ export async function repairStaleSyncedBillOutboxFailures(): Promise<number> {
 export async function readSyncQueueCounts(): Promise<SyncQueueCounts> {
   await repairResolvedSyncStatusNoise().catch(() => 0);
   const outbox = filterRowsForCurrentScope(
-    await offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
-  ).filter((row) => !isSyncedOutbox(row));
-  const syncConflicts = await offlineDB.getAll<OfflineRow>("sync_conflicts").catch(() => []);
-  const pending = outbox.filter(isPendingOutbox).length;
-  const failed = outbox.filter(isFailedOutbox).length;
-  const outboxConflicts = outbox.filter(isConflictOutbox).length;
-  const storedConflicts = filterRowsForCurrentScope(syncConflicts).filter(
-    (row) => row.sync_status === "conflict" || row.resolution === "unresolved",
-  ).length;
-  const conflict = outboxConflicts + storedConflicts;
-  const retryable = failed + outboxConflicts;
-  return {
-    pending,
-    failed,
-    conflict,
-    retryable,
-    totalBlocking: pending + failed + conflict,
-  };
+    await offlineDB.getAll<PendingSyncEvent>("sync_outbox"),
+  );
+  const syncConflicts = await offlineDB.getAll<OfflineRow>("sync_conflicts");
+  return calculateSyncQueueCounts(outbox, filterRowsForCurrentScope(syncConflicts));
 }

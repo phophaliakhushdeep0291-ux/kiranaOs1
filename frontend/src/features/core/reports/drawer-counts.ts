@@ -59,7 +59,7 @@ export function buildDrawerCount(date: string, expectedCash: number, countedCash
 }
 
 export async function loadDrawerCounts(): Promise<DrawerCount[]> {
-  const stored = await offlineDB.getSetting<DrawerCount[]>(STORE_KEY).catch(() => null);
+  const stored = await offlineDB.getSetting<DrawerCount[]>(STORE_KEY);
   return Array.isArray(stored) ? stored : [];
 }
 
@@ -97,7 +97,7 @@ export async function refreshDrawerCountsFromCloud(): Promise<DrawerCount[]> {
   const [local, server, outbox] = await Promise.all([
     loadDrawerCounts(),
     getDailyClosingDrawerCounts(),
-    offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
+    offlineDB.getAll<PendingSyncEvent>("sync_outbox"),
   ]);
   const pendingDates = new Set(
     outbox

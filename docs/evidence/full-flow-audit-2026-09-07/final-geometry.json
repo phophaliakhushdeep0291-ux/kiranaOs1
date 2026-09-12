@@ -1,0 +1,17 @@
+[
+  {
+    "documentWidth": 360,
+    "route": "/money-statement",
+    "width": 360
+  },
+  {
+    "documentWidth": 390,
+    "route": "/money-statement",
+    "width": 390
+  },
+  {
+    "documentWidth": 1440,
+    "route": "/money-statement",
+    "width": 1440
+  }
+]

@@ -11,6 +11,13 @@
 // Singular/plural is two keys, never one string with a suffix: Hindi does not
 // pluralise by adding "s", so `${n} change${n === 1 ? "" : "s"}` is untranslatable.
 export const syncEn = {
+  "sync.local.setupNeeded": "Offline setup needed",
+  "sync.local.reviewNeeded": "Review needed",
+  "sync.local.checking": "Checking local data",
+  "sync.local.unavailable": "Cannot verify local data",
+  "sync.local.unavailableBody": "The local database could not be read. Sync status and totals are unverified. Retry or open Recovery Mode before continuing.",
+  "sync.local.retry": "Retry local check",
+  "sync.local.recovery": "Open Recovery Mode",
   // ── Page header ──
   "sync.title": "Sync Status",
   "sync.action.retryFailed": "Retry failed",
@@ -28,6 +35,28 @@ export const syncEn = {
   // ── Status badge ──
   "sync.badge.failed": "{count} failed cloud backup",
   "sync.badge.pending": "{count} pending cloud backup",
+
+  // The top-of-app banner. Three states, because a queue that is emptying is not
+  // a fault: loading the starter catalogue queues hundreds of rows at once, and
+  // wearing the warning colour through all of it made a healthy first run look
+  // broken.
+  // One rejected bill leaves one review item, and that is the number the
+  // banner most often carries — the queue counts stopped double-reporting a
+  // single refusal, so the singular is now reachable rather than theoretical.
+  "sync.banner.reviewTitle.one": "1 change needs review",
+  "sync.banner.reviewTitle": "{count} changes need review",
+  "sync.banner.reviewBody": "Your data is safe on this device. Retry, or open Sync Status to review.",
+  "sync.banner.backingUpTitle.one": "Backing up 1 change...",
+  "sync.banner.backingUpTitle": "Backing up {count} changes...",
+  "sync.banner.backingUpBody": "Saving to the cloud. You can keep working.",
+  "sync.banner.waitingTitle.one": "1 change waiting to back up",
+  "sync.banner.waitingTitle": "{count} changes waiting to back up",
+  "sync.banner.waitingBody": "Will retry automatically when the connection is healthy.",
+  "sync.banner.retry": "Retry now",
+  "sync.banner.retrying": "Retrying...",
+  "sync.banner.view": "View",
+  "sync.banner.retryFailedTitle": "Retry failed",
+  "sync.banner.retryFailedBody": "Please check your connection and try again.",
   "sync.badge.offline": "Offline",
 
   // ── Top alerts ──

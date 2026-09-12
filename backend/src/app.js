@@ -52,6 +52,15 @@ import restaurantServiceOpsRoutes from "./verticals/restaurant/service-ops/servi
 // only place allowed to name a vertical, which is why registration happens here
 // alongside the route mounting rather than inside the shared AI module.
 import "./verticals/restaurant/ai/tools.js";
+import "./verticals/clothing/ai/tools.js";
+import "./verticals/footwear/ai/tools.js";
+import "./verticals/auto-parts/ai/tools.js";
+import "./verticals/electronics/ai/tools.js";
+import "./verticals/pharmacy/ai/tools.js";
+import "./verticals/stationery-books/ai/tools.js";
+import "./verticals/furniture-home/ai/tools.js";
+import "./verticals/beauty-cosmetics/ai/tools.js";
+import "./verticals/manufacturing/ai/tools.js";
 import integrationRoutes from "./modules/integrations/integrations.routes.js";
 import { taxRoutes as complianceRoutes } from "./core/taxes/index.js";
 import loyaltyRoutes from "./modules/loyalty/loyalty.routes.js";

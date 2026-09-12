@@ -139,7 +139,18 @@ function isProseAcrossLines(run: string): boolean {
 }
 
 export function findHardcodedStrings(source: string): HardcodedString[] {
-  const cleaned = stripCommentsAndClasses(source);
+  // A bare fragment is given a name first.
+  //
+  // The text sweep below matches `>text<`, and refuses a `>` that follows `<`
+  // so that `=>`, `<=` and `>=` are not read as tags. `<>` is caught by that
+  // refusal too — so anything written directly inside a fragment was invisible
+  // to this check, allowlist and all. `<>Place Order</>` on the page a CUSTOMER
+  // taps was sitting in a file the list records as clean.
+  //
+  // Renaming beats loosening the lookbehind: the guard against arrow functions
+  // stays exactly as strict, and a fragment becomes an ordinary element.
+  const named = source.split("<>").join("<Frag>").split("</>").join("</Frag>");
+  const cleaned = stripCommentsAndClasses(named);
   const lineOf = (index: number) => cleaned.slice(0, index).split("\n").length;
   const found: HardcodedString[] = [];
 

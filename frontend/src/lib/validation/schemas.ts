@@ -13,6 +13,10 @@ const positiveMoney = z.coerce.number().finite().positive();
 const quantity = z.coerce.number().finite().positive();
 const nonNegativeQuantity = z.coerce.number().finite().nonnegative();
 const percentage = z.coerce.number().finite().min(0).max(100);
+const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}, "Valid calendar date required").nullable().optional();
 
 export const mobileNumberSchema = z
   .string()
@@ -28,9 +32,11 @@ export const customerCreationSchema = z.object({
   address: optionalText,
   gstNumber: optionalText,
   stateCode: z.preprocess(emptyStringToUndefined, z.string().regex(/^\d{2}$/, "State code must be 2 digits").optional()),
-  udharLimit: money.optional(),
+  udharLimit: money.nullable().optional(),
+  dueDate: calendarDate,
+  promiseToPayDate: calendarDate,
   reminderOverrideUntil: optionalText,
-  notes: optionalText,
+  notes: z.string().trim().max(2000).nullable().optional(),
 }).superRefine((customer, ctx) => {
   if (!customer.gstNumber) return;
   const result = validateGstin(customer.gstNumber);

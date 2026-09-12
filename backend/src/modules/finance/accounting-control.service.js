@@ -222,7 +222,8 @@ export function buildAccountingControl(rows = []) {
       "Historical purchases and expenses recorded before accounting-control-v2 remain outside this projection unless they are explicitly backfilled.",
       "Purchase inventory and expenses are posted at their gross recorded amounts; the source records do not yet contain enough immutable tax evidence to infer GST input credit.",
       "GST output is reclassified as one aggregate liability; CGST, SGST and IGST component evidence remains in the GST register rather than separate journal accounts.",
-      "Sales COGS, non-purchase stock valuation changes, live bank/provider feeds, TDS, TCS and statutory financial statements are not yet covered; imported CSV statement reconciliation is reported separately.",
+      "Sales cost of goods sold is posted at each bill's recorded line cost, not recomputed from a valuation method; non-purchase stock movements — adjustments, counts, write-offs and repacking — do not reach the ledger at all.",
+      "Live bank and payment-provider feeds, TDS, TCS and statutory-format financial statements are not yet covered; imported CSV statement reconciliation is reported separately.",
     ],
   };
 }

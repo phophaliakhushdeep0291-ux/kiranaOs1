@@ -1,0 +1,169 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Security" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: Security page loaded
+  - heading "Owner PIN" [level=3]
+  - paragraph: Protects money-sensitive actions
+  - generic: Checking
+  - generic: —
+  - paragraph: No owner PIN yet
+  - paragraph: Set one so protected actions can be approved
+  - button "Change PIN":
+    - text: Change PIN
+  - paragraph: Forgot your PIN? Recover it from your registered owner email/phone on the login screen.
+  - heading "Session & Login Security" [level=3]
+  - paragraph: Enforced on this device by the counter lock
+  - paragraph: Session timeout
+  - paragraph: Lock the counter when idle this long
+  - combobox:
+    - generic: 15 minutes
+  - paragraph: Auto-lock after inactivity
+  - paragraph: Lock to a PIN screen instead of signing out
+  - switch "Auto-lock after inactivity" [checked]
+  - paragraph: Biometric unlock
+  - paragraph: Use the device fingerprint / face prompt on the lock screen
+  - switch "Biometric unlock"
+  - paragraph: Require unlock on app start
+  - paragraph: Ask for the PIN every time the app is opened fresh
+  - switch "Require unlock on app start" [checked]
+  - paragraph: Remember this device
+  - paragraph: Off means an expired session signs out fully instead of offering a PIN unlock
+  - switch "Remember this device" [checked]
+  - paragraph: Two-factor sign-in needs server-side enrolment and is not offered here yet, so no toggle pretends to switch it on.
+  - heading "Sensitive Action Protection" [level=3]
+  - paragraph: Which actions require approval & who can approve
+  - generic: 11 of 11 protected
+  - heading "Cancel Bill" [level=4]
+  - generic: Server enforced
+  - switch "Protect Cancel Bill" [checked] [disabled]
+  - paragraph: Who can approve
+  - combobox "Approver for Cancel Bill" [disabled]:
+    - generic: Owner only
+  - generic: Audit trail
+  - generic: Logged
+  - heading "Reverse Payment" [level=4]
+  - generic: Server enforced
+  - switch "Protect Reverse Payment" [checked] [disabled]
+  - paragraph: Who can approve
+  - combobox "Approver for Reverse Payment" [disabled]:
+    - generic: Owner only
+  - generic: Audit trail
+  - generic: Logged
+  - heading "Delete Product" [level=4]
+  - generic: Server enforced
+  - switch "Protect Delete Product" [checked] [disabled]
+  - paragraph: Who can approve
+  - combobox "Approver for Delete Product" [disabled]:
+    - generic: Owner only
+  - generic: Audit trail
+  - generic: Logged
+  - heading "Delete Customer" [level=4]
+  - generic: Server enforced
+  - switch "Protect Delete Customer" [checked] [disabled]
+  - paragraph: Who can approve
+  - combobox "Approver for Delete Customer" [disabled]:
+    - generic: Owner only
+  - generic: Audit trail
+  - generic: Logged
+  - heading "Stock Correction" [level=4]
+  - generic: Server enforced
+  - switch "Protect Stock Correction" [checked] [disabled]
+  - paragraph: Who can approve
+  - combobox "Approver for Stock Correction" [disabled]:
+    - generic: Owner only
+  - generic: Audit trail
+  - generic: Logged
+  - heading "Large Discount" [level=4]
+  - generic: Server enforced
+  - switch "Protect Large Discount" [checked] [disabled]
+  - paragraph: Who can approve
+  - combobox "Approver for Large Discount" [disabled]:
+    - generic: Owner only
+  - generic: Audit trail
+  - generic: Logged
+  - heading "Sell Below Min Price" [level=4]
+  - generic: Server enforced
+  - switch "Protect Sell Below Min Price" [checked] [disabled]
+  - paragraph: Who can approve
+  - combobox "Approver for Sell Below Min Price" [disabled]:
+    - generic: Owner only
+  - generic: Audit trail
+  - generic: Logged
+  - heading "Export Data" [level=4]
+  - switch "Protect Export Data" [checked]
+  - paragraph: Who can approve
+  - combobox "Approver for Export Data":
+    - generic: Owner only
+  - generic: Audit trail
+  - generic: Logged
+  - heading "Change Staff Permissions" [level=4]
+  - generic: Server enforced
+  - switch "Protect Change Staff Permissions" [checked] [disabled]
+  - paragraph: Who can approve
+  - combobox "Approver for Change Staff Permissions" [disabled]:
+    - generic: Owner only
+  - generic: Audit trail
+  - generic: Logged
+  - heading "Restore Deleted Record" [level=4]
+  - generic: Server enforced
+  - switch "Protect Restore Deleted Record" [checked] [disabled]
+  - paragraph: Who can approve
+  - combobox "Approver for Restore Deleted Record" [disabled]:
+    - generic: Owner only
+  - generic: Audit trail
+  - generic: Logged
+  - heading "Change GST Settings" [level=4]
+  - generic: Server enforced
+  - switch "Protect Change GST Settings" [checked] [disabled]
+  - paragraph: Who can approve
+  - combobox "Approver for Change GST Settings" [disabled]:
+    - generic: Owner only
+  - generic: Audit trail
+  - generic: Logged
+  - paragraph:
+    - text: Protected actions prompt for the owner PIN at the counter and are written to the audit log. Rows marked
+    - strong: Server enforced
+    - text: are also required by the API, so their prompt cannot be switched off; the rest are decided here and take effect on the next bill.
+  - heading "Signed-in Devices" [level=3]
+  - paragraph: Live from your device licence list
+  - button "Refresh":
+    - text: Refresh
+  - paragraph:
+    - text: Loading devices
+  - link "Manage devices":
+    - /url: /settings/devices
+    - text: Manage devices
+  - heading "Security Logs" [level=3]
+  - paragraph: Real approvals and sensitive actions on this device
+  - button "Refresh"
+  - paragraph:
+    - text: Reading audit trail
+  - link "Open full audit log":
+    - /url: /audit-logs
+    - text: Open full audit log
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

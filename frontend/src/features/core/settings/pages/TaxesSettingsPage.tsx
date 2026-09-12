@@ -1,3 +1,4 @@
+import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -126,6 +127,7 @@ function downloadText(filename: string, text: string, type = "text/csv;charset=u
 }
 
 export default function TaxesSettingsPage() {
+  const requestExport = useDataExport();
   const { t } = useAppLanguage();
   const { toast } = useToast();
   const { prefs, patch, shop, hydrated } = useSettingsPrefs();
@@ -429,7 +431,7 @@ export default function TaxesSettingsPage() {
             title={t("settings.tax.reportsTitle")}
             sub={t("settings.tax.thisMonth")}
             action={gstReportsFeature.allowed
-              ? <span className="flex items-center gap-3"><button onClick={exportGstReport} className="inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Download size={12} /> {t("settings.tax.register")}</button><button onClick={exportGstr1Working} className="inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Download size={12} /> {t("settings.tax.gstr1Working")}</button></span>
+              ? <span className="flex items-center gap-3"><button onClick={() => requestExport({ reportType: "gst_register", format: "csv" }, exportGstReport)} className="inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Download size={12} /> {t("settings.tax.register")}</button><button onClick={() => requestExport({ reportType: "gstr1_working", format: "csv" }, exportGstr1Working)} className="inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Download size={12} /> {t("settings.tax.gstr1Working")}</button></span>
               : <Button asChild size="sm" variant="outline" className="h-8 text-xs"><Link href="/plans">{t("settings.tax.upgradeBusiness")}</Link></Button>}
           />
           {!gstReportsFeature.loading && !gstReportsFeature.allowed ? (
@@ -456,7 +458,7 @@ export default function TaxesSettingsPage() {
                     <p className="text-[13px] font-black text-[var(--brand-ink)]">{t("settings.tax.filingCoverage")}</p>
                     <p className="mt-0.5 text-[11px] leading-4 text-[#64748b]">{t("settings.tax.filingCoverageSub")}</p>
                   </div>
-                  <button type="button" onClick={exportFilingRun} className="inline-flex shrink-0 items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Download size={12} /> {t("settings.tax.allRegistrations")}</button>
+                  <button type="button" onClick={() => requestExport({ reportType: "gst_filing_run", format: "csv" }, exportFilingRun)} className="inline-flex shrink-0 items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Download size={12} /> {t("settings.tax.allRegistrations")}</button>
                 </div>
                 {filingRunQ.isLoading && <p className="mt-3 text-[11px] text-[#64748b]">{t("settings.tax.filingLoading")}</p>}
                 {!filingRunQ.isLoading && filingRunQ.data?.registrationCount === 0 && <p className="mt-3 text-[11px] text-[#64748b]">{t("settings.tax.filingNoData")}</p>}

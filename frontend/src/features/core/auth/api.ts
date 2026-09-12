@@ -1,6 +1,7 @@
 import { apiRequest, getStoredRefreshToken, refreshStoredAuthSession } from "@/lib/api/http";
 import type { AuthResponse, Shop, User } from "@/types/api";
 import { getDeviceMetadata, hydrateDeviceIdentity } from "@/lib/device-identity";
+import { clearDeviceUnlock } from "@/lib/storage/device-unlock-storage";
 
 export interface LoginRequest {
   mobile?: string;
@@ -14,6 +15,7 @@ export type RegisterRequest = Record<string, unknown>;
 
 export interface SetOwnerPinRequest {
   pin: string;
+  currentPassword: string;
 }
 
 export interface ChangePasswordRequest {
@@ -125,11 +127,15 @@ export function getMe() {
   return apiRequest<{ user: User; shop?: Shop }>("/auth/me");
 }
 
-export function setOwnerPin(pin: string) {
-  return apiRequest<{ success: boolean; message?: string }>("/auth/pin/set", {
+export async function setOwnerPin(pin: string, currentPassword: string) {
+  const result = await apiRequest<{ success: boolean; message?: string }>("/auth/pin/set", {
     method: "POST",
-    body: JSON.stringify({ pin } satisfies SetOwnerPinRequest),
+    body: JSON.stringify({ pin, currentPassword } satisfies SetOwnerPinRequest),
+    cache: "no-store",
   });
+  if (result?.success !== true) throw new Error("The server did not confirm the PIN change.");
+  clearDeviceUnlock();
+  return result;
 }
 
 export function changePassword(data: ChangePasswordRequest) {
