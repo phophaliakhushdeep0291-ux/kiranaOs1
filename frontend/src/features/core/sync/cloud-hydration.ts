@@ -19,6 +19,22 @@ function isRecord(value: unknown): value is AnyRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Everything this module writes came from the server, so everything it announces
+ * carries the sync engine's own tag — `type: "sync"`, the marker a finished push or
+ * pull uses.
+ *
+ * Pages refresh on the event whatever its detail says; the two schedulers read the
+ * tag. Without it they took a hydration for a local edit, so every snapshot was
+ * chased by a cycle 450ms later plus a forced queue recovery at 900ms
+ * (`useOfflineStatus`) and one 250ms later (`useMultiDeviceSync`) — none of them
+ * with anything to send. A hydration enqueues no outbox work at all: the rows it
+ * writes are the server's already, so nothing it announces can be work to push.
+ */
+function snapshotImport(detail: AnyRecord): AnyRecord {
+  return { type: "sync", ...detail };
+}
+
 function toDateInput(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -304,7 +320,7 @@ export async function hydratePurchaseHistoryFromSyncPull(): Promise<number> {
   if (imported > 0) {
     assertCurrentOfflineScope(scope);
     await refreshBusinessCaches().catch(() => undefined);
-    emitLocalDataChanged({ type: "cloud-hydration", action: "purchase-history-import", count: imported });
+    emitLocalDataChanged(snapshotImport({ action: "purchase-history-import", count: imported }));
   }
 
   return imported;
@@ -315,7 +331,7 @@ async function importSubscription() {
   const data = await apiRequest<AnyRecord>(`/subscription/current`, { method: "GET", cache: "no-store", background: true });
   if (isRecord(data)) {
     assertCurrentOfflineScope(scope);
-    await writeSubscriptionSnapshot(data);
+    await writeSubscriptionSnapshot(data, snapshotImport({ action: "subscription-import" }));
   }
   return isRecord(data) ? 1 : 0;
 }
@@ -368,6 +384,6 @@ export async function hydrateFromBackendSnapshot(): Promise<CloudHydrationResult
   assertCurrentOfflineScope(scope);
   await refreshBusinessCaches().catch(() => undefined);
   assertCurrentOfflineScope(scope);
-  emitLocalDataChanged({ type: "cloud-hydration", action: "direct-import", result });
+  emitLocalDataChanged(snapshotImport({ action: "direct-import", result }));
   return result;
 }

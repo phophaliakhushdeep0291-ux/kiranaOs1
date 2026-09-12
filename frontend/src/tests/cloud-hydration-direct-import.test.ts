@@ -19,7 +19,10 @@ describe("cloud hydration direct import wiring", () => {
     expect(hydration).toContain("/subscription/current");
     expect(hydration).toContain("hydratePurchaseHistoryFromSyncPull");
     expect(hydration).toContain("offlineDB.putMany(\"purchase_bills\"");
-    expect(hydration).toContain("writeSubscriptionSnapshot(data)");
+    // Tagged as the sync engine's own, like every other announcement a hydration
+    // makes: server state landing locally is not work for the schedulers to push.
+    // snapshot-hydration-echo.test.ts holds that behaviour.
+    expect(hydration).toContain('writeSubscriptionSnapshot(data, snapshotImport({ action: "subscription-import" }))');
     expect(hydration).toContain("offlineDB.replaceSyncedSnapshot(\"bills\"");
     expect(hydration).toContain("offlineDB.removeOrphans(");
     expect(hydration).toContain("\"inventory_movements\"");

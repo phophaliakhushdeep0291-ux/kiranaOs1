@@ -95,6 +95,15 @@ remote support read.
 - A finished sync announces itself on `kirana:local-data-changed`, the same
   channel a local edit uses. Treating that as fresh work schedules another sync,
   which announces itself — a loop. Filter on `detail.type === "sync"`.
+- The snapshot hydration is that trap in a second costume. It only ever writes
+  server state, but announced itself outside the convention — typed
+  `"cloud-hydration"`, and the subscription snapshot it saves said nothing at all —
+  so each hydration bought a cycle 450ms later, a forced queue recovery at 900ms
+  and one more 250ms later from `useMultiDeviceSync`; when the minute's snapshot
+  had been throttled, that last one ran a second whole hydration. Its three
+  announcements carry `type: "sync"` now, and `useMultiDeviceSync` filters the
+  family rather than a list of action names. Nothing a hydration says is ever work:
+  it enqueues no outbox rows, because the rows it writes are the server's already.
 - `shouldPassSharedThrottle` **consumes** its token when it passes. Take it only
   once you know you will do the work, or you lock every other tab out for the
   interval having done nothing.
