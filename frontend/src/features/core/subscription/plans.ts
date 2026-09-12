@@ -513,6 +513,29 @@ export function getPlanForEntitlementSnapshot(
   return { ...base, features: uniqueFeatures(base.features, grandfatheredVerticalFeatures) };
 }
 
+/** Display pricing is independent of legacy feature entitlements. Prefer the
+ * server's subscription price, which already includes a grandfathered rate. */
+export function getPlanForSubscriptionDisplay(
+  code: PlanCode,
+  businessType: BusinessType,
+  entitledFeatures: readonly string[] | null,
+  serverPlan?: unknown,
+): PlanDefinition {
+  const entitled = getPlanForEntitlementSnapshot(code, businessType, entitledFeatures);
+  const offered = getPlanForBusinessType(code, businessType);
+  const record = serverPlan && typeof serverPlan === "object" && !Array.isArray(serverPlan)
+    ? serverPlan as Record<string, unknown> : null;
+  const matching = record?.code === code ? record : null;
+  const price = (paise: unknown, fallback: number) =>
+    typeof paise === "number" && Number.isSafeInteger(paise) && paise >= 0 ? paise / 100 : fallback;
+  return {
+    ...entitled,
+    name: offered.name,
+    price: price(matching?.priceMonthlyPaise, offered.price),
+    annualPrice: price(matching?.priceYearlyPaise, offered.annualPrice),
+  };
+}
+
 export const FEATURE_LABELS: Record<FeatureName, string> = {
   view_old_data: "View old data",
   new_billing: "New billing",

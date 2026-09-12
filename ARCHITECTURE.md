@@ -70,14 +70,14 @@ stops waking the radio. `useMultiDeviceSync` keeps only what is uniquely its own
 the cross-tab BroadcastChannel, focus/online catch-up, and the 60s authoritative
 snapshot.
 
-**The incremental pull is currently inert.** Nothing in the backend writes
-`changeLog` — `sync.service.js` only ever reads it — so `/sync/pull` always
-returns an empty page and the stored cursor stays `"0"`. Real device-to-device
-propagation therefore rides on the 60s snapshot hydration, not the pull. Wiring
-`changeLog` on every mutation path is the change that would make cross-device
-sync genuinely incremental. Note the ack must keep firing regardless: it is what
-writes `lastSeenAt`/`lastActiveAt` on the device row, which device health and
-remote support read.
+**Database triggers populate the incremental feed.** Core mutations write
+`ChangeLog` in the same transaction; a rollback also rolls back its feed entries.
+PostgreSQL installs these through migrations (`000053`, `000076`, `000101`).
+SQLite schema push does not run migrations, so both local setup/reset and the
+test setup explicitly run `backend/scripts/install-sqlite-sync-triggers.js`.
+Use the repository's `db:push` command, not a bare Prisma push. The 60s snapshot
+hydration remains a catch-up path. The ack must keep firing regardless: it writes
+`lastSeenAt`/`lastActiveAt` on the device row for device health and remote support.
 
 - `useOfflineStatus` is a **subscription to one module-level engine**, not an
   engine per caller. Twenty components call it and most only want `isOnline`; when

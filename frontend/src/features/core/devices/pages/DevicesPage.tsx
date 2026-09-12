@@ -293,7 +293,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
         description={t(canManageDevices ? "devices.subtitle.manage" : "devices.subtitle.self")}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {subscription ? <PlanBadge planCode={subscription.planCode} status={subscription.status} /> : null}
+            {subscription ? <PlanBadge planCode={subscription.planCode} status={subscription.status} plan={subscription.plan} /> : null}
             <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={refreshing}>
               <RefreshCcw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />{t("devices.refresh")}
             </Button>

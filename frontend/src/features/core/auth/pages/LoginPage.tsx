@@ -263,7 +263,7 @@ export default function Login() {
             </p>
           </div>
           <div className="relative grid gap-3 text-sm">
-            {["Works offline at the counter", "Keeps owner cash signals visible", "Syncs safely when network returns"].map((item) => (
+            {[t("auth.offlineBenefit"), t("auth.cashBenefit"), t("auth.syncBenefit")].map((item) => (
               <div key={item} className="rounded-[12px] bg-white/[0.07] px-4 py-3 font-semibold text-white/88 ring-1 ring-white/10 backdrop-blur-sm">
                 {item}
               </div>
@@ -459,7 +459,7 @@ export default function Login() {
             >
               {authPending ? (
                 <><Loader2 size={16} className="mr-2 animate-spin" />{t("auth.signingIn")}</>
-              ) : "Sign In"}
+              ) : t("auth.signIn")}
             </Button>
           </form>
 
