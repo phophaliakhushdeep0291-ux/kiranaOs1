@@ -70,7 +70,8 @@ type TradeOrder = {
   id: string; orderNumber: string; buyerPoNumber?: string | null; customerName: string;
   orderType: "domestic" | "export"; status: string; currencyCode: string;
   billId?: string | null; customerId?: string | null;
-  countryOfDestination?: string | null; items: Array<{ id: string; description: string; quantity: number; lineTotal: number; gstRate?: number }>;
+  countryOfDestination?: string | null;
+  items: Array<{ id: string; description: string; quantity: number; quantityBaseQty: number; lineTotal: number; gstRate?: number; allocations?: Array<{ quantityBaseQty: number; dispatchId?: string | null }> }>;
 };
 type DraftOrderLine = NonNullable<ReturnType<typeof tradeOrderLine>>;
 type FlipkartStatus = { enabled: boolean; configured: boolean; officialDocuments: boolean };
@@ -175,8 +176,15 @@ export default function ManufacturingPage() {
   const advanceTradeOrder = useMutation({
     mutationFn: async (order: TradeOrder) => {
       if (order.status === "draft") return apiRequest(`/manufacturing/trade-orders/${order.id}/confirm`, { method: "POST", body: "{}" });
-      if (order.status === "confirmed") return apiRequest(`/manufacturing/trade-orders/${order.id}/auto-allocate`, { method: "POST", body: "{}" });
-      if (order.status === "allocated") return apiRequest(`/manufacturing/trade-orders/${order.id}/pack`, { method: "POST", body: JSON.stringify({ items: order.items.map((item) => ({ orderItemId: item.id, packedQuantity: Number(item.quantity) })) }) });
+      if (order.status === "confirmed" || order.status === "partially_dispatched") return apiRequest(`/manufacturing/trade-orders/${order.id}/auto-allocate`, { method: "POST", body: "{}" });
+      if (order.status === "allocated") {
+        const reserved = order.items.map((item) => {
+          const open = (item.allocations ?? []).filter((row) => !row.dispatchId).reduce((sum, row) => sum + Number(row.quantityBaseQty), 0);
+          const perUnit = Number(item.quantityBaseQty) / Number(item.quantity);
+          return { orderItemId: item.id, packedQuantity: perUnit > 0 ? open / perUnit : Number(item.quantity) };
+        }).filter((row) => row.packedQuantity > 0);
+        return apiRequest(`/manufacturing/trade-orders/${order.id}/pack`, { method: "POST", body: JSON.stringify({ items: reserved }) });
+      }
       return null;
     },
     onSuccess: async () => { toast({ title: t("manufacturing.orders.updatedTitle"), description: t("manufacturing.orders.updatedDetail") }); await tradeOrdersQ.refetch(); },
@@ -371,7 +379,7 @@ export default function ManufacturingPage() {
                 <div className="flex flex-wrap items-center gap-2 sm:col-span-3">
                   {order.status in tradeActionKey ? <Button size="sm" className="min-h-11" disabled={advanceTradeOrder.isPending} onClick={() => advanceTradeOrder.mutate(order)}>{t(tradeActionKey[order.status as keyof typeof tradeActionKey])}</Button> : null}
                   {order.status === "packed" ? <Button size="sm" className="min-h-11" onClick={() => { setDispatchOrderId(order.id); setDispatchNumber(`DSP-${order.orderNumber}`.slice(0, 64)); }}>{t("manufacturing.orders.action.packed")}</Button> : null}
-                  {order.status === "dispatched" ? <Button size="sm" className="min-h-11" onClick={() => setInvoiceOrderId(order.id)}>{t("manufacturing.invoice.create")}</Button> : null}
+                  {["dispatched", "partially_dispatched"].includes(order.status) ? <Button size="sm" className="min-h-11" onClick={() => setInvoiceOrderId(order.id)}>{t("manufacturing.invoice.create")}</Button> : null}
                   {documents.invoice ? <Button size="sm" className="min-h-11" variant="outline" onClick={() => void openTradePdf(order, order.orderType === "export" ? "commercial-invoice" : "tax-invoice")}>{t("manufacturing.orders.invoicePdf")}</Button> : null}
                   {documents.packingList ? <Button size="sm" className="min-h-11" variant="outline" onClick={() => void openTradePdf(order, "packing-list")}>{t("manufacturing.orders.packingPdf")}</Button> : null}
                   {documents.label ? <Button size="sm" className="min-h-11" variant="outline" onClick={() => void openTradePdf(order, "shipping-label")}>{t("manufacturing.orders.labelPdf")}</Button> : null}

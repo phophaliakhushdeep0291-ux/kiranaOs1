@@ -33,7 +33,7 @@ else {
     const orderInput = createTradeOrderSchema.parse({ orderNumber: "ORDER", customerName: "QA Buyer", items: [{ productId: finished.id, sellingUnitId: bag.id, quantity: 5, unitPrice: 20 }, { productId: finished.id, sellingUnitId: carton.id, quantity: 2, unitPrice: 40 }] });
     const order = await trade.createTradeOrder(shop.id, orderInput);
     await trade.confirmTradeOrder(shop.id, order.id);
-    return { ...tenant, shopId: shop.id, raw, finished, bag, carton, run, lot, order, orderInput };
+    return { ...tenant, shopId: shop.id, raw, finished, bag, carton, bom, run, lot, order, orderInput };
   }
   async function dispatchedFixture(options) {
     const f = await fixture(options); await production.releaseRun(f.shopId, f.run.id);
@@ -60,7 +60,8 @@ else {
     assert.equal((await ctx.db.product.findUnique({ where: { id: f.finished.id } })).stockBaseQty, 0);
     for (const unitId of [f.bag.id, f.carton.id]) assert.equal((await ctx.db.productSellingUnit.findUnique({ where: { id: unitId } })).onHandQty, 0);
     assert.equal((await ctx.db.inventoryLot.findUnique({ where: { id: f.lot.id } })).status, "depleted");
-    const ledger = await ctx.db.stockLedger.findMany({ where: { sourceId: f.order.id } });
+    const consignment = await ctx.db.tradeDispatch.findFirst({ where: { orderId: f.order.id } });
+    const ledger = await ctx.db.stockLedger.findMany({ where: { sourceType: "trade_dispatch", sourceId: consignment.id } });
     assert.equal(ledger.length, 2); assert.equal(ledger.reduce((sum, row) => sum + row.changeBaseQty, 0), -20);
     await assert.rejects(() => trade.dispatchTradeOrder(f.shopId, f.order.id, payload), { code: "TRADE_ORDER_NOT_PACKED" });
     await assert.rejects(() => trade.cancelTradeOrder(f.shopId, f.order.id), { code: "TRADE_ORDER_CANNOT_CANCEL" });
@@ -74,13 +75,88 @@ else {
     await assert.rejects(() => trade.allocateTradeOrder(f.shopId, f.order.id, { allocations }), { code: "TRADE_ALLOCATION_BATCH_INVALID" });
     await ctx.db.inventoryLot.update({ where: { id: f.lot.id }, data: { expiresOn: new Date(day(365)), availableBaseQty: 15 } });
     await assert.rejects(() => trade.allocateTradeOrder(f.shopId, f.order.id, { allocations }), { code: "TRADE_ALLOCATION_STOCK_SHORT" });
-    await assert.rejects(() => trade.autoAllocateTradeOrder(f.shopId, f.order.id), { code: "TRADE_ALLOCATION_STOCK_SHORT" });
     await ctx.db.inventoryLot.update({ where: { id: f.lot.id }, data: { availableBaseQty: 20, sellingUnitId: f.bag.id } });
     await assert.rejects(() => trade.allocateTradeOrder(f.shopId, f.order.id, { allocations }), { code: "TRADE_ALLOCATION_PACKAGING_MISMATCH" });
     assert.equal((await trade.getTradeOrder(f.shopId, f.order.id)).status, "confirmed");
     assert.equal(await ctx.db.tradeOrderAllocation.count({ where: { shopId: f.shopId } }), 0);
     await assert.rejects(() => trade.createTradeOrder(f.shopId, { ...f.orderInput, orderNumber: "NO-PACK", items: [{ ...f.orderInput.items[0], sellingUnitId: null }] }), { code: "TRADE_ORDER_PACKAGING_REQUIRED" });
   });
+  // Produce a batch of bags only. The fixture's own run is left on QC hold, so
+  // its mixed bag/carton output is not allocatable and the sums stay simple.
+  let batchSequence = 0;
+  async function produceBags(f, baseQty) {
+    batchSequence += 1;
+    const run = await production.createRun(f.shopId, { bomId: f.bom.id, runNumber: `RUN-B${batchSequence}`, plannedOutputBaseQty: baseQty });
+    await production.completeRun(f.shopId, run.id, { actualOutputBaseQty: baseQty, finishedBatchNumber: `BAGS-${batchSequence}`, manufacturedOn: day(), expiresOn: day(365), qcStatus: "passed", consumptions: [{ productId: f.raw.id, actualBaseQty: baseQty }], outputs: [{ sellingUnitId: f.bag.id, packageCount: baseQty / 2, quantityBaseQty: baseQty }] });
+    return run;
+  }
+
+  // 12 bags ordered (24 base) against 20 base of bags in stock: 10 bags ship now
+  // and 2 bags stay owed.
+  async function backorderFixture() {
+    const f = await fixture();
+    await trade.cancelTradeOrder(f.shopId, f.order.id);
+    await produceBags(f, 20);
+    const input = createTradeOrderSchema.parse({ orderNumber: "BACKORDER", customerName: "QA Buyer", items: [{ productId: f.finished.id, sellingUnitId: f.bag.id, quantity: 12, unitPrice: 20 }] });
+    const order = await trade.createTradeOrder(f.shopId, input);
+    await trade.confirmTradeOrder(f.shopId, order.id);
+    return { ...f, order };
+  }
+  async function shipConsignment(f, { dispatchNumber }) {
+    const allocated = await trade.autoAllocateTradeOrder(f.shopId, f.order.id, { locationId: f.run.locationId });
+    const reserved = allocated.items.map((item) => ({
+      orderItemId: item.id,
+      packedQuantity: item.allocations.filter((row) => !row.dispatchId).reduce((sum, row) => sum + row.quantityBaseQty, 0) / (item.quantityBaseQty / item.quantity),
+    })).filter((row) => row.packedQuantity > 0);
+    await trade.packTradeOrder(f.shopId, f.order.id, { items: reserved });
+    return trade.dispatchTradeOrder(f.shopId, f.order.id, { dispatchNumber, dispatchDate: day() }, { locationId: f.run.locationId });
+  }
+
+  test("an order short of stock ships what there is and stays open for the rest", async () => {
+    const f = await backorderFixture();
+    const shipped = await shipConsignment(f, { dispatchNumber: "DSP-A" });
+    assert.equal(shipped.status, "partially_dispatched", "the order is still owed 2 bags");
+    // 20 of the 24 base units left the building. What remains is the fixture's
+    // own batch, still on QC hold and so not shippable.
+    assert.equal((await ctx.db.inventoryLot.findFirst({ where: { batchNumber: "BAGS-1", shopId: f.shopId } })).availableBaseQty, 0);
+    const consignment = await ctx.db.tradeDispatch.findFirst({ where: { orderId: f.order.id } });
+    const ledger = await ctx.db.stockLedger.findMany({ where: { sourceType: "trade_dispatch", sourceId: consignment.id } });
+    assert.equal(ledger.reduce((sum, row) => sum + row.changeBaseQty, 0), -20);
+    const [item] = shipped.items;
+    assert.equal(item.allocations.filter((row) => row.dispatchId === consignment.id).reduce((sum, row) => sum + row.quantityBaseQty, 0), 20);
+    assert.equal(item.allocations.some((row) => !row.dispatchId), false, "every reservation shipped with this consignment");
+    // A second consignment cannot go out while there is nothing reserved for it.
+    await assert.rejects(() => trade.dispatchTradeOrder(f.shopId, f.order.id, { dispatchNumber: "DSP-B", dispatchDate: day() }), { code: "TRADE_ORDER_NOT_PACKED" });
+  });
+
+  test("the back-order ships later and each consignment is invoiced for its own goods", async () => {
+    const f = await backorderFixture();
+    await shipConsignment(f, { dispatchNumber: "DSP-A" });
+    const first = await createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank" }, { ownerPinVerified: true });
+    assert.equal(first.status, "partially_dispatched", "invoicing a consignment does not close an open order");
+    const firstBill = await ctx.db.bill.findFirst({ where: { id: first.billId }, include: { items: true } });
+    assert.equal(firstBill.grandTotal, 200, "10 bags at 20");
+    assert.equal(firstBill.items[0].quantity, 10);
+
+    // Make more bags, then ship and bill the back-order on its own invoice.
+    await produceBags(f, 20);
+    const settled = await shipConsignment(f, { dispatchNumber: "DSP-B" });
+    assert.equal(settled.status, "dispatched", "nothing is owed once the back-order ships");
+    assert.equal(await ctx.db.tradeDispatch.count({ where: { orderId: f.order.id } }), 2);
+    const second = await createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank" }, { ownerPinVerified: true });
+    assert.equal(second.status, "invoiced", "every consignment is now billed");
+    const secondBill = await ctx.db.bill.findFirst({ where: { id: second.billId }, include: { items: true } });
+    assert.notEqual(secondBill.id, firstBill.id, "the back-order gets its own invoice");
+    assert.equal(secondBill.grandTotal, 40, "2 bags at 20 — never the whole order again");
+    assert.equal(secondBill.items[0].quantity, 2);
+    // The two invoices together bill the order exactly once.
+    assert.equal(round2(firstBill.grandTotal + secondBill.grandTotal), 240);
+    // Re-invoicing is a no-op once nothing is left un-billed.
+    const again = await createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank" }, { ownerPinVerified: true });
+    assert.equal(again.billId, second.billId);
+    assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId, billType: { not: "sales_return" } } }), 2);
+  });
+
   test("expiry after packing and a later pack shortage roll back dispatch and every earlier stock movement", async () => {
     const f = await fixture(); await production.releaseRun(f.shopId, f.run.id);
     const order = await trade.autoAllocateTradeOrder(f.shopId, f.order.id);

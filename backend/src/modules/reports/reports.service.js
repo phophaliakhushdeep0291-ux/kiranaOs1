@@ -4,7 +4,7 @@ import { addMoney, round2, subtractMoney, sumMoney } from "../../utils/money.js"
 import { AppError } from "../../middleware/error.js";
 import { env } from "../../config/env.js";
 import { getReportRangeLimit } from "../feature-gates/featureGate.service.js";
-import { getLocationQuantity, resolveOperationalLocation } from "../stores/location-context.service.js";
+import { getLocationQuantitiesByProduct, resolveOperationalLocation } from "../stores/location-context.service.js";
 import { validateGstin } from "../../utils/gst.js";
 import { summarizeFinancialLedger } from "../finance/financial-ledger.service.js";
 import { baseQtyToRateQty } from "../../utils/units.js";
@@ -280,12 +280,18 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
   ]);
 
   const reportLocation = allLocations ? null : await resolveOperationalLocation(shopId, locationId);
-  const lowStockAtLocation = allLocations
-    ? lowStockProducts
-    : await Promise.all(lowStockProducts.map(async (product) => ({
+  // One lookup for the whole list, not one per product. Bounded at 20 by the take
+  // above, so this is smaller than the /inventory case it mirrors — but it is the
+  // same shape, and the closing report runs at every till at end of day.
+  const lowStockQuantities = allLocations
+    ? null
+    : await getLocationQuantitiesByProduct(db, shopId, reportLocation, lowStockProducts);
+  const lowStockAtLocation = lowStockQuantities
+    ? lowStockProducts.map((product) => ({
       ...product,
-      stockBaseQty: await getLocationQuantity(db, shopId, reportLocation, product),
-    })));
+      stockBaseQty: lowStockQuantities.get(product.id) ?? 0,
+    }))
+    : lowStockProducts;
 
   // Which SIZE needs reordering, not just which product. A product can look
   // comfortably stocked in total while one pack size has run out — 40 loose packets
@@ -835,15 +841,18 @@ export async function getInventoryHealth(shopId, { includeCost = false, windowDa
 
   const activeProducts = products.filter((p) => !p.deletedAt);
   const reportLocation = await resolveOperationalLocation(shopId, locationId);
-  const movementRows = await Promise.all(activeProducts.map(async (p) => ({
+  // Unbounded: this walks EVERY active product, so a per-product lookup here cost
+  // the whole catalogue in queries — the same defect /inventory carried.
+  const stockByProduct = await getLocationQuantitiesByProduct(db, shopId, reportLocation, activeProducts);
+  const movementRows = activeProducts.map((p) => ({
     productId: p.id,
     productName: p.name,
-    stockBaseQty: await getLocationQuantity(db, shopId, reportLocation, p),
+    stockBaseQty: stockByProduct.get(p.id) ?? 0,
     baseUnit: p.baseUnit,
     lowStockThreshold: p.lowStockThreshold,
     quantitySoldBase: round2(soldByProduct.get(p.id)?.quantitySoldBase ?? 0),
     revenuePaise: toPaise(soldByProduct.get(p.id)?.revenue ?? 0),
-  })));
+  }));
 
   const result = {
     lowStock: movementRows.filter((p) => p.lowStockThreshold > 0 && p.stockBaseQty <= p.lowStockThreshold),

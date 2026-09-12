@@ -5,6 +5,42 @@ import { manufacturingEn } from "@/features/core/settings/translations/manufactu
 
 const statuses = ["draft", "confirmed", "allocated", "packed", "dispatched", "invoiced", "returned", "cancelled"];
 
+describe("part-shipped orders", () => {
+  const page = readFileSync(new URL("../features/verticals/manufacturing/pages/ManufacturingPage.tsx", import.meta.url), "utf8");
+
+  it("names the status an order sits in while the rest is still owed", () => {
+    expect(tradeOrderStatusKey("partially_dispatched")).toBe("manufacturing.orders.status.partiallyDispatched");
+    expect(manufacturingEn).toHaveProperty("manufacturing.orders.status.partiallyDispatched");
+    // It must not fall through to the transient "updating" label, which is what
+    // the register showed for any status it did not know.
+    expect(tradeOrderStatusKey("partially_dispatched")).not.toBe("manufacturing.orders.status.updating");
+  });
+
+  it("prints what shipped and invoices it while the back-order is still open", () => {
+    const open = tradeOrderDocuments({ status: "partially_dispatched", billId: "bill-1" });
+    expect(open).toEqual({ packingList: true, label: true, invoice: true });
+    // Without an invoice yet, only the shipping paperwork exists.
+    expect(tradeOrderDocuments({ status: "partially_dispatched" }).invoice).toBe(false);
+  });
+
+  it("lets a back-order be allocated again and invoiced per consignment", () => {
+    expect(page).toContain('order.status === "confirmed" || order.status === "partially_dispatched"');
+    expect(page).toContain('["dispatched", "partially_dispatched"].includes(order.status)');
+  });
+
+  it("packs what is reserved for this consignment, not the whole line", () => {
+    // Packing the ordered quantity would claim goods the shop has not reserved.
+    expect(page).not.toContain("packedQuantity: Number(item.quantity) }))");
+    expect(page).toContain("(item.allocations ?? []).filter((row) => !row.dispatchId)");
+  });
+
+  it("still refuses to cancel an order once goods have gone out", () => {
+    for (const status of ["dispatched", "partially_dispatched", "invoiced"]) {
+      expect(canCancelTradeOrder(status)).toBe(false);
+    }
+  });
+});
+
 describe("export orders reach the invoice", () => {
   const page = readFileSync(new URL("../features/verticals/manufacturing/pages/ManufacturingPage.tsx", import.meta.url), "utf8");
 
@@ -12,7 +48,8 @@ describe("export orders reach the invoice", () => {
     // The button used to be gated on orderType === "domestic", which left an
     // export dispatched forever with its stock gone and no sale recorded.
     expect(page).not.toContain('order.status === "dispatched" && order.orderType === "domestic"');
-    expect(page).toContain('order.status === "dispatched" ? <Button');
+    // The gate is the shipping state alone; the order's trade type is irrelevant.
+    expect(page).toContain('["dispatched", "partially_dispatched"].includes(order.status) ? <Button');
   });
 
   it("prints an export on a commercial invoice and a domestic sale on a tax invoice", () => {
