@@ -5,7 +5,7 @@ import { decrementLocationInventory, resolveOperationalLocation, getVariantLocat
 import { createSaleReturn, getBill } from "../../modules/bills/bills.service.js";
 import { stockLedgerProvenance } from "../../modules/inventory/stock-ledger-provenance.js";
 import { formatDateInTimeZone } from "../../utils/dates.js";
-import { tradeReturnFulfilment } from "./trade-invoices.service.js";
+import { exportTaxTreatment, tradeReturnFulfilment } from "./trade-invoices.service.js";
 
 const detailInclude = { items: { include: { allocations: true } }, dispatch: true };
 const date = (value) => value ? new Date(`${value}T00:00:00.000Z`) : null;
@@ -206,6 +206,10 @@ export async function returnTradeOrder(shopId, id, input, actor = {}) {
 
 export async function tradeDocuments(shopId, id) {
   const order = await getTradeOrder(shopId, id);
-  const totals = order.items.reduce((acc, row) => ({ quantity: acc.quantity + Number(row.quantity), subtotal: acc.subtotal + Number(row.lineTotal), gst: acc.gst + (order.orderType === "domestic" ? Number(row.lineTotal) * Number(row.gstRate) / 100 : 0) }), { quantity: 0, subtotal: 0, gst: 0 });
-  return { order, packingList: { documentNumber: order.dispatch?.dispatchNumber || order.orderNumber, buyer: order.customerName, shipTo: order.shippingAddress, items: order.items.map((row) => ({ sku: row.sku, buyerProductCode: row.buyerProductCode, description: row.description, quantity: row.packedQuantity || row.quantity, batches: row.allocations.map((allocation) => allocation.batchNumber) })), packageCount: order.dispatch?.packageCount, netWeight: order.dispatch?.netWeight, grossWeight: order.dispatch?.grossWeight }, commercialInvoice: { invoiceReference: order.billId, orderNumber: order.orderNumber, buyerPoNumber: order.buyerPoNumber, currencyCode: order.currencyCode, exchangeRate: order.exchangeRate, incoterm: order.incoterm, destination: order.countryOfDestination, origin: order.countryOfOrigin, iec: order.iec, lutBondReference: order.lutBondReference, portOfLoading: order.portOfLoading, portOfDischarge: order.portOfDischarge, subtotal: round2(totals.subtotal), gst: round2(totals.gst), total: round2(totals.subtotal + totals.gst), paymentTerms: order.paymentTerms } };
+  const treatment = order.orderType === "export" ? exportTaxTreatment(order) : null;
+  // Zero only under an LUT. An export without one carries IGST at the item rate,
+  // which the exporter reclaims as a refund afterwards.
+  const taxRate = (row) => (treatment?.underLut ? 0 : Number(row.gstRate));
+  const totals = order.items.reduce((acc, row) => ({ quantity: acc.quantity + Number(row.quantity), subtotal: acc.subtotal + Number(row.lineTotal), gst: acc.gst + Number(row.lineTotal) * taxRate(row) / 100 }), { quantity: 0, subtotal: 0, gst: 0 });
+  return { order, packingList: { documentNumber: order.dispatch?.dispatchNumber || order.orderNumber, buyer: order.customerName, shipTo: order.shippingAddress, items: order.items.map((row) => ({ sku: row.sku, buyerProductCode: row.buyerProductCode, description: row.description, quantity: row.packedQuantity || row.quantity, batches: row.allocations.map((allocation) => allocation.batchNumber) })), packageCount: order.dispatch?.packageCount, netWeight: order.dispatch?.netWeight, grossWeight: order.dispatch?.grossWeight }, commercialInvoice: { invoiceReference: order.billId, orderNumber: order.orderNumber, buyerPoNumber: order.buyerPoNumber, currencyCode: order.currencyCode, exchangeRate: order.exchangeRate, incoterm: order.incoterm, destination: order.countryOfDestination, origin: order.countryOfOrigin, iec: order.iec, lutBondReference: order.lutBondReference, underLut: treatment?.underLut ?? false, declaration: treatment?.declaration ?? null, portOfLoading: order.portOfLoading, portOfDischarge: order.portOfDischarge, subtotal: round2(totals.subtotal), gst: round2(totals.gst), total: round2(totals.subtotal + totals.gst), paymentTerms: order.paymentTerms } };
 }
