@@ -165,6 +165,13 @@ function BusinessProfileRouteGate({ capability, children }: { capability?: strin
   // requested page opens and the completed bootstrap applies on the next render.
   if (!profile.data) return <>{children}</>;
   if (!isPathInBusinessProfile(location, profile.data.navigation)) {
+    // Old restaurant bookmarks should land on the real dine-in inbox. Once a
+    // verified marketplace connector adds the `orders` navigation key, this
+    // route passes the profile check and opens normally.
+    if (/^\/orders-received(?:[/?#]|$)/.test(location)
+      && profile.data.shop.businessType === "restaurant") {
+      return <Redirect to="/tables" />;
+    }
     return <PermissionDenied title={t("chrome.route.notInProfile")} message={t("chrome.route.notInProfileHelp")} />;
   }
   if (capability && !profileHasCapability(profile.data.capabilities, capability)) {
