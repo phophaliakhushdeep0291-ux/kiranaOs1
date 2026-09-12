@@ -164,7 +164,7 @@ export const MORE_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
       { href: "/expenses", label: "Expenses", helper: "Track shop spending", Icon: ReceiptIndianRupee },
       { href: "/money-statement", label: "Money statement", helper: "Cash, bank and UPI", Icon: Landmark },
       { href: "/reports", label: "Reports", helper: "Profit and performance", Icon: BarChart3 },
-      { href: "/accounting", label: "", helper: "", labelKey: "accounting.title", helperKey: "accounting.entry.body", Icon: BookOpenCheck },
+      { href: "/accounting", label: "", helper: "", labelKey: "accounting.title", helperKey: "accounting.entry.menuHelper", Icon: BookOpenCheck },
       { href: "/daily-closing", label: "Daily closing", helper: "Close and verify today", Icon: ShieldCheck },
       { href: "/offers", label: "Offers", helper: "Discount rules", Icon: BarChart3 },
       { href: "/loyalty", label: "Loyalty", helper: "Points and members", Icon: HandCoins },

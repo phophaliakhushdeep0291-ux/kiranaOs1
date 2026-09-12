@@ -98,6 +98,8 @@ export const accountingEn = {
   // ── Entry point on the Reports screen ──
   "accounting.entry.body": "Trial balance, profit and loss, balance sheet and the chart of accounts, straight from the posted ledger.",
   "accounting.entry.action": "Open",
+  // One clipped line in the phone's More sheet — keep it short; see entry.body for the card.
+  "accounting.entry.menuHelper": "Trial balance, P&L, balance sheet",
 
   // ── Footer ──
   "accounting.note.version": "Projection",

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { englishDeferredTranslations } from "@/features/core/settings/translations/english-deferred";
+import { hindiDeferredTranslations } from "@/features/core/settings/translations/hindi-deferred";
 
 /** Every .tsx under a directory, with its text, for whole-tree invariants. */
 function sourceFiles(dir: string): Array<{ path: string; text: string }> {
@@ -89,6 +91,27 @@ describe("mobile panels stay inside the viewport the user can see", () => {
       .map((file) => file.path);
     expect(largeViewport).toEqual([]);
     expect(styles).not.toMatch(/\.purchase-panel\s*\{[^}]*\bh-full\b/);
+  });
+
+  it("keeps one long More-sheet helper from widening every row in the sheet", () => {
+    // Found in a browser at 375px: the accounting row carried the Reports card's
+    // whole paragraph as its helper, and the entire sheet became 652px wide — every
+    // row, not only that one — because a grid child's min-width is auto, so the list
+    // refused to shrink below its widest unbreakable line.
+    //
+    // Two guards, because either alone leaves the trap armed: the rows stay short
+    // enough to read on a phone, and the sheet can shrink even when one is not.
+    expect(styles).toMatch(/\.mobile-more-groups\s*>\s*section\s*\{[^}]*min-width:\s*0/);
+
+    const helpers = [...mobileChrome.matchAll(/helper: "([^"]+)"/g)].map((match) => match[1]);
+    const helperKeys = [...mobileChrome.matchAll(/helperKey: "([^"]+)"/g)].map((match) => match[1]);
+    expect(helpers.length).toBeGreaterThan(15);
+    const translated = helperKeys.flatMap((key) => [
+      englishDeferredTranslations[key as keyof typeof englishDeferredTranslations],
+      hindiDeferredTranslations[key as keyof typeof hindiDeferredTranslations],
+    ]);
+    expect(translated.filter(Boolean).length).toBe(helperKeys.length * 2);
+    expect([...helpers, ...translated].filter((line) => String(line).length > 48)).toEqual([]);
   });
 });
 

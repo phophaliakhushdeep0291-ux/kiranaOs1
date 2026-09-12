@@ -2246,6 +2246,14 @@ html[data-density="compact"] {
     gap: 20px;
   }
 
+  /* A grid child's min-width is auto, so it refuses to shrink below its content.
+     One long helper line therefore stretched every row in the sheet to its own
+     width and the whole list scrolled sideways. The labels already ask to clip
+     with an ellipsis; this is what lets them. */
+  .mobile-more-groups > section {
+    min-width: 0;
+  }
+
   .mobile-more-group-title {
     margin: 0 2px 8px;
     color: #7b879c;

@@ -98,6 +98,8 @@ export const accountingHi: Record<keyof typeof accountingEn, string> = {
   // ── रिपोर्ट स्क्रीन पर जाने का रास्ता ──
   "accounting.entry.body": "ट्रायल बैलेंस, लाभ-हानि, बैलेंस शीट और खातों की सूची — सीधे चढ़े हुए बही-खाते से।",
   "accounting.entry.action": "खोलें",
+  // फ़ोन की “और” सूची में एक ही कटी हुई लाइन — छोटा रखें।
+  "accounting.entry.menuHelper": "ट्रायल बैलेंस, लाभ-हानि, बैलेंस शीट",
 
   // ── नीचे ──
   "accounting.note.version": "प्रोजेक्शन",
