@@ -39,7 +39,9 @@ reload `.env`, so pick a port from that list rather than editing the allowlist.
 
 ## Gates
 
-`cd frontend && npm run prod:check` is the release gate: typecheck, i18n, tests,
-build, bundle budget and the production app check. Run it before saying a change
-is ready. The i18n hardcoded-string allowlist is a **ratchet** — a listed file is
+`cd frontend && npm run prod:check` is the release gate: typecheck, i18n, build,
+bundle budget, the production app check, and then tests. Run it before saying a
+change is ready. Tests run last on purpose: they are the step that fails most
+often, and while they ran third a single brittle assertion left the build, the
+bundle budget and the app check unrun and therefore unknown. The i18n hardcoded-string allowlist is a **ratchet** — a listed file is
 a ceiling, not a pass.
