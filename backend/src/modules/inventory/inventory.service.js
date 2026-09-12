@@ -5,7 +5,7 @@ import { toBaseQty, rateUnitToBase } from "../../utils/units.js";
 import { rangeEndInclusive, rangeStart } from "../../utils/dateRange.js";
 import {
   decrementLocationInventory,
-  getLocationQuantity,
+  getLocationQuantitiesByProduct,
   incrementLocationInventory,
   resolveOperationalLocation,
   setLocationInventory,
@@ -92,8 +92,12 @@ export async function getInventory(shopId, requestedLocationId = null) {
     orderBy: { name: "asc" },
     include: { sellingUnits: { where: { isActive: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
   });
-  return Promise.all(products.map(async (p) => {
-    const stockBaseQty = await getLocationQuantity(db, shopId, location, p);
+  // One pass for every product's location stock, not one query each: this
+  // endpoint is on the 60s device snapshot, so a per-SKU lookup here was the
+  // shop's whole catalogue in queries, every minute, per till.
+  const quantities = await getLocationQuantitiesByProduct(db, shopId, location, products);
+  return products.map((p) => {
+    const stockBaseQty = quantities.get(p.id) ?? 0;
     return {
       id: p.id,
       name: p.name,
@@ -134,7 +138,7 @@ export async function getInventory(shopId, requestedLocationId = null) {
       trackStock: p.stockTrackingEnabled !== false,
       isLowStock: p.lowStockThreshold > 0 && stockBaseQty <= p.lowStockThreshold,
     };
-  }));
+  });
 }
 
 export async function getLowStock(shopId, requestedLocationId = null) {
