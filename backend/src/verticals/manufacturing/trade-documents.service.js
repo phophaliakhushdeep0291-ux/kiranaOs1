@@ -36,7 +36,7 @@ function commonMeta({ shop, order, customer }) {
 }
 
 function transportLines(order) {
-  const dispatch = order.dispatch;
+  const dispatch = order.dispatches?.at(-1);
   return [
     `Transporter: ${dispatch?.transporterName || "-"}`, `Vehicle: ${dispatch?.vehicleNumber || "-"}`,
     `LR / AWB: ${dispatch?.lrAwbNumber || "-"}`, `E-way bill: ${dispatch?.ewayBillNumber || "-"}`,
@@ -61,7 +61,7 @@ function rows({ order, packNames }) {
 export async function buildTradePdf(shopId, orderId, kind) {
   const ctx = await context(shopId, orderId);
   const { shop, order } = ctx;
-  const dispatch = order.dispatch;
+  const dispatch = order.dispatches?.at(-1);
   const shared = { meta: commonMeta(ctx), footer: "System generated document. Verify statutory and marketplace data before dispatch." };
   if (kind === "packing-list") return buildPdf({ ...shared, title: "PACKING LIST", subtitle: `Dispatch ${dispatch?.dispatchNumber || "pending"} | ${dateOnly(dispatch?.dispatchDate)}`, sections: [{ heading: "Ship to", lines: [shipTo(ctx)] }, { heading: "Packed goods", columns: itemColumns, rows: rows(ctx) }, { heading: "Shipment", lines: [...transportLines(order), `Packages: ${dispatch?.packageCount || "-"}`, `Net weight: ${dispatch?.netWeight || "-"}`, `Gross weight: ${dispatch?.grossWeight || "-"}`, `Container / seal: ${dispatch?.containerNumber || "-"} / ${dispatch?.sealNumber || "-"}`] }] });
   if (kind === "shipping-label") return buildPdf({ ...shared, title: "SHIPPING LABEL", subtitle: "Seller generated - use the marketplace-issued label when platform logistics requires it", meta: [{ label: "Shipment / order", value: dispatch?.lrAwbNumber || order.orderNumber }, { label: "Dispatch", value: dispatch?.dispatchNumber || "pending" }, { label: "Seller", value: shop.name }, { label: "From", value: `${shop.address}, ${shop.city}` }, { label: "Deliver to", value: order.customerName }, { label: "Address", value: shipTo(ctx) }, { label: "Packages", value: String(dispatch?.packageCount || 1) }, { label: "Transporter / vehicle", value: `${dispatch?.transporterName || "-"} / ${dispatch?.vehicleNumber || "-"}` }, { label: "E-way bill", value: dispatch?.ewayBillNumber || "-" }], sections: [{ heading: "Contents", columns: [{ key: "sku", label: "Seller SKU", width: 150 }, { key: "description", label: "Item", width: 260 }, { key: "quantity", label: "Qty", width: 70, align: "right" }], rows: rows(ctx) }, { heading: "Handling", lines: ["Scan/verify shipment ID before handover.", "Keep proof of dispatch and proof of delivery with this order record."] }] });

@@ -233,9 +233,9 @@ export async function getGstInvoiceRegister(shopId, query = {}) {
   // the bill, so fetch them only when the period holds an export.
   const exportBillIds = bills.filter((bill) => bill.billType !== "sales_return" && isExportPlaceOfSupply(bill.buyerStateCode)).map((bill) => bill.id);
   const exportShipments = exportBillIds.length > 0
-    ? await db.tradeOrder.findMany({ where: { shopId, billId: { in: exportBillIds } }, select: { billId: true, portOfLoading: true, dispatch: { select: { shippingBillNumber: true, shippingBillDate: true } } } })
+    ? await db.tradeDispatch.findMany({ where: { shopId, billId: { in: exportBillIds } }, select: { billId: true, shippingBillNumber: true, shippingBillDate: true, order: { select: { portOfLoading: true } } } })
     : [];
-  const shipmentByBillId = new Map(exportShipments.map((order) => [order.billId, order]));
+  const shipmentByBillId = new Map(exportShipments.map((row) => [row.billId, row]));
   const rows = [];
   for (const bill of bills) {
     const original = bill.returnOfBillId ? originalById.get(bill.returnOfBillId) : null;
@@ -289,9 +289,9 @@ export async function getGstInvoiceRegister(shopId, query = {}) {
         lineTotal: netLineTotal,
         paymentModes: [...new Set(bill.payments.map((payment) => payment.mode))].join("+"),
         exportType,
-        portCode: shipment?.portOfLoading || "",
-        shippingBillNumber: shipment?.dispatch?.shippingBillNumber || "",
-        shippingBillDate: shipment?.dispatch?.shippingBillDate ? shipment.dispatch.shippingBillDate.toISOString().slice(0, 10) : "",
+        portCode: shipment?.order?.portOfLoading || "",
+        shippingBillNumber: shipment?.shippingBillNumber || "",
+        shippingBillDate: shipment?.shippingBillDate ? shipment.shippingBillDate.toISOString().slice(0, 10) : "",
       });
     }
   }
