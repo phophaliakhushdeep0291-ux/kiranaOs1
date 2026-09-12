@@ -280,6 +280,10 @@ export const shopTypesHi: Record<keyof typeof shopTypesEn, string> = {
   "shopType.nav.manufacturing": "मैन्युफ़ैक्चरिंग",
   "shopType.nav.manufacturing.helper": "BOM, प्रोडक्शन, पैकिंग, बैच और निर्यात डिस्पैच",
   "shopType.nav.prescriptions": "पर्चे",
+  // पर्चे के बिना शेड्यूल H दवा — काउंटर पर ही पूछा जाता है।
+  "shopType.pharmacy.settle.noPrescriptionTitle": "शेड्यूल {schedule} — पर्चा नहीं लगा",
+  "shopType.pharmacy.settle.noPrescriptionBody": "{items} बिना डॉक्टर के पर्चे के नहीं दी जा सकती, और बिक्री दर्ज होनी चाहिए। पर्चा लगाएं, या खुद दर्ज कर रहे हों तो आगे बढ़ें।",
+  "shopType.pharmacy.settle.noPrescriptionConfirm": "फिर भी बेचें",
   "shopType.nav.prescriptions.helper": "किसके पर्चे पर क्या दवा दी, वह दर्ज करें",
   "shopType.nav.tables": "टेबल",
   "shopType.nav.reservations": "रिज़र्वेशन",

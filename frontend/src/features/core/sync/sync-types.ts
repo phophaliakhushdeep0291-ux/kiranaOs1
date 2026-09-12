@@ -316,7 +316,17 @@ export function extractIdPair(
     event?.operation_type ?? event?.type ?? "",
     resultEntityType ?? eventEntityType,
   );
-  const serverId =
+  // Older servers used customerId as the envelope serverId for collections.
+  // The nested ledger id is unique per payment and is authoritative here.
+  const collection = ["RECORD_PAYMENT", "UDHAR_PAYMENT"].includes(event?.operation_type ?? event?.type ?? "");
+  const collectionLedgerId = collection
+    ? getStringFrom(resultRecord, ["ledgerEntryId", "ledger_entry_id"]) ?? getStringFrom(entity, ["ledgerEntryId", "ledger_entry_id"])
+    : undefined;
+  // Reversal updates the original local payment's status. Its id must remain
+  // the original ledger id; the separate refund arrives in purchase history.
+  const originalSupplierLedgerId = (event?.operation_type ?? event?.type) === "REVERSE_SUPPLIER_PAYMENT"
+    ? getStringFrom(resultRecord, ["originalLedgerEntryId"]) : undefined;
+  const serverId = originalSupplierLedgerId ?? collectionLedgerId ??
     getStringFrom(result, entityIdKeys(entityType)) ??
     getStringFrom(resultRecord, entityIdKeys(entityType)) ??
     getStringFrom(entity, entityIdKeys(entityType));

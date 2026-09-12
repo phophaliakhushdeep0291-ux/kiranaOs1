@@ -3,6 +3,15 @@
 import type { billingEn } from "./billing";
 
 export const billingHi: Record<keyof typeof billingEn, string> = {
+  "billing.assistant.queueFailed": "सहायक के आइटम लोड नहीं हो सके",
+  "billing.assistant.queueRetry": "फिर कोशिश करने के लिए बिल दोबारा खोलें। भुगतान लेने से पहले कार्ट जांच लें।",
+  "billing.assistant.itemsPending": "सहायक के कुछ आइटम अभी बाकी हैं",
+  "billing.assistant.itemsPendingDetail": "पेमेंट लेने से पहले कार्ट जांच लें।",
+  "billing.assistant.recoveryFailed": "बिल ड्राफ्ट वापस नहीं आ सका",
+  "billing.assistant.recovering": "बिल ड्राफ्ट वापस आ रहा है",
+  "billing.assistant.recoveryFailedDetail": "सेव किया हुआ ड्राफ्ट लोड नहीं हो सका। नया बिल शुरू करने से पहले दोबारा कोशिश करें।",
+  "billing.assistant.recoveringDetail": "सेव किए हुए आइटम वापस लाए जा रहे हैं।",
+  "billing.assistant.retryRecovery": "फिर कोशिश करें",
   "billing.openBills": "खुले बिल",
   "billing.openBills.current": "यही बिल चालू है",
   "billing.openBills.switchTo": "{name} पर जाएं",
@@ -97,9 +106,10 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.pay.dynamicQr.imageAlt": "UPI से ₹{amount} देने के लिए स्कैन करें",
   "billing.pay.dynamicQr.waiting": "बैंक की पुष्टि का इंतजार",
   "billing.pay.dynamicQr.waitingHelp": "ग्राहक के स्क्रीनशॉट या आवाज भर पर बिल सेव न करें। साइन किए webhook या प्रोवाइडर API की पुष्टि के बाद ही KiranaOS इसे खोलेगा।",
+  "billing.pay.dynamicQr.expiredChecking": "स्कैन करने का समय खत्म हो गया है। भुगतान की पुष्टि अभी जाँची जा रही है। पहले प्रयास का मिलान किए बिना ग्राहक से दोबारा भुगतान न लें।",
   "billing.pay.dynamicQr.confirmed": "पेमेंट प्रोवाइडर से पक्का हुआ",
   "billing.pay.dynamicQr.unavailable": "यह QR अब इस्तेमाल नहीं हो सकता",
-  "billing.pay.dynamicQr.unavailableHelp": "नई जांच शुरू करें। इस बिल से कोई पेमेंट नहीं जोड़ा गया है।",
+  "billing.pay.dynamicQr.unavailableHelp": "इस बिल से अभी कोई भुगतान नहीं जोड़ा गया है। बैंक की पुष्टि देर से आ सकती है। दोबारा पैसे लेने से पहले प्रोवाइडर से पहले भुगतान की स्थिति जाँचें।",
   "billing.pay.dynamicQr.safety": "एक बार · तय रकम · ब्रांच से जुड़ा · अपने-आप समाप्त",
   "billing.pay.dynamicQr.statusFailed": "प्रोवाइडर पेमेंट की स्थिति नहीं मिल सकी।",
   "billing.pay.dynamicQr.closeFailed": "पेमेंट QR बंद नहीं हो सका।",
@@ -677,4 +687,7 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.pay.upi.utrPlaceholder": "जैसे 412345678901",
   "billing.pay.upi.utrHelp": "वैकल्पिक, अपने भुगतान अलर्ट से। दिन के अंत में यही इस बिल को आपके बैंक स्टेटमेंट से मिलाता है।",
   "billing.pay.upi.utrInvalid": "कम से कम 6 अक्षर या अंक डालें, या रेफ़रेंस खाली छोड़ें।",
+  "billing.search.emptyCategory": "इस कैटेगरी में कोई सामान नहीं है",
+  "billing.search.resetFilters": "खोज और फ़िल्टर हटाएँ",
+  "billing.search.openProducts": "सामान की सूची खोलें",
 };

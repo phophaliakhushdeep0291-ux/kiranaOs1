@@ -258,7 +258,9 @@ export async function restoreDeletedBill(shopId, billId, actor = {}) {
 // Everything runs in a single DB transaction.
 // If anything fails, everything rolls back.
 // ─────────────────────────────────────────────────────────────
-export async function confirmBill(shopId, body, actor = {}) {
+// fulfilment is server-owned context for goods already dispatched. HTTP/sync
+// bodies never supply it; all accounting still runs in this transaction.
+export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
   const sensitiveActions = Array.isArray(actor.sensitiveBillActions)
     ? [...new Set(actor.sensitiveBillActions)]
     : await deriveSensitiveBillActions(shopId, body);
@@ -337,6 +339,7 @@ export async function confirmBill(shopId, body, actor = {}) {
     const transactionResult = await db.$transaction(async (tx) => {
     const existingBill = await findExistingBillByIdentity(tx, shopId, billIdentity);
     if (existingBill) return { bill: existingBill, deliveries: [] };
+    const fulfilledStock = fulfilment ? await fulfilment.prepare(tx) : null;
     const location = await resolveOperationalLocation(shopId, operationalLocation.id, tx);
     const shop = await tx.shop.findUnique({ where: { id: shopId } });
     if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
@@ -401,7 +404,9 @@ export async function confirmBill(shopId, body, actor = {}) {
     // same quantity that will actually be allocated — a pack line converts by
     // conversionToBase, a loose line by its entered unit, and reading one with the
     // other's rule walks the wrong batches.
-    const resolveSellingUnit = (item, product) => (product
+    const resolveSellingUnit = (item, product) => fulfilledStock
+      ? (item.sellingUnitId ? sellingUnitById.get(item.sellingUnitId) ?? null : null)
+      : (product
       ? (item.sellingUnitId ? sellingUnitById.get(item.sellingUnitId) : null)
         ?? (item.sellingUnitCode ? sellingUnitByCode.get(`${product.id}:${item.sellingUnitCode}`) : null)
         ?? defaultSellingUnitByProduct.get(product.id)
@@ -428,7 +433,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       const baseQty = Math.abs(Number(baseQtyForItem(item, productMap[item.productId]) || 0));
       batchQtyByProduct.set(item.productId, (batchQtyByProduct.get(item.productId) ?? 0) + baseQty);
     }
-    const batchCeilingByProduct = batchTrackedIds.size > 0
+    const batchCeilingByProduct = fulfilledStock?.batchCeilings ?? (batchTrackedIds.size > 0
       ? await batchMrpCeilings(tx, {
         shopId,
         locationId: location.id,
@@ -438,7 +443,7 @@ export async function confirmBill(shopId, body, actor = {}) {
           quantityBaseQty: round2(batchQtyByProduct.get(productId) ?? 0),
         })),
       })
-      : new Map();
+      : new Map());
 
     // ── 2. Build bill items + validate stock ──────────────────
     let subtotal = 0;
@@ -485,7 +490,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       // it — removing it from either would start refusing ordinary counter sales of
       // an under-counted item, which is the failure this comment previously implied
       // was impossible.
-      if (product && !allowStockShortfall) {
+      if (product && !allowStockShortfall && !fulfilledStock) {
         const availableAtLocation = locationStockByProduct.get(product.id) ?? 0;
         if (availableAtLocation < qtyInBase) {
           throw new AppError(
@@ -697,6 +702,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       if (product?.stockTrackingEnabled === false) stockUpdatesByProduct.delete(productId);
     }
     for (const productId of stockHandledProductIds) stockUpdatesByProduct.delete(productId);
+    if (fulfilledStock) stockUpdatesByProduct.clear();
     if (!allowStockShortfall) {
       for (const { product, qtyInBase } of stockUpdatesByProduct.values()) {
         const availableAtLocation = locationStockByProduct.get(product.id) ?? 0;
@@ -754,9 +760,9 @@ export async function confirmBill(shopId, body, actor = {}) {
         billType,
         customerId: customerId ?? null,
         customerName,
-        buyerGstin: invoiceCustomer?.gstNumber ?? null,
-        buyerStateCode: invoiceCustomer?.stateCode ?? null,
-        buyerAddress: invoiceCustomer?.address ?? null,
+        buyerGstin: fulfilledStock?.buyerGstin ?? invoiceCustomer?.gstNumber ?? null,
+        buyerStateCode: fulfilledStock?.buyerStateCode ?? invoiceCustomer?.stateCode ?? null,
+        buyerAddress: fulfilledStock?.buyerAddress ?? invoiceCustomer?.address ?? null,
         sellerGstin: sellerIdentity.sellerGstin,
         sellerStateCode: sellerIdentity.sellerStateCode,
         sellerLegalName: sellerIdentity.sellerLegalName,
@@ -794,7 +800,8 @@ export async function confirmBill(shopId, body, actor = {}) {
       include: { items: BILL_ITEMS_WITH_OPTIONS, payments: true, loyaltyTransactions: true },
     });
     await redeemOfferInTransaction(tx, shopId, validatedOffer, { isEstimate });
-    await allocateLotsForBill(tx, { shopId, locationId: location.id, bill, chosenLotByProduct });
+    if (fulfilledStock) await fulfilment.recordBill(tx, bill);
+    else await allocateLotsForBill(tx, { shopId, locationId: location.id, bill, chosenLotByProduct });
 
     // Whatever a guard needs to record about the sale it permitted — the pharmacy
     // closes its register entry against this bill here.
@@ -1023,6 +1030,9 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
   });
 
   if (!bill) throw new AppError("Bill not found", 404);
+  if (await db.tradeOrder.findFirst({ where: { shopId, billId: bill.id } })) {
+    throw new AppError("Use the wholesale order return to reverse this dispatched invoice", 409, "TRADE_INVOICE_USE_ORDER_RETURN");
+  }
   // Idempotent: a bill can be cancelled then "deleted" (both map to this op), or the same
   // cancel can be replayed by sync. Already-cancelled => return as-is WITHOUT re-reversing
   // stock/udhar (the reversal already happened), instead of throwing a permanent CONFLICT.
@@ -1181,7 +1191,7 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
 // customer's udhar. Reuses the reversal primitives proven in cancelBill; runs in one
 // transaction; idempotent on the same bill identity as CREATE_BILL.
 // ─────────────────────────────────────────────────────────────
-export async function createSaleReturn(shopId, body, actor = {}) {
+export async function createSaleReturn(shopId, body, actor = {}, fulfilment = null) {
   const {
     items = [],
     refundMode = "cash",
@@ -1216,6 +1226,9 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         ? await tx.bill.findFirst({ where: { id: returnOfBillId, shopId }, include: { items: true } })
         : null;
       if (returnOfBillId && !original) throw new AppError("Original sale not found", 404);
+      const linkedTradeOrder = original ? await tx.tradeOrder.findFirst({ where: { shopId, billId: original.id } }) : null;
+      if (linkedTradeOrder && !fulfilment) throw new AppError("Use the wholesale order return to reverse this dispatched invoice", 409, "TRADE_INVOICE_USE_ORDER_RETURN");
+      if (fulfilment) await fulfilment.prepare(tx, original);
       if (original && original.status !== "active") {
         const err = new AppError("Only an active sale can be returned", 409);
         err.code = "ORIGINAL_BILL_NOT_RETURNABLE";
@@ -1561,10 +1574,16 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         if (!row.damaged) continue;
         damagedBaseQtyByProduct.set(row.product.id, round2((damagedBaseQtyByProduct.get(row.product.id) ?? 0) + row.qtyInBase));
       }
-      await restoreLotsForSaleReturn(tx, { originalBillId: original?.id ?? null, returnBill, damagedBaseQtyByProduct });
+      if (fulfilment) await fulfilment.restoreLots(tx, original, returnBill);
+      else await restoreLotsForSaleReturn(tx, { originalBillId: original?.id ?? null, returnBill, damagedBaseQtyByProduct });
 
       // Restock resellable items; write off damaged ones (no restock, records the cost loss).
+      const returnMovementCounts = new Map();
       for (const { product, qtyInBase, lineCost, damaged, sellingUnitId, sellingUnitQty } of restockPlan) {
+        const movementGroup = `${damaged ? "damage" : "return"}:${product.id}`;
+        const occurrence = returnMovementCounts.get(movementGroup) || 0;
+        returnMovementCounts.set(movementGroup, occurrence + 1);
+        const movementKey = occurrence ? `${movementGroup}:line:${occurrence}` : movementGroup;
         if (damaged) {
           await tx.stockLedger.create({
             data: {
@@ -1584,8 +1603,8 @@ export async function createSaleReturn(shopId, body, actor = {}) {
               // damage silently undercounts once those consumers become primary.
               ...moneyShadows({ damageLossValue: lineCost }),
               billId: returnBill.id,
-              clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `damage:${product.id}`),
-              idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `damage:${product.id}`),
+              clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, movementKey),
+              idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, movementKey),
               sourceDeviceId: billIdentity.sourceDeviceId,
               sourceType: "bill",
               sourceId: returnBill.id,
@@ -1619,8 +1638,8 @@ export async function createSaleReturn(shopId, body, actor = {}) {
             sellingUnitId: sellingUnitId ?? null,
             sellingUnitQty: sellingUnitId && sellingUnitQty > 0 ? round2(sellingUnitQty) : null,
             billId: returnBill.id,
-            clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `return:${product.id}`),
-            idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `return:${product.id}`),
+            clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, movementKey),
+            idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, movementKey),
             sourceDeviceId: billIdentity.sourceDeviceId,
             sourceType: "bill",
             sourceId: returnBill.id,

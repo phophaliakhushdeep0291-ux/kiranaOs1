@@ -22,6 +22,16 @@ if (filename.includes("prod") || filename.includes("production") || !filename.en
 }
 
 const prismaCli = path.join(process.cwd(), "node_modules", "prisma", "build", "index.js");
+function runNode(scriptPath) {
+  const result = spawnSync(process.execPath, [scriptPath], {
+    cwd: process.cwd(),
+    env: process.env,
+    stdio: "inherit",
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
 function runPrisma(args) {
   const result = spawnSync(process.execPath, [prismaCli, ...args], {
     cwd: process.cwd(),
@@ -41,11 +51,11 @@ runPrisma(["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"])
 if (process.env.SKIP_LOCAL_PRISMA_GENERATE !== "true") {
   runPrisma(["generate", "--generator", "client", "--schema", "prisma/schema.prisma"]);
 }
-// Schema push does not execute SQL migrations. Local shops need the same
-// mutation log as test/production databases for incremental device sync.
-const triggers = spawnSync(process.execPath, ["scripts/install-sqlite-sync-triggers.js"], {
-  cwd: process.cwd(), env: process.env, stdio: "inherit",
-});
-if (triggers.error) throw triggers.error;
-if (triggers.status !== 0) process.exit(triggers.status ?? 1);
-console.log("Local SQLite schema is aligned with prisma/schema.prisma.");
+// `db push` recreates tables, and SQLite drops a table's triggers with it. The
+// sync feed lives entirely in triggers defined by migrations, not in
+// schema.prisma, so nothing above puts them back — which quietly turns two-way
+// sync into push-only until someone notices a second device is missing bills.
+// Reinstalling here is what keeps the server's startup check meaningful rather
+// than something a developer learns to expect and ignore.
+runNode(path.join(process.cwd(), "scripts", "install-sqlite-sync-triggers.js"));
+console.log("Local SQLite schema is aligned with prisma/schema.prisma, sync triggers reinstalled.");

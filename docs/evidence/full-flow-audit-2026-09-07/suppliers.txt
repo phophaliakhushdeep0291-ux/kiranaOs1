@@ -1,0 +1,43 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Suppliers" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Suppliers page loaded
+  - heading "Suppliers and wholesalers" [level=1]
+  - paragraph: 0 suppliers
+  - button "Add Supplier":
+    - text: Add Supplier
+  - paragraph: Buying, for your shop type
+  - paragraph: 🛒 Kirana / General Store
+  - button "Buying, for your shop type":
+  - textbox "Search by name or mobile..."
+  - generic: No suppliers yet — add your first one
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

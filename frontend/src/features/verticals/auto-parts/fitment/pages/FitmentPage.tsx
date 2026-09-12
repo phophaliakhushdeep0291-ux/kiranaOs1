@@ -180,7 +180,7 @@ export default function FitmentPage() {
 
         {results && <VehicleResults results={results} searched={searched} onSell={sellPart} sellLabel={t("shopType.fitment.sell")} />}
 
-        <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <Kpi icon={<Layers size={16} />} label="Fitments recorded" value={String(summary?.fitments ?? 0)} tone="blue" />
           <Kpi icon={<Car size={16} />} label="Makes covered" value={String(summary?.makes ?? 0)} tone="violet" />
           <Kpi icon={<Package size={16} />} label="Parts mapped" value={String(summary?.mappedParts ?? 0)} tone="green" />
@@ -219,7 +219,7 @@ export default function FitmentPage() {
             </div>
           ) : (
             <div className="app-table-scroll overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <table className="trade-mobile-table w-full text-[13px]">
                 <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                   <tr>
                     <th className="px-5 py-2.5 text-left font-bold">Part</th>
@@ -231,17 +231,17 @@ export default function FitmentPage() {
                 <tbody>
                   {recent.map((fitment, i) => (
                     <tr key={fitment.id} className={i < recent.length - 1 ? "border-b border-[#eef2f8]" : ""}>
-                      <td className="px-5 py-3 align-top">
+                      <td data-label="Part" className="px-5 py-3 align-top">
                         <p className="font-bold text-[var(--brand-ink)]">{fitment.productName}</p>
                       </td>
-                      <td className="px-5 py-3 align-top">
+                      <td data-label="Fits" className="px-5 py-3 align-top">
                         <p className="font-semibold text-[var(--brand-ink)]">{fitment.make} {fitment.model}</p>
                         <p className="mt-0.5 text-[11px] text-[#8492ac]">{fitment.variant || "All variants"}</p>
                       </td>
-                      <td className="px-5 py-3 align-top">
+                      <td data-label="Years" className="px-5 py-3 align-top">
                         <span className="rounded-[7px] bg-[#f1f5fa] px-2 py-[3px] text-[11px] font-bold text-[#52627e]">{fitment.yearLabel}</span>
                       </td>
-                      <td className="px-5 py-3 text-right align-top">
+                      <td data-label={t("workflow.register.actions")} className="px-5 py-3 text-right align-top">
                         <button onClick={() => setRemoving(fitment)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label={`Remove ${fitment.productName} from ${fitment.make} ${fitment.model}`}><Trash2 size={14} /></button>
                       </td>
                     </tr>

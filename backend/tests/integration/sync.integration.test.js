@@ -110,14 +110,32 @@ if (ctx.skip) {
       assert.equal(count, 1, "exactly one product should exist after the retried create");
     });
 
+    test("CREATE_PRODUCT under a name another product holds is still a conflict", async () => {
+      // A replay converges on its own product by client identity. That must not
+      // let a DIFFERENT offline product through under a name already taken.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      await createProduct(ctx.db, tenant.shop.id, { name: "Parle-G Biscuit" });
+      const data = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{ eventId: "create-product-taken-name", type: "CREATE_PRODUCT", payload: { localProductId: "local_prod_other", product: productPayload({ name: "Parle-G Biscuit" }), ownerPin: "1234" } }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      assert.equal(data.summary.conflicts, 1, JSON.stringify(data.results));
+      assert.equal(data.results[0].code, "PRODUCT_NAME_DUPLICATE");
+      assert.equal(await ctx.db.product.count({ where: { shopId: tenant.shop.id, name: "Parle-G Biscuit", deletedAt: null } }), 1);
+    });
+
     test("sync push CREATE_CUSTOMER works", async () => {
       const { ownerAuth, deviceHeaders } = await ownerCtx();
+      const followup = { udharLimit: 1500.25, dueDate: "2026-09-15", promiseToPayDate: "2026-09-12", notes: "Offline follow-up" };
       const response = await ctx.post("/api/sync/push", {
-        events: [{ eventId: "create-customer-1", type: "CREATE_CUSTOMER", payload: { customer: { name: "Sync Customer", mobile: "6999999991", type: "regular" } } }],
+        events: [{ eventId: "create-customer-1", type: "CREATE_CUSTOMER", payload: { customer: { name: "Sync Customer", mobile: "6999999991", type: "regular", ...followup } } }],
       }, { token: ownerAuth.accessToken, headers: deviceHeaders });
       const data = assertSuccess(response);
       assert.equal(data.summary.synced, 1);
       assert.ok(data.results[0].serverId);
+      const pulled = assertSuccess(await ctx.get("/api/sync/pull?since=1970-01-01T00:00:00.000Z", { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      const customer = pulled.customers.find((row) => row.id === data.results[0].serverId);
+      for (const [key, value] of Object.entries(followup)) assert.equal(customer[key], value);
     });
 
     test("CREATE_CUSTOMER converges on existing mobile instead of duplicating or failing", async () => {
@@ -1670,11 +1688,19 @@ if (ctx.skip) {
       assert.equal(data.summary.synced, 2);
       assert.equal(data.summary.failed, 0);
 
+      const collectionIds = data.results.map((row) => row.serverId);
+      assert.equal(new Set(collectionIds).size, 2, "each collection needs its own server identity");
+      for (const row of data.results) {
+        assert.equal(row.serverId, row.result.ledgerEntryId);
+        assert.notEqual(row.serverId, customer.id);
+      }
+
       data = assertSuccess(await ctx.post("/api/sync/push", {
         events: [{ ...eventA, eventId: "udhar-split-pay-1-retry" }],
       }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       assert.equal(data.summary.synced, 1);
       assert.equal(data.results[0].result.idempotentReplay, true);
+      assert.equal(data.results[0].serverId, collectionIds[0]);
 
       const updatedCustomer = await ctx.db.customer.findUnique({ where: { id: customer.id } });
       assert.equal(updatedCustomer.udharAmount, 0);
@@ -2090,6 +2116,13 @@ if (ctx.skip) {
       let updated = await ctx.db.purchaseHistory.findUnique({ where: { id: purchase.id } });
       assert.equal(updated.purchasePaidAmount, 350);
       assert.equal(updated.purchaseDueAmount, 650);
+      assert.equal(updated.purchasePaymentMode, purchase.purchasePaymentMode, "settling later must retain the initial payment mode");
+      const freshPull = assertSuccess(await ctx.get("/api/sync/pull?since=1970-01-01T00:00:00.000Z", { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      const freshPurchase = freshPull.purchaseHistory.find((row) => row.id === purchase.id);
+      assert.equal(freshPurchase.supplierPayments.length, 1);
+      assert.equal(freshPurchase.supplierPayments[0].amount, 250);
+      assert.equal(freshPurchase.supplierPayments[0].mode, "upi");
+      assert.equal(freshPurchase.supplierPayments[0].local_id, "local-supplier-payment-1");
       assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, sourceType: "supplier_payment" } }), 1, "event replay never duplicates payment");
 
       const reverseEvent = {
@@ -2101,10 +2134,14 @@ if (ctx.skip) {
       const reversed = assertSuccess(await ctx.post("/api/sync/push", { events: [reverseEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       const reversalLedger = await ctx.db.financialLedger.findFirst({ where: { shopId: tenant.shop.id, sourceType: "supplier_payment_reversal", sourceId: paymentLedger.id } });
       assert.equal(reversed.results[0].serverId, reversalLedger.id, "reversal reconciliation must expose the reversal-ledger id");
+      assert.equal(reversed.results[0].result.originalLedgerEntryId, paymentLedger.id, "the original payment retains its identity on devices");
       assertSuccess(await ctx.post("/api/sync/push", { events: [reverseEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       updated = await ctx.db.purchaseHistory.findUnique({ where: { id: purchase.id } });
       assert.equal(updated.purchasePaidAmount, 100);
       assert.equal(updated.purchaseDueAmount, 900);
+      const reversedPull = assertSuccess(await ctx.get("/api/sync/pull?since=1970-01-01T00:00:00.000Z", { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      const paymentHistory = reversedPull.purchaseHistory.find((row) => row.id === purchase.id).supplierPayments;
+      assert.deepEqual(paymentHistory.map((row) => row.amount).sort((a, b) => a - b), [-250, 250]);
       assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, sourceType: "supplier_payment_reversal" } }), 1, "reversal replay is exact-once");
       assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: { in: ["SUPPLIER_PAYMENT_RECORDED", "SUPPLIER_PAYMENT_REVERSED"] } } }), 2);
     });

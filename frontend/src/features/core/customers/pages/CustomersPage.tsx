@@ -1,3 +1,4 @@
+import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useSearch } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -391,6 +392,7 @@ function percentageChange(current: number, previous: number): number {
 }
 
 export default function CustomersPage() {
+  const requestExport = useDataExport();
   const { t } = useAppLanguage();
   // Who the person on the other side of the counter is here — the sidebar
   // already reached this screen as "Khata", "Accounts" or "Tabs", and the
@@ -424,7 +426,7 @@ export default function CustomersPage() {
       variant: "destructive",
     }),
   });
-  const { pendingCount, failedCount } = useOfflineStatus();
+  const { pendingCount, failedCount, conflictCount, queueStatus } = useOfflineStatus();
   const { data: customers = [], isLoading, refetch } = useCustomersLedgerList();
   const overviewQuery = useQuery({ queryKey: ["customers-overview-activity"], queryFn: loadCustomerOverviewActivity, staleTime: 1_500 });
   const [search, setSearch] = useState("");
@@ -798,10 +800,10 @@ export default function CustomersPage() {
         gstNumber: gstin?.normalized || undefined,
         stateCode: gstin?.stateCode || customerForm.stateCode || undefined,
         type: customerForm.type,
-        dueDate: customerForm.dueDate || undefined,
-        promiseToPayDate: customerForm.promiseToPayDate || undefined,
-        udharLimit: customerForm.udharLimit ? Number(customerForm.udharLimit) : undefined,
-        notes: customerForm.notes.trim() || undefined,
+        dueDate: customerForm.dueDate || null,
+        promiseToPayDate: customerForm.promiseToPayDate || null,
+        udharLimit: customerForm.udharLimit ? Number(customerForm.udharLimit) : null,
+        notes: customerForm.notes.trim() || null,
       };
       if (editing) await updateCustomerLocalFirst(editing.id, data);
       else await createCustomerLocalFirst(data);
@@ -992,7 +994,7 @@ export default function CustomersPage() {
       <section className="rounded-[18px] border border-[#e2e8f2] bg-white p-4 shadow-[0_10px_30px_rgba(15,35,80,0.05)] lg:flex lg:items-center lg:justify-between lg:gap-6 lg:p-5">
         <div className="min-w-0">
           <div className="hidden items-center gap-3 lg:flex"><span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[var(--brand)]"><Users size={19} /></span><div><h2 className="text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{t(tradeProfile.headingKey)}</h2><p className="mt-0.5 text-[11px] font-medium text-[#718099]">{t(tradeProfile.subtitleKey)}</p></div></div>
-          <SyncBadge className="hidden lg:mt-3 lg:inline-flex" status={failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={failedCount > 0 ? t("customers.detail.reviewSync") : pendingCount > 0 ? `${pendingCount} pending` : t("customers.detail.syncedJustNow")} />
+          <SyncBadge className="hidden lg:mt-3 lg:inline-flex" status={queueStatus !== "ready" ? "failed" : failedCount + conflictCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={queueStatus !== "ready" ? t(queueStatus === "error" ? "sync.local.unavailable" : "sync.local.checking") : failedCount + conflictCount > 0 ? t("customers.detail.reviewSync") : pendingCount > 0 ? `${pendingCount} pending` : t("customers.detail.syncedJustNow")} />
         </div>
         <div className="grid grid-cols-2 items-center gap-2 lg:flex lg:flex-wrap">
           <div className="col-span-2 lg:contents">
@@ -1005,11 +1007,21 @@ export default function CustomersPage() {
             <DropdownMenuTrigger asChild><Button variant="outline" className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Filter size={16} />{t("customers.filters")}</Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => setFilter("all")}>{t("customers.filter.all")}</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("udhar")}>{t("customers.filter.withBalance")}</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("due")}>{t("customers.list.overdue")}</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("cleared")}>{t("customers.list.cleared")}</DropdownMenuItem></DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" onClick={exportCustomers} className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Download size={16} />{t("customers.export")}</Button>
+          <Button variant="outline" onClick={() => requestExport({ reportType: "customers", format: "csv" }, exportCustomers)} className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Download size={16} />{t("customers.export")}</Button>
           <Button variant="outline" onClick={() => openPayment()} className="h-12 w-full gap-2 rounded-[14px] border-[var(--brand-border)] bg-[var(--brand-softer)] px-3 text-[11px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)] lg:h-11 lg:w-auto lg:rounded-[10px]"><Wallet size={16} />{t("customers.collectPayment")}</Button>
           <Button onClick={openCreate} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-[#174ea6] px-3 text-[11px] font-bold text-white shadow-[0_8px_18px_rgba(23,78,166,0.2)] hover:bg-[#123f86] lg:h-11 lg:w-auto lg:rounded-[10px] lg:px-[18px]"><Plus size={16} className="shrink-0" /><span>{t("customers.list.addCustomer")}</span></Button>
         </div>
       </section>
+
+      <form
+        role="search"
+        className="flex min-w-0 items-center gap-2 rounded-[14px] border border-[#dfe7f2] bg-white p-1.5 lg:hidden"
+        onSubmit={(event) => { event.preventDefault(); if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); document.getElementById("customer-list-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+      >
+        <Search size={18} className="ml-2 shrink-0 text-primary" aria-hidden="true" />
+        <Input type="search" enterKeyHint="search" aria-label={t("customers.searchShort")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("customers.searchShort")} className="h-11 min-w-0 flex-1 border-0 bg-transparent px-1 text-base shadow-none" />
+        <button type="submit" aria-label={t("customers.list.title")} className="grid h-11 w-11 shrink-0 place-items-center rounded-[10px] bg-primary text-primary-foreground"><ChevronRight size={20} aria-hidden="true" /></button>
+      </form>
 
       <TradeFocusStrip titleKey="customers.trade.title" focusKey={tradeProfile.focusKey} links={tradeProfile.links} />
 
@@ -1506,8 +1518,8 @@ export default function CustomersPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div><Label htmlFor="customer-form-type" className="text-[11px] font-bold text-[#435474]">{t("customers.form.customerType")}</Label><Select value={customerForm.type} onValueChange={(value) => setCustomerForm((form) => ({ ...form, type: value as "regular" | "udhar" }))}><SelectTrigger id="customer-form-type" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">{t("customers.form.regular")}</SelectItem><SelectItem value="udhar">{t("customers.form.udharAllowed")}</SelectItem></SelectContent></Select></div>
                   <div><Label htmlFor="customer-udhar-limit" className="text-[11px] font-bold text-[#435474]">{t("customers.form.udharLimit")}</Label><Input id="customer-udhar-limit" type="number" inputMode="decimal" min="0" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.udharLimit} onChange={(event) => setCustomerForm((form) => ({ ...form, udharLimit: event.target.value }))} /></div>
-                  <div><Label htmlFor="customer-due-date" className="text-[11px] font-bold text-[#435474]">{t("customers.form.dueDate")}</Label><Input id="customer-due-date" type="date" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.dueDate} onChange={(event) => setCustomerForm((form) => ({ ...form, dueDate: event.target.value }))} /></div>
-                  <div><Label htmlFor="customer-promise-date" className="text-[11px] font-bold text-[#435474]">{t("customers.form.promiseDate")}</Label><Input id="customer-promise-date" type="date" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.promiseToPayDate} onChange={(event) => setCustomerForm((form) => ({ ...form, promiseToPayDate: event.target.value }))} /></div>
+                  <div><Label htmlFor="customer-due-date" className="text-[11px] font-bold text-[#435474]">{t("customers.form.dueDate")}</Label><Input id="customer-due-date" type="date" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.dueDate} onInput={(event) => { const value = event.currentTarget.value; setCustomerForm((form) => ({ ...form, dueDate: value })); }} onChange={(event) => { const value = event.currentTarget.value; setCustomerForm((form) => ({ ...form, dueDate: value })); }} /></div>
+                  <div><Label htmlFor="customer-promise-date" className="text-[11px] font-bold text-[#435474]">{t("customers.form.promiseDate")}</Label><Input id="customer-promise-date" type="date" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.promiseToPayDate} onInput={(event) => { const value = event.currentTarget.value; setCustomerForm((form) => ({ ...form, promiseToPayDate: value })); }} onChange={(event) => { const value = event.currentTarget.value; setCustomerForm((form) => ({ ...form, promiseToPayDate: value })); }} /></div>
                 </div>
               </section>
 
@@ -1615,10 +1627,10 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
   const { t } = useAppLanguage();
   const avatarTones = ["bg-[var(--brand-soft)] text-[var(--brand)]", "bg-[#ecfdf5] text-[var(--success-ink)]", "bg-[#f5f3ff] text-[#7c3aed]", "bg-[#fff7ed] text-[#f97316]", "bg-[#fef2f2] text-[#ef4444]"];
   return (
-    <section className="min-h-0 overflow-hidden rounded-[18px] border border-[#e2e8f2] bg-white shadow-[0_10px_30px_rgba(15,35,80,0.05)]">
+    <section id="customer-list-panel" className="min-h-0 scroll-mt-4 overflow-hidden rounded-[18px] border border-[#e2e8f2] bg-white shadow-[0_10px_30px_rgba(15,35,80,0.05)]">
       <header className="flex h-[58px] items-center justify-between px-[18px]"><h2 className="text-[15px] font-extrabold text-[var(--brand-ink)]">{t("customers.list.title")}</h2><span className="rounded-full bg-[#f2f5f9] px-2.5 py-1 text-[9px] font-black text-[#60708e]">{t("customers.list.shownCount", { count: customers.length })}</span></header>
       <div className="border-y border-[#e8edf4] p-3.5">
-        <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b89a2]" /><Input aria-label={t("customers.searchShort")} value={search} onChange={(event) => onSearch(event.target.value)} placeholder={t("customers.searchShort")} className="h-11 rounded-[10px] border-[#dfe7f2] pl-10 text-[12px]" /></div>
+        <div className="relative hidden lg:block"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b89a2]" /><Input aria-label={t("customers.searchShort")} value={search} onChange={(event) => onSearch(event.target.value)} placeholder={t("customers.searchShort")} className="h-11 rounded-[10px] border-[#dfe7f2] pl-10 text-[12px]" /></div>
         <div className="mt-3 grid grid-cols-4 gap-1.5">{([["all", t("customers.filter.allCustomers")], ["udhar", t("customers.filter.withBalanceTitle")], ["due", t("customers.list.overdue")], ["cleared", t("customers.list.cleared")]] as const).map(([key, label]) => <button key={key} type="button" data-customer-filter={key} aria-pressed={filter === key} onClick={() => onFilter(key)} className={cn("h-11 rounded-[8px] border px-1 text-[8.5px] font-bold transition-colors", filter === key ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e3e9f2] bg-white text-[#405273] hover:bg-[#f8faff]")}>{label}</button>)}</div>
       </div>
       <div className="app-scrollbar max-h-[610px] overflow-y-auto p-3">

@@ -95,6 +95,14 @@ hydration remains a catch-up path. The ack must keep firing regardless: it write
 - A finished sync announces itself on `kirana:local-data-changed`, the same
   channel a local edit uses. Treating that as fresh work schedules another sync,
   which announces itself — a loop. Filter on `detail.type === "sync"`.
+- So does every outbox status write a push makes, on `kirana:sync-queue-updated`:
+  `SYNCING` before the request, then `SYNCED`, `FAILED`, `CONFLICT` or a deferred
+  `PENDING`. Untagged, each one scheduled a cycle with nothing to send — two per
+  push attempt from the two listeners, twice the traffic against a server that was
+  already failing. They carry `type: "sync"` too, so the same filter skips them
+  while counts and pages still refresh. The exception is a write that leaves a row
+  due — `PENDING` with no deferral, a requeue — which is work, goes out untagged,
+  and must keep prompting a sync.
 - `shouldPassSharedThrottle` **consumes** its token when it passes. Take it only
   once you know you will do the work, or you lock every other tab out for the
   interval having done nothing.
@@ -118,6 +126,23 @@ failures are therefore classified (`sync-failure-classification.ts`):
 |---|---|---|
 | **Transient** — no status, 5xx, 408, 429, 401 | never got a verdict | back to `PENDING`, deferred, **no attempt spent**, reported as `skipped` |
 | **Permanent** — a 4xx verdict | the server read it and refused | `FAILED`, parked for a human immediately |
+
+The rule holds **per event** too, not only per batch. A push that returns 200 can
+still fail one operation inside it, and the backend's `classifySyncError` marks
+each result `retryable`: a write conflict that outlasted `serializableTransaction`,
+a 5xx, a 408/425/429, `SYNC_DEPENDENCY_PENDING` and `SYNC_EVENT_IN_PROGRESS` are
+`true`; `PERMISSION_DENIED` and business-rule refusals are `false`.
+`isTransientSyncEventResult` reads that flag, so a retryable event takes the
+transient row of the table above while its neighbours in the batch settle
+normally. An explicit `retryable: false` always wins.
+
+The transient deferral has its own ladder — 1s doubling to a 30s cap — sized by
+the row's `transient_failures`, **never** by `retry_count`. A transient failure
+does not move `retry_count`, so sizing the wait from it pinned the deferral at 1s,
+and a till facing a 500ing server re-sent every scheduler tick for the length of
+the outage. `transient_failures` rises on each deferral and is zeroed by any
+verdict (`SYNCED`, `FAILED`, `CONFLICT`) or an explicit Retry. A reconnect lifts
+the wait but keeps the count, the same treatment it gives `retry_count`.
 
 Two consequences worth holding on to: a wifi blip no longer lights the "needs
 review" banner, and a rejected operation stops wasting twelve attempts against an
@@ -175,6 +200,17 @@ blocks only on the shell and billing halves.
 rejected on measurement. Read it before optimising; several obvious ideas
 (recharts chunking, per-vertical chunks, lowering `experimentalMinChunkSize`)
 were measured and made things worse.
+
+**SQLite passes races that PostgreSQL refuses.** SQLite queues concurrent
+writers; PostgreSQL aborts the losing Serializable transaction (Prisma P2034),
+which used to reach the client as a 500 while every local test stayed green.
+Serializable transactions go through `serializableTransaction`
+(`backend/src/lib/transactions.js`), which runs the loser again, in the same
+order SQLite would have run them. Its callback may therefore run more than once:
+keep webhooks, provider calls and metrics outside it. A conflict that outlasts
+the retries answers 503, never 409, because the till's sync engine parks any 4xx
+for a human. `tests/serializable-transaction.examples.js` fails on a raw
+Serializable `$transaction`.
 
 **Tests passing is not the feature working.** The suites are large and green, and
 the bugs that reached a shop were all found by driving the real screen or probing

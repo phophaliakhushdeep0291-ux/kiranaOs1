@@ -1,6 +1,7 @@
 import { roundMoney } from "@/lib/money";
 import { dexieDB, filterRowsForCurrentScope, rowMatchesCurrentScope, type OfflineRow, type PendingSyncEvent } from "@/lib/offline/db";
 import { nowIso } from "@/lib/offline/context";
+import { canAutoResolveSyncConflict, isUnresolvedSyncConflict } from "@/features/core/sync/sync-health";
 import {
   billsShareClientIdentity,
   hasDurableClientIdentity,
@@ -810,28 +811,26 @@ async function repairFinancialDuplicateOutboxFailures(): Promise<number> {
   return resolved;
 }
 
-async function repairConflictsWithoutBlockingOutbox(): Promise<number> {
+async function repairAcknowledgedLocalConflicts(): Promise<number> {
   await dexieDB.open();
-  const conflicts = filterRowsForCurrentScope(
-    await dexieDB.sync_conflicts.filter(rowMatchesCurrentScope).toArray().catch(() => []),
-  ) as OfflineRow[];
-  const blockingOutbox = filterRowsForCurrentScope(
-    await dexieDB.sync_outbox.filter(rowMatchesCurrentScope).toArray().catch(() => []),
-  ).filter((row) => !outboxStatusSynced(row));
-  if (conflicts.length === 0 || blockingOutbox.length > 0) return 0;
-  const now = nowIso();
   let resolved = 0;
-  for (const conflict of conflicts) {
-    if (!(conflict.sync_status === "conflict" || conflict.resolution === "unresolved")) continue;
-    await dexieDB.sync_conflicts.put({
-      ...conflict,
-      sync_status: "synced",
-      resolution: "auto_resolved",
-      resolved_at: now,
-      updated_at: now,
-    });
-    resolved += 1;
-  }
+  await dexieDB.transaction("rw", [dexieDB.sync_conflicts, dexieDB.sync_outbox], async () => {
+    const conflicts = await dexieDB.sync_conflicts.filter(rowMatchesCurrentScope).toArray();
+    if (!conflicts.some(isUnresolvedSyncConflict)) return;
+    const outbox = await dexieDB.sync_outbox.filter(rowMatchesCurrentScope).toArray();
+    const now = nowIso();
+    for (const conflict of conflicts) {
+      if (!isUnresolvedSyncConflict(conflict) || !canAutoResolveSyncConflict(conflict, outbox)) continue;
+      await dexieDB.sync_conflicts.put({
+        ...conflict,
+        sync_status: "synced",
+        resolution: "auto_resolved",
+        resolved_at: now,
+        updated_at: now,
+      });
+      resolved += 1;
+    }
+  });
   return resolved;
 }
 
@@ -854,7 +853,7 @@ export async function hardenLocalFinancialData(): Promise<LocalDataHardeningResu
       (await repairDuplicateFinancialEchoTable("customer_ledger").catch(() => 0)) +
       (await repairDuplicateOpeningBalanceLedgerRows().catch(() => 0));
     const outboxResolved = await repairFinancialDuplicateOutboxFailures().catch(() => 0);
-    const conflictsResolved = await repairConflictsWithoutBlockingOutbox().catch(() => 0);
+    const conflictsResolved = await repairAcknowledgedLocalConflicts().catch(() => 0);
     const total = billsMerged + paymentsMerged + ledgerMerged + outboxResolved + conflictsResolved;
     if (total > 0 && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("kirana:local-data-changed"));

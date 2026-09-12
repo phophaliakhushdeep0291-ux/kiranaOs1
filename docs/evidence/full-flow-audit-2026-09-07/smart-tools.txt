@@ -1,0 +1,142 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Smart Tools" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Smart Tools page loaded
+  - heading "Smart tools" [level=1]
+  - generic: Premium helpers for faster billing, recovery, reminders, and owner confidence.
+  - link "Fast billing":
+    - /url: /billing
+    - button "Fast billing"
+  - alert:
+    - generic: Working tools only
+    - generic: Every card below opens a real workflow. Plan-locked tools explain the required plan; roadmap placeholders are not shown.
+  - text: Offline confidence meter
+  - generic: Offline setup needed
+  - paragraph: All local data is safe on this device.
+  - paragraph: The app shell or this shop type's screens are not yet cached for an offline restart.
+  - text: Pending backup
+  - generic: "0"
+  - text: Failed/conflict
+  - generic: "0"
+  - text: Last cloud backup
+  - generic: less than a minute ago
+  - text: Offline grace
+  - generic: about 1 month left
+  - text: App restart
+  - generic: Cache not verified
+  - text: Device storage
+  - generic: May be cleaned
+  - generic: 0% used
+  - link "Open sync status":
+    - /url: /sync-status
+    - button "Open sync status"
+  - link "Open recovery mode":
+    - /url: /recovery-mode
+    - button "Open recovery mode"
+  - generic: Hindi/Hinglish voice billing
+  - generic: Bolkar bill
+  - generic: Available now
+  - paragraph: Speak a billing command, review the parsed customer, items, rates, and payment, then confirm through the normal protected bill flow.
+  - generic: Included in your plan
+  - generic: Hindi/Hinglish voice billing
+  - generic: Browser speech works first; secured OpenAI/Groq transcription is the online fallback.
+  - link "Open entry point":
+    - /url: /billing
+    - button "Open entry point":
+      - text: Open entry point
+  - generic: WhatsApp udhar reminders
+  - generic: Udhar yaad dilana
+  - generic: Available now
+  - paragraph: Send a customer reminder from their ledger and see whether it was queued, accepted, skipped, or failed.
+  - generic: Included in your plan
+  - generic: Automated WhatsApp reminders
+  - generic: Uses live provider, Redis queue, worker health, templates, and delivery logs.
+  - link "Open entry point":
+    - /url: /settings/notifications
+    - button "Open entry point":
+      - text: Open entry point
+  - generic: Smart daily closing
+  - generic: Din band report
+  - generic: Available now
+  - paragraph: Review sales, expected cash, UPI, udhar, collections, and the exact sync state before closing the counter.
+  - generic: Included in your plan
+  - generic: Smart daily closing
+  - generic: Works offline and labels estimates when device changes are still pending sync.
+  - link "Open entry point":
+    - /url: /daily-closing
+    - button "Open entry point":
+      - text: Open entry point
+  - generic: Customer trust score
+  - generic: Grahak bharosa score
+  - generic: Available now
+  - paragraph: See ageing buckets and risk guidance with the underlying ledger still available for owner judgement.
+  - generic: Included in your plan
+  - generic: Customer trust score
+  - generic: Calculated from the real customer ledger, ageing, and payment behaviour.
+  - link "Open entry point":
+    - /url: /customers
+    - button "Open entry point":
+      - text: Open entry point
+  - generic: No-barcode fast billing
+  - generic: Bina barcode tez bill
+  - generic: Available now
+  - paragraph: Find and add real catalogue items quickly even when the store does not maintain barcodes.
+  - generic: Included in your plan
+  - generic: No-barcode fast billing
+  - generic: Uses products, aliases, categories, favourites, recent items, units, and pricing rules.
+  - link "Open entry point":
+    - /url: /billing
+    - button "Open entry point":
+      - text: Open entry point
+  - generic: Offline confidence meter
+  - generic: Data safety meter
+  - generic: Available now
+  - paragraph: Know what is safe locally, what is pending, and what needs owner attention without blocking offline billing.
+  - generic: Included in your plan
+  - generic: Offline confidence meter
+  - generic: Reads the actual local queue, conflicts, connectivity, and subscription grace state.
+  - link "Open entry point":
+    - /url: /sync-status
+    - button "Open entry point":
+      - text: Open entry point
+  - generic: Recovery mode
+  - generic: Surakshit recovery
+  - generic: Available now
+  - paragraph: Recover unfinished work and inspect real data-health evidence without destructive automatic repair.
+  - generic: Included in your plan
+  - generic: Restore and recover data
+  - generic: Combines draft recovery, IndexedDB health checks, sync retry, and encrypted backup history.
+  - link "Open entry point":
+    - /url: /recovery-mode
+    - button "Open entry point":
+      - text: Open entry point
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

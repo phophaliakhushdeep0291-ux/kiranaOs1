@@ -1,0 +1,4 @@
+import{c as e}from"./vendor-data-BaHBZjtO.js"
+import{ak as t}from"./index-DtTTo2f-.js"
+function i(e=10){return t(`/activity/personalization?limit=${e}`,{background:!0})}function n(e=30){return t(`/activity/insights?days=${e}`)}function a(e=30){return t(`/activity/analytics?days=${e}`)}const r={staleTime:6e5,gcTime:36e5,retry:!1,refetchOnWindowFocus:!1},s={recent:["activity","recent"],personalization:["activity","personalization"],replenishment:["activity","replenishment"],insights:e=>["activity","insights",e],analytics:e=>["activity","analytics",e]}
+function c(t=!0){return e({queryKey:s.personalization,queryFn:()=>i(),enabled:t,...r})}function o(t=30,i=!0){return e({queryKey:s.insights(t),queryFn:()=>n(t),enabled:i,staleTime:3e5,refetchOnWindowFocus:!1})}function y(t=30,i=!0){return e({queryKey:s.analytics(t),queryFn:()=>a(t),enabled:i,staleTime:3e5,refetchOnWindowFocus:!1})}export{s as a,n as b,i as c,o as d,c as e,a as f,y as u}

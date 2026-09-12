@@ -4,6 +4,15 @@
 // counter already says out loud ("बिल", "कैश", "स्टॉक", "पेमेंट") are kept in
 // Devanagari rather than translated into words nobody uses at a kirana.
 export const billingEn = {
+  "billing.assistant.queueFailed": "Could not load the assistant's items",
+  "billing.assistant.queueRetry": "Reload the bill to try again. Check the cart before collecting payment.",
+  "billing.assistant.itemsPending": "Some assistant items are still pending",
+  "billing.assistant.itemsPendingDetail": "Review the cart before collecting payment.",
+  "billing.assistant.recoveryFailed": "Could not recover the billing draft",
+  "billing.assistant.recovering": "Recovering your billing draft",
+  "billing.assistant.recoveryFailedDetail": "The saved draft could not be loaded. Try again before starting a new bill.",
+  "billing.assistant.recoveringDetail": "Please wait while we restore the saved items.",
+  "billing.assistant.retryRecovery": "Try again",
   // Open bills strip
   "billing.openBills": "Open bills",
   "billing.openBills.current": "Current bill",
@@ -104,9 +113,10 @@ export const billingEn = {
   "billing.pay.dynamicQr.imageAlt": "Scan to pay ₹{amount} by UPI",
   "billing.pay.dynamicQr.waiting": "Waiting for bank confirmation",
   "billing.pay.dynamicQr.waitingHelp": "Do not save the bill from a customer screenshot or sound alone. KiranaOS unlocks it only after signed webhook or provider API verification.",
+  "billing.pay.dynamicQr.expiredChecking": "The scan window has ended. Payment confirmation is still being checked. Do not ask the customer to pay again until the first attempt is reconciled.",
   "billing.pay.dynamicQr.confirmed": "Payment confirmed by provider",
   "billing.pay.dynamicQr.unavailable": "This QR can no longer be used",
-  "billing.pay.dynamicQr.unavailableHelp": "Create a new verification attempt. No payment has been attached to the bill.",
+  "billing.pay.dynamicQr.unavailableHelp": "No payment has been attached to this bill yet. A late bank confirmation is still possible. Check the first payment with the provider before collecting again.",
   "billing.pay.dynamicQr.safety": "Single-use · fixed amount · branch-bound · expires automatically",
   "billing.pay.dynamicQr.statusFailed": "Could not check provider payment status.",
   "billing.pay.dynamicQr.closeFailed": "Could not close the payment QR.",
@@ -720,4 +730,7 @@ export const billingEn = {
   "billing.pay.upi.utrPlaceholder": "e.g. 412345678901",
   "billing.pay.upi.utrHelp": "Optional, from your own payment alert. It is what matches this bill to your bank statement at day close.",
   "billing.pay.upi.utrInvalid": "Enter at least 6 letters or numbers, or leave the reference empty.",
+  "billing.search.emptyCategory": "No products in this category",
+  "billing.search.resetFilters": "Clear search & filters",
+  "billing.search.openProducts": "Open product catalog",
 } as const;

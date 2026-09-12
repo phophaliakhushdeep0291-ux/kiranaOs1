@@ -1,0 +1,98 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Customers / Udhar" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Customers / Udhar page loaded
+  - button "01 Sept 2026 - 07 Sept 2026":
+    - text: 01 Sept 2026 - 07 Sept 2026
+  - button "Collect payment":
+    - text: Collect payment
+  - button "Add customer":
+    - generic: Add customer
+  - search:
+    - searchbox "Search by name or mobile"
+    - button "Customers":
+  - paragraph: Accounts for your shop type
+  - paragraph: 🛒 Kirana / General Store
+  - button "Accounts for your shop type":
+  - region "Customer account summary":
+    - article:
+      - paragraph: Total Customers
+      - paragraph: "1"
+      - text: 100%
+      - generic: vs last week
+    - article:
+      - paragraph: Total Udhar Outstanding
+      - paragraph: ₹30
+      - text: 100%
+      - generic: vs last week
+    - article:
+      - paragraph: Overdue Amount
+      - paragraph: ₹0
+      - generic: 0%
+      - generic: vs last week
+    - article:
+      - paragraph: Udhar Collected
+      - paragraph: ₹20
+      - text: 100%
+      - generic: vs last week
+  - heading "Customers" [level=2]
+  - generic: 1 shown
+  - button "All Customers" [pressed]
+  - button "With Balance"
+  - button "Overdue"
+  - button "Cleared"
+  - button "QC QA Credit Customer No address 9778652604 07 Sept 2026, 05:25 pm ₹30 0-7 Days Low":
+    - generic: QC
+    - generic: QA Credit Customer
+    - generic: No address
+    - generic: "9778652604"
+    - generic: 07 Sept 2026, 05:25 pm
+    - generic: ₹30
+    - generic: 0-7 Days
+    - generic: Low
+  - generic: Showing 1 of 1 customers
+  - generic: 1 loaded
+  - paragraph: Select a customer
+  - paragraph: Choose a customer from the list to view balance, collect payment, and inspect ledger history.
+  - complementary:
+    - paragraph: Customer insights
+    - paragraph: Ageing, recent payments, and credit risk will appear after selecting a customer.
+  - heading "Udhar Ledger" [level=2]
+  - paragraph: View every bill, payment, and balance movement
+  - button "All Entries":
+    - text: All Entries
+  - button "All time - 07 Sept 2026":
+    - text: All time - 07 Sept 2026
+  - button "Download Statement" [disabled]:
+    - text: Download Statement
+  - generic: No ledger entries found.
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

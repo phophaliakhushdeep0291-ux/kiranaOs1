@@ -124,7 +124,7 @@ export const productsHi: Record<keyof typeof productsEn, string> = {
   "products.form.amountPlaceholder": "0.00",
   "products.form.gstRate": "GST रेट",
   "products.form.avgCost": "औसत लागत",
-  "products.form.margin": "मुनाफा",
+  "products.form.margin": "लागत पर बढ़ोतरी",
   "products.form.otherPackSizes": "दूसरी पैक साइज़",
   "products.form.otherPackSizesHint": "जरूरी नहीं: वही स्टॉक 500 ग्राम, 1 किलो, कार्टन में भी बेच सकते हैं।",
   "products.form.stockCounting": "स्टॉक की गिनती",

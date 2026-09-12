@@ -27,10 +27,20 @@ phone, transcript, audio, product name, or free-form text as metric labels.
 
 ## Delivery phases
 
-### 1. Deterministic grounding and fail-closed semantics — implemented
+### 1. Deterministic grounding and fail-closed semantics — implemented for the covered workflows
 
 - Strict JSON schema; unknown fields and malformed provider output are rejected.
-- Provider prose never reaches the user as an operational claim.
+- Agent answers are composed from explicitly mapped values in successful server
+  tool results. A success flag alone cannot validate provider prose. The
+  operational answer records the result's subject and report dates.
+- Exact integer paise are formatted without converting large values through
+  floating-point numbers. Missing amounts stay unavailable, and negative stock
+  keeps its sign. Stock units and pricing units are separate fields.
+- Customer balances use the derived ledger balance. Staff product lookups omit
+  costs before data reaches the provider. Named reporting periods resolve to
+  explicit dates in the shop timezone.
+- Unknown or unencodable results cannot create a successful evidence trace.
+  A provider failure after a successful read still returns the verified data.
 - Products, quantities, units, customers, phones, amounts, discounts, targets,
   and intent keywords must be supported by first-party evidence.
 - Product-changing and bill-line commands require one unambiguous product from
@@ -39,6 +49,12 @@ phone, transcript, audio, product name, or free-form text as metric labels.
 - Intents with missing payloads are rejected rather than accepted as incomplete
   commands.
 - Catalogue outages force manual selection; they never relax validation.
+- Approved agent plans are claimed atomically before any handler runs. Parallel
+  confirmation and cancellation compete for the same pending status. Current
+  role, business type, feature access and owner-PIN risk are checked again.
+- A timed-out write has an uncertain outcome, since the underlying operation
+  might still finish. Later plan steps are skipped, the original plan cannot be
+  replayed, and the user is directed to inspect the record before another action.
 
 ### 2. Versioned canary and privacy-safe telemetry — implemented
 
@@ -49,16 +65,17 @@ phone, transcript, audio, product name, or free-form text as metric labels.
 - Any model, prompt, or schema change is attributable to a distinct telemetry
   series and must pass the same canary before rollout.
 
-### 3. Human outcome labels — next code-controlled milestone
+### 3. Human outcome labels — implemented; production sample collection remains
 
-- Add one-tap correct, misunderstood, and unsafe feedback to voice and assistant
+- One-tap correct, misunderstood, and unsafe feedback is available on voice and assistant
   results.
-- Store only the action-log ID, bounded reason code, policy fingerprint, and
+- Feedback stores only the action-log ID, bounded reason code, policy fingerprint, and
   outcome; do not copy raw audio or free-form customer data into evaluation
   tables.
-- Report false-accept and false-reject rates with minimum sample sizes and
-  Wilson confidence intervals. Small samples are shown as insufficient evidence,
-  never as a quality percentage.
+- Outcome proportions use minimum sample sizes and Wilson confidence intervals.
+  Small samples are shown as insufficient evidence. These voluntary feedback
+  labels do not establish population false-accept or false-reject rates; that
+  requires independently labelled accepted and rejected requests.
 
 ### 4. Shadow evaluation and staged rollout — requires provider traffic
 
@@ -86,3 +103,25 @@ model response or accent. Production false-accept and false-reject rates require
 consented labeled traffic. Until that evidence exists, KiranaOS should claim
 strong fail-closed controls and zero unsafe acceptance on its named corpus—not
 universal freedom from hallucination.
+
+The agent policy `2026-09-08.1` covers the registered core and trade summary
+formats. It can still choose an irrelevant lookup, misunderstand a requested
+period, or miss part of a question. Summaries show a bounded number of records
+with a count when more exist. New tools and fields need an explicit formatter
+and coverage before their values can appear in an operational reply. Proposals
+still require human review; deterministic display does not prove that every
+proposed action matches the person's intent.
+
+## Verification added on 2026-09-08
+
+- `backend/tests/ai-agent-response-grounding.examples.js` checks fabricated
+  amounts after a successful unrelated read, a success flag with no evidence,
+  exact large paise, negative stock, absent values, real catalogue field mappings,
+  staff cost visibility, shop-timezone periods, and the complete turn-to-audit
+  path with a scripted provider. It also checks large results and provider failure.
+- `backend/tests/ai-agent-plan-concurrency.examples.js` exercises actual database
+  claims, including two requests forced to read the same pending plan before
+  claiming it, confirmation versus rejection, tenant boundaries, changed risk,
+  an uncertain timeout followed by a late write, and suppression of later steps.
+- Both suites run in `npm run test:ai-safety` with an isolated database. Their
+  scripted provider tests require no external API request or merchant data.

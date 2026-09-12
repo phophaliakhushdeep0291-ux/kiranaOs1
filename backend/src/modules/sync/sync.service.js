@@ -332,6 +332,10 @@ function conflictCustomerUpdate(selected) {
     gstNumber: conflictText(selected.gstNumber),
     stateCode: conflictText(selected.stateCode),
     type: conflictEnum(selected.type, ["regular", "udhar"]),
+    udharLimit: selected.udharLimit,
+    dueDate: selected.dueDate,
+    promiseToPayDate: selected.promiseToPayDate,
+    notes: selected.notes,
   });
 }
 
@@ -936,6 +940,29 @@ async function backfillLegacyBillIdentity(shopId, bills) {
   });
 }
 
+async function attachSupplierPayments(shopId, purchases) {
+  if (!purchases.length) return purchases;
+  const entries = await db.financialLedger.findMany({
+    where: { shopId, purchaseBillId: { in: purchases.map((row) => row.id) }, sourceType: { in: ["supplier_payment", "supplier_payment_reversal"] } },
+    orderBy: [{ businessDate: "asc" }, { id: "asc" }],
+  });
+  const byPurchase = new Map();
+  for (const entry of entries) {
+    const rows = byPurchase.get(entry.purchaseBillId) ?? [];
+    rows.push({
+      id: entry.id, server_id: entry.id,
+      ...(entry.sourceType === "supplier_payment" ? { local_id: entry.sourceId } : {}),
+      kind: "supplier_payment", status: "active", sync_status: "synced",
+      purchase_history_id: entry.purchaseBillId, supplier_id: entry.supplierId,
+      amount: Number(entry.amountPaise) / 100, mode: entry.paymentMode,
+      paid_at: entry.businessDate, created_at: entry.createdAt,
+      ...(entry.sourceType === "supplier_payment_reversal" ? { reverses_payment_id: entry.sourceId } : {}),
+    });
+    byPurchase.set(entry.purchaseBillId, rows);
+  }
+  return purchases.map((purchase) => ({ ...purchase, supplierPayments: byPurchase.get(purchase.id) ?? [] }));
+}
+
 export async function pullSince(shopId, since, { cursor, limit, cursors, role, afterSeq } = {}) {
   if (afterSeq !== undefined) return pullBySequence(shopId, afterSeq, { limit, role });
   const sinceDate = new Date(since);
@@ -1014,7 +1041,7 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role, a
     stockLedger,
     udharLedger,
     suppliers: privileged ? suppliers : [],
-    purchaseHistory: privileged ? purchaseHistory : [],
+    purchaseHistory: privileged ? await attachSupplierPayments(shopId, purchaseHistory) : [],
     expenses: privileged ? expenses : [],
     sync: {
       hasMore,
@@ -1252,7 +1279,7 @@ async function loadSequenceEntities(shopId, logs) {
   ]);
   const bills = await backfillLegacyBillIdentity(shopId, rawBills);
   const map = new Map();
-  for (const [type, rows] of Object.entries({ product: products, customer: customers, bill: bills, stock_ledger: stockLedger, udhar_ledger: udharLedger, supplier: suppliers, purchase_history: purchaseHistory, expense: expenses })) {
+  for (const [type, rows] of Object.entries({ product: products, customer: customers, bill: bills, stock_ledger: stockLedger, udhar_ledger: udharLedger, supplier: suppliers, purchase_history: await attachSupplierPayments(shopId, purchaseHistory), expense: expenses })) {
     for (const row of rows) map.set(`${type}:${row.id}`, row);
   }
   return map;
@@ -3393,7 +3420,6 @@ async function applyRecordSupplierPayment(shopId, event, user, context) {
         purchaseDueAmount: due,
         ...moneyShadows({ purchasePaidAmount: paid, purchaseDueAmount: due }),
         purchasePaymentStatus: due <= 0 ? "paid" : "partial",
-        purchasePaymentMode: mode,
       },
     });
     const audit = await createAuditLog({
@@ -3430,7 +3456,7 @@ async function applyReverseSupplierPayment(shopId, event, user) {
 
   return db.$transaction(async (tx) => {
     const existing = await tx.financialLedger.findFirst({ where: { shopId, idempotencyKey } });
-    if (existing) return { type: event.type, paymentId: original.sourceId, reversalLedgerEntryId: existing.id, purchaseHistoryId: existing.purchaseBillId, idempotentReplay: true };
+    if (existing) return { type: event.type, paymentId: original.sourceId, originalLedgerEntryId: original.id, reversalLedgerEntryId: existing.id, purchaseHistoryId: existing.purchaseBillId, idempotentReplay: true };
     const priorReversal = await tx.financialLedger.findFirst({
       where: { shopId, sourceType: "supplier_payment_reversal", sourceId: original.id },
     });
@@ -3492,7 +3518,7 @@ async function applyReverseSupplierPayment(shopId, event, user) {
         "SUPPLIER_PAYMENT_REVERSAL_AUDIT_WRITE_FAILED",
       );
     }
-    return { type: event.type, paymentId: original.sourceId, reversalLedgerEntryId: reversal.id, purchaseHistoryId: purchase.id, amountPaid: -amount, purchaseHistory: toSyncJsonSafe(updated) };
+    return { type: event.type, paymentId: original.sourceId, originalLedgerEntryId: original.id, reversalLedgerEntryId: reversal.id, purchaseHistoryId: purchase.id, amountPaid: -amount, purchaseHistory: toSyncJsonSafe(updated) };
   });
 }
 
@@ -4282,5 +4308,9 @@ function safeJsonParse(value) {
 
 function getServerId(result) {
   if (!result || typeof result !== "object") return null;
+  // Collections are identified by their unique ledger row. A customer's id is
+  // shared by all their collections and would overwrite earlier device payments.
+  if (result.type === SYNC_EVENT_TYPES.UDHAR_PAYMENT) return result.ledgerEntryId ?? null;
+  if (result.type === SYNC_EVENT_TYPES.REVERSE_UDHAR_PAYMENT) return result.reversalLedgerEntryId ?? result.ledgerEntryId ?? null;
   return result.billId ?? result.productId ?? result.customerId ?? result.supplierId ?? result.ledgerEntryId ?? result.reversalLedgerEntryId ?? result.purchaseHistoryId ?? result.stockLedgerId ?? null;
 }

@@ -85,6 +85,14 @@ assert.equal(missing.problems[0].reason, "no_match");
 assert.ok(!JSON.stringify(missing).includes("Dragon Fruit"), "another shop's catalogue must be invisible");
 ok("an item the shop does not stock is reported, not invented");
 
+for (const name of ["QA Shoe UK 8", "QA Shoe UK 10 Wide"]) {
+  await db.product.create({ data: { shopId: shop.id, name, baseUnit: "piece", rateUnit: "piece", defaultPricePerRateUnit: 500 } });
+}
+const ambiguousSize = await run([{ query: "QA Shoe", quantity: 1 }]);
+assert.equal(ambiguousSize.lines.length, 0, "a shorter variant name must not choose a size the buyer did not specify");
+assert.equal(ambiguousSize.problems[0].reason, "ambiguous");
+assert.equal(ambiguousSize.problems[0].candidates.length, 2);
+
 /* ---------------------------------------------------- partial success */
 
 const mixed = await run([

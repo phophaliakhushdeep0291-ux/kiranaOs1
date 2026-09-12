@@ -59,19 +59,25 @@ export function SyncAlertBanner() {
   // replaces a second IndexedDB poll that ran every eight seconds on its own
   // timer, and is what makes isSyncing — the whole point of this change —
   // visible to the banner at all.
-  const { pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
+  const { pendingCount, failedCount, conflictCount, isSyncing, queueStatus } = useOfflineStatus();
   const [retrying, setRetrying] = useState(false);
 
   const needsReview = failedCount + conflictCount;
   // A manual retry is the shop asking for exactly this, so treat it as sending.
   const mode = syncBannerMode({ pendingCount, failedCount, conflictCount, isSyncing: isSyncing || retrying });
-  if (!mode) return null;
+  if (queueStatus === "error") return <div role="alert" className="border-b border-amber-300 bg-amber-50 p-3 text-amber-950"><p className="font-bold">{t("sync.local.unavailable")}</p><p className="text-sm">{t("sync.local.unavailableBody")}</p><Link href="/recovery-mode" className="inline-flex min-h-11 items-center underline">{t("sync.local.recovery")}</Link></div>;
+  if (queueStatus === "checking" || !mode) return null;
 
-  const headline = mode === "review"
-    ? t("sync.banner.reviewTitle", { count: needsReview })
+  // "1 changes need review" is what a shop reads most of the time now that a
+  // single refusal is counted once, and Hindi distinguishes the two forms too
+  // ("देखना है" against "देखने हैं"). Both dictionaries carry a .one variant.
+  const headlineCount = mode === "review" ? needsReview : pendingCount;
+  const headlineKey = mode === "review"
+    ? "sync.banner.reviewTitle"
     : mode === "backingUp"
-      ? t("sync.banner.backingUpTitle", { count: pendingCount })
-      : t("sync.banner.waitingTitle", { count: pendingCount });
+      ? "sync.banner.backingUpTitle"
+      : "sync.banner.waitingTitle";
+  const headline = t(headlineCount === 1 ? `${headlineKey}.one` : headlineKey, { count: headlineCount });
 
   const sub = mode === "review"
     ? t("sync.banner.reviewBody")

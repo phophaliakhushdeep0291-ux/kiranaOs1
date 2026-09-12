@@ -26,6 +26,16 @@ test("production completion requires dated, QC-classified, reconciled input shap
   const completion = { actualOutputBaseQty: 950, finishedBatchNumber: "FG-001", manufacturedOn: "2026-08-13", expiresOn: "2027-08-13", qcStatus: "passed", consumptions: [{ productId: "raw", actualBaseQty: 1000 }], outputs: [{ quantityBaseQty: 950 }] };
   assert.equal(completeRunSchema.safeParse(completion).success, true);
   assert.equal(completeRunSchema.safeParse({ ...completion, expiresOn: "2026-08-12" }).success, false);
+  assert.equal(completeRunSchema.safeParse({ ...completion, actualOutputBaseQty: 0.001 }).success, false, "stock movements cannot round a valid quantity down to zero");
+  assert.equal(completeRunSchema.safeParse({ ...completion, consumptions: [{ productId: "raw", actualBaseQty: 10.001 }] }).success, false);
+  assert.equal(completeRunSchema.safeParse({ ...completion, outputs: [{ quantityBaseQty: 950.001 }] }).success, false);
+  assert.equal(completeRunSchema.safeParse({ ...completion, outputs: [] }).success, false, "a batch entering stock must say how it is packed");
+  assert.equal(completeRunSchema.safeParse({ ...completion, expiresOn: null }).success, false, "a batch entering stock must carry an expiry");
+  // A scrapped batch never reaches a shelf: no packs, no expiry, but a reason.
+  const scrap = { ...completion, qcStatus: "failed", outputs: [], expiresOn: null, notes: "Viscosity out of spec" };
+  assert.equal(completeRunSchema.safeParse(scrap).success, true);
+  assert.equal(completeRunSchema.safeParse({ ...scrap, notes: undefined }).success, false, "a write-off must record why");
+  assert.equal(completeRunSchema.safeParse({ ...scrap, outputs: [{ quantityBaseQty: 950 }] }).success, false, "a failed batch cannot be packed into stock");
 });
 
 test("both databases carry the manufacturing migration and packaging SKU", () => {

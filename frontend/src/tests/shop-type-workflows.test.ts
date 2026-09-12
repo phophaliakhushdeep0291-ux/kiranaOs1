@@ -41,7 +41,7 @@ describe("shop-type workflows", () => {
     expect(say(SHOP_WORKFLOWS.clothing.productEntry.helper)).toContain("separate SKU");
     expect(say(SHOP_WORKFLOWS.footwear.productEntry.helper)).toContain("one SKU");
     expect(say(SHOP_WORKFLOWS.auto_parts.productEntry.notesLabel)).toContain("Compatibility");
-    expect(say(SHOP_WORKFLOWS.electronics.productEntry.helper)).toContain("planned next step");
+    expect(say(SHOP_WORKFLOWS.electronics.productEntry.helper)).toContain("Serial and IMEI register");
   });
 
   it("wires the capability map into dashboard and product entry", () => {

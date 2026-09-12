@@ -1,0 +1,69 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Billing Settings" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Billing Settings page loaded
+  - heading "Subscription" [level=2]
+  - generic: Your plan, billing cycle, and store protection in one place.
+  - generic "Rs 999 Business - trial": Rs 999 Business
+  - paragraph: Current plan
+  - text: Business
+  - paragraph: ₹599/month
+  - generic: Trial active. Your data is safe locally and can be backed up when sync is allowed.
+  - paragraph: Plan status
+  - paragraph: trial
+  - paragraph: Access until
+  - paragraph: 7/10/2026 (in 30 days)
+  - paragraph: Offline protection
+  - paragraph: 10/10/2026 (in about 1 month)
+  - paragraph: Automatic backup
+  - generic: Protected
+  - button "Check payment status":
+    - text: Check payment status
+  - generic: Compare plans
+  - generic: Choose the capacity that matches how your store works.
+  - button "Starter ₹99/month 1 store · 1 devices · no staff Tap to switch":
+    - paragraph: Starter
+    - paragraph: ₹99/month
+    - paragraph: 1 store · 1 devices · no staff
+    - paragraph: Tap to switch
+  - button "Growth ₹299/month 1 store · 3 devices · 3 staff Tap to switch":
+    - paragraph: Growth
+    - paragraph: ₹299/month
+    - paragraph: 1 store · 3 devices · 3 staff
+    - paragraph: Tap to switch
+  - button "Business Current ₹599/month 3 store · 10 devices · 10 staff Current plan - tap to renew":
+    - paragraph: Business
+    - generic: Current
+    - paragraph: ₹599/month
+    - paragraph: 3 store · 10 devices · 10 staff
+    - paragraph: Current plan - tap to renew
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

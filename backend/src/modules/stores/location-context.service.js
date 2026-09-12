@@ -3,6 +3,9 @@ import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
 import { ensurePrimaryLocation } from "./stores.service.js";
 
+/** Product ids bound per LocationStock lookup. Keeps a big catalogue under the driver's parameter cap. */
+const LOCATION_STOCK_LOOKUP_CHUNK = 1000;
+
 export function requestLocationId(req) {
   if (req?.locationScopeAll === true) return null;
   const values = [req?.body?.locationId, req?.body?.location_id, req?.query?.locationId, req?.headers?.["x-location-id"], req?.operationalLocation?.id];
@@ -100,6 +103,68 @@ export async function getLocationQuantity(client, shopId, location, product) {
   }
   const allocated = await allocatedSecondaryQty(client, shopId, product.id);
   return round2(Number(product.stockBaseQty || 0) - allocated);
+}
+
+/**
+ * How many base units each of MANY products holds at one location.
+ *
+ * The batched twin of getLocationQuantity, and it must stay batched. getInventory
+ * used to call the single-product form inside a Promise.all, which is one query
+ * per SKU: a 2,000-item shop answered /inventory in 2,002 queries, and /inventory
+ * sits on the 60s device snapshot, so that ran for every till every minute.
+ *
+ * Every product-level row for these products is read in one pass and then read
+ * twice out of memory — once as "the row at this location" for a branch, once as
+ * "everything the branches hold" for the primary. The two cases want different
+ * projections of the SAME rows, which is why one query can serve both.
+ *
+ * The arithmetic is deliberately identical to the single-product form, including
+ * rounding the branch total BEFORE subtracting it. round2 is paise-exact, so
+ * round2(a - round2(b)) and round2(a - b) can differ by a paise; keeping the
+ * intermediate round2 means a batched screen and a single-product check can never
+ * disagree about the same product.
+ */
+export async function getLocationQuantitiesByProduct(client, shopId, location, products) {
+  const quantities = new Map();
+  if (!Array.isArray(products) || products.length === 0) return quantities;
+
+  // Chunked because the id list becomes bound parameters: an unsplit IN over a
+  // wholesaler's catalogue exceeds what the driver will bind, and the failure is
+  // at the far end of a list nobody tests with.
+  const rows = [];
+  for (let at = 0; at < products.length; at += LOCATION_STOCK_LOOKUP_CHUNK) {
+    const productIds = products.slice(at, at + LOCATION_STOCK_LOOKUP_CHUNK).map((product) => product.id);
+    const chunk = await client.locationStock.findMany({
+      // Product-level rows only, exactly as allocatedSecondaryQty selects: variant
+      // rows live in the same table but count in their own unit, not base units.
+      where: { shopId, productId: { in: productIds }, sellingUnitId: null },
+      select: { locationId: true, productId: true, stockBaseQty: true },
+    });
+    rows.push(...chunk);
+  }
+
+  if (!location.isPrimary) {
+    const here = new Map();
+    for (const row of rows) {
+      if (row.locationId === location.id) here.set(row.productId, row.stockBaseQty);
+    }
+    for (const product of products) {
+      quantities.set(product.id, round2(here.get(product.id) ?? 0));
+    }
+    return quantities;
+  }
+
+  const allocated = new Map();
+  for (const row of rows) {
+    allocated.set(row.productId, (allocated.get(row.productId) ?? 0) + Number(row.stockBaseQty || 0));
+  }
+  for (const product of products) {
+    quantities.set(
+      product.id,
+      round2(Number(product.stockBaseQty || 0) - round2(allocated.get(product.id) ?? 0)),
+    );
+  }
+  return quantities;
 }
 
 function insufficientLocationStock(location, product, available, requested) {

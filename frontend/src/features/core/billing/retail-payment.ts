@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api/http";
+import { loadRazorpayCheckout } from "@/lib/razorpay-checkout-loader";
 
 export interface RetailPaymentReadiness {
   provider: "manual" | "razorpay";
@@ -63,30 +64,6 @@ type RazorpayWindow = Window & {
     };
   }) => { open: () => void; on: (event: "payment.failed", handler: (response: { error?: { description?: string } }) => void) => void };
 };
-
-let checkoutLoader: Promise<void> | null = null;
-
-function loadCheckout() {
-  const razorpayWindow = window as RazorpayWindow;
-  if (razorpayWindow.Razorpay) return Promise.resolve();
-  if (checkoutLoader) return checkoutLoader;
-  checkoutLoader = new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>("script[data-razorpay-checkout]");
-    if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error("Unable to load verified payment checkout.")), { once: true });
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.dataset.razorpayCheckout = "true";
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Unable to load verified payment checkout."));
-    document.head.appendChild(script);
-  });
-  return checkoutLoader;
-}
 
 function openCheckout(checkout: RetailCheckout) {
   return new Promise<RazorpaySuccess>((resolve, reject) => {
@@ -153,8 +130,8 @@ export function cancelRetailPaymentQr(intentId: string) {
 }
 
 export async function verifyRetailPayment(amountPaise: number) {
+  await loadRazorpayCheckout();
   const checkout = await apiRequest<RetailCheckout>("/payment-provider/retail/intents", { method: "POST", body: JSON.stringify({ amountPaise }) });
-  await loadCheckout();
   const response = await openCheckout(checkout);
   await apiRequest(`/payment-provider/retail/intents/${checkout.intentId}/verify`, { method: "POST", body: JSON.stringify(response) });
   return { intentId: checkout.intentId, amountPaise, locationId: checkout.location.id };

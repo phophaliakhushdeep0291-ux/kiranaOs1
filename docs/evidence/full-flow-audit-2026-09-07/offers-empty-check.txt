@@ -1,0 +1,93 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Offers & Discounts" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Offers & Discounts page loaded
+  - paragraph: Active Offers
+  - paragraph: "0"
+  - paragraph: Scheduled Offers
+  - paragraph: "0"
+  - paragraph: Coupon Redemptions
+  - paragraph: "0"
+  - paragraph: Discount Impact
+  - paragraph: ₹0
+  - heading "All Offers & Campaigns" [level=3]
+  - button "New Offer":
+    - text: New Offer
+  - paragraph: No offers yet
+  - paragraph: Create a coupon or auto-discount to boost sales.
+  - heading "Coupon tester" [level=3]
+  - paragraph: Check what discount applies for a bill — exactly what billing will compute.
+  - generic: Bill subtotal (₹)
+  - spinbutton: "500"
+  - generic: Coupon code (optional)
+  - textbox "Leave blank for auto-offers"
+  - button "Check offer"
+  - paragraph: No offer applies to this bill yet
+  - dialog:
+    - heading [level=2]: Create New Offer
+    - paragraph: Set up a new discount or promotional offer
+    - button:
+    - generic: Offer Type
+    - button:
+      - generic: Flat
+    - button:
+      - generic: Percentage
+    - generic: Offer Name *
+    - textbox:
+      - /placeholder: E.g., Summer Sale Flat ₹50 Off
+    - generic: Coupon Code (Optional)
+    - textbox:
+      - /placeholder: E.g., SUMMER50
+    - paragraph: Leave blank to auto-apply at billing
+    - generic: Discount Value (%) *
+    - spinbutton
+    - generic: Minimum Purchase (₹)
+    - spinbutton: "0"
+    - paragraph: Minimum cart value to apply offer
+    - generic: Max Discount Cap (₹)
+    - spinbutton: "0"
+    - paragraph: 0 = no cap
+    - generic: Start Date
+    - textbox
+    - generic: End Date
+    - textbox
+    - generic: Usage Limit
+    - spinbutton: "0"
+    - paragraph: Total times this offer can be used · 0 = unlimited
+    - paragraph: Status — Active
+    - paragraph: Offer will be live immediately
+    - switch [checked]
+    - checkbox [checked]
+    - button: Cancel
+    - button:
+      - text: Create Offer
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

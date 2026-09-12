@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BUSINESS_TYPES } from "../../verticals/profile.js";
 
 export const updateShopSchema = z.object({
   name: z.string().min(2).optional(),
@@ -11,7 +12,7 @@ export const updateShopSchema = z.object({
 });
 
 export const businessTypeCompatibilitySchema = z.object({
-  targetBusinessType: z.enum(["kirana", "clothing", "footwear", "auto_parts", "electronics", "pharmacy", "stationery", "furniture", "cosmetics", "restaurant", "other"]),
+  targetBusinessType: z.enum(BUSINESS_TYPES),
 });
 
 export const setupStatusSchema = z.object({

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "KiranaOS competitive capability evidence",
-  "generatedAt": "2026-09-02",
+  "generatedAt": "2026-09-08",
   "scoreScale": 10,
   "statusFactors": {
     "verified": 1,
@@ -361,18 +361,19 @@
       "id": "local_release_certification",
       "domain": "production_maturity",
       "weight": 35,
-      "status": "verified",
+      "status": "partial",
       "proofKind": "runtime_required",
-      "summary": "A durable 2026-08-24 local attestation records 15 required stages passed and zero failed: SQLite and PostgreSQL schema validation, replay-safe migration checks, source tests, warehouse bins/repack/replenishment, the full isolated SQLite integration suite, frontend production checks, AI hallucination safety, API and hardware contracts, Razorpay fixtures and local object storage. Certification now uses a dedicated generated Prisma client so it can run beside live local QA without Windows query-engine DLL contention. It deliberately skips and does not claim PostgreSQL runtime, Redis, live API, cloud storage, restore or Docker proof.",
+      "summary": "The August 24 local pass is historical. The latest observed full local certification completed September 2 with 15 passed stages, one failed required source-snapshot-stability stage, and nine skips. Current source certification remains unproved until the full suite passes against one stable snapshot. Targeted September 8 AI, frontend and recovery tests do not replace that release-wide proof.",
       "competitorEvidence": [
         { "product": "Zoho POS", "url": "https://www.zoho.com/en-us/pos/features/", "claim": "Reliable cloud and offline operation establish the production benchmark." }
       ],
       "kiranaEvidence": {
         "sourcePaths": ["backend/scripts/release-certification.js"],
         "testCommands": ["cd backend && npm run release:certify:local"],
-        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/local-release-certification-latest.json" }
+        "runtimeProof": { "status": "latest-run-failed", "artifact": "docs/evidence/local-release-certification-status-2026-09-08.json" },
+        "externalProofRequirements": ["A complete passing local certification against one stable current source snapshot, with the report retained."]
       },
-      "lastVerifiedAt": "2026-08-24"
+      "lastVerifiedAt": "2026-09-08"
     },
     {
       "id": "postgres_runtime_proof",
@@ -387,7 +388,7 @@
       "kiranaEvidence": {
         "sourcePaths": ["backend/scripts/postgres-production-proof.js", "docs/evidence/postgres-production-proof-2026-09-02.json"],
         "testCommands": ["cd backend && npm run proof:postgres"],
-        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/postgres-production-proof-2026-09-02.json" }
+        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/postgres-production-proof-2026-09-02.json", "contentSha256": "993421e7a8cba4d651b7c9b2379900b541f0b9b5125008456862a72e52e62d51" }
       },
       "lastVerifiedAt": "2026-09-02"
     },
@@ -404,7 +405,7 @@
       "kiranaEvidence": {
         "sourcePaths": ["backend/scripts/prove-worker-runtime.js", "backend/src/workers/index.js", "docs/evidence/redis-worker-production-proof-2026-09-02.json"],
         "testCommands": ["cd backend && npm run worker:proof"],
-        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/redis-worker-production-proof-2026-09-02.json" }
+        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/redis-worker-production-proof-2026-09-02.json", "contentSha256": "a1a835bde201e17c04d8bbc21381ccf926dca26cf82a8d80a140363567fdc5f3" }
       },
       "lastVerifiedAt": "2026-09-02"
     },
@@ -474,7 +475,7 @@
         "sourcePaths": ["frontend/scripts/capture-mobile-core-matrix-v1.mjs", "frontend/src/tests/mobile-core-matrix-harness.test.ts", "docs/evidence/core-route-wcag-axe-2026-08-30.json"],
         "testCommands": ["cd frontend && npm run qa:mobile-core-matrix"],
         "externalProofRequirements": [],
-        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/core-route-wcag-axe-2026-08-30.json" }
+        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/core-route-wcag-axe-2026-08-30.json", "contentSha256": "04430d5bf29625e9182581d0e63890cd495605617ff75b2da89d6804057bc199" }
       },
       "lastVerifiedAt": "2026-08-30"
     },

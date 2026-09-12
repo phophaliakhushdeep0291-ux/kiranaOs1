@@ -1,3 +1,5 @@
+import { LocalDataUnavailable } from "@/features/core/sync/LocalDataUnavailable";
+import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { roundMoney } from "@/lib/money";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "wouter";
@@ -245,6 +247,7 @@ async function loadSalesData(range: DateRange) {
 type SalesData = Awaited<ReturnType<typeof loadSalesData>>;
 
 export default function SalesOverviewPage() {
+  const requestExport = useDataExport();
   useReportView("sales", "Sales overview");
   const { toast } = useToast();
   const [period, setPeriod] = useState<SalesPeriod>("week");
@@ -252,6 +255,8 @@ export default function SalesOverviewPage() {
   const [to, setTo] = useState(toDateInputValue(new Date()));
   const [data, setData] = useState<SalesData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [readError, setReadError] = useState(false);
+  const [retryGeneration, setRetryGeneration] = useState(0);
   const [dateOpen, setDateOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -265,15 +270,19 @@ export default function SalesOverviewPage() {
 
   useEffect(() => {
     let cancelled = false;
+    let generation = 0;
     const run = async (options?: { showLoader?: boolean }) => {
       if (cancelled) return;
+      const request = ++generation;
       const showLoader = options?.showLoader ?? !dataRef.current;
       if (showLoader) setLoading(true);
       try {
         const next = await loadSalesData(range);
-        if (!cancelled) setData(next);
+        if (!cancelled && request === generation) { setData(next); setReadError(false); }
+      } catch {
+        if (!cancelled && request === generation) setReadError(true);
       } finally {
-        if (!cancelled && showLoader) setLoading(false);
+        if (!cancelled && request === generation) setLoading(false);
       }
     };
     void run({ showLoader: !dataRef.current });
@@ -295,7 +304,7 @@ export default function SalesOverviewPage() {
       window.removeEventListener("kirana:local-data-changed", refresh);
       window.removeEventListener("kirana:sync-queue-updated", refresh);
     };
-  }, [range]);
+  }, [range, retryGeneration]);
 
   const applyPeriod = (nextPeriod: Exclude<SalesPeriod, "custom">) => {
     const nextRange = periodRange(nextPeriod);
@@ -419,6 +428,8 @@ export default function SalesOverviewPage() {
     toast({ title: "Sales overview exported", description: "The selected period summary was downloaded." });
   };
 
+  if (readError || !data) return <LocalDataUnavailable checking={!readError && loading} onRetry={() => setRetryGeneration((value) => value + 1)} />;
+
   return (
     <PageShell className="mx-auto min-h-full w-full max-w-[1800px] space-y-3 !bg-white pb-8 text-[var(--brand-ink)]">
       <section className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
@@ -451,7 +462,7 @@ export default function SalesOverviewPage() {
               ))}
             </PopoverContent>
           </Popover>
-          <Button variant="outline" onClick={exportSales} disabled={!snapshot || loading} className="h-9 rounded-[7px] border-[#dfe7f2] px-4 text-[12px] font-bold"><Download size={14} className="mr-2" />Export</Button>
+          <Button variant="outline" onClick={() => requestExport({ reportType: "sales_overview", format: "json" }, exportSales)} disabled={!snapshot || loading} className="h-9 rounded-[7px] border-[#dfe7f2] px-4 text-[12px] font-bold"><Download size={14} className="mr-2" />Export</Button>
           <Button asChild className="h-9 rounded-[7px] bg-[var(--brand)] px-5 text-[12px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.22)] hover:bg-[var(--brand-strong)]"><Link href="/billing"><Plus size={14} className="mr-2" />New Sale</Link></Button>
         </div>
       </section>

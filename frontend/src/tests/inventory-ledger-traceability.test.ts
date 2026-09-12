@@ -7,6 +7,20 @@ import {
 } from "@/features/core/inventory/queries";
 
 describe("inventory ledger traceability", () => {
+  it("replaces optimistic bill movements by exact document, product and quantity", () => {
+    const local = { id: "stock_sale_device", billId: "bill_1", productId: "soap", action: "sale", quantityDelta: -2, sync_status: "pending_sync" };
+    const server = { id: "ledger_server", billId: "bill_1", productId: "soap", action: "sale", changeBaseQty: -2, clientMovementId: "bill-device:stock:soap" };
+    expect(reconcileInventoryLedgerEntries([local], [server])).toEqual([expect.objectContaining({ id: "ledger_server" })]);
+    expect(reconcileInventoryLedgerEntries([{ ...local, action: "return", quantityDelta: 1 }], [{ ...server, action: "return", changeBaseQty: 1 }])).toHaveLength(1);
+  });
+
+  it("retains another bill and any unconfirmed quantity instead of hiding local work", () => {
+    const local = { id: "stock_sale_device", billId: "bill_1", productId: "soap", action: "sale", quantityDelta: -2, sync_status: "pending_sync" };
+    const server = { id: "ledger_server", billId: "bill_2", productId: "soap", action: "sale", changeBaseQty: -2 };
+    expect(reconcileInventoryLedgerEntries([local], [server])).toHaveLength(2);
+    expect(reconcileInventoryLedgerEntries([local], [{ ...server, billId: "bill_1", changeBaseQty: -1 }])).toHaveLength(2);
+    expect(reconcileInventoryLedgerEntries([{ ...local, billId: undefined }], [server])).toHaveLength(2);
+  });
   it("normalizes the server ledger contract without losing quantity or balances", () => {
     const entry = normalizeInventoryLedgerEntry({
       id: "ledger_1",

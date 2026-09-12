@@ -1,0 +1,190 @@
+[
+  {
+    "file": "audit-logs.txt",
+    "sha256": "c227d2f16ae0d465221372fa3d1a54a47d7a10580a777836402e5e4f8d755cdb"
+  },
+  {
+    "file": "counter-locked-after-reload.txt",
+    "sha256": "5ef866f3caa1338577d69dff1a976f29f2b0e4169eed5ed0e1984b313c37906b"
+  },
+  {
+    "file": "counter-locked-before-reload.txt",
+    "sha256": "5ef866f3caa1338577d69dff1a976f29f2b0e4169eed5ed0e1984b313c37906b"
+  },
+  {
+    "file": "counter-wrong-pin.txt",
+    "sha256": "c0227586842619ca911157b2733c964d25e47b1524dc48c53dab7c7b9fc921a3"
+  },
+  {
+    "file": "customer-balance.txt",
+    "sha256": "a60ac2111225039924e0fff6f7eb20a0c5fe47ce83575cd32d33323a040df08e"
+  },
+  {
+    "file": "daily-closing-after-fix.txt",
+    "sha256": "74f3c5c8109e0d6bf72a6f9f27e5f302caf58ccb49303673cf7c3d88ca4df708"
+  },
+  {
+    "file": "daily-closing-before-fix.txt",
+    "sha256": "c15c173456934ef3f9b31bf0d6f475fcb39f362d18a49d086736e472414c33d8"
+  },
+  {
+    "file": "daily-closing-counted.txt",
+    "sha256": "00519b719afd15c3d06be7e202d1f2c220c28221a6a35e5b3b6483f86859e65a"
+  },
+  {
+    "file": "expenses-after-save.txt",
+    "sha256": "cfd11adaa52738a4e3c6aba49e17f599aea8cbd1d7425db1e67b3b12929402ac"
+  },
+  {
+    "file": "final-geometry.json",
+    "sha256": "40f4cf7eed37df3b4553aaf792c16e1cef64e4594d0a700db73b2407cfa7ce64"
+  },
+  {
+    "file": "gift-card-form.txt",
+    "sha256": "c887679193f27bf75c233ad70f216813fbfa2ac76d9468515f73d36e1356d67b"
+  },
+  {
+    "file": "loyalty-form.txt",
+    "sha256": "3c543cb8303f5aa11a0e70292a50734535332e66dacbf696e8dc8993db1220c9"
+  },
+  {
+    "file": "money-statement-final-360.png",
+    "sha256": "4d93ad82c71187c787dd835ba164e40938ef517a42eb891537dcd6f5d2899888"
+  },
+  {
+    "file": "money-statement-final-390.png",
+    "sha256": "32ced196ccbb5cea6a86bbaf2414d9c2f0b67394c22827a0568e7888621c25db"
+  },
+  {
+    "file": "money-statement-final-desktop.png",
+    "sha256": "c1ec6be735c0aebb668bdf0fd8b5c006e2e0a49e45bc08e306b0830b357da764"
+  },
+  {
+    "file": "money-statement-final.txt",
+    "sha256": "cfe5a3507e449bb78a66e6af244cb8f9a12d1667b18b7d07d42bb7cfbab14659"
+  },
+  {
+    "file": "money-statement-mobile.png",
+    "sha256": "94a8e9cc6a845f98814afae7f3ed02272669899236cc343da4d616a1503fef7a"
+  },
+  {
+    "file": "money-statement.txt",
+    "sha256": "fbfb3d6fd3512e66fb45dc26bb8a696d52c6a0ff80128e9d5c9cca1f79ac0875"
+  },
+  {
+    "file": "offers-empty-check.txt",
+    "sha256": "fc8b6786ebc5872022e8149c4f0ef44794a8f1159297a7d485fa9ee8dc377dc5"
+  },
+  {
+    "file": "plans.txt",
+    "sha256": "bf7deb1c32c808eb3515ef10af544817cc2e5a83bb2f45f06a53502be793079c"
+  },
+  {
+    "file": "purchase-balance.txt",
+    "sha256": "02b0084515d507aef9b12b60a96bd71059b95cd955789d8b2a81fa1b28327820"
+  },
+  {
+    "file": "README.md",
+    "sha256": "043f050edbe52d3f44250c68ea60e520394004f0c6cf89c7d9eeabed7fc3b044"
+  },
+  {
+    "file": "recovery-mode.txt",
+    "sha256": "619d4aa36b7b159b7f006f68b3ae61bc049b6e78aad9a9f6a08996625799dd3a"
+  },
+  {
+    "file": "recycle-bin.txt",
+    "sha256": "b684dc086dd5a88482a905c33e063ac33979159833a9a20f26eb58613c832bf0"
+  },
+  {
+    "file": "returns.txt",
+    "sha256": "b2a6484cfd9746a86fab5807243e7c49434a41ad9ba3d00681364dc9e917fd12"
+  },
+  {
+    "file": "security-timeout-restored.txt",
+    "sha256": "f0014551b830310063197121bdec47e2b3d700a9e7036c47b48dde3d5be07879"
+  },
+  {
+    "file": "settings-advanced.txt",
+    "sha256": "121fa395dc10e675101d28eb430be3e2e8edda4d77fe15c43d3ae475fcf65528"
+  },
+  {
+    "file": "settings-billing.txt",
+    "sha256": "05b36bdb6d744ad296e51032fab5fbf1d3c9f3567460e68b73d2f52b4ee32011"
+  },
+  {
+    "file": "settings-devices.txt",
+    "sha256": "53f6369cb0b0dd712790309d744615da8cba9e6090ff5b3e27a5982fc21be20e"
+  },
+  {
+    "file": "settings-integrations.txt",
+    "sha256": "05ae6b32d2ed5530d9f854dbbec4c65fd3f7a5fc0bae589202053ae5d8d912c8"
+  },
+  {
+    "file": "settings-notifications.txt",
+    "sha256": "56318bc6e9542b5ad8faec94f665e809dfb62c09e14b8a9defab49b0f308354b"
+  },
+  {
+    "file": "settings-printer.txt",
+    "sha256": "e20ff525827152b7f7f67d78c97868b5a9630c432468ac22b64c94e451b1d8ec"
+  },
+  {
+    "file": "settings-routes.json",
+    "sha256": "5c1df6e8ac38310514552cc039330026c8c72feff99015c6954acb544e4a3a7f"
+  },
+  {
+    "file": "settings-security.txt",
+    "sha256": "ef57d6ca0676fe8fd6a3bac6add7492c69f33300c68f770d4b1a5f56dc265ea2"
+  },
+  {
+    "file": "settings-setup.txt",
+    "sha256": "2e9edb3e4ccaa88f2f827112f99189727e37a49229c6352dcc9e1d1b3c77be19"
+  },
+  {
+    "file": "settings-staff.txt",
+    "sha256": "bb2a22da3d801a322bc9b03194194153cbddffc9eb1e5b23f4c4e382ab9549cd"
+  },
+  {
+    "file": "settings-store-profile.txt",
+    "sha256": "769ae8ae6a5185d1bb00b87400d129b9156162fea7098b2203e6ffe9f392f51d"
+  },
+  {
+    "file": "settings-sync.txt",
+    "sha256": "bd911441e4035dac2c821546399a9e08ddffa60279d099c5e94caa2c158ff87d"
+  },
+  {
+    "file": "settings-taxes.txt",
+    "sha256": "3178a5581927a273202b6eab37233344771785a44a24ac7bf973a430733daba2"
+  },
+  {
+    "file": "smart-tools.txt",
+    "sha256": "4fac399abf3fadbe1f3fcfe3c09bf8eea9bdab8efca80be67055d6e671e9e651"
+  },
+  {
+    "file": "stock-count-applied.txt",
+    "sha256": "00d5f06b95618a11cdc16ce58584f9418517339a6498dbc34c6fcc844a96479a"
+  },
+  {
+    "file": "store-profile-phone-after-reload.png",
+    "sha256": "a4f9590ddaa401eba55e5cc06007cfd03be069afef91172381465d781cfdadd7"
+  },
+  {
+    "file": "subscription-corrected.txt",
+    "sha256": "f0dba058bbf326a4c8193a85cc2f3ea7775004cc457cb3571e4f09e150adbff6"
+  },
+  {
+    "file": "subscription.txt",
+    "sha256": "75d52d8ba558264eade9675464b5526d1a7fe63c7340554f9674187ecd8cc496"
+  },
+  {
+    "file": "suppliers.txt",
+    "sha256": "c144c8af1332dc55da4773495b0b7e5359c8bc97ed5c7429c950ac17cde89fbd"
+  },
+  {
+    "file": "sync-review-before.txt",
+    "sha256": "8b5138b42557eaf46d73b6f9a6d7f2a42ac90a34ee770dd12bac9892b8b70d2a"
+  },
+  {
+    "file": "sync-review-resolved.txt",
+    "sha256": "394ddd7cadd12dfcc5ab90f8cc557c4bad91ab786026d198995300e141fc9b87"
+  }
+]

@@ -1,3 +1,4 @@
+import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -80,6 +81,7 @@ const expenseFormSchema = z.object({
 type ExpenseFormData = z.infer<typeof expenseFormSchema>;
 
 export default function ExpensesPage() {
+  const requestExport = useDataExport();
   const { toast } = useToast();
   const businessType = useBusinessTypeKey();
   const queryClient = useQueryClient();
@@ -227,7 +229,7 @@ export default function ExpensesPage() {
               {categoryOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={exportCsv} disabled={rows.length === 0}><Download size={15} /> Export</Button>
+          <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => requestExport({ reportType: "expenses", format: "csv" }, exportCsv)} disabled={rows.length === 0}><Download size={15} /> Export</Button>
           <Button onClick={openAdd} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-10 gap-2 rounded-[10px] font-bold text-white hover:opacity-95">
             <Plus size={16} /> Add Expense
           </Button>

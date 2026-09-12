@@ -1,11 +1,11 @@
-import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { ownerPinSchema, type OwnerPinData } from "../owner-pin-form";
 import { Link } from "wouter";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useChangePassword } from "@/lib/api/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { setOwnerPin } from "@/features/core/auth/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -17,7 +17,7 @@ import { SettingsShell } from "@/features/core/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge, RowToggle } from "@/features/core/settings/ui";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { checkOwnerPin } from "@/features/core/settings/api";
-import { enrolBiometric, forgetBiometric, isBiometricAvailable } from "@/features/core/settings/biometric-unlock";
+import { enrolBiometric, forgetBiometric, isBiometricAvailable, isBiometricEnrolled } from "@/features/core/settings/biometric-unlock";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { listDevices, logoutDevice, type DeviceDto } from "@/features/core/devices/api";
@@ -112,6 +112,8 @@ export default function SecuritySettingsPage() {
   const [signingOut, setSigningOut] = useState(false);
   const [biometricSupported, setBiometricSupported] = useState<boolean | null>(null);
   const [enrolling, setEnrolling] = useState(false);
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [enrollError, setEnrollError] = useState<string | null>(null);
   const seeded = useRef(false);
   const currentDeviceId = getOfflineScope().device_id;
   const { user } = useAuth();
@@ -149,13 +151,20 @@ export default function SecuritySettingsPage() {
       toast({ title: t("settings.security.biometricOff") });
       return;
     }
+    setEnrollError(null);
+    setEnrollOpen(true);
+  }
+
+  async function confirmBiometric(ownerPin: string) {
     setEnrolling(true);
+    setEnrollError(null);
     try {
-      await enrolBiometric(user?.id ?? "artha-owner", user?.name ?? "Artha owner");
+      await enrolBiometric(user?.id ?? "", user?.name ?? "Artha owner", ownerPin);
       update({ biometric: true });
+      setEnrollOpen(false);
       toast({ title: t("settings.security.biometricReady"), description: t("settings.security.biometricReadyHelp") });
     } catch (error) {
-      update({ biometric: false });
+      setEnrollError((error as { message?: string })?.message || "Device setup did not complete.");
       toast({
         title: t("settings.security.biometricFailed"),
         description: (error as { message?: string })?.message || "The device prompt was cancelled.",
@@ -217,11 +226,11 @@ export default function SecuritySettingsPage() {
               ? <Badge tone="gray">{t("settings.security.checking")}</Badge>
               : pinQ.data?.hasPin
                 ? <Badge tone="green"><ShieldCheck size={11} /> {t("settings.security.set")}</Badge>
-                : <Badge tone="amber">{t("settings.security.notSet")}</Badge>}
+                : <Badge tone="amber">{pinQ.isError ? t("settings.security.statusOffline") : t("settings.security.notSet")}</Badge>}
           />
           <div className="space-y-3 px-5 pb-5">
             <div className="flex items-center gap-3 rounded-[10px] border border-[#eef2f8] px-4 py-3">
-              <span className="font-mono text-[18px] tracking-[0.3em] text-[var(--brand-ink)]">{pinQ.data?.hasPin ? "•••••" : "—"}</span>
+              <span className="font-mono text-[18px] tracking-[0.3em] text-[var(--brand-ink)]">{pinQ.data?.hasPin ? "••••" : "—"}</span>
               <div className="flex-1">
                 <p className="text-[12px] font-bold text-[var(--brand-ink)]">{pinQ.data?.hasPin ? t("settings.security.pinActive") : pinQ.isError ? t("settings.security.statusOffline") : t("settings.security.noPinYet")}</p>
                 <p className="text-[11px] text-[#64748b]">
@@ -232,7 +241,7 @@ export default function SecuritySettingsPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => setPwOpen(true)} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-10 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95"><KeyRound size={15} /> {t("settings.security.changePin")}</Button>
+              <Button disabled={user?.role !== "owner"} onClick={() => setPwOpen(true)} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-10 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95"><KeyRound size={15} /> {t("settings.security.changePin")}</Button>
             </div>
             <p className="text-[11px] text-[#9aa6bb]">{t("settings.security.forgotPin")}</p>
           </div>
@@ -256,12 +265,13 @@ export default function SecuritySettingsPage() {
                   ? t("settings.security.biometricHelp")
                   : t("settings.security.biometricUnavailable")}
               pill={biometricSupported
-                ? <Switch disabled={enrolling} checked={sec.biometric} onCheckedChange={(v) => void toggleBiometric(v)} />
+                ? <Switch disabled={enrolling} checked={sec.biometric && isBiometricEnrolled()} onCheckedChange={(v) => void toggleBiometric(v)} />
                 : <Badge tone="gray"><Fingerprint size={11} /> {t("settings.security.unavailable")}</Badge>}
             />
             <RowToggle label={t("settings.security.unlockOnStart")} desc={t("settings.security.unlockOnStartHelp")} pill={<Switch checked={sec.requireLoginOnStart} onCheckedChange={(v) => update({ requireLoginOnStart: v })} />} />
             <RowToggle label={t("settings.security.rememberDevice")} desc={t("settings.security.rememberDeviceHelp")} pill={<Switch checked={sec.rememberDevice} onCheckedChange={(v) => update({ rememberDevice: v })} />} last />
             <p className="mt-2 text-[11px] text-[#9aa6bb]">{t("settings.security.twoFactorHelp")}</p>
+            <p className="mt-2 text-[12px] text-[#64748b]">{t("settings.lock.connectionHelp")}</p>
           </div>
         </Card>
       </div>
@@ -435,6 +445,16 @@ export default function SecuritySettingsPage() {
       <ChangePinDialog open={pwOpen} onOpenChange={setPwOpen} onChanged={() => void pinQ.refetch()} />
 
       <OwnerPinModal
+        open={enrollOpen}
+        title={t("settings.security.biometric")}
+        description={t("settings.security.deviceEnrollHelp")}
+        loading={enrolling}
+        error={enrollError}
+        onCancel={() => { if (!enrolling) setEnrollOpen(false); }}
+        onConfirm={({ ownerPin }) => confirmBiometric(ownerPin)}
+      />
+
+      <OwnerPinModal
         open={signOutTarget !== null}
         title={t("settings.security.signOutThisDevice")}
         description={signOutTarget ? `${deviceLabel(signOutTarget)} will need to sign in again. Unsynced work on that device stays on it.` : undefined}
@@ -448,44 +468,47 @@ export default function SecuritySettingsPage() {
   );
 }
 
-const passwordSchema = (t: Translate) => z.object({
-  currentPassword: z.string().min(1, t("settings.security.pwRequired")),
-  newPassword: z.string().min(6, t("settings.security.pwMinLength")),
-  confirmPassword: z.string(),
-}).refine((d) => d.newPassword === d.confirmPassword, { message: t("settings.security.pwMismatch"), path: ["confirmPassword"] });
-type PwData = z.infer<ReturnType<typeof passwordSchema>>;
-
 function ChangePinDialog({ open, onOpenChange, onChanged }: { open: boolean; onOpenChange: (o: boolean) => void; onChanged: () => void }) {
   const { t } = useAppLanguage();
   const { toast } = useToast();
   const [show, setShow] = useState(false);
-  const form = useForm<PwData>({ resolver: zodResolver(passwordSchema(t)), defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" } });
-  const changePassword = useChangePassword({
-    mutation: {
-      onSuccess: () => { form.reset(); toast({ title: t("settings.security.pinUpdated") }); onChanged(); onOpenChange(false); },
-      onError: (err: unknown) => toast({ title: t("settings.security.error"), description: (err as { data?: { message?: string } })?.data?.message ?? "Incorrect current PIN", variant: "destructive" }),
-    },
+  const form = useForm<OwnerPinData>({
+    resolver: zodResolver(ownerPinSchema(t)),
+    defaultValues: { currentPassword: "", pin: "", confirmPin: "" },
   });
+  const changePin = useMutation({
+    mutationFn: (data: OwnerPinData) => setOwnerPin(data.pin, data.currentPassword),
+    onSuccess: () => {
+      form.reset();
+      toast({ title: t("settings.security.pinUpdated"), description: t("settings.security.pinChangedHelp") });
+      onChanged();
+      onOpenChange(false);
+    },
+    onError: (error: unknown) => form.setError("root", { message: error instanceof Error ? error.message : t("settings.security.error") }),
+  });
+  useEffect(() => { if (!open) { form.reset(); setShow(false); } }, [open, form]);
+  const close = (nextOpen: boolean) => { if (!changePin.isPending) onOpenChange(nextOpen); };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={close}>
       <DialogContent className="max-w-[400px]">
         <DialogHeader>
           <DialogTitle className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{t("settings.security.updateOwnerPin")}</DialogTitle>
           <p className="text-[12px] text-[#6d7c98]">{t("settings.security.updateOwnerPinHelp")}</p>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit((v) => changePassword.mutate({ data: { currentPassword: v.currentPassword, newPassword: v.newPassword } }))} className="space-y-3.5">
+        <form onSubmit={form.handleSubmit((data) => { if (!changePin.isPending) changePin.mutate(data); })} className="space-y-3.5">
           <Fld label={t("settings.security.currentPin")} err={form.formState.errors.currentPassword?.message}>
             <div className="relative">
-              <Input className="pr-12" type={show ? "text" : "password"} {...form.register("currentPassword")} />
+              <Input disabled={changePin.isPending} autoComplete="current-password" className="pr-12" type={show ? "text" : "password"} {...form.register("currentPassword")} />
               <button type="button" aria-label={show ? t("settings.security.hidePin") : t("settings.security.showPin")} onClick={() => setShow((s) => !s)} className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-xl text-[#6b7a9a] hover:bg-[#f1f5fb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
             </div>
           </Fld>
-          <Fld label={t("settings.security.newPin")} err={form.formState.errors.newPassword?.message}><Input className="h-10" type="password" {...form.register("newPassword")} /></Fld>
-          <Fld label={t("settings.security.confirmPin")} err={form.formState.errors.confirmPassword?.message}><Input className="h-10" type="password" {...form.register("confirmPassword")} /></Fld>
+          <Fld label={t("settings.security.newPin")} err={form.formState.errors.pin?.message}><Input disabled={changePin.isPending} inputMode="numeric" maxLength={4} autoComplete="off" className="h-10" type="password" {...form.register("pin")} /></Fld>
+          <Fld label={t("settings.security.confirmPin")} err={form.formState.errors.confirmPin?.message}><Input disabled={changePin.isPending} inputMode="numeric" maxLength={4} autoComplete="off" className="h-10" type="password" {...form.register("confirmPin")} /></Fld>
+          {form.formState.errors.root?.message && <p role="alert" className="text-sm text-destructive">{form.formState.errors.root.message}</p>}
           <div className="flex gap-2.5 pt-1">
-            <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>{t("settings.security.cancel")}</Button>
-            <Button type="submit" disabled={changePassword.isPending} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
-              {changePassword.isPending ? <><Loader2 size={16} className="animate-spin" /> {t("settings.security.saving")}</> : "Update"}
+            <Button type="button" disabled={changePin.isPending} variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => close(false)}>{t("settings.security.cancel")}</Button>
+            <Button type="submit" disabled={changePin.isPending} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
+              {changePin.isPending ? <><Loader2 size={16} className="animate-spin" /> {t("settings.security.saving")}</> : t("settings.security.updateOwnerPin")}
             </Button>
           </div>
         </form>

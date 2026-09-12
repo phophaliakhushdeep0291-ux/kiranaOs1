@@ -1,0 +1,75 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Sync" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Sync page loaded
+  - heading "Sync Health Overview" [level=3]
+  - paragraph: Live status across your devices
+  - button "Sync Now":
+    - text: Sync Now
+  - link "View logs":
+    - /url: /sync-status
+  - paragraph: Sync Status
+  - paragraph: Synced
+  - paragraph: Last Synced
+  - paragraph: —
+  - paragraph: this session
+  - paragraph: Pending Uploads
+  - paragraph: "0"
+  - paragraph: Failed
+  - paragraph: "0"
+  - paragraph: Conflicts
+  - paragraph: "0"
+  - heading "Sync Activity" [level=3]
+  - paragraph: Recent sync events
+  - paragraph: Waiting for first sync in this session
+  - generic: —
+  - paragraph: 0 changes queued to upload
+  - generic: now
+  - paragraph: No conflicts to review
+  - generic: now
+  - paragraph: No failures
+  - generic: now
+  - heading "Pending Sync Queue" [level=3]
+  - paragraph: Changes waiting to reach the cloud
+  - paragraph: Everything is synced
+  - paragraph: No changes are waiting to upload.
+  - heading "Portable shop backup" [level=3]
+  - paragraph: Encrypted recovery artifact
+  - button "Create snapshot":
+    - text: Create snapshot
+  - paragraph: AES-256-GCM · SHA-256 · Sensitive credentials excluded.
+  - heading "Backup history" [level=3]
+  - paragraph: Server-confirmed encrypted artifacts
+  - button "Refresh"
+  - strong: No portable snapshot yet
+  - paragraph: Create one before major changes.
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

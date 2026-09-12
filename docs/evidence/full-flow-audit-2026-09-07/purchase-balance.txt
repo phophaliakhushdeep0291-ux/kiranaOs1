@@ -1,0 +1,176 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Purchases" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Purchases page loaded
+  - paragraph: After receiving, for your shop type
+  - paragraph: 🛒 Kirana / General Store
+  - button "After receiving, for your shop type":
+  - paragraph: Total Purchase Value
+  - paragraph: ₹150.00
+  - paragraph: 1 purchase bills
+  - paragraph: Unpaid Purchase Dues
+  - paragraph: ₹75.00
+  - paragraph: 1 bills pending
+  - paragraph: Today's Purchases
+  - paragraph: ₹150.00
+  - paragraph: 1 bill today
+  - paragraph: Stock Added (This Month)
+  - paragraph: ₹150.00
+  - paragraph: first month of data
+  - region "Purchase workflow":
+    - generic: 1. Order
+    - generic: 2. Receive stock
+    - generic: 3. Record bill
+    - generic: 4. Settle due
+    - button "Planning insights":
+      - text: Planning insights
+  - heading "Purchase orders" [level=2]
+  - paragraph: Plan, approve and receive supplier stock without losing the audit trail
+  - text: 0 evidence-backed suggestions
+  - button "Supplier return" [disabled]:
+    - text: Supplier return
+  - button "New order":
+    - text: New order
+  - paragraph: No open purchase orders
+  - paragraph: Use reorder suggestions or add products manually to create one.
+  - heading "Purchase Bills" [level=2]
+  - textbox "Search purchase bills":
+    - /placeholder: Search by bill no., supplier or product…
+  - button "Filters":
+    - text: Filters
+  - button "Columns":
+    - text: Columns
+  - button "Export":
+    - text: Export
+  - button "Add Purchase":
+    - text: Add Purchase
+  - article:
+    - paragraph: QA-PURCHASE-01
+    - paragraph: QA Wholesale
+    - paragraph: 07 Sep 2026 • 5 items
+    - paragraph: ₹150.00
+    - generic: Partial
+    - paragraph: Paid
+    - paragraph: ₹75.00
+    - paragraph: Due
+    - paragraph: ₹75.00
+    - paragraph: Mode
+    - paragraph: Cash
+    - button "Pay"
+    - button "Edit"
+    - button "Actions for QA-PURCHASE-01":
+  - generic: Showing 1 to 1 of 1 bills
+  - button "‹" [disabled]
+  - button "1"
+  - button "›" [disabled]
+  - text: Rows per page
+  - combobox:
+    - generic: "10"
+  - heading "Top Suppliers" [level=3]
+  - combobox "Top Suppliers":
+    - generic: This Month
+  - generic: "1"
+  - paragraph: QA Wholesale
+  - text: ₹150.00
+  - generic: (100%)
+  - link "View all suppliers":
+    - /url: /suppliers
+  - heading "Recent Purchase Activity" [level=3]
+  - link "View all":
+    - /url: "#purchase-table"
+  - paragraph:
+    - text: QA-PURCHASE-01
+    - generic: from QA Wholesale
+  - paragraph: ₹150.00 • Partial • 07 Sep 2026
+  - heading "Purchase Due Alerts" [level=3]
+  - button "View all"
+  - paragraph: QA Wholesale
+  - paragraph: ₹75.00
+  - paragraph: Due 0 days
+  - generic: Total Overdue
+  - generic: ₹75.00
+  - dialog:
+    - heading [level=2]: Add Purchase
+    - paragraph: Add a new purchase bill
+    - button
+    - text: Read invoice
+    - button:
+    - heading [level=3]: Supplier Information
+    - generic: Supplier *
+    - combobox:
+      - generic: Select supplier
+    - generic: Mobile
+    - textbox:
+      - /placeholder: +91 98290 12345
+    - heading [level=3]: Bill Details
+    - generic: Purchase Date *
+    - textbox: 2026-09-07
+    - generic: Purchase No.
+    - textbox:
+      - /placeholder: Auto if left blank
+    - generic: Payment Mode *
+    - combobox:
+      - generic: UPI
+    - generic: Due / Paid *
+    - combobox:
+      - generic: Full Credit (Unpaid)
+    - heading [level=3]: Products
+    - generic: Product
+    - generic: Qty
+    - generic: Unit Cost
+    - generic: Total
+    - combobox:
+      - generic: Select product
+    - spinbutton
+    - spinbutton
+    - generic: ₹0.00
+    - button:
+    - button:
+      - text: Add Product
+    - button:
+      - text: Scan Barcode
+    - paragraph: Total Items
+    - paragraph: "0"
+    - paragraph: Total Amount
+    - paragraph: ₹0.00
+    - paragraph: Paid Amount
+    - paragraph: ₹0.00
+    - paragraph: Due Amount
+    - paragraph: ₹0.00
+    - heading [level=3]: Notes (Optional)
+    - textbox:
+      - /placeholder: Enter any notes about this purchase…
+    - paragraph: 0/250
+    - button: Cancel
+    - button:
+      - text: Save Purchase
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

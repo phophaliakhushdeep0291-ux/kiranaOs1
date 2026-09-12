@@ -47,6 +47,12 @@ export interface SettingsPrefs {
   [key: string]: unknown;
 }
 
+/** Identity documents are device attachments, not part of the synced shop profile. */
+export function settingsPrefsForSync(prefs: SettingsPrefs): SettingsPrefs {
+  const { docs: _documents, ...synced } = prefs;
+  return synced;
+}
+
 /**
  * Loads the settings blob (IndexedDB instantly, server as source of truth on
  * first load) and returns a `patch` that writes through to both, debouncing the
@@ -64,7 +70,7 @@ export function useSettingsPrefs() {
 
   async function persistPrefsToServer(next: SettingsPrefs): Promise<Shop | null> {
     try {
-      const updated = await updateShopOnServer({ settingsJson: JSON.stringify(next) });
+      const updated = await updateShopOnServer({ settingsJson: JSON.stringify(settingsPrefsForSync(next)) });
       queryClient.setQueryData(getGetShopQueryKey(), updated);
       await offlineDB.setSetting("shop", updated).catch(() => undefined);
       if (pendingRef.current === next) {
@@ -103,7 +109,7 @@ export function useSettingsPrefs() {
       const parsed = JSON.parse(raw || "{}");
       if (parsed && typeof parsed === "object") {
         setPrefs((p) => {
-          const merged = { ...p, ...parsed };
+          const merged = { ...p, ...settingsPrefsForSync(parsed) };
           prefsRef.current = merged;
           void offlineDB.setSetting(PREFS_KEY, merged);
           return merged;

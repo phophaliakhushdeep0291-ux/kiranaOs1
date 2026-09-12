@@ -13,6 +13,7 @@ import type { VerticalPack, VerticalSlotId } from "@/features/verticals/registry
  */
 const VERTICAL_SLOTS: Record<VerticalSlotId, () => Promise<unknown>> = {
   "pharmacy/prescription": () => import("@/features/verticals/pharmacy/prescriptions/billing-slot"),
+  "pharmacy/schedule-slip": () => import("@/features/verticals/pharmacy/prescriptions/billing-schedule-check"),
   "restaurant/addons": () => import("@/features/verticals/restaurant/billing-addon-configurator"),
   "restaurant/unfired-kot": () => import("@/features/verticals/restaurant/billing-unfired-kot-check"),
 };

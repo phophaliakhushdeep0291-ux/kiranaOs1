@@ -72,6 +72,14 @@ if (ctx.skip) {
       assert.equal(product.name, "Rice");
     });
 
+    test("an online create under an active product's name is refused", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      await createProduct(ctx.db, tenant.shop.id, { name: "Toor Dal 1kg" });
+      const failure = assertFailure(await ctx.post("/api/products", productPayload({ name: "Toor Dal 1kg" }), { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 409);
+      assert.equal(failure.code, "PRODUCT_NAME_DUPLICATE");
+      assert.equal(await ctx.db.product.count({ where: { shopId: tenant.shop.id, deletedAt: null } }), 1);
+    });
+
     test("stock history exposes immutable actor, source, quantity, time and resulting balance", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = assertSuccess(await ctx.post("/api/products", productPayload({

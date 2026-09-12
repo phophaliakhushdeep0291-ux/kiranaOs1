@@ -9,6 +9,8 @@ import { probeBackendConnection } from "@/features/core/sync/backend-health";
 import { ApiClientError, getStoredAccessToken, getStoredRefreshToken } from "@/lib/api/http";
 import { ACTIVITY_EVENTS, trackEvent, type ActivityEventType } from "@/lib/activity";
 import { drainDeviceCommands } from "@/features/core/remote-support/command-runner";
+import { refreshServerConflictCache } from "@/features/core/sync/sync-conflict-cache";
+import { loadAuthSession } from "@/lib/storage/auth-storage";
 
 async function canSubscriptionSync(): Promise<boolean> {
   const snapshot = await getCurrentSubscriptionSnapshot();
@@ -115,6 +117,13 @@ async function runSyncCycleBody(ownsCrossTabLock = false): Promise<SyncRunResult
   // runner guards its own re-entrancy, since RUN_SYNC_NOW lands back here.
   void drainDeviceCommands();
 
+  // Reviews from another counter must reach the header even if Sync Status is
+  // never opened. Owner/admin only; run in the background so billing sync never
+  // waits for the review listing. The cache throttles repeated cycles.
+  if (["owner", "admin"].includes(String(loadAuthSession().user?.role ?? ""))) {
+    void refreshServerConflictCache().catch(() => undefined);
+  }
+
   const localSubscriptionAllowsSync = await canSubscriptionSync();
   let serverAllowsSync: boolean | null = null;
   let statusCursor: string | number | null | undefined;
@@ -159,6 +168,15 @@ async function runSyncCycleBody(ownsCrossTabLock = false): Promise<SyncRunResult
   }
 
   await repairResolvedSyncStatusNoise().catch(() => 0);
+  // A successful network exchange is not proof that the durable local queue can
+  // be verified. Check before recording SYNC_COMPLETED, not afterwards.
+  let queueCounts: Awaited<ReturnType<typeof readSyncQueueCounts>>;
+  try {
+    queueCounts = await readSyncQueueCounts();
+  } catch (error) {
+    trackSyncEvent(ACTIVITY_EVENTS.SYNC_FAILED, Date.now() - startedAt, { reason: "local_queue_unavailable" });
+    throw error;
+  }
   const moved = push.pushed + pull.pulled + push.failed + push.conflicts + pull.conflicts;
   // A failed pull moves nothing, so it would never be recorded if `moved` alone
   // decided — which is exactly how a total receive outage stayed invisible.
@@ -181,7 +199,7 @@ async function runSyncCycleBody(ownsCrossTabLock = false): Promise<SyncRunResult
     pulled: pull.pulled,
     conflicts: push.conflicts + pull.conflicts,
     failed: push.failed,
-    pending: (await readSyncQueueCounts()).totalBlocking,
+    pending: queueCounts.totalBlocking,
     skipped: push.skipped,
     cursor: pull.cursor,
     pullFailed: pull.failed,
@@ -280,6 +298,10 @@ export async function retryFailedSyncOperations(
           // already bypasses the attempt cap, and the count is the history the
           // Sync Status screen shows ("Retries: 108").
           repair_requeues: 0,
+          // The transient streak IS reset: it only paces waiting, and a person
+          // pressing Retry has just said not to wait. If the push fails without
+          // a verdict again, the backoff starts over from one second.
+          transient_failures: 0,
         });
         const entityType = entityTypeFromOperation(row.operation_type, row.entity_type);
         const tableName = tableNameForEntity(entityType);

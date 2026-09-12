@@ -50,7 +50,8 @@ describe("mobile settings accessibility contract", () => {
     expect(security).toContain("flex min-h-11 items-center justify-center");
     // The toggle must still say which state it will move to, not just "toggle".
     expect(security).toContain('aria-label={show ? t("settings.security.hidePin") : t("settings.security.showPin")}');
-    expect(read("../features/core/settings/translations/settings-pages.ts")).toContain('"settings.security.hidePin": "Hide current PIN"');
+    // The approval field is the login password, not the PIN being changed.
+    expect(read("../features/core/settings/translations/settings-pages.ts")).toContain('"settings.security.hidePin": "Hide login password"');
     expect(security).toContain("grid h-11 w-11");
   });
 });

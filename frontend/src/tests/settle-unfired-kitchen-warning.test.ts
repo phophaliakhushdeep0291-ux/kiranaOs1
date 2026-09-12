@@ -99,7 +99,7 @@ describe("the check registry core billing consults", () => {
 
   it("is wired into the confirm path ahead of the PIN and printer gates", () => {
     const page = readFileSync("src/features/core/billing/pages/BillingPage.tsx", "utf8");
-    expect(page).toContain("void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart })");
+    expect(page).toContain("void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart, slotValues: billingSlotValues })");
     // The gate can be re-entered from the PIN dialog, so answering the warning
     // must hand back everything that confirm was already carrying — otherwise
     // the approval just collected is dropped and the PIN is asked for twice.

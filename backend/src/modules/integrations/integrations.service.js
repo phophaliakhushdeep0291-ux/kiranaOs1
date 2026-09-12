@@ -4,6 +4,7 @@ import http from "http";
 import https from "https";
 import net from "net";
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { env } from "../../config/env.js";
 import { retailPaymentReadinessForShop } from "../payment-provider/retailPayment.service.js";
 import { gspHttpReadiness } from "../compliance/gsp-http.provider.js";
@@ -217,7 +218,7 @@ export async function listApiKeys(shopId) {
 export async function createApiKey({ shopId, userId, input, actor = {} }) {
   const raw = crypto.randomBytes(32).toString("base64url");
   const secret = `kos_${env.NODE_ENV === "production" ? "live" : "test"}_${raw}`;
-  const row = await db.$transaction(async (tx) => {
+  const row = await serializableTransaction(async (tx) => {
     const activeCount = await tx.integrationApiKey.count({ where: { shopId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } });
     if (activeCount >= MAX_ACTIVE_API_KEYS) throw new AppError(`A shop can have at most ${MAX_ACTIVE_API_KEYS} active API keys`, 409, "INTEGRATION_KEY_LIMIT_REACHED");
     const created = await tx.integrationApiKey.create({ data: { shopId, name: input.name, keyPrefix: secret.slice(0, 18), keyHash: hashApiKey(secret), scopesJson: JSON.stringify([...new Set(input.scopes)].sort()), createdByUserId: userId || null, expiresAt: input.expiresAt ? new Date(input.expiresAt) : null } });
@@ -233,12 +234,12 @@ export async function createApiKey({ shopId, userId, input, actor = {} }) {
       req: actor.req ?? null,
     }, tx);
     return created;
-  }, { isolationLevel: "Serializable" });
+  });
   return { ...row, scopes: jsonArray(row.scopesJson), scopesJson: undefined, secret };
 }
 
 export async function revokeApiKey(shopId, id, actor = {}) {
-  await db.$transaction(async (tx) => {
+  await serializableTransaction(async (tx) => {
     const existing = await tx.integrationApiKey.findFirst({ where: { id, shopId, revokedAt: null } });
     if (!existing) throw new AppError("API key not found or already revoked", 404, "INTEGRATION_KEY_NOT_FOUND");
     const revokedAt = new Date();
@@ -255,7 +256,7 @@ export async function revokeApiKey(shopId, id, actor = {}) {
       after: apiKeyAuditSnapshot({ ...existing, revokedAt }),
       req: actor.req ?? null,
     }, tx);
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 export async function authenticateApiKey(secret) {
@@ -281,7 +282,7 @@ export async function listWebhookEndpoints(shopId) {
 
 export async function createWebhookEndpoint({ shopId, userId, input, actor = {} }) {
   const url = assertWebhookUrlSyntax(input.url).toString();
-  const row = await db.$transaction(async (tx) => {
+  const row = await serializableTransaction(async (tx) => {
     const endpointCount = await tx.webhookEndpoint.count({ where: { shopId, deletedAt: null } });
     const duplicate = await tx.webhookEndpoint.findFirst({ where: { shopId, deletedAt: null, url }, select: { id: true } });
     if (endpointCount >= MAX_WEBHOOK_ENDPOINTS) throw new AppError(`A shop can have at most ${MAX_WEBHOOK_ENDPOINTS} webhook endpoints`, 409, "WEBHOOK_LIMIT_REACHED");
@@ -299,13 +300,13 @@ export async function createWebhookEndpoint({ shopId, userId, input, actor = {} 
       req: actor.req ?? null,
     }, tx);
     return created;
-  }, { isolationLevel: "Serializable" });
+  });
   return { ...row, events: jsonArray(row.eventsJson), eventsJson: undefined, secret: deriveWebhookSecret(row.id) };
 }
 
 export async function updateWebhookEndpoint(shopId, id, input, actor = {}) {
   const normalizedUrl = input.url ? assertWebhookUrlSyntax(input.url).toString() : undefined;
-  const row = await db.$transaction(async (tx) => {
+  const row = await serializableTransaction(async (tx) => {
     const existing = await tx.webhookEndpoint.findFirst({ where: { id, shopId, deletedAt: null } });
     if (!existing) throw new AppError("Webhook endpoint not found", 404, "WEBHOOK_NOT_FOUND");
     if (normalizedUrl) {
@@ -328,12 +329,12 @@ export async function updateWebhookEndpoint(shopId, id, input, actor = {}) {
       req: actor.req ?? null,
     }, tx);
     return updated;
-  }, { isolationLevel: "Serializable" });
+  });
   return { ...row, events: jsonArray(row.eventsJson), eventsJson: undefined };
 }
 
 export async function deleteWebhookEndpoint(shopId, id, actor = {}) {
-  await db.$transaction(async (tx) => {
+  await serializableTransaction(async (tx) => {
     const existing = await tx.webhookEndpoint.findFirst({ where: { id, shopId, deletedAt: null } });
     if (!existing) throw new AppError("Webhook endpoint not found", 404, "WEBHOOK_NOT_FOUND");
     const deletedAt = new Date();
@@ -350,7 +351,7 @@ export async function deleteWebhookEndpoint(shopId, id, actor = {}) {
       after: webhookAuditSnapshot({ ...existing, enabled: false, deletedAt }),
       req: actor.req ?? null,
     }, tx);
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 export async function listWebhookDeliveries(shopId, { limit, cursor }) {
@@ -361,7 +362,7 @@ export async function listWebhookDeliveries(shopId, { limit, cursor }) {
 }
 
 export async function testWebhookEndpoint(shopId, endpointId, actor = {}) {
-  const delivery = await db.$transaction(async (tx) => {
+  const delivery = await serializableTransaction(async (tx) => {
     const endpoint = await tx.webhookEndpoint.findFirst({ where: { id: endpointId, shopId, deletedAt: null } });
     if (!endpoint) throw new AppError("Webhook endpoint not found", 404, "WEBHOOK_NOT_FOUND");
     if (!endpoint.enabled) throw new AppError("Webhook endpoint is disabled", 409, "WEBHOOK_DISABLED");
@@ -382,7 +383,7 @@ export async function testWebhookEndpoint(shopId, endpointId, actor = {}) {
       req: actor.req ?? null,
     }, tx);
     return created;
-  }, { isolationLevel: "Serializable" });
+  });
   // The durable request and audit are committed before the network call. A crash
   // here leaves a pending row that recoverWebhookDeliveries will pick up.
   return retryWebhookDelivery(shopId, delivery.id);
@@ -395,7 +396,7 @@ export async function retryWebhookDelivery(shopId, deliveryId) {
 }
 
 export async function requestWebhookDeliveryRetry(shopId, deliveryId, actor = {}) {
-  await db.$transaction(async (tx) => {
+  await serializableTransaction(async (tx) => {
     const delivery = await tx.webhookDelivery.findFirst({ where: { id: deliveryId, shopId }, include: { endpoint: true } });
     if (!delivery || delivery.endpoint.deletedAt) throw new AppError("Webhook delivery not found or endpoint has been archived", 404, "WEBHOOK_DELIVERY_NOT_FOUND");
     if (!delivery.endpoint.enabled) throw new AppError("Webhook endpoint is disabled", 409, "WEBHOOK_DISABLED");
@@ -415,7 +416,7 @@ export async function requestWebhookDeliveryRetry(shopId, deliveryId, actor = {}
       metadata: { endpointId: delivery.endpointId, eventId: delivery.eventId, eventType: delivery.eventType },
       req: actor.req ?? null,
     }, tx);
-  }, { isolationLevel: "Serializable" });
+  });
   // If the process exits after commit, the recovery scan sees status=pending.
   return retryWebhookDelivery(shopId, deliveryId);
 }
@@ -799,7 +800,7 @@ export async function markTallyPosted(shopId, documents, actor = {}) {
   };
 
   try {
-    return await db.$transaction(async (tx) => {
+    return await serializableTransaction(async (tx) => {
       let recorded = 0;
       for (let index = 0; index < rows.length; index += 500) {
         const result = await tx.tallyPost.createMany({ data: rows.slice(index, index + 500) });
@@ -807,13 +808,13 @@ export async function markTallyPosted(shopId, documents, actor = {}) {
       }
       await recordAudit(tx, recorded);
       return { recorded };
-    }, { isolationLevel: "Serializable" });
+    });
   } catch (error) {
     if (error?.code !== "P2002") throw error;
     // Two tills confirming the same batch can collide. SQLite has no
     // skipDuplicates for createMany, so retry the whole confirmation as
     // idempotent upserts in one fresh transaction. Audit remains atomic with it.
-    return db.$transaction(async (tx) => {
+    return serializableTransaction(async (tx) => {
       for (const row of rows) {
         await tx.tallyPost.upsert({
           where: { shopId_documentType_documentId: { shopId, documentType: row.documentType, documentId: row.documentId } },
@@ -823,7 +824,7 @@ export async function markTallyPosted(shopId, documents, actor = {}) {
       }
       await recordAudit(tx, rows.length);
       return { recorded: rows.length };
-    }, { isolationLevel: "Serializable" });
+    });
   }
 }
 

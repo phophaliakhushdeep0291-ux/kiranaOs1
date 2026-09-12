@@ -1,4 +1,7 @@
 import { offlineDB } from "@/lib/offline/db";
+import type { Product } from "@/lib/api/client";
+import type { BillingDraft } from "./pages/billing-types";
+import { mergeAssistantCart } from "./assistant-cart";
 
 /**
  * Lines the assistant has resolved, waiting for the till to pick them up.
@@ -42,38 +45,57 @@ const STAGED_MAX_AGE_MS = 30 * 60 * 1000;
 export async function stageBillLines(lines: StagedBillLine[]): Promise<number> {
   const usable = (lines ?? []).filter((line) => line?.productId && Number(line.quantity) > 0);
   if (usable.length === 0) return 0;
-  const existing = await readStagedBatch();
-  const batch: StagedBatch = {
-    lines: [...(existing?.lines ?? []), ...usable],
-    stagedAt: Date.now(),
-  };
-  await offlineDB.setSetting(STAGED_LINES_KEY, batch).catch(() => undefined);
+  await offlineDB.transaction(["settings"], async (tx) => {
+    const existing = await readStagedBatch();
+    await tx.setSetting(STAGED_LINES_KEY, {
+      lines: [...(existing?.lines ?? []), ...usable],
+      stagedAt: Date.now(),
+    } satisfies StagedBatch);
+  });
   return usable.length;
 }
 
 async function readStagedBatch(): Promise<StagedBatch | null> {
-  const batch = await offlineDB.getSetting<StagedBatch>(STAGED_LINES_KEY).catch(() => null);
+  const batch = await offlineDB.getSetting<StagedBatch>(STAGED_LINES_KEY);
   if (!batch || !Array.isArray(batch.lines) || batch.lines.length === 0) return null;
-  if (Date.now() - Number(batch.stagedAt ?? 0) > STAGED_MAX_AGE_MS) {
-    await clearStagedBillLines();
-    return null;
-  }
+  const age = Date.now() - Number(batch.stagedAt ?? 0);
+  if (!Number.isFinite(age) || age > STAGED_MAX_AGE_MS) return null;
   return batch;
 }
 
 /**
- * Take the staged lines, clearing them in the same breath.
- *
- * Read-and-clear rather than read-then-clear: a till that mounts twice, or a
- * refresh mid-merge, must not add the same items to the bill again.
+ * Serialize queue reads and writes across counters in this browser. A failed
+ * clear rolls back, so the caller cannot receive lines that remain queued.
+ * This transaction does not cover the later cart/draft save.
  */
-export async function takeStagedBillLines(): Promise<StagedBillLine[]> {
-  const batch = await readStagedBatch();
-  if (!batch) return [];
-  await clearStagedBillLines();
-  return batch.lines;
+export async function takeStagedBillLines(shouldTake: () => boolean = () => true): Promise<StagedBillLine[]> {
+  return offlineDB.transaction(["settings"], async (tx) => {
+    const batch = await readStagedBatch();
+    if (!shouldTake()) return [];
+    await tx.setSetting(STAGED_LINES_KEY, { lines: [], stagedAt: 0 });
+    return batch?.lines ?? [];
+  });
 }
 
 export async function clearStagedBillLines(): Promise<void> {
-  await offlineDB.setSetting(STAGED_LINES_KEY, { lines: [], stagedAt: 0 }).catch(() => undefined);
+  await offlineDB.setSetting(STAGED_LINES_KEY, { lines: [], stagedAt: 0 });
+}
+
+/** A route change or lost acknowledgement can recover the committed draft.
+ * The queue is never cleared independently of the cart that receives it.
+ */
+export async function recoverAssistantBillingDraft(draftKey: string, products: Map<string, Product>, shouldRecover: () => boolean = () => true) {
+  return offlineDB.transaction(["settings"], async tx => {
+    const draft = await offlineDB.getSetting<BillingDraft>(draftKey) ?? {};
+    const batch = await readStagedBatch();
+    if (!shouldRecover()) return null;
+    const merged = mergeAssistantCart(draft.cart ?? [], batch?.lines ?? [], products);
+    const next = merged.applied.length ? { ...draft, cart: merged.cart } : draft;
+    if (merged.applied.length) {
+      await tx.setSetting(draftKey, next);
+      await tx.setSetting(STAGED_LINES_KEY, { lines: merged.remaining, stagedAt: batch?.stagedAt ?? 0 });
+      if (!shouldRecover()) throw new Error("Billing recovery cancelled");
+    }
+    return { draft: next, added: merged.applied.length, remaining: merged.remaining.length };
+  });
 }

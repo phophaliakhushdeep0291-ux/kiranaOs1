@@ -1,0 +1,177 @@
+- link:
+  - /url: "#main-content"
+  - text: Skip to main content
+- banner:
+  - link:
+    - /url: /dashboard
+  - heading [level=1]: Billing
+  - generic: Full Flow Audit Shop · Synced
+  - button:
+  - link:
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link:
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Billing page loaded
+  - generic: Open bills
+  - button:
+    - generic: Walk-in
+    - generic: "1"
+  - button:
+    - text: New bill
+  - textbox:
+    - /placeholder: Search products
+  - button:
+  - button:
+  - button: All
+  - button: grocery
+  - button:
+    - text: Order QR
+  - button:
+    - generic: 🧼
+    - paragraph: QA Soap
+    - paragraph: piece
+    - generic: ₹50.00
+    - generic: +
+  - paragraph: Order Summary
+  - paragraph: 1 Item
+  - paragraph: Products
+  - generic: ₹
+  - paragraph: ₹100
+  - paragraph: Subtotal
+  - paragraph: ₹100
+  - paragraph: Grand Total
+  - generic: 1 item
+  - generic: ₹100
+  - button: Review & collect ₹100
+- navigation:
+  - link:
+    - /url: /dashboard
+    - generic: Home
+  - link:
+    - /url: /billing
+    - generic: Sell
+  - link:
+    - /url: /inventory
+    - generic: Stock
+  - link:
+    - /url: /customers
+    - generic: Customers
+  - button:
+    - generic: More
+- list
+- generic: "7"
+- dialog "Full Flow Audit Shop":
+  - generic: FF
+  - heading "Full Flow Audit Shop" [level=2]
+  - paragraph: MAIN · Jaipur
+  - button "Close app menu" [active]:
+  - link "Synced Last synced just now":
+    - /url: /sync-status
+    - generic: Synced
+    - generic: Last synced just now
+  - button "Search products, bills, customers…":
+    - generic: Search products, bills, customers…
+  - searchbox "Find a tool or page"
+  - region "Sell":
+    - heading "Sell" [level=3]
+    - link "Billing history Find, share, return":
+      - /url: /bills
+      - generic: Billing history
+      - generic: Find, share, return
+    - link "Customer orders Review QR orders":
+      - /url: /orders-received
+      - generic: Customer orders
+      - generic: Review QR orders
+    - link "Returns Refund or exchange":
+      - /url: /returns
+      - generic: Returns
+      - generic: Refund or exchange
+    - link "Sales overview Sales and collections":
+      - /url: /sales-overview
+      - generic: Sales overview
+      - generic: Sales and collections
+  - region "Stock & buying":
+    - heading "Stock & buying" [level=3]
+    - link "Products Catalog and prices":
+      - /url: /products
+      - generic: Products
+      - generic: Catalog and prices
+    - link "Categories Organize products":
+      - /url: /categories
+      - generic: Categories
+      - generic: Organize products
+    - button "Stock movements Stock in, out, counts, batches":
+      - generic: Stock movements
+      - generic: Stock in, out, counts, batches
+    - link "Purchases Receive supplier stock":
+      - /url: /purchase-bills
+      - generic: Purchases
+      - generic: Receive supplier stock
+    - link "Suppliers Dues and payments":
+      - /url: /suppliers
+      - generic: Suppliers
+      - generic: Dues and payments
+  - region "Money & growth":
+    - heading "Money & growth" [level=3]
+    - link "Expenses Track shop spending":
+      - /url: /expenses
+      - generic: Expenses
+      - generic: Track shop spending
+    - link "Money statement Cash, bank and UPI":
+      - /url: /money-statement
+      - generic: Money statement
+      - generic: Cash, bank and UPI
+    - link "Reports Profit and performance":
+      - /url: /reports
+      - generic: Reports
+      - generic: Profit and performance
+    - link "Daily closing Close and verify today":
+      - /url: /daily-closing
+      - generic: Daily closing
+      - generic: Close and verify today
+    - link "Offers Discount rules":
+      - /url: /offers
+      - generic: Offers
+      - generic: Discount rules
+    - link "Loyalty Points and members":
+      - /url: /loyalty
+      - generic: Loyalty
+      - generic: Points and members
+    - link "Gift cards Issue and redeem":
+      - /url: /gift-cards
+      - generic: Gift cards
+      - generic: Issue and redeem
+  - region "Manage":
+    - heading "Manage" [level=3]
+    - link "Staff Access and permissions":
+      - /url: /staff
+      - generic: Staff
+      - generic: Access and permissions
+    - button "Financial assurance Findings, evidence, audit runs":
+      - generic: Financial assurance
+      - generic: Findings, evidence, audit runs
+    - link "Activity & insights How this shop uses Artha":
+      - /url: /activity-insights
+      - generic: Activity & insights
+      - generic: How this shop uses Artha
+    - link "Audit trail Review important actions":
+      - /url: /audit-logs
+      - generic: Audit trail
+      - generic: Review important actions
+    - link "Backup & sync Offline queue and health":
+      - /url: /sync-status
+      - generic: Backup & sync
+      - generic: Offline queue and health
+    - link "Ask Artha Answers from your own data":
+      - /url: /help
+      - generic: Ask Artha
+      - generic: Answers from your own data
+    - link "Settings Store and app setup":
+      - /url: /settings
+      - generic: Settings
+      - generic: Store and app setup
+  - button "Sign out safely":
+    - text: Sign out safely

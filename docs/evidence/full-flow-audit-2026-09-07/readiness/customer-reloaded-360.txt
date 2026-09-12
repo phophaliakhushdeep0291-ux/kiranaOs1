@@ -1,0 +1,239 @@
+- link:
+  - /url: "#main-content"
+  - text: Skip to main content
+- banner:
+  - link:
+    - /url: /dashboard
+  - heading [level=1]: Customers / Udhar
+  - generic: Full Flow Audit Shop · Synced
+  - button:
+  - link:
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link:
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Customers / Udhar page loaded
+  - button:
+    - text: 02 Sept 2026 - 08 Sept 2026
+  - button:
+    - text: Collect payment
+  - button:
+    - generic: Add customer
+  - search:
+    - searchbox
+    - button:
+  - paragraph: Accounts for your shop type
+  - paragraph: 🛒 Kirana / General Store
+  - button:
+  - region:
+    - article:
+      - paragraph: Total Customers
+      - paragraph: "1"
+      - text: 100%
+      - generic: vs last week
+    - article:
+      - paragraph: Total Udhar Outstanding
+      - paragraph: ₹30
+      - text: 100%
+      - generic: vs last week
+    - article:
+      - paragraph: Overdue Amount
+      - paragraph: ₹0
+      - generic: 0%
+      - generic: vs last week
+    - article:
+      - paragraph: Udhar Collected
+      - paragraph: ₹20
+      - text: 100%
+      - generic: vs last week
+  - heading [level=2]: Customers
+  - generic: 1 shown
+  - button [pressed]: All Customers
+  - button: With Balance
+  - button: Overdue
+  - button: Cleared
+  - button:
+    - generic: QC
+    - generic: QA Credit Customer
+    - generic: No address
+    - generic: "9778652604"
+    - generic: 07 Sept 2026, 05:25 pm
+    - generic: ₹30
+    - generic: 0-7 Days
+    - generic: Low
+  - generic: Showing 1 of 1 customers
+  - generic: 1 loaded
+  - article:
+    - generic: QC
+    - heading [level=2]: QA Credit Customer
+    - generic: Low Risk
+    - button:
+    - text: "9778652604"
+    - text: No address
+    - link:
+      - /url: /customers/cmtr64ts900e2q5iknhnfa4w3
+      - text: View Ledger
+    - paragraph: Last Payment
+    - paragraph: 07 Sept 2026
+    - paragraph: Credit Limit
+    - paragraph: ₹1,500.25
+    - paragraph: Total Purchases
+    - paragraph: ₹50
+    - paragraph: Total Paid
+    - paragraph: ₹20
+    - paragraph: Outstanding
+    - paragraph: ₹30
+    - paragraph: Overdue Days
+    - paragraph: 0 Days
+  - article:
+    - heading [level=2]: Record Udhar Payment
+    - paragraph: Amount Due
+    - paragraph: ₹30
+    - generic: Payment Amount *
+    - generic: ₹
+    - spinbutton
+    - button: Full Due (₹30)
+    - button: ₹500
+    - button: ₹1,000
+    - button: ₹2,000
+    - button: Custom
+    - paragraph: Payment Mode
+    - button:
+      - text: Cash
+    - button:
+      - text: UPI
+    - button:
+      - text: Bank
+    - button:
+      - text: Split
+    - generic: Payment Note (Optional)
+    - textbox:
+      - /placeholder: Payment note / reference
+    - button [disabled]:
+      - text: Collect Payment
+    - button:
+      - text: Send Reminder
+    - paragraph:
+      - text: After payment, customer balance and ledger update automatically.
+  - complementary:
+    - heading [level=3]: Ageing Summary
+    - paragraph: ₹30
+    - paragraph: Total Due
+    - generic: 0 - 7 Days
+    - text: ₹30
+    - generic: 100%
+    - generic: 7 - 30 Days
+    - text: ₹0
+    - generic: 0%
+    - generic: 30+ Days
+    - text: ₹0
+    - generic: 0%
+    - heading [level=3]: Collection Progress
+    - button:
+      - text: Last 7 days
+    - paragraph: 40%
+    - paragraph: Collected
+    - paragraph: Collected
+    - paragraph: ₹20
+    - paragraph: "vs previous period: ↑ 100%"
+    - paragraph: Pending
+    - paragraph: ₹30
+    - heading [level=3]: Recent Payments Received
+    - button: View all
+    - generic: 07 Sept 2026
+    - generic: ₹20
+    - generic: Cash
+    - heading [level=3]: Credit Risk
+    - generic: Low Risk
+    - paragraph: Payment pattern looks trackable.
+    - button:
+      - text: Send Reminder
+  - heading [level=2]: Udhar Ledger
+  - paragraph: View every bill, payment, and balance movement
+  - button:
+    - text: All Entries
+  - button:
+    - text: 07 Sept 2026 - 07 Sept 2026
+  - button:
+    - text: Download Statement
+  - generic: Payment
+  - generic: 07 Sept 2026
+  - paragraph: Manual payment
+  - paragraph: — • cash
+  - paragraph: "-₹20"
+  - paragraph: Bal ₹30
+  - generic: Posted
+  - generic: Bill
+  - generic: 07 Sept 2026
+  - paragraph: Bill KOS-2026-000002
+  - paragraph: — • credit
+  - paragraph: +₹50
+  - paragraph: Bal ₹50
+  - generic: Posted
+- navigation:
+  - link:
+    - /url: /dashboard
+    - generic: Home
+  - link:
+    - /url: /billing
+    - generic: Sell
+  - link:
+    - /url: /inventory
+    - generic: Stock
+  - link:
+    - /url: /customers
+    - generic: Customers
+  - button:
+    - generic: More
+- button:
+- list
+- dialog "Edit customer":
+  - heading "Edit customer" [level=2]
+  - paragraph: Save contact, credit, billing address, and optional GST identity for accurate invoices and customer ledgers.
+  - button "Fill by voice":
+    - text: Fill by voice
+  - paragraph: Say it all at once, like Ramesh Kumar mobile 98765 43210 udhar limit 5000, or answer one question at a time.
+  - heading "Customer identity" [level=3]
+  - paragraph: The mobile number is the customer's unique account identity.
+  - text: Name *
+  - textbox "Name *" [active]: QA Credit Customer
+  - text: Phone / number *
+  - generic: "+91"
+  - textbox "Phone / number *":
+    - /placeholder: 98765 43210
+  - text: Number is valid and available
+  - heading "Credit preferences" [level=3]
+  - paragraph: Optional limits and follow-up dates help the owner control udhar.
+  - text: Customer type
+  - combobox "Customer type":
+    - generic: Udhar allowed
+  - text: Udhar limit
+  - spinbutton "Udhar limit": "1500.25"
+  - text: Due date
+  - textbox "Due date": 2026-09-15
+  - text: Promise-to-pay date
+  - textbox "Promise-to-pay date": 2026-09-12
+  - heading "Billing and tax details" [level=3]
+  - paragraph: Optional information for B2B invoices and customer notes.
+  - text: Billing address
+  - textbox "Billing address"
+  - paragraph: GST details (optional)
+  - paragraph: Add these for registered B2B buyers. The state is derived from a valid GSTIN and controls IGST versus CGST/SGST.
+  - text: Customer GSTIN
+  - textbox "Customer GSTIN":
+    - /placeholder: 22AAAAA0000A1Z5
+  - text: State code
+  - textbox "GST state code":
+    - /placeholder: "--"
+  - text: Notes / pricing rule
+  - textbox "Notes / pricing rule":
+    - /placeholder: "Example: gives wholesale price for 10kg+"
+    - text: QA follow-up persistence verified
+  - paragraph:
+    - text: Saved securely on this device first, then synced automatically.
+  - button "Cancel"
+  - button "Save changes"
+  - button "Close":
+    - generic: Close

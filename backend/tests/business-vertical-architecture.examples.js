@@ -6,6 +6,8 @@ import { dirname, join } from "node:path";
 import { BUSINESS_PROFILE_LIST, BUSINESS_TYPES, BUSINESS_TYPE_DIRECTORIES } from "../src/verticals/registry.js";
 import { NAVIGATION_KEYS, SHARED_NAVIGATION } from "../src/verticals/profile.js";
 import { ENGINE_CATALOG } from "../src/engines/catalog.js";
+import { registerSchema } from "../src/modules/auth/auth.schema.js";
+import { businessTypeCompatibilitySchema } from "../src/modules/shops/shops.schema.js";
 
 const root = dirname(fileURLToPath(new URL("../src/verticals/registry.js", import.meta.url)));
 
@@ -178,6 +180,18 @@ test("every navigation key a vertical declares is a known key", () => {
     const unknown = profile.navigation.filter((key) => !NAVIGATION_KEYS.includes(key));
     assert.deepEqual(unknown, [], `${profile.businessType} declares unknown keys: ${unknown.join(", ")}`);
   }
+});
+
+test("signup and the business-type change check accept every registered trade", () => {
+  // Both enums were hand-copied lists of eleven. Manufacturing was registered,
+  // offered on the signup screen, then refused by validation: a new factory
+  // could not create its shop at all.
+  const signup = { shopName: "QA Works", ownerName: "QA Owner", city: "Pune", address: "Plot 12 MIDC", mobile: "9876501234", password: "secret1" };
+  for (const businessType of BUSINESS_TYPES) {
+    assert.equal(registerSchema.safeParse({ ...signup, businessType }).success, true, `signup refuses ${businessType}`);
+    assert.equal(businessTypeCompatibilitySchema.safeParse({ targetBusinessType: businessType }).success, true, `type change refuses ${businessType}`);
+  }
+  assert.equal(registerSchema.safeParse({ ...signup, businessType: "unknown_trade" }).success, false);
 });
 
 test("every vertical is laid out the same way", () => {

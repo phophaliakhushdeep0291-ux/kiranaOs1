@@ -4,6 +4,7 @@ import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i1
 import { useBusinessType } from "@/features/core/settings/business-types";
 import { useVisibleTradeLinks, type ShopTradeLink } from "@/features/core/settings/shop-trade-links";
 import { cn } from "@/lib/utils";
+import { useId, useState } from "react";
 
 export interface TradeFocusStripProps {
   /** Eyebrow above the trade name — what this screen is doing for the trade. */
@@ -27,6 +28,8 @@ export function TradeFocusStrip({ titleKey, focusKey, links, className }: TradeF
   const { t } = useAppLanguage();
   const { def } = useBusinessType();
   const visibleLinks = useVisibleTradeLinks(links);
+  const [expanded, setExpanded] = useState(false);
+  const detailsId = useId();
 
   return (
     <section
@@ -41,17 +44,21 @@ export function TradeFocusStrip({ titleKey, focusKey, links, className }: TradeF
         className,
       )}
     >
-      <div className="min-w-0">
-        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#174ea6]">{t(titleKey)}</p>
-        <p className="mt-1 truncate text-[14px] font-bold text-[#13223f]">{def.emoji} {def.label}</p>
-        <p className="mt-0.5 text-[11px] leading-4 text-[#52617c]">{t(focusKey)}</p>
+      <div className="flex min-w-0 items-center justify-between gap-3 lg:block">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#174ea6]">{t(titleKey)}</p>
+          <p className="mt-1 truncate text-[14px] font-bold text-[#13223f]">{def.emoji} {def.label}</p>
+          <p className="mt-0.5 hidden text-[11px] leading-4 text-[#52617c] lg:block">{t(focusKey)}</p>
+        </div>
+        <button type="button" aria-expanded={expanded} aria-controls={detailsId} aria-label={t(titleKey)} onClick={() => setExpanded(!expanded)} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--brand-border)] bg-white text-primary lg:hidden"><ChevronRight size={18} className={cn("transition-transform", expanded && "rotate-90")} aria-hidden="true" /></button>
       </div>
       {/* `min-w-0` and wrapping: three chips plus the settings link overflow a
           375px screen, and the shell clips horizontal overflow rather than
           scrolling it, so an unwrapped row would be silently cut off.
           44px boxes on touch, dense only for a mouse — these sit 8px apart, so
           a `.tap-target` overlay would reach into its neighbour and steal taps. */}
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <div id={detailsId} className={cn("min-w-0 flex-wrap items-center gap-2 lg:flex", expanded ? "flex" : "hidden")}>
+        <p className="w-full text-xs leading-5 text-[#52617c] lg:hidden">{t(focusKey)}</p>
         {visibleLinks.map((link) => (
           <Link
             key={link.href}

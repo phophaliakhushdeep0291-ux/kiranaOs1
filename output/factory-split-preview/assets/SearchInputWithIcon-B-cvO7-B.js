@@ -1,0 +1,5 @@
+import{j as e}from"./vendor-data-BaHBZjtO.js"
+import{l as s,I as a}from"./index-CYG8yywH.js"
+import{Q as l}from"./vendor-ui-CIi-vqR6.js"
+function n({children:a,actions:l,className:n,...r}){return e.jsxs("div",{className:s("premium-panel-muted flex w-full min-w-0 flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between",n),...r,children:[e.jsx("div",{className:"grid w-full min-w-0 gap-2 sm:flex sm:flex-1 sm:flex-wrap sm:items-center",children:a}),l?e.jsx("div",{className:"responsive-action-row shrink-0 sm:justify-end",children:l}):null]})}function r({label:n,containerClassName:r,className:i,id:t,...m}){const o=t??"shared-search-input"
+return e.jsxs("div",{className:s("relative w-full min-w-0",r),children:[e.jsx("label",{htmlFor:o,className:"sr-only",children:n}),e.jsx(l,{className:"pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground","aria-hidden":"true"}),e.jsx(a,{id:o,type:"search","aria-label":n,className:s("h-10 w-full rounded-lg pl-9 shadow-none",i),...m})]})}export{n as F,r as S}

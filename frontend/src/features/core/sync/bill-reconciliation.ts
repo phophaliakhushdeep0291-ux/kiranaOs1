@@ -1245,6 +1245,14 @@ export function dedupePaymentsForDisplay<T extends object>(payments: T[]): T[] {
     const identityKeys = paymentIdentityKeys(record);
     if (identityKeys.some((key) => seenIdentity.has(key))) continue;
 
+    // Supplier installments have durable ledger/client ids. Equal amounts in
+    // the same minute may be separate installments or different suppliers.
+    if (record.kind === "supplier_payment") {
+      identityKeys.forEach((key) => seenIdentity.add(key));
+      picked.push(payment);
+      continue;
+    }
+
     const displaySignature = paymentBillDisplaySignature(record);
     if (displaySignature && pickedByDisplaySignature.has(displaySignature)) {
       identityKeys.forEach((key) => seenIdentity.add(key));

@@ -1,3 +1,4 @@
+import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -105,6 +106,7 @@ function exportRows(rows: MovementRow[], mode: RegisterMode) {
 }
 
 export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
+  const requestExport = useDataExport();
   const { t } = useAppLanguage();
   const [search, setSearch] = useState("");
   const ledger = useGetStockLedger({ limit: 500 });
@@ -181,7 +183,7 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
         <Button
           variant="outline"
           className="h-11 gap-2 rounded-[10px] font-bold"
-          onClick={() => exportRows(scopedRows, mode)}
+          onClick={() => requestExport({ reportType: mode, format: "csv", rowCount: scopedRows.length }, () => exportRows(scopedRows, mode))}
           disabled={scopedRows.length === 0}
         >
           <Download size={15} /> Export

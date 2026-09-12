@@ -1,4 +1,5 @@
 import db from "../../../db.js";
+import { isWriteConflict, serializableTransaction } from "../../../lib/transactions.js";
 import { AppError } from "../../../middleware/error.js";
 import { round2 } from "../../../utils/money.js";
 import { dateRangeForDateOnly, formatDateInTimeZone } from "../../../utils/dates.js";
@@ -190,8 +191,8 @@ function normalizeItems(items) {
  * to people waiting for delivery — so only one is actually for sale. Returns
  * Map<productId, qty>.
  */
-export async function getReservations(shopId, { excludeOrderId = null } = {}) {
-  const orders = await db.furnitureOrder.findMany({
+export async function getReservations(shopId, { excludeOrderId = null } = {}, client = db) {
+  const orders = await client.furnitureOrder.findMany({
     where: {
       shopId,
       deletedAt: null,
@@ -211,6 +212,37 @@ export async function getReservations(shopId, { excludeOrderId = null } = {}) {
   return held;
 }
 
+async function withOrderTransaction(operation) {
+  try {
+    return await serializableTransaction(operation);
+  } catch (error) {
+    if (!isWriteConflict(error)) throw error;
+    throw new AppError("Stock changed while saving. Check the order and try again.", 409, "ORDER_STOCK_CHANGED");
+  }
+}
+
+async function assertOrderStock(client, shopId, items, status, excludeOrderId = null) {
+  const ids = [...new Set(items.map((item) => item.productId).filter(Boolean))];
+  if (!ids.length) return;
+  const products = await client.product.findMany({
+    where: { id: { in: ids }, shopId, deletedAt: null },
+    select: { id: true, name: true, stockBaseQty: true },
+  });
+  if (products.length !== ids.length) throw new AppError("One of the items is no longer in your catalogue", 404, "ORDER_ITEM_MISSING");
+  if (!RESERVING_STATUSES.includes(status)) return;
+  const held = await getReservations(shopId, { excludeOrderId }, client);
+  const wanted = new Map();
+  for (const item of items) {
+    if (item.productId && item.reserveStock) wanted.set(item.productId, (wanted.get(item.productId) ?? 0) + Number(item.qty));
+  }
+  for (const product of products) {
+    const available = Math.max(0, Number(product.stockBaseQty) - (held.get(product.id) ?? 0));
+    if ((wanted.get(product.id) ?? 0) > available) {
+      throw new AppError(`"${product.name}" has only ${round2(available)} available for this order. Check stock or mark the line as made to order.`, 409, "ORDER_NOT_AVAILABLE");
+    }
+  }
+}
+
 export async function listOrders(shopId, { status, search, from, to, overdueOnly = false, includeDeleted = false } = {}) {
   const where = {
     shopId,
@@ -222,6 +254,7 @@ export async function listOrders(shopId, { status, search, from, to, overdueOnly
             { customerPhone: { contains: normalizePhone(search) || search } },
             { orderNumber: { contains: search } },
             { billNumber: { contains: search } },
+            { items: { some: { name: { contains: search } } } },
           ],
         }
       : {}),
@@ -263,11 +296,12 @@ export async function createOrder(shopId, data, { userId = null } = {}) {
   const items = normalizeItems(data.items ?? []);
   const { itemsTotal, grandTotal } = totalsFor({ ...data, items });
 
-  const create = async () =>
-    db.furnitureOrder.create({
+  const create = () => withOrderTransaction(async (tx) => {
+    await assertOrderStock(tx, shopId, items, data.status || "quote");
+    return tx.furnitureOrder.create({
       data: {
         shopId,
-        orderNumber: await nextOrderNumber(db, shopId),
+        orderNumber: await nextOrderNumber(tx, shopId),
         customerId: data.customerId || null,
         customerName: String(data.customerName).trim(),
         customerPhone: normalizePhone(data.customerPhone),
@@ -287,6 +321,7 @@ export async function createOrder(shopId, data, { userId = null } = {}) {
       },
       include: { items: true, payments: true },
     });
+  });
 
   // Two counters quoting at the same instant can pick the same number; the
   // unique index catches it and the retry takes the next one.
@@ -299,7 +334,8 @@ export async function createOrder(shopId, data, { userId = null } = {}) {
 }
 
 export async function updateOrder(shopId, id, data) {
-  const existing = await db.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true } });
+  return withOrderTransaction(async (tx) => {
+  const existing = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true } });
   if (!existing) throw new AppError("Order not found", 404);
   if (!OPEN_STATUSES.includes(existing.status)) {
     throw new AppError(
@@ -310,6 +346,7 @@ export async function updateOrder(shopId, id, data) {
   }
 
   const items = data.items ? normalizeItems(data.items) : existing.items;
+  await assertOrderStock(tx, shopId, items, existing.status, id);
   const { itemsTotal, grandTotal } = totalsFor({
     items,
     discount: data.discount ?? existing.discount,
@@ -317,7 +354,7 @@ export async function updateOrder(shopId, id, data) {
     installCharge: data.installCharge ?? existing.installCharge,
   });
 
-  const updated = await db.furnitureOrder.update({
+  const updated = await tx.furnitureOrder.update({
     where: { id: existing.id },
     data: {
       ...(data.customerId !== undefined ? { customerId: data.customerId || null } : {}),
@@ -339,6 +376,7 @@ export async function updateOrder(shopId, id, data) {
     include: { items: true, payments: { orderBy: { paidOn: "asc" } } },
   });
   return serializeOrder(updated);
+  });
 }
 
 /**
@@ -350,7 +388,8 @@ export async function updateOrder(shopId, id, data) {
  * is the question a customer disputes months later.
  */
 export async function setOrderStatus(shopId, id, status, { billId = null, billNumber = null, note } = {}) {
-  const order = await db.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { payments: true } });
+  return withOrderTransaction(async (tx) => {
+  const order = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { payments: true, items: true } });
   if (!order) throw new AppError("Order not found", 404);
 
   const allowed = TRANSITIONS[order.status] ?? [];
@@ -364,7 +403,13 @@ export async function setOrderStatus(shopId, id, status, { billId = null, billNu
     );
   }
 
-  const updated = await db.furnitureOrder.update({
+  if (status === "confirmed") await assertOrderStock(tx, shopId, order.items, status, id);
+  if (billId) {
+    const bill = await tx.bill.findFirst({ where: { id: billId, shopId, deletedAt: null } });
+    if (!bill) throw new AppError("That bill is not in your shop", 404, "ORDER_BILL_MISSING");
+    billNumber = bill.billNo;
+  }
+  const updated = await tx.furnitureOrder.update({
     where: { id: order.id },
     data: {
       status,
@@ -377,6 +422,7 @@ export async function setOrderStatus(shopId, id, status, { billId = null, billNu
     include: { items: true, payments: { orderBy: { paidOn: "asc" } } },
   });
   return serializeOrder(updated);
+  });
 }
 
 export async function cancelOrder(shopId, id, { reason } = {}) {
@@ -437,14 +483,17 @@ export async function softDeleteOrder(shopId, id) {
 }
 
 export async function restoreOrder(shopId, id) {
-  const order = await db.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: { not: null } } });
+  return withOrderTransaction(async (tx) => {
+  const order = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: { not: null } }, include: { items: true } });
   if (!order) throw new AppError("Deleted order not found in recycle bin", 404);
-  const restored = await db.furnitureOrder.update({
+  await assertOrderStock(tx, shopId, order.items, order.status, id);
+  const restored = await tx.furnitureOrder.update({
     where: { id: order.id },
     data: { deletedAt: null },
     include: { items: true, payments: { orderBy: { paidOn: "asc" } } },
   });
   return serializeOrder(restored);
+  });
 }
 
 /** Every order a product is promised on — "who is waiting for this sofa?" */
@@ -474,8 +523,8 @@ export async function getOrderSummary(shopId) {
     dueSoon: open.filter((order) => order.isDueSoon).length,
     /** Money taken against work not yet delivered — the shop is holding it, not earning it. */
     advancesHeld: round2(open.reduce((sum, order) => sum + order.paidTotal, 0)),
-    /** Still to collect across every open order. */
-    pendingCollection: round2(open.reduce((sum, order) => sum + order.balanceDue, 0)),
+    /** Delivery does not erase an unpaid balance. */
+    pendingCollection: round2(orders.filter((order) => order.status !== "cancelled").reduce((sum, order) => sum + order.balanceDue, 0)),
     orderBookValue: round2(open.reduce((sum, order) => sum + (Number(order.grandTotal) || 0), 0)),
     reservedProducts: reservations.size,
   };

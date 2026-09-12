@@ -175,7 +175,7 @@ export default function RentalsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <Kpi icon={<Shirt size={16} />} label="Out with customers" value={String(summary?.outNow ?? 0)} tone="violet" />
           <Kpi icon={<CalendarDays size={16} />} label="Due back today" value={String(summary?.dueToday ?? 0)} tone="blue" />
           <Kpi icon={<AlertTriangle size={16} />} label="Overdue" value={String(summary?.overdue ?? 0)} tone={summary?.overdue ? "rose" : "green"} />
@@ -237,7 +237,7 @@ export default function RentalsPage() {
             </div>
           ) : (
             <div className="app-table-scroll overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <table className="trade-mobile-table w-full text-[13px]">
                 <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                   <tr>
                     <th className="px-5 py-2.5 text-left font-bold">Renter</th>
@@ -254,7 +254,7 @@ export default function RentalsPage() {
                     const open = booking.status === "booked" || booking.status === "picked_up";
                     return (
                       <tr key={booking.id} className={i < rows.length - 1 ? "border-b border-[#eef2f8]" : ""}>
-                        <td className="px-5 py-3 align-top">
+                        <td data-label="Renter" className="px-5 py-3 align-top">
                           <p className="font-bold text-[var(--brand-ink)]">{booking.customerName}</p>
                           <p className="mt-0.5 flex items-center gap-1 text-[11.5px] text-[#52627e]"><Phone size={11} /> {booking.customerPhone || "—"}</p>
                           {booking.customerAddress && (
@@ -265,7 +265,7 @@ export default function RentalsPage() {
                           )}
                           <span className="mt-1 inline-block rounded-[5px] bg-[#f1f5fa] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#52627e]">{booking.bookingNumber}</span>
                         </td>
-                        <td className="px-5 py-3 align-top">
+                        <td data-label="Items" className="px-5 py-3 align-top">
                           <ul className="space-y-1.5">
                             {booking.items.map((item, idx) => (
                               <li key={item.id ?? idx} className="flex items-center gap-2 text-[12px] text-[#344668]">
@@ -277,24 +277,24 @@ export default function RentalsPage() {
                             ))}
                           </ul>
                         </td>
-                        <td className="px-5 py-3 align-top">
+                        <td data-label="Rented for" className="px-5 py-3 align-top">
                           <p className="flex items-center gap-1.5 font-semibold text-[var(--brand-ink)]">
                             <CalendarRange size={13} className="text-[#8492ac]" />
                             {fmtDay(booking.fromDateKey)} – {fmtDay(booking.toDateKey)}
                           </p>
                           <p className="mt-0.5 text-[11px] text-[#8492ac]">{daysOut(booking)} day{daysOut(booking) === 1 ? "" : "s"}</p>
                         </td>
-                        <td className="px-5 py-3 align-top">
+                        <td data-label="Status" className="px-5 py-3 align-top">
                           <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", CHIP_TONES[chip.tone])}>{chip.label}</span>
                           {booking.isOverdue && (
                             <span className={cn("mt-1 block w-fit rounded-[7px] px-2 py-[3px] text-[11px] font-bold", CHIP_TONES.red)}>Overdue</span>
                           )}
                         </td>
-                        <td className="px-5 py-3 text-right align-top">
+                        <td data-label="Balance" className="px-5 py-3 text-right align-top">
                           <p className="font-bold text-[var(--brand-ink)]">{inr(booking.balanceDue)}</p>
                           {booking.depositAmount > 0 && <p className="mt-0.5 text-[11px] text-[#8492ac]">{inr(booking.depositAmount)} deposit</p>}
                         </td>
-                        <td className="px-5 py-3 align-top">
+                        <td data-label="Actions" className="px-5 py-3 align-top">
                           <div className="flex flex-wrap items-center justify-end gap-2 lg:mouse:gap-1.5">
                             {booking.status === "booked" && (
                               <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" disabled={pickupMut.isPending} onClick={() => pickupMut.mutate(booking.id)}>

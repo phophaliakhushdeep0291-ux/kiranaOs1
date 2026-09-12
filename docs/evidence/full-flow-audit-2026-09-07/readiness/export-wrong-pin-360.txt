@@ -1,0 +1,130 @@
+- link:
+  - /url: "#main-content"
+  - text: Skip to main content
+- banner:
+  - link:
+    - /url: /dashboard
+  - heading [level=1]: Cash & Payments
+  - generic: Full Flow Audit Shop · Synced
+  - button:
+  - link:
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link:
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Cash & Payments page loaded
+  - link:
+    - /url: /money-statement?mode=cash
+    - generic: Net -
+    - paragraph: Cash Balance
+    - paragraph: ₹-15
+    - paragraph: ₹120 received · ₹135 paid
+  - link:
+    - /url: /money-statement?mode=upi
+    - generic: Net +
+    - paragraph: UPI Balance
+    - paragraph: ₹0
+    - paragraph: ₹0 received · ₹0 paid
+  - link:
+    - /url: /money-statement?mode=bank
+    - generic: Net +
+    - paragraph: Bank Balance
+    - paragraph: ₹0
+    - paragraph: ₹0 received · ₹0 paid
+  - link:
+    - /url: /money-statement
+    - generic: Net -
+    - paragraph: Total Net
+    - paragraph: ₹-15
+    - paragraph: ₹120 in · ₹135 out
+  - textbox:
+    - /placeholder: Search name, mobile or bill no
+  - button: today
+  - button: week
+  - button: month
+  - textbox: 2026-09-02
+  - textbox: 2026-09-08
+  - button:
+    - text: Refresh
+  - button: all
+  - button: cash
+  - button: upi
+  - button: bank
+  - button: All flow
+  - button: Received
+  - button: Paid
+  - button:
+    - text: Export
+  - heading [level=2]: Cash, UPI & Bank Statement
+  - paragraph: Every received and paid entry with date, time, party, and payment mode.
+  - text: 5 rows
+  - button:
+    - paragraph: QA Wholesale
+    - paragraph: 07 Sep 2026 · 05:28 PM
+    - paragraph: "-₹75"
+    - generic: cash
+    - generic: Purchase payment
+    - generic: QA-PURCHASE-01
+  - button:
+    - paragraph: QA Credit Customer
+    - paragraph: 07 Sep 2026 · 05:25 PM
+    - paragraph: +₹20
+    - generic: cash
+    - generic: Udhar payment
+    - generic: Udhar recovery
+  - button:
+    - paragraph: Walk-in
+    - paragraph: 07 Sep 2026 · 05:08 PM
+    - paragraph: "-₹50"
+    - generic: cash
+    - generic: Bill payment
+    - generic: RET-2026-000001
+  - button:
+    - paragraph: Walk-in
+    - paragraph: 07 Sep 2026 · 05:07 PM
+    - paragraph: +₹100
+    - generic: cash
+    - generic: Bill payment
+    - generic: KOS-2026-000001
+  - button:
+    - paragraph: QA Local Vendor
+    - paragraph: 07 Sep 2026 · 05:30 AM
+    - paragraph: "-₹10"
+    - generic: cash
+    - generic: Expense
+    - generic: QA packing bags
+- navigation:
+  - link:
+    - /url: /dashboard
+    - generic: Home
+  - link:
+    - /url: /billing
+    - generic: Sell
+  - link:
+    - /url: /inventory
+    - generic: Stock
+  - link:
+    - /url: /customers
+    - generic: Customers
+  - button:
+    - generic: More
+- button:
+- list
+- dialog "Approve data export":
+  - heading "Approve data export" [level=2]:
+    - text: Approve data export
+  - paragraph: This file contains private shop records. Enter the owner PIN and a reason to download it. Connect to the internet to verify approval.
+  - text: Owner PIN *
+  - textbox "Owner PIN *":
+    - /placeholder: Enter owner PIN
+  - generic: Reason for export *
+  - textbox "Reason for export *":
+    - /placeholder: Reason required for audit trail
+    - text: QA export approval check
+  - alert: Wrong PIN
+  - button "Cancel"
+  - button "Download export"
+  - button "Close":
+    - generic: Close

@@ -312,6 +312,18 @@ runStep({
 runStep({ id: "migration-safety", label: "Migration safety and sequence", args: ["run", "migration:safety"] });
 runStep({ id: "release-gate", label: "Release documentation and rollback gate", args: ["run", "release:gate"] });
 runStep({
+  id: "prisma-postgres-generate",
+  label: "Generate isolated PostgreSQL client for datasource-selection tests",
+  command: process.execPath,
+  args: ["node_modules/prisma/build/index.js", "generate", "--schema", "prisma-postgres/schema.prisma"],
+  // Client generation does not connect to a database. The separate output
+  // preserves the SQLite client used by the local runtime and test suite.
+  env: {
+    DATABASE_URL: "postgresql://release:release@127.0.0.1:5432/kiranaos_release_validation",
+    DIRECT_DATABASE_URL: "postgresql://release:release@127.0.0.1:5432/kiranaos_release_validation",
+  },
+});
+runStep({
   id: "backend-source-db",
   label: "Prepare isolated database for source-level tests",
   command: process.execPath,

@@ -6,6 +6,7 @@ import {
   heldBillFromBillingDraft,
   newBillId,
   upsertOpenBill,
+  wouldEvictOpenBill,
 } from "@/features/core/billing/pages/open-bills";
 import type { BillingDraft, CartItem, HeldBill } from "@/features/core/billing/pages/billing-types";
 import type { BookList, Product } from "@/types/api";
@@ -64,16 +65,7 @@ export async function openBookListInBilling(list: BookList, products: Product[])
     });
   }
 
-  const [heldRaw, draft] = await Promise.all([
-    offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY).catch(() => null),
-    offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY).catch(() => null),
-  ]);
-  let held = Array.isArray(heldRaw) ? heldRaw : [];
-
-  // Park whatever is already in the workspace, exactly as switching tables does,
-  // so loading a list never drops a half-rung sale at the counter.
-  const parked = heldBillFromBillingDraft(draft);
-  if (parked) held = upsertOpenBill(held, parked);
+  if (cart.length === 0) throw new Error("None of this list's products are available. Check the catalogue before billing this set.");
 
   const bill: HeldBill = {
     id: newBillId(),
@@ -82,12 +74,23 @@ export async function openBookListInBilling(list: BookList, products: Product[])
     cart,
     selectedCustomerId: "walk_in",
   };
-  held = upsertOpenBill(held, bill);
-
-  await Promise.all([
-    offlineDB.setSetting(HELD_BILLS_KEY, held).catch(() => undefined),
-    offlineDB.setSetting(BILLING_DRAFT_KEY, billingDraftFromHeldBill(bill)).catch(() => undefined),
-  ]);
+  await offlineDB.transaction(["settings"], async (tx) => {
+    const [heldRaw, draft] = await Promise.all([
+      offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY),
+      offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY),
+    ]);
+    let held = Array.isArray(heldRaw) ? heldRaw : [];
+    // Preserve both the current sale and every parked sale. The normal upsert
+    // caps the list, so refuse this transition before it could evict a cart.
+    const parked = heldBillFromBillingDraft(draft);
+    for (const next of [parked, bill]) {
+      if (!next) continue;
+      if (wouldEvictOpenBill(held, next)) throw new Error("Finish or close an open bill before starting another book set.");
+      held = upsertOpenBill(held, next);
+    }
+    await tx.setSetting(HELD_BILLS_KEY, held);
+    await tx.setSetting(BILLING_DRAFT_KEY, billingDraftFromHeldBill(bill));
+  });
 
   return { bill, added: cart.length, skipped };
 }

@@ -1,0 +1,39 @@
+{
+  "run": {
+    "number": "QA-MOBILE-RUN-02",
+    "status": "quarantined",
+    "qc": "conditional",
+    "planned": 10,
+    "actual": 9,
+    "consumed": [
+      12.5
+    ]
+  },
+  "products": [
+    {
+      "name": "QA manufacturing item",
+      "stockBaseQty": 29
+    },
+    {
+      "name": "QA raw material",
+      "stockBaseQty": 87.5
+    }
+  ],
+  "lots": [
+    {
+      "batchNumber": "QA-MOBILE-BATCH-02",
+      "status": "quarantined",
+      "availableBaseQty": 9
+    }
+  ],
+  "ledger": [
+    {
+      "action": "production_use",
+      "changeBaseQty": -12.5
+    },
+    {
+      "action": "production_output",
+      "changeBaseQty": 9
+    }
+  ]
+}

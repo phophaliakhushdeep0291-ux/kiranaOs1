@@ -85,7 +85,7 @@ export async function me(req, res, next) {
 
 export async function setPin(req, res, next) {
   try {
-    const data = await authService.setPin(req.user.userId, req.user.shopId, req.body.pin, requestMeta(req));
+    const data = await authService.setPin(req.user.userId, req.user.shopId, req.body.pin, requestMeta(req), req.body.currentPassword);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }

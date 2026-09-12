@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { isWriteConflict, serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { listProducts } from "../products/products.service.js";
 import { priceCatalogProducts } from "../pricing/pricing.service.js";
@@ -246,7 +247,7 @@ export async function cancelPublicOrder(shopId, orderId, options = {}) {
   const minutes = Number(cancelPolicy?.windowMinutes ?? 0);
   if (minutes <= 0) throw new AppError("This restaurant does not allow online cancellation.", 409, "ORDER_CANCELLATION_DISABLED");
 
-  const result = await db.$transaction(async (tx) => {
+  const result = await serializableTransaction(async (tx) => {
     const existing = await tx.customerOrder.findFirst({ where: { id: String(orderId ?? ""), shopId } });
     if (!existing) throw new AppError("We couldn't find that order.", 404);
     if (existing.status === "cancelled" && !selection.items) return { deliveries: [] };
@@ -290,8 +291,8 @@ export async function cancelPublicOrder(shopId, orderId, options = {}) {
       itemCount: updated.itemCount, estimatedTotal: updated.estimatedTotal,
     }, { client: tx });
     return { deliveries };
-  }, { isolationLevel: "Serializable" }).catch((error) => {
-    if (error?.code === "P2034") throw new AppError("The order changed. Refresh it before trying again.", 409, "CONCURRENT_ORDER_UPDATE");
+  }).catch((error) => {
+    if (isWriteConflict(error)) throw new AppError("The order changed. Refresh it before trying again.", 409, "CONCURRENT_ORDER_UPDATE");
     throw error;
   });
   await dispatchIntegrationDeliveries(result.deliveries);
@@ -314,7 +315,7 @@ export async function submitPublicOrderFeedback(shopId, orderId, body = {}, opti
   }
 
   const now = new Date();
-  const result = await db.$transaction(async (tx) => {
+  const result = await serializableTransaction(async (tx) => {
     const claimed = await tx.customerOrder.updateMany({
       where: { id: existing.id, shopId, status: "fulfilled", feedbackAt: null },
       data: { feedbackRating: rating, feedbackComment: comment || null, feedbackAt: now },
@@ -333,7 +334,7 @@ export async function submitPublicOrderFeedback(shopId, orderId, body = {}, opti
       id: existing.id, rating, hasComment: Boolean(comment), submittedAt: now,
     }, { client: tx });
     return { current, deliveries };
-  }, { isolationLevel: "Serializable" });
+  });
   await dispatchIntegrationDeliveries(result.deliveries);
   return { rating: result.current.feedbackRating, comment: result.current.feedbackComment, submittedAt: result.current.feedbackAt, duplicate: result.deliveries.length === 0 };
 }
@@ -597,7 +598,7 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
   const estimatedTotal = round2(lines.reduce((sum, l) => sum + l.qty * l.price, 0));
 
   try {
-    const result = await db.$transaction(async (tx) => {
+    const result = await serializableTransaction(async (tx) => {
       const order = await tx.customerOrder.create({
         data: {
           shopId,
@@ -654,7 +655,7 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
         estimatedTotal: order.estimatedTotal,
       }, { client: tx });
       return { order, deliveries };
-    }, { isolationLevel: "Serializable" });
+    });
 
     await dispatchIntegrationDeliveries(result.deliveries);
     return shapeOrderSubmitResponse(result.order, shop.name);

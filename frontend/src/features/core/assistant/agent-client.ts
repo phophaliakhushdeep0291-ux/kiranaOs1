@@ -112,6 +112,8 @@ export async function sendAgentMessage(
       ...(init?.cart?.length ? { cart: init.cart.slice(0, 40) } : {}),
     }),
     signal: init?.signal,
+    // Allow the server's 45-second turn deadline to return its useful timeout.
+    timeoutMs: 55_000,
   });
 }
 

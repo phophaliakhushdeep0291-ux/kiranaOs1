@@ -35,6 +35,7 @@ type OfflineStatusState = {
   failedCount: number;
   conflictCount: number;
   isSyncing: boolean;
+  queueStatus: "checking" | "ready" | "error";
 };
 
 let state: OfflineStatusState = {
@@ -43,6 +44,7 @@ let state: OfflineStatusState = {
   failedCount: 0,
   conflictCount: 0,
   isSyncing: false,
+  queueStatus: "checking",
 };
 
 const subscribers = new Set<() => void>();
@@ -56,9 +58,9 @@ function setCounts(counts: SyncQueueCounts) {
   if (
     state.pendingCount === counts.pending &&
     state.failedCount === counts.failed &&
-    state.conflictCount === counts.conflict
+    state.conflictCount === counts.conflict && state.queueStatus === "ready"
   ) return;
-  publish({ ...state, pendingCount: counts.pending, failedCount: counts.failed, conflictCount: counts.conflict });
+  publish({ ...state, pendingCount: counts.pending, failedCount: counts.failed, conflictCount: counts.conflict, queueStatus: "ready" });
 }
 
 function setSyncing(value: boolean) {
@@ -129,7 +131,7 @@ function armScheduledSync() {
 async function runScheduledTick() {
   try {
     const counts = await refreshCount();
-    const hadWork = Boolean(counts && counts.totalBlocking > 0);
+    const hadWork = !counts || counts.totalBlocking > 0;
     const canRun = navigator.onLine && document.visibilityState === "visible";
     const pushed = canRun && shouldRunScheduledNetworkWork() ? await syncNow() : 0;
     if (canRun) await recoverLocalQueueIfNeeded();
@@ -149,13 +151,19 @@ async function runScheduledTick() {
   }
 }
 
+let countReadGeneration = 0;
 async function refreshCount(): Promise<SyncQueueCounts | null> {
+  const generation = ++countReadGeneration;
   try {
     const counts = await readSyncQueueCounts();
+    if (generation !== countReadGeneration) return null;
     setCounts(counts);
     return counts;
   } catch {
-    // Ignore IndexedDB errors in UI status.
+    // Keep last-known counts, but never describe them as a verified empty queue.
+    if (generation === countReadGeneration && state.queueStatus !== "error") {
+      publish({ ...state, queueStatus: "error" });
+    }
     return null;
   }
 }
@@ -175,6 +183,9 @@ export async function syncNow(options: { manual?: boolean; hydrate?: boolean } =
     const result = hydrate ? await runManualSyncCycle() : await runSyncCycle();
     await refreshCount();
     return result.pushed;
+  } catch (error) {
+    await refreshCount();
+    throw error;
   } finally {
     isSyncing = false;
     setSyncing(false);
@@ -200,7 +211,7 @@ function scheduleSync(delayMs: number) {
   if (scheduledSyncTimer !== null) window.clearTimeout(scheduledSyncTimer);
   scheduledSyncTimer = window.setTimeout(() => {
     scheduledSyncTimer = null;
-    void syncNow();
+    void syncNow().catch(() => undefined);
   }, delayMs);
 }
 
@@ -216,11 +227,13 @@ function handleOffline() {
 
 function handleQueueUpdated(event?: Event) {
   void refreshCount();
-  // A finished sync announces itself on the same channel a local edit uses, so
-  // reacting to it scheduled another sync, which announced itself, and so on.
-  // `useMultiDeviceSync` already filters its own echo this way; this side did not,
-  // which is what turned two schedulers into a loop. Counts still refresh above —
-  // only the follow-up cycle is skipped.
+  // The sync engine's own announcements carry `type: "sync"`: a finished push or
+  // pull on kirana:local-data-changed, and every outbox status write a push makes
+  // on kirana:sync-queue-updated. None is new work. Reacting scheduled another
+  // cycle, which announced itself, and so on — that is what turned two schedulers
+  // into a loop — and each status write alone cost a cycle with nothing to send.
+  // Counts still refresh above; only the follow-up cycle is skipped. A requeue
+  // that makes a row due is announced without the tag.
   const detail = (event as CustomEvent | undefined)?.detail as { type?: string } | undefined;
   if (detail?.type === "sync") return;
   // New local work: whatever the idle ramp had drifted to, the next scheduled
@@ -231,7 +244,7 @@ function handleQueueUpdated(event?: Event) {
     if (queueRecoveryTimer !== null) window.clearTimeout(queueRecoveryTimer);
     queueRecoveryTimer = window.setTimeout(() => {
       queueRecoveryTimer = null;
-      void recoverLocalQueueIfNeeded();
+      void recoverLocalQueueIfNeeded().catch(() => undefined);
     }, 900);
   }
 }
@@ -244,7 +257,7 @@ function handleBackendStatus(event: Event) {
 function handleVisibility() {
   if (document.visibilityState === "visible") {
     void refreshCount();
-    if (navigator.onLine) void recoverLocalQueueIfNeeded();
+    if (navigator.onLine) void recoverLocalQueueIfNeeded().catch(() => undefined);
   }
 }
 
@@ -264,12 +277,12 @@ function start() {
   if ((typeof navigator === "undefined" || navigator.onLine) && shouldRunScheduledNetworkWork()) {
     bootSyncTimer = window.setTimeout(() => {
       bootSyncTimer = null;
-      void syncNow();
+      void syncNow().catch(() => undefined);
     }, 700);
   }
   bootRecoveryTimer = window.setTimeout(() => {
     bootRecoveryTimer = null;
-    void recoverLocalQueueIfNeeded();
+    void recoverLocalQueueIfNeeded().catch(() => undefined);
   }, 1_000);
 
   idleStep = 0;
@@ -282,6 +295,8 @@ function start() {
 function stop() {
   if (!running) return;
   running = false;
+  countReadGeneration += 1;
+  state = { ...state, queueStatus: "checking" };
 
   window.removeEventListener("online", handleOnline);
   window.removeEventListener("offline", handleOffline);
@@ -327,6 +342,7 @@ export function useOfflineStatus() {
     failedCount: snapshot.failedCount,
     conflictCount: snapshot.conflictCount,
     isSyncing: snapshot.isSyncing,
+    queueStatus: snapshot.queueStatus,
     syncNow,
   };
 }

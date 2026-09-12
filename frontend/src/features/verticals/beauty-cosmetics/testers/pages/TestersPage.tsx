@@ -125,7 +125,7 @@ export default function TestersPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <Kpi icon={<Sparkles size={16} />} label="Testers on the counter" value={String(summary?.openTesters ?? 0)} tone="violet" />
           <Kpi
             icon={<AlertTriangle size={16} />}
@@ -215,7 +215,7 @@ export default function TestersPage() {
             </div>
           ) : (
             <div className="app-table-scroll overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <table className="trade-mobile-table w-full text-[13px]">
                 <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                   <tr>
                     <th className="px-5 py-2.5 text-left font-bold">Tester</th>
@@ -228,18 +228,18 @@ export default function TestersPage() {
                 <tbody>
                   {testers.map((tester, i) => (
                     <tr key={tester.id} className={i < testers.length - 1 ? "border-b border-[#eef2f8]" : ""}>
-                      <td className="px-5 py-3 align-top">
+                      <td data-label="Tester" className="px-5 py-3 align-top">
                         <p className="font-bold text-[var(--brand-ink)]">{tester.productName}</p>
                         {tester.variant && <p className="mt-0.5 text-[11.5px] text-[#52627e]">{tester.variant}</p>}
                         {!tester.stockLedgerId && (
                           <p className="mt-0.5 text-[10.5px] text-amber-700">recorded without moving stock</p>
                         )}
                       </td>
-                      <td className="px-5 py-3 align-top">
+                      <td data-label="Opened" className="px-5 py-3 align-top">
                         <p className="text-[12px] text-[#344668]">{fmtDay(tester.openedOnKey)}</p>
                         <p className="mt-0.5 text-[11px] text-[#8492ac]">{tester.ageDays} day{tester.ageDays === 1 ? "" : "s"} ago</p>
                       </td>
-                      <td className="px-5 py-3 align-top">
+                      <td data-label="Replace by" className="px-5 py-3 align-top">
                         {!tester.isOpen ? (
                           <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", CHIP_TONES.gray)}>
                             {tester.status === "replaced" ? "Replaced" : "Discarded"} {fmtDay(tester.closedOnKey)}
@@ -256,10 +256,10 @@ export default function TestersPage() {
                           <span className="text-[12px] text-[#52627e]">{fmtDay(tester.dueOnKey)}</span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-right align-top">
+                      <td data-label="Cost" className="px-5 py-3 text-right align-top">
                         <span className="text-[12.5px] font-semibold text-[var(--brand-ink)]">{inr(tester.costValue)}</span>
                       </td>
-                      <td className="px-5 py-3 align-top">
+                      <td data-label="Actions" className="px-5 py-3 align-top">
                         <div className="flex flex-wrap items-center justify-end gap-2 lg:mouse:gap-1.5">
                           {tester.isOpen && (
                             <>

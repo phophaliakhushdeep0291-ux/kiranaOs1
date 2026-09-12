@@ -1,0 +1,125 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Expenses" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Expenses page loaded
+  - paragraph: Today's Expenses
+  - paragraph: ₹10
+  - paragraph: vs yesterday
+  - paragraph: This Month's Expenses
+  - paragraph: ₹10
+  - paragraph: vs last month
+  - paragraph: Pending Payouts
+  - paragraph: ₹0
+  - paragraph: 0 payments pending
+  - paragraph: Top Expense Category
+  - paragraph: Packing Material
+  - paragraph: ₹10 (100%)
+  - textbox "Search by description, vendor or notes…"
+  - combobox:
+    - generic: This Month
+  - combobox:
+    - generic: All Categories
+  - button "Export":
+    - text: Export
+  - button "Add Expense":
+    - text: Add Expense
+  - heading "Expenses by Category" [level=3]
+  - paragraph: This month
+  - paragraph: Total
+  - paragraph: ₹10
+  - list:
+    - generic: Packing Material
+    - generic: ₹10
+    - generic: (100%)
+  - heading "Monthly Spending Trend" [level=3]
+  - paragraph: Last 6 months
+  - generic: "Average monthly expense: ₹1.67"
+  - heading "All Expenses" [level=3]
+  - generic: Showing 1 to 1 of 1 expenses
+  - article:
+    - paragraph: QA packing bags
+    - paragraph: Packing Material • QA Local Vendor
+    - generic: Cash
+    - generic: Paid
+    - paragraph: ₹10
+    - paragraph: 07 Sept 2026
+    - button "Edit":
+      - text: Edit
+    - button "Delete":
+      - text: Delete
+  - button "Previous page" [disabled]: ‹
+  - button "Page 1": "1"
+  - button "Next page" [disabled]: ›
+  - text: Rows per page
+  - combobox:
+    - generic: "10"
+  - dialog:
+    - heading [level=2]: Add New Expense
+    - paragraph: Record a new business expense
+    - button:
+    - generic: Category *
+    - combobox:
+      - generic: Packing Material
+    - combobox
+    - generic: Vendor / Payee
+    - textbox:
+      - /placeholder: Shree Ganesh Properties
+      - text: QA Local Vendor
+    - generic: Amount *
+    - generic: ₹
+    - spinbutton: "10"
+    - generic: Payment Mode *
+    - combobox:
+      - generic: Cash
+    - combobox
+    - generic: Payment Date *
+    - textbox: 2026-09-07
+    - generic: Description *
+    - textbox:
+      - /placeholder: Shop Rent – May 2024
+      - text: QA packing bags
+    - generic: Status
+    - combobox:
+      - generic: Paid
+    - combobox
+    - generic: Notes (Optional)
+    - textbox:
+      - /placeholder: Payment for shop rent – May 2024
+    - paragraph: Recurring Expense
+    - paragraph: Repeats on a schedule (rent, salary…)
+    - switch
+    - checkbox
+    - button: Cancel
+    - button:
+      - text: Save Expense
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list
+- generic: ₹6

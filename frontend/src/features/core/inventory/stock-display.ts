@@ -304,13 +304,11 @@ export function normalizeInventoryItem(item: Product | InventoryItem): Inventory
   } as InventoryItem;
 }
 
-function rowKey(item: Product | InventoryItem): string | undefined {
-  const record = item as StockRecord;
-  return cleanText(record.productId)
-    ?? cleanText(record.product_id)
-    ?? cleanText(item.id)
-    ?? cleanText(record.local_id)
-    ?? cleanText(record.server_id);
+function rowKeys(item: Product | InventoryItem): string[] {
+  const row = item as StockRecord;
+  return [row.productId, row.product_id, row.id, row.local_id, row.localId,
+    row.server_id, row.serverId, row.clientProductId, row.client_product_id]
+    .map(cleanText).filter((key): key is string => Boolean(key));
 }
 
 function isDeleted(item: Product | InventoryItem) {
@@ -338,15 +336,27 @@ function mergeRows(existing: InventoryItem | undefined, incoming: Product | Inve
 export function mergeInventoryRows(...groups: Array<Array<Product | InventoryItem> | undefined | null>): InventoryItem[] {
   const rows = groups.flatMap((group) => group ?? []).filter((item) => item && !isDeleted(item));
   const merged = new Map<string, InventoryItem>();
+  const aliases = new Map<string, string>();
   const anonymous: InventoryItem[] = [];
 
   for (const row of rows) {
-    const key = rowKey(row);
+    const keys = rowKeys(row);
+    const matches = [...new Set(keys.map((key) => aliases.get(key)).filter((key): key is string => Boolean(key)))];
+    const key = matches[0] ?? keys[0];
     if (!key) {
       anonymous.push(normalizeInventoryItem(row));
       continue;
     }
-    merged.set(key, mergeRows(merged.get(key), row));
+    // A server echo can join a device id and a server id that arrived separately.
+    // Only durable ids establish identity; equal names or barcodes do not.
+    let previous = merged.get(key);
+    for (const duplicate of matches.slice(1)) {
+      previous = mergeRows(previous, merged.get(duplicate)!);
+      merged.delete(duplicate);
+      for (const [alias, target] of aliases) if (target === duplicate) aliases.set(alias, key);
+    }
+    merged.set(key, mergeRows(previous, row));
+    keys.forEach((alias) => aliases.set(alias, key));
   }
 
   return [...merged.values(), ...anonymous];
@@ -372,12 +382,10 @@ export function enrichInventoryRows(
 ): InventoryItem[] {
   const wanted = new Set<string>();
   for (const row of subject ?? []) {
-    const key = row && rowKey(row);
-    if (key) wanted.add(key);
+    if (row) rowKeys(row).forEach((key) => wanted.add(key));
   }
   if (wanted.size === 0) return [];
   return mergeInventoryRows(...detail, subject).filter((row) => {
-    const key = rowKey(row);
-    return key !== undefined && wanted.has(key);
+    return rowKeys(row).some((key) => wanted.has(key));
   });
 }

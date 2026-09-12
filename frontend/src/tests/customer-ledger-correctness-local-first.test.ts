@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BillInputBillType, BillPaymentMode, type BillInput } from "@/types/api";
 import { calculateLedgerBalance, normaliseLedgerType } from "@/features/core/ledger/accounting";
+import { createCustomerLocalFirst, updateCustomerLocalFirst } from "@/features/core/customers/local-actions";
 
 const dbState = vi.hoisted(() => ({
   scope: {
@@ -179,6 +180,22 @@ function seedLedger(row: Record<string, unknown>) {
 }
 
 describe("customer ledger correctness", () => {
+  it("keeps credit follow-up fields in the offline record and sync payload, including explicit clears", async () => {
+    const fields = { udharLimit: 1200.25, dueDate: "2026-09-15", promiseToPayDate: "2026-09-12", notes: "After delivery" };
+    const customer = await createCustomerLocalFirst({ name: "Credit follow-up", mobile: "9876500011", ...fields });
+    expect(customer).toEqual(expect.objectContaining(fields));
+    const created = scopedRows("sync_outbox").find((row) => row.operation_type === "CREATE_CUSTOMER");
+    expect(created?.payload).toEqual(expect.objectContaining({ customer: expect.objectContaining(fields) }));
+    await updateCustomerLocalFirst(customer.id, { name: "Updated follow-up" });
+    expect(scopedRows("customers").find((row) => row.id === customer.id)).toEqual(expect.objectContaining(fields));
+    const cleared = { dueDate: null, promiseToPayDate: null, udharLimit: null, notes: null };
+    await updateCustomerLocalFirst(customer.id, cleared);
+    expect(scopedRows("customers").find((row) => row.id === customer.id)).toEqual(expect.objectContaining(cleared));
+    const updates = scopedRows("sync_outbox").filter((row) => row.operation_type === "UPDATE_CUSTOMER");
+    expect(updates.at(-1)?.payload).toEqual(expect.objectContaining({ customer: expect.objectContaining(cleared) }));
+    await expect(updateCustomerLocalFirst(customer.id, { dueDate: "2026-02-30" })).rejects.toThrow();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     resetTables();

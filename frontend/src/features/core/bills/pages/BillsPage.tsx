@@ -1,3 +1,4 @@
+import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
@@ -389,6 +390,7 @@ function useLocalBills() {
 }
 
 export default function BillsPage() {
+  const requestExport = useDataExport();
   const { t } = useAppLanguage();
   const { toast } = useToast();
   const { shop } = useAuth();
@@ -734,7 +736,7 @@ export default function BillsPage() {
           <Button variant="outline" className="hidden h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[#24385f] lg:inline-flex" onClick={() => document.getElementById("billing-history-table")?.scrollIntoView({ block: "start", behavior: "smooth" })}>
             <Filter size={15} /> Filters
           </Button>
-          <Button onClick={exportCsv} disabled={filtered.length === 0} variant="outline" className="hidden h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[var(--brand)] lg:inline-flex">
+          <Button onClick={() => requestExport({ reportType: "bills", format: "csv" }, exportCsv)} disabled={filtered.length === 0} variant="outline" className="hidden h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[var(--brand)] lg:inline-flex">
             <Download size={15} /> Export
           </Button>
           <Button onClick={requestEstimateCleanup} disabled={counts.estimates === 0 || isSaving} variant="outline" className="hidden h-10 rounded-[8px] border-rose-100 bg-white px-4 text-[12px] font-bold text-rose-600 hover:border-rose-200 hover:bg-rose-50 lg:inline-flex">

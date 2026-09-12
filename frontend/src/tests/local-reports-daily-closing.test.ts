@@ -35,6 +35,23 @@ import {
   buildDailyClosingReport,
   buildLocalReportSnapshot,
 } from "@/features/core/reports/local-reporting";
+import { offlineDB } from "@/lib/offline/db";
+
+describe("financial read failures cannot become confirmed zero totals", () => {
+  it.each(["bills", "bill_items", "payments", "customer_ledger", "products", "customers", "suppliers", "inventory_movements", "purchase_bills", "sync_outbox", "sync_conflicts"])("rejects reports and closing if %s cannot be read, then recovers", async (table) => {
+    const getAll = vi.mocked(offlineDB.getAll);
+    const original = getAll.getMockImplementation()!;
+    getAll.mockImplementation(async (name) => {
+      if (name === table) throw new Error(`unreadable:${table}`);
+      return original(name);
+    });
+    try {
+      await expect(buildLocalReportSnapshot({ from: "2026-06-06", to: "2026-06-06" })).rejects.toThrow(`unreadable:${table}`);
+      await expect(buildDailyClosingReport("2026-06-06")).rejects.toThrow(`unreadable:${table}`);
+    } finally { getAll.mockImplementation(original); }
+    await expect(buildDailyClosingReport("2026-06-06")).resolves.toHaveProperty("date", "2026-06-06");
+  });
+});
 
 const scope = {
   tenant_id: "tenant_reports",
@@ -883,6 +900,39 @@ describe("local reports and daily closing", () => {
     expect(snapshot.pendingSyncCount).toBe(1);
     expect(snapshot.dataSourceLabel).toBe("Local estimate");
     expect(closing.isLocalEstimate).toBe(true);
+  });
+
+  it("keeps daily closing provisional while a change is actively syncing", async () => {
+    setRows({ sync_outbox: [{ ...scope, clientEventId: "uploading", status: "SYNCING", sync_status: "syncing" }] });
+
+    const closing = await buildDailyClosingReport("2026-06-06");
+
+    expect(closing.pendingSyncCount).toBe(1);
+    expect(closing.isLocalEstimate).toBe(true);
+  });
+
+  it("includes stored reviews without a local outbox event in closing health", async () => {
+    setRows({ sync_conflicts: [
+      { ...scope, id: "product-review", entity_type: "product", entity_id: "product-1", resolution: "unresolved", sync_status: "conflict" },
+      { ...scope, id: "other-shop", tenant_id: "other", resolution: "unresolved", sync_status: "conflict" },
+      { ...scope, id: "resolved", resolution: "use_server", sync_status: "synced" },
+    ] });
+
+    const closing = await buildDailyClosingReport("2026-06-06");
+
+    expect(closing.conflictCount).toBe(1);
+    expect(closing.isLocalEstimate).toBe(true);
+  });
+
+  it("counts one rejection once in closing even when both conflict and outbox rows exist", async () => {
+    setRows({
+      sync_outbox: [{ ...scope, clientEventId: "rejected", status: "CONFLICT", sync_status: "conflict" }],
+      sync_conflicts: [{ ...scope, id: "review", source_event_id: "rejected", resolution: "unresolved", sync_status: "conflict" }],
+    });
+
+    const closing = await buildDailyClosingReport("2026-06-06");
+
+    expect(closing.conflictCount).toBe(1);
   });
 
   it("dashboard report totals dedupe pending local bill and synced server bill", async () => {

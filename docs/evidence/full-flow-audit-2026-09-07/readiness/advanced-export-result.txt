@@ -1,0 +1,149 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Advanced" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Advanced page loaded
+  - heading "Data Management" [level=3]
+  - paragraph: Retention & storage
+  - button "Optimize"
+  - paragraph: Auto cleanup temp files
+  - paragraph: Prune expired caches and synced history every 10 minutes
+  - switch "Auto cleanup temp files" [checked]
+  - generic: Storage used on this device
+  - generic: 3.8 MB of 10.00 GB
+  - paragraph: 62 local records
+  - generic: Catalogue 2
+  - generic: Sales 17
+  - generic: Customers 3
+  - generic: Stock 10
+  - generic: Sync queue 30
+  - button "Clean Cache"
+  - heading "App Preferences" [level=3]
+  - paragraph: Language, theme & defaults
+  - group "Language":
+    - generic: Language
+    - combobox "Language":
+      - generic: English
+  - group "Date format":
+    - generic: Date format
+    - combobox "Date format":
+      - generic: DD/MM/YYYY
+  - group "Default landing page":
+    - generic: Default landing page
+    - combobox "Default landing page":
+      - generic: Dashboard
+  - group "Default payment":
+    - generic: Default payment
+    - combobox "Default payment":
+      - generic: Cash
+  - paragraph: Accent theme
+  - button
+  - button
+  - button
+  - button
+  - button
+  - button
+  - button
+  - button
+  - button
+  - paragraph: Compact mode
+  - switch "Compact mode"
+  - paragraph: Keyboard shortcuts
+  - switch "Keyboard shortcuts" [checked]
+  - paragraph: Sound effects
+  - switch "Sound effects" [checked]
+  - heading "Import / Export" [level=3]
+  - paragraph: Move your data in & out
+  - button "Open product import":
+    - text: Open product import
+  - button "Customer CSV template":
+    - text: Customer CSV template
+  - button "Export products":
+    - text: Export products
+  - button "Export customers":
+    - text: Export customers
+  - button "Export bills":
+    - text: Export bills
+  - button "Export local records":
+    - text: Export local records
+  - heading "Offline Database Tools" [level=3]
+  - paragraph: Keep local data healthy
+  - generic: Check database health
+  - button "Run"
+  - generic: Repair local database
+  - button "Run"
+  - generic: Rebuild search index
+  - button "Run"
+  - generic: Recalculate dashboard totals
+  - button "Run"
+  - generic: Recalculate customer ledgers
+  - button "Run"
+  - generic: Recalculate inventory stock
+  - button "Run"
+  - heading "Developer / Diagnostics" [level=3]
+  - paragraph: For support
+  - button "Copy"
+  - paragraph: App version
+  - paragraph: 2026.09.07
+  - paragraph: Build
+  - paragraph: "20260907104410"
+  - paragraph: Database
+  - paragraph: v6
+  - paragraph: Connection
+  - paragraph: Online
+  - paragraph: Outbox
+  - paragraph: 0 pending · 1 conflict(s)
+  - paragraph: Storage
+  - paragraph: 3.8 MB
+  - button "Copy diagnostics":
+    - text: Copy diagnostics
+  - button "Send to support"
+  - heading "Danger Zone" [level=3]
+  - paragraph: Irreversible — owner PIN required
+  - paragraph: Reset settings
+  - paragraph: Restore all settings to defaults
+  - button "Run"
+  - paragraph: Clear local cache
+  - paragraph: Free up space; keeps your data
+  - button "Run"
+  - paragraph: Logout all other devices
+  - paragraph: Sign out every device except this one
+  - button "Confirm"
+  - paragraph: Remove this device
+  - paragraph: Unlink this device from the store
+  - button "Confirm"
+  - paragraph: Delete local offline data
+  - paragraph: Clears this device's local copy
+  - button "Confirm"
+  - paragraph: Factory reset store
+  - paragraph: Permanently wipe local data & settings
+  - button "Confirm"
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list
