@@ -2080,7 +2080,7 @@ model TradeOrder {
   updatedAt             DateTime  @updatedAt
 
   items    TradeOrderItem[]
-  dispatch TradeDispatch?
+  dispatches TradeDispatch[]
 
   @@unique([shopId, orderNumber])
   @@index([shopId, status, createdAt])
@@ -2121,18 +2121,23 @@ model TradeOrderAllocation {
   inventoryLotId  String
   batchNumber     String
   quantityBaseQty Float
+  // Null while the reservation is still open; set to the consignment that
+  // shipped it, which is what makes the rest of the line a back-order.
+  dispatchId      String?
   createdAt       DateTime @default(now())
 
   orderItem TradeOrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
 
-  @@unique([orderItemId, inventoryLotId])
+  @@unique([orderItemId, inventoryLotId, dispatchId])
+
+  @@index([shopId, dispatchId])
   @@index([shopId, inventoryLotId])
 }
 
 model TradeDispatch {
   id                 String    @id @default(cuid())
   shopId             String
-  orderId            String    @unique
+  orderId            String
   dispatchNumber     String
   dispatchDate       DateTime
   transporterName    String?
@@ -2148,12 +2153,16 @@ model TradeDispatch {
   grossWeight        Float?
   sealNumber         String?
   notes              String?
+  // The invoice for THIS consignment. An order shipped in two parts is
+  // billed twice, and neither bill may cover the other's goods.
+  billId             String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
   order TradeOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
 
   @@unique([shopId, dispatchNumber])
+  @@index([shopId, orderId])
   @@index([shopId, dispatchDate])
 }
 

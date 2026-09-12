@@ -6,6 +6,7 @@ const STATUS_KEYS: Record<string, TranslationKey> = {
   allocated: "manufacturing.orders.status.allocated",
   packed: "manufacturing.orders.status.packed",
   dispatched: "manufacturing.orders.status.dispatched",
+  partially_dispatched: "manufacturing.orders.status.partiallyDispatched",
   invoiced: "manufacturing.orders.status.invoiced",
   returned: "manufacturing.orders.status.returned",
   cancelled: "manufacturing.orders.status.cancelled",
@@ -32,12 +33,12 @@ export function canCancelTradeOrder(status: string) {
  * A cancelled order printed both, for goods that were never going anywhere.
  */
 export function tradeOrderDocuments(order: { status: string; billId?: string | null }) {
-  const packingFrom = ["allocated", "packed", "dispatched", "invoiced", "returned"];
-  const labelFrom = ["packed", "dispatched", "invoiced", "returned"];
+  const packingFrom = ["allocated", "packed", "dispatched", "partially_dispatched", "invoiced", "returned"];
+  const labelFrom = ["packed", "dispatched", "partially_dispatched", "invoiced", "returned"];
   return {
     packingList: packingFrom.includes(order.status),
     label: labelFrom.includes(order.status),
-    invoice: Boolean(order.billId) && ["invoiced", "returned"].includes(order.status),
+    invoice: Boolean(order.billId) && ["invoiced", "returned", "partially_dispatched"].includes(order.status),
   };
 }
 
