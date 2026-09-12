@@ -10,6 +10,7 @@ import { ensureLegacyUdharOpeningLedger, syncCustomerUdharBalance } from "../udh
 import { postBillCancelledLedger, postBillCreatedLedger, postBillDeletedLedger, postBillRestoredLedger, postBillUndeletedLedger, postSaleReturnLedger } from "../finance/financial-ledger.service.js";
 import {
   decrementLocationInventory,
+  getLocationQuantitiesByProduct,
   getLocationQuantity,
   incrementLocationInventory,
   resolveOperationalLocation,
@@ -384,10 +385,11 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
       throw error;
     }
 
-    const locationStockByProduct = new Map(await Promise.all(dbProducts.map(async (product) => [
-      product.id,
-      await getLocationQuantity(tx, shopId, location, product),
-    ])));
+    // One read for every product on the bill. This is the snapshot the shortfall
+    // guard below compares against, and it was already taken once, here, before
+    // any stock moves — batching changes only the query count, not when it is
+    // read or what it says.
+    const locationStockByProduct = await getLocationQuantitiesByProduct(tx, shopId, location, dbProducts);
     const dbSellingUnits = productIds.length > 0
       ? await tx.productSellingUnit.findMany({ where: { shopId, productId: { in: productIds }, isActive: true } })
       : [];
@@ -1585,6 +1587,16 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
         returnMovementCounts.set(movementGroup, occurrence + 1);
         const movementKey = occurrence ? `${movementGroup}:line:${occurrence}` : movementGroup;
         if (damaged) {
+          // changeBaseQty is 0 — a write-off records the value lost, not a
+          // quantity change — so old and new are the same number by definition.
+          // It used to be read twice, spending a query per damaged line to
+          // re-fetch a value already in hand.
+          //
+          // Read inside the loop, NOT once before it: the restock branch below
+          // calls incrementLocationInventory, so a damaged line that follows a
+          // resellable one must see the stock that line put back. Hoisting this
+          // out would write a stale oldStockBaseQty onto the ledger.
+          const stockAtLocation = await getLocationQuantity(tx, shopId, location, product);
           await tx.stockLedger.create({
             data: {
               shopId,
@@ -1594,8 +1606,8 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
               ...stockLedgerProvenance(actor),
               action: "damage",
               changeBaseQty: 0,
-              oldStockBaseQty: await getLocationQuantity(tx, shopId, location, product),
-              newStockBaseQty: await getLocationQuantity(tx, shopId, location, product),
+              oldStockBaseQty: stockAtLocation,
+              newStockBaseQty: stockAtLocation,
               damageLossValue: lineCost,
               // The paise shadow has to be written alongside the decimal, exactly
               // as inventory.service.js does for a counter damage entry. Without it
