@@ -2342,6 +2342,8 @@ export default function Billing() {
           onSearchChange={setSearch}
           searchInputRef={searchInputRef}
           productsLoading={products.isLoading || products.isFetching}
+          productsError={products.isError ? products.error.message : undefined}
+          onRetryProducts={() => { void products.refetch(); }}
           filteredProducts={filteredProducts}
           allProducts={allProducts}
           onAddProduct={(product, sellingUnit) => addToCart(product, sellingUnit, { quantity: typedQuantity.quantity ?? undefined })}

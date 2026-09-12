@@ -105,6 +105,8 @@ interface BillingSearchProps {
   onSearchChange: (value: string) => void;
   searchInputRef: RefObject<HTMLInputElement>;
   productsLoading: boolean;
+  productsError?: string;
+  onRetryProducts?: () => void;
   filteredProducts: Product[];
   /** Whole catalogue — the bind sheet searches this, not the category-filtered grid. */
   allProducts: Product[];
@@ -162,6 +164,8 @@ export function BillingSearch({
   onSearchChange,
   searchInputRef,
   productsLoading,
+  productsError,
+  onRetryProducts,
   filteredProducts,
   allProducts,
   onAddProduct,
@@ -882,6 +886,14 @@ export function BillingSearch({
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-[#6B6455]">
               <Search size={22} className="animate-pulse text-[var(--brand)]/60" />
               <p className="text-sm">{t("billing.search.loadingProducts")}</p>
+            </div>
+          ) : productsError && filteredProducts.length === 0 ? (
+            <div role="alert" className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+              <p className="text-sm font-bold text-destructive">{t("billing.search.loadFailed")}</p>
+              <p className="max-w-sm text-sm text-muted-foreground">{productsError}</p>
+              <button type="button" onClick={onRetryProducts} className="min-h-[44px] rounded-lg border border-border px-4 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                {t("billing.search.retryProducts")}
+              </button>
             </div>
           ) : filteredProducts.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">

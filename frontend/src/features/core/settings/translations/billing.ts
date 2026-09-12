@@ -290,6 +290,8 @@ export const billingEn = {
   "billing.search.cameraBlocked": "Camera permission was blocked.",
   "billing.search.scannerFailed": "Scanner could not start",
   "billing.search.loadingProducts": "Loading products…",
+  "billing.search.loadFailed": "Could not load your products",
+  "billing.search.retryProducts": "Retry loading products",
   "billing.search.noProductsYet": "No products yet",
   "billing.search.addFromProductsPage": "Add products from the Products page.",
   "billing.search.noMatch": "Try a different term or clear search.",

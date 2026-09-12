@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { maskDatabaseUrl } from "./test-db-utils.js";
@@ -25,6 +26,8 @@ if (!new Set(["dev.db", "test.db"]).has(filename)) {
 }
 
 const prismaCli = path.join(process.cwd(), "node_modules", "prisma", "build", "index.js");
+fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+fs.closeSync(fs.openSync(databasePath, "a"));
 const result = spawnSync(process.execPath, [
   prismaCli,
   "db",
@@ -52,4 +55,9 @@ if (process.env.SKIP_LOCAL_PRISMA_GENERATE !== "true") {
   if (generated.status !== 0) process.exit(generated.status ?? 1);
 }
 
+const triggers = spawnSync(process.execPath, ["scripts/install-sqlite-sync-triggers.js"], {
+  cwd: process.cwd(), env: process.env, stdio: "inherit",
+});
+if (triggers.error) throw triggers.error;
+if (triggers.status !== 0) process.exit(triggers.status ?? 1);
 console.log(`Reset local SQLite schema at ${maskDatabaseUrl(databaseUrl)}.`);

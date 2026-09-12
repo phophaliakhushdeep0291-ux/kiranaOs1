@@ -1,6 +1,7 @@
 import { LocalDataUnavailable } from "@/features/core/sync/LocalDataUnavailable";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SyncDiagnosticsSection } from "./SyncDiagnosticsSection";
+import { readSyncSubjectAmount } from "../subject-amount";
 import { formatDistanceToNow } from "date-fns";
 import { hi as hiDateLocale } from "date-fns/locale";
 import {
@@ -221,15 +222,6 @@ function readStringFromRecord(record: unknown, keys: string[]): string | null {
   return null;
 }
 
-function readNumberFromRecord(record: unknown, keys: string[]): number | null {
-  if (!isRecord(record)) return null;
-  for (const key of keys) {
-    const value = Number(record[key]);
-    if (Number.isFinite(value)) return value;
-  }
-  return null;
-}
-
 function moneyLabel(value: number | null): string | null {
   if (value == null) return null;
   return `Rs ${Math.abs(value).toLocaleString("en-IN")}`;
@@ -309,24 +301,15 @@ function readSubjectString(records: Record<string, unknown>[], keys: string[]): 
   return undefined;
 }
 
-function readSubjectNumber(records: Record<string, unknown>[], keys: string[]): number | null {
-  for (const record of records) {
-    const value = readNumberFromRecord(record, keys);
-    if (value !== null && value !== undefined) return value;
-  }
-  return null;
-}
-
 const SUBJECT_NAME_KEYS = ["customerName", "customer_name", "name", "productName", "product_name"];
 const SUBJECT_BILL_NO_KEYS = ["billNo", "billNumber", "bill_no"];
-const SUBJECT_AMOUNT_KEYS = ["grandTotal", "grand_total", "totalAmount", "amount", "creditAmount", "credit_amount"];
 
 function operationSubject(loc: Loc, operation: PendingSyncEvent) {
   const payload = payloadFromOperation(operation);
   const records = subjectRecords(payload);
   const name = readSubjectString(records, SUBJECT_NAME_KEYS);
   const billNo = readSubjectString(records, SUBJECT_BILL_NO_KEYS);
-  const amount = readSubjectNumber(records, SUBJECT_AMOUNT_KEYS);
+  const amount = readSyncSubjectAmount(records);
   const mode = readSubjectString(records, ["mode", "paymentMode", "payment_mode"]);
   const reason =
     readStringFromRecord(operation, ["error_message", "last_error"]) ??
@@ -355,7 +338,7 @@ function conflictSubject(loc: Loc, conflict: ConflictRow) {
   const records = [...subjectRecords(local), ...subjectRecords(server)];
   const name = readSubjectString(records, SUBJECT_NAME_KEYS);
   const billNo = readSubjectString(records, SUBJECT_BILL_NO_KEYS);
-  const amount = readSubjectNumber(records, SUBJECT_AMOUNT_KEYS);
+  const amount = readSyncSubjectAmount(records);
   const parts = [name, billNo, moneyLabel(amount)].filter(Boolean);
   return {
     title: parts.length ? parts.join(" - ") : `${safeString(conflict.entity_type)} - ${safeString(conflict.entity_id)}`,

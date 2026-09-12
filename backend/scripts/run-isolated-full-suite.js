@@ -37,6 +37,12 @@ function run(command, args, label) {
 
 try {
   console.log(`Running the complete suite against isolated database ${maskDatabaseUrl(databaseUrl)}`);
+  // Posttest verifies datasource/client separation by importing the PostgreSQL
+  // client without connecting. A fresh npm install only generates SQLite.
+  const postgresClientPath = path.join(backendRoot, "generated", "postgres-prisma-client", "index.js");
+  if (!fs.existsSync(postgresClientPath)) {
+    run(process.execPath, ["node_modules/prisma/build/index.js", "generate", "--schema", "prisma-postgres/schema.prisma"], "PostgreSQL client setup");
+  }
   run(process.execPath, ["scripts/setup-test-db.js"], "Isolated database setup");
   const npmCli = process.env.npm_execpath;
   if (!npmCli) throw new Error("npm_execpath is required to run the isolated suite");
