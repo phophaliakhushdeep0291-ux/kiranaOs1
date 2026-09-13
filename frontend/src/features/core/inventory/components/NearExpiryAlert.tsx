@@ -5,6 +5,7 @@ import { AlertTriangle, CalendarClock, IndianRupee } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getExpiryAlerts, INVENTORY_LOT_CACHE_KEYS, inventoryLotCacheUpdatedAt, readInventoryLotMemoryCache, type ExpiringBatch, type ExpiryAlerts, type ExpirySeverity } from "@/features/core/inventory/inventory-lots-api";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
+import { useShopCapability } from "@/features/core/settings/capabilities";
 import { getActiveLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
 
 export const NEAR_EXPIRY_QUERY_KEY = ["inventory-lots", "expiry-alerts"] as const;
@@ -60,6 +61,8 @@ export function ExpiringBatchRow({ batch }: { batch: ExpiringBatch }) {
  */
 export function NearExpiryAlert({ limit = 5, className }: { limit?: number; className?: string }) {
   const { t } = useAppLanguage();
+  const hasCapability = useShopCapability();
+  const tracksBatches = hasCapability("BATCH_TRACKING");
   const [locationId, setLocationId] = useState(() => getActiveLocationId() ?? "primary");
   useEffect(() => {
     const refreshLocation = () => setLocationId(getActiveLocationId() ?? "primary");
@@ -73,12 +76,19 @@ export function NearExpiryAlert({ limit = 5, className }: { limit?: number; clas
     initialData: () => readInventoryLotMemoryCache<ExpiryAlerts>(cacheKey),
     initialDataUpdatedAt: () => inventoryLotCacheUpdatedAt(cacheKey),
     staleTime: 5 * 60_000,
-    // Batch tracking is off for most trades, and the endpoint is capability-gated;
-    // a shop without it should see no error, just nothing.
+    // `/inventory-lots/expiry-alerts` is gated on BATCH_TRACKING
+    // (inventoryLots.routes.js), which seven of the twelve trades do not hold.
+    // `retry: false` stopped this retrying a 403 but not from asking in the
+    // first place, so every dashboard mount and refetch still spent a request to
+    // be told no — five to eight of them per load once remounts are counted.
+    // A shop whose trade cannot have batches has nothing to ask about.
+    enabled: tracksBatches,
     retry: false,
   });
 
-  const data = query.data;
+  // `initialData` reads a device cache that can outlive a change of trade, so the
+  // capability decides what renders, not just what is fetched.
+  const data = tracksBatches ? query.data : undefined;
   if (!data || data.totalCount === 0) return null;
 
   const { expired, critical, warning } = data.buckets;
