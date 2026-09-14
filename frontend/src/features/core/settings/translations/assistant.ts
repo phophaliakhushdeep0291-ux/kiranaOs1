@@ -35,7 +35,7 @@ export const assistantEn = {
   "assistant.cancelFailed": "Cancellation could not be confirmed. Check the record or try cancelling again.",
   "assistant.partialFailure": "Some changes could not be applied",
   "assistant.outcomeUnknown": "The result is uncertain. Check the affected record before trying again.",
-  "assistant.openBill": "Open bill ({count} items waiting)",
+  "assistant.openBill": "Open bill · {count} to review",
   "assistant.till.title": "Assistant",
   "assistant.till.thinking": "Working it out…",
   "assistant.till.apply": "Add to this bill",
