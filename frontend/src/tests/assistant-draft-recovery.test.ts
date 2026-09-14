@@ -87,3 +87,22 @@ it("does not add an expired assistant request to a later bill", async () => {
   const next = await recoverAssistantBillingDraft(draftKey, products);
   expect(next?.draft).toEqual(initial); expect(next?.added).toBe(0);
 });
+
+it("uses the resolved pack id even when pack display names are duplicated", async () => {
+  const packed = { ...product, sellingUnits: [
+    { id: "small", name: "Bag", unitType: "packet", defaultPrice: 25, conversionToBase: 250 },
+    { id: "large", name: "Bag", unitType: "packet", defaultPrice: 45, conversionToBase: 500 },
+  ] } as unknown as Product;
+  await stageBillLines([{ ...line, unit: "Bag", rate: 45, sellingUnitId: "large", conversionToBase: 500 }]);
+  const next = await recoverAssistantBillingDraft(draftKey, new Map([[packed.id, packed]]));
+  expect(next?.added).toBe(1);
+  expect(next?.draft.cart?.at(-1)).toMatchObject({ quantity: 2, rate: 45, sellingUnit: { id: "large", conversionToBase: 500 } });
+});
+
+it.each(["removed", "conversion", "price"])("keeps a %s pack change queued for review", async change => {
+  const packed = { ...product, sellingUnits: change === "removed" ? [] : [{ id: "bag", name: "Bag", unitType: "packet", defaultPrice: change === "price" ? 55 : 45, conversionToBase: change === "conversion" ? 1000 : 500 }] } as unknown as Product;
+  await stageBillLines([{ ...line, unit: "Bag", rate: 45, sellingUnitId: "bag", conversionToBase: 500 }]);
+  const next = await recoverAssistantBillingDraft(draftKey, new Map([[packed.id, packed]]));
+  expect(next?.added).toBe(0); expect(next?.remaining).toBe(1);
+  expect(next?.draft).toEqual(initial);
+});

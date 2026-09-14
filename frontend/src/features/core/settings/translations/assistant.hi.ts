@@ -7,7 +7,7 @@ import type { assistantEn } from "./assistant";
 
 export const assistantHi: Record<keyof typeof assistantEn, string> = {
   "assistant.timeout": "सहायक को जवाब देने में ज़्यादा समय लगा। फिर से कोशिश करें।",
-  "assistant.itemsUnresolved": "इन सामानों को जोड़ने के लिए उनका पूरा नाम बताएँ:",
+  "assistant.itemsUnresolved": "इन आइटम को जोड़ने से पहले प्रोडक्ट का नाम, मात्रा या पैक साइज़ जांचें:",
   "assistant.pinLocked": "PIN की जाँच कुछ समय के लिए बंद है। दोबारा कोशिश करने से पहले रुकें।",
   "assistant.title": "सहायक",
   "assistant.subtitle": "दुकान के बारे में पूछें, या बदलाव बताएं",
@@ -39,7 +39,7 @@ export const assistantHi: Record<keyof typeof assistantEn, string> = {
   "assistant.cancelFailed": "रद्द होने की पुष्टि नहीं हुई। रिकॉर्ड जाँचें या फिर रद्द करने की कोशिश करें।",
   "assistant.partialFailure": "कुछ बदलाव लागू नहीं हो सके",
   "assistant.outcomeUnknown": "नतीजा पक्का नहीं है। दोबारा कोशिश करने से पहले संबंधित रिकॉर्ड जाँचें।",
-  "assistant.openBill": "बिल खोलें ({count} चीज़ें जोड़ी गईं)",
+  "assistant.openBill": "बिल खोलें ({count} आइटम बाकी हैं)",
   "assistant.till.title": "सहायक",
   "assistant.till.thinking": "देख रहे हैं…",
   "assistant.till.apply": "इस बिल में जोड़ें",

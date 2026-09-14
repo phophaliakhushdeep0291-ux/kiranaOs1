@@ -6,7 +6,7 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.assistant.queueFailed": "सहायक के आइटम लोड नहीं हो सके",
   "billing.assistant.queueRetry": "फिर कोशिश करने के लिए बिल दोबारा खोलें। भुगतान लेने से पहले कार्ट जांच लें।",
   "billing.assistant.itemsPending": "सहायक के कुछ आइटम अभी बाकी हैं",
-  "billing.assistant.itemsPendingDetail": "कुछ प्रोडक्ट या पैक साइज़ नहीं मिले। वे आइटम अभी जांच के लिए बाकी हैं। पेमेंट लेने से पहले प्रोडक्ट सूची रिफ्रेश करके बिल दोबारा खोलें।",
+  "billing.assistant.itemsPendingDetail": "कुछ प्रोडक्ट, पैक या कीमतों की पुष्टि नहीं हो सकी। वे आइटम अभी जांच के लिए बाकी हैं। पेमेंट लेने से पहले प्रोडक्ट सूची और बिल जांच लें।",
   "billing.assistant.recoveryFailed": "बिल ड्राफ्ट वापस नहीं आ सका",
   "billing.assistant.recovering": "बिल ड्राफ्ट वापस आ रहा है",
   "billing.assistant.recoveryFailedDetail": "सेव किया हुआ ड्राफ्ट लोड नहीं हो सका। नया बिल शुरू करने से पहले दोबारा कोशिश करें।",

@@ -111,6 +111,26 @@ const noUnit = await run([{ query: "sugar", quantity: 2 }]);
 assert.equal(noUnit.lines[0].unit, "kg", "an unspoken unit falls back to the product's own");
 ok("an unspoken unit comes from the product, not from a default");
 
+const halfKilo = await run([{ query: "sugar", quantity: 500, unit: "gram" }]);
+assert.equal(halfKilo.lines[0].quantity, 0.5);
+assert.equal(halfKilo.lines[0].quantity * halfKilo.lines[0].rate, 21);
+const packedTea = await db.product.create({ data: {
+  shopId: shop.id, name: "QA Packed Tea", baseUnit: "gram", rateUnit: "packet", defaultPricePerRateUnit: 25,
+  packagingMode: "per_pack", sellingUnits: { create: [
+    { shopId: shop.id, name: "Small tea bag", unitCode: "tea-250", unitType: "packet", packSizeValue: 250, packSizeUnit: "gram", conversionToBase: 250, defaultPrice: 25, isDefault: true },
+    { shopId: shop.id, name: "Large tea bag", unitCode: "tea-500", unitType: "packet", packSizeValue: 500, packSizeUnit: "gram", conversionToBase: 500, defaultPrice: 45 },
+  ] },
+}, include: { sellingUnits: true } });
+const namedPack = await run([{ query: "QA Packed Tea", quantity: 2, unit: "tea-500" }]);
+assert.equal(namedPack.lines[0].rate, 45);
+assert.equal(namedPack.lines[0].sellingUnitId, packedTea.sellingUnits.find(unit => unit.unitCode === "tea-500").id);
+assert.equal(namedPack.lines[0].conversionToBase, 500);
+const unspecifiedPack = await run([{ query: "QA Packed Tea", quantity: 2, unit: "packet" }]);
+assert.equal(unspecifiedPack.lines.length, 0);
+assert.equal(unspecifiedPack.problems[0].reason, "ambiguous_unit");
+assert.equal((await run([{ query: "QA Packed Tea", quantity: 500, unit: "gram" }])).lines.length, 0);
+ok("loose measures convert and named packs retain their own price and stock identity");
+
 
 /* ------------------------------------------------- negative stock reporting */
 

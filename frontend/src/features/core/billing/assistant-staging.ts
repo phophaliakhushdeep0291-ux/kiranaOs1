@@ -27,6 +27,8 @@ export interface StagedBillLine {
   quantity: number;
   unit: string;
   rate: number;
+  sellingUnitId?: string;
+  conversionToBase?: number;
 }
 
 interface StagedBatch {

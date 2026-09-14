@@ -16,10 +16,13 @@ export function mergeAssistantCart(previous: CartItem[], lines: StagedBillLine[]
     const units = (product.sellingUnits ?? []).filter(unit => unit.isActive !== false);
     const requestedUnit = line.unit.trim().toLowerCase();
     const exactUnits = units.filter(unit => [unit.name, unit.unitCode].filter(Boolean).some(value => String(value).trim().toLowerCase() === requestedUnit));
-    const matches = exactUnits.length ? exactUnits : units.filter(unit => [unit.unitType, unit.packSizeUnit].filter(Boolean).some(value => String(value).trim().toLowerCase() === requestedUnit));
+    const matches = line.sellingUnitId ? units.filter(unit => unit.id === line.sellingUnitId) : exactUnits.length ? exactUnits : units.filter(unit => String(unit.unitType).trim().toLowerCase() === requestedUnit);
     // A generic "pack" must never silently choose one of several pack sizes.
-    if (units.length && matches.length !== 1) { remaining.push(line); continue; }
+    if ((units.length || line.sellingUnitId) && matches.length !== 1) { remaining.push(line); continue; }
     const sellingUnit = matches[0];
+    if (sellingUnit && line.conversionToBase !== undefined && line.conversionToBase !== Number(sellingUnit.conversionToBase)) { remaining.push(line); continue; }
+    const catalogRate = sellingUnit?.defaultPrice ?? product.defaultPricePerRateUnit;
+    if (catalogRate != null && Math.abs(Number(catalogRate) - line.rate) > 0.001) { remaining.push(line); continue; }
     const candidate: CartItem = { product, quantity: line.quantity, rate: line.rate, unit: sellingUnit?.name ?? line.unit, sellingUnit, manualRate: true };
     const key = cartItemKey(candidate);
     if (cart.some(item => cartItemKey(item) === key)) {

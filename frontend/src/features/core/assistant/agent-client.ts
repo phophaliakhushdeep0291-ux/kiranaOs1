@@ -64,7 +64,7 @@ export interface AgentClientAction {
   ref: string;
   action: "add_bill_lines" | string;
   payload: {
-    lines?: Array<{ productId: string; name: string; quantity: number; unit: string; rate: number }>;
+    lines?: Array<{ productId: string; name: string; quantity: number; unit: string; rate: number; sellingUnitId?: string; conversionToBase?: number }>;
     problems?: Array<{ query: string; reason: string; candidates?: string[] }>;
   };
 }
