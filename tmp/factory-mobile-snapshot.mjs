@@ -10,7 +10,7 @@ try {
   const product = await db.product.findFirst({ where: { shopId, name: 'QA Finished spice' }, select: { id: true, name: true, stockBaseQty: true } });
   const packs = await db.productSellingUnit.findMany({ where: { productId: product.id }, select: { name: true, onHandQty: true } });
   const lots = await db.inventoryLot.findMany({ where: { shopId, productId: product.id }, select: { batchNumber: true, availableBaseQty: true, status: true } });
-  const bill = order.billId ? await db.bill.findUnique({ where: { id: order.billId }, select: { id: true, billNo: true, grandTotal: true, paymentMode: true } }) : null;
+  const bill = order.billId ? await db.bill.findUnique({ where: { id: order.billId }, select: { id: true, billNo: true, grandTotal: true, paidAmount: true, creditAmount: true, payments: true } }) : null;
   const credit = bill ? await db.bill.findMany({ where: { shopId, returnOfBillId: bill.id }, select: { id: true, billNo: true, grandTotal: true } }) : [];
   const result = { checkedAt: new Date().toISOString(), method: 'Read-only database snapshot after browser UI actions', order: { id: order.id, number: order.orderNumber, status: order.status }, product, packs, lots, bill, credit, stockLedger: await db.stockLedger.findMany({ where: { shopId, OR: [{ sourceId: order.id }, { billId: { in: credit.map(row => row.id) } }] } }), financialLedger: bill ? await db.financialLedger.findMany({ where: { shopId, billId: { in: [bill.id, ...credit.map(row => row.id)] } } }) : [] };
   await fs.writeFile(`docs/evidence/shop-type-audit-2026-09-08/manufacturing-mobile-${order.status}.json`, JSON.stringify(result, (_, value) => typeof value === 'bigint' ? String(value) : value, 2));
