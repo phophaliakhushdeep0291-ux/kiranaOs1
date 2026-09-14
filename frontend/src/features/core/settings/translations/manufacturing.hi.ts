@@ -156,7 +156,7 @@ export const manufacturingHi: Record<keyof typeof manufacturingEn, string> = {
   "manufacturing.flow.packageTitle": "पैकिंग",
   "manufacturing.flow.packageText": "तैयार माल को पाउच, बॉक्स और कार्टन SKU में बाँटें।",
   "manufacturing.flow.dispatchTitle": "डिस्पैच",
-  "manufacturing.flow.dispatchText": "रिलीज़ बैच से घरेलू थोक या निर्यात इनवॉइस बनाएँ।",
+  "manufacturing.flow.dispatchText": "रिलीज़ हुए बैच भेजें और घरेलू ऑर्डर का बिल बनाएं। निर्यात बिल अभी उपलब्ध नहीं है।",
   "manufacturing.register.title": "BOM रजिस्टर",
   "manufacturing.register.bom": "सामग्री सूची (BOM)",
   "manufacturing.register.finishedGood": "तैयार माल",

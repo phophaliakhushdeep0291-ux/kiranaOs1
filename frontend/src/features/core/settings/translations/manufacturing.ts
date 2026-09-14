@@ -155,7 +155,7 @@ export const manufacturingEn = {
   "manufacturing.flow.packageTitle": "Package",
   "manufacturing.flow.packageText": "Split finished output across pouch, box and carton SKUs.",
   "manufacturing.flow.dispatchTitle": "Dispatch",
-  "manufacturing.flow.dispatchText": "Use released batches for domestic wholesale or export invoices.",
+  "manufacturing.flow.dispatchText": "Dispatch released batches and invoice domestic orders. Export invoicing is not yet available.",
   "manufacturing.register.title": "BOM register",
   "manufacturing.register.bom": "BOM",
   "manufacturing.register.finishedGood": "Finished good",

@@ -45,6 +45,7 @@ export const assistantHi: Record<keyof typeof assistantEn, string> = {
   "assistant.till.apply": "इस बिल में जोड़ें",
   "assistant.till.dismiss": "हटाएँ",
   "assistant.till.applied": "बिल में जोड़ दिया",
+  "assistant.till.reviewItems": "कुछ मांगे गए आइटम या बदलाव लागू नहीं हो सके। पेमेंट लेने से पहले बिल जांचें और छूटे हुए आइटम सही पैक साइज़ के साथ जोड़ें।",
   "assistant.till.nothingToAdd": "इसमें जोड़ने लायक कुछ नहीं मिला।",
 
   "assistant.ownerPinTitle": "मालिक का PIN चाहिए",

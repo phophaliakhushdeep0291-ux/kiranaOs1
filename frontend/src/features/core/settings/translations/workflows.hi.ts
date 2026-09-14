@@ -18,7 +18,7 @@ export const workflowsHi: Record<keyof typeof workflowsEn, string> = {
   "workflow.manufacturing.action.3": "पैक सेट करें",
   "workflow.manufacturing.action.3.detail": "हर पाउच, डिब्बे और कार्टन का अलग SKU बनाएं",
   "workflow.manufacturing.action.4": "माल भेजें",
-  "workflow.manufacturing.action.4.detail": "रिलीज़ हुए बैच से थोक या निर्यात बिल",
+  "workflow.manufacturing.action.4.detail": "बैच आवंटित करें, पैक करें, भेजें और घरेलू ऑर्डर का बिल बनाएं",
   "workflow.manufacturing.entry.helper": "पहले तय करें कि यह कच्चा माल, पैकिंग माल या तैयार माल है, फिर हर बिकने वाले पैक और कार्टन को अलग से बनाएं।",
   "workflow.manufacturing.entry.name": "माल या तैयार माल का नाम",
   "workflow.manufacturing.entry.namePlaceholder": "जैसे हल्दी पाउडर",

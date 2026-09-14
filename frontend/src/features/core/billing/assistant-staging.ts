@@ -11,12 +11,9 @@ import { mergeAssistantCart } from "./assistant-cart";
  * never lands on the keypad mid-sale. So the two never coexist, and the handover
  * cannot be a function call.
  *
- * It is a queue rather than a write into the billing draft on purpose. Writing
- * the draft would mean re-implementing the cart merge — selling units, duplicate
- * lines, rounding — in a second place, and getting it subtly different would
- * mis-price a real bill. Instead the till drains this on mount and merges it
- * through the code it already uses for voice, which is proven and is the only
- * copy of that logic.
+ * Billing resolves the queued lines against its catalogue during hydration.
+ * It saves the merged draft and consumes the queue in the same transaction,
+ * using the same merge function as the inline assistant.
  *
  * Stored in IndexedDB, not memory, because the trip from the assistant to the
  * bill is a route change, and on a shop tablet it may be a reload.

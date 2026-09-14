@@ -425,7 +425,7 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
       quickActions: [
         { label: "shopType.manufacturing.action.1", href: "/manufacturing", icon: "inventory", color: "teal" },
         { label: "shopType.manufacturing.action.2", href: "/purchase-bills", icon: "purchase", color: "amber" },
-        { label: "shopType.manufacturing.action.3", href: "/billing", icon: "billing", color: "primary" },
+        { label: "shopType.manufacturing.action.3", href: "/manufacturing#trade-orders", icon: "purchase", color: "primary" },
         { label: "shopType.manufacturing.action.4", href: "/reports", icon: "reports", color: "violet" },
       ],
     },

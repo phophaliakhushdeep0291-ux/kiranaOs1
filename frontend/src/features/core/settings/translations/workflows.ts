@@ -22,7 +22,7 @@ export const workflowsEn = {
   "workflow.manufacturing.action.3": "Configure packs",
   "workflow.manufacturing.action.3.detail": "Give every pouch, box and carton its own SKU",
   "workflow.manufacturing.action.4": "Dispatch goods",
-  "workflow.manufacturing.action.4.detail": "Wholesale or export invoice from released batches",
+  "workflow.manufacturing.action.4.detail": "Allocate batches, pack, dispatch and invoice domestic orders",
   "workflow.manufacturing.entry.helper": "Classify the item as raw material, packaging material or finished good, then define every sellable pack and carton separately.",
   "workflow.manufacturing.entry.name": "Material or finished-good name",
   "workflow.manufacturing.entry.namePlaceholder": "e.g. Turmeric powder",

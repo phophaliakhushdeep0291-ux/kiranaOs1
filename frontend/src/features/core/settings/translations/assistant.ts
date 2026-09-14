@@ -41,6 +41,7 @@ export const assistantEn = {
   "assistant.till.apply": "Add to this bill",
   "assistant.till.dismiss": "Dismiss",
   "assistant.till.applied": "Added to the bill",
+  "assistant.till.reviewItems": "Some requested items or changes could not be applied. Check the bill and add missing items with the correct pack size before collecting payment.",
   "assistant.till.nothingToAdd": "Nothing to add from that.",
 
   "assistant.ownerPinTitle": "Owner PIN needed",
