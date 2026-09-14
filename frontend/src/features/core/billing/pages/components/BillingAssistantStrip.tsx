@@ -49,15 +49,13 @@ export function BillingAssistantStrip({
   const [note, setNote] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [feedback, setFeedback] = useState<AiFeedbackOutcome | "submitting" | "failed" | null>(null);
-  // The till re-renders constantly as the cart changes; without this the same
-  // command would be asked again on every keystroke elsewhere on the screen.
-  const askedFor = useRef<string | null>(null);
+  // Keep request context current without cancelling an in-flight answer when
+  // a cashier edits the cart. Only a changed command/language starts a turn.
+  const cartContext = useRef(cart);
+  cartContext.current = cart;
   const applyBusy = useRef(false);
 
   useEffect(() => {
-    if (askedFor.current === command) return;
-    askedFor.current = command;
-
     let cancelled = false;
     setBusy(true);
     setTurn(null);
@@ -66,7 +64,7 @@ export function BillingAssistantStrip({
 
     void (async () => {
       try {
-        const result = await sendAgentMessage(command, [], { language, cart });
+        const result = await sendAgentMessage(command, [], { language, cart: cartContext.current });
         if (!cancelled) setTurn(result);
       } catch (caught) {
         if (cancelled) return;
@@ -82,7 +80,7 @@ export function BillingAssistantStrip({
     })();
 
     return () => { cancelled = true; };
-  }, [command, cart, language, t]);
+  }, [command, language, t]);
 
   const apply = useCallback(async () => {
     if (!turn?.planId || applyBusy.current) return;
