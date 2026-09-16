@@ -113,13 +113,9 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
       const result = await confirmAgentPlan(pending.planId, ownerPin);
       // Lines the server resolved are not on the bill yet — the till owns the
       // cart. Stage them and offer the trip rather than claiming it is done.
-      let staged = 0;
-      const unresolved: string[] = [];
-      for (const action of result.clientActions ?? []) {
-        if (action.action !== "add_bill_lines") continue;
-        staged += await stageBillLines(action.payload?.lines ?? []);
-        unresolved.push(...(action.payload?.problems ?? []).map((problem) => problem.query));
-      }
+      const billActions = (result.clientActions ?? []).filter(action => action.action === "add_bill_lines");
+      const staged = await stageBillLines(billActions.flatMap(action => action.payload?.lines ?? []));
+      const unresolved = billActions.flatMap(action => (action.payload?.problems ?? []).map(problem => problem.candidates?.length ? `${problem.query} (${problem.candidates.join(", ")})` : problem.query));
       setStagedCount(staged);
       setPlanState({
         status: "done",
@@ -250,12 +246,13 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
             <button
               type="button"
               onClick={() => { setMessages([]); setPending(null); setPlanState({ status: "idle" }); setError(null); }}
-              className="rounded-lg px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-100"
+              disabled={busy || planState.status === "working"}
+              className="min-h-11 rounded-lg px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-100 disabled:opacity-50"
             >
               {t("assistant.clear")}
             </button>
           ) : null}
-          <button type="button" onClick={onClose} aria-label={t("assistant.close")} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
+          <button type="button" onClick={onClose} aria-label={t("assistant.close")} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
             <X size={18} />
           </button>
         </header>
@@ -303,7 +300,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
                               type="button"
                               disabled={message.feedback === "submitting"}
                               onClick={() => void labelAnswer(index, message.turn!.turnId, outcome)}
-                              className="min-h-8 rounded-lg border border-slate-300 bg-white px-2 font-bold text-slate-600 hover:border-[var(--brand)] disabled:opacity-50"
+                              className="min-h-11 rounded-lg border border-slate-300 bg-white px-2 font-bold text-slate-600 hover:border-[var(--brand)] disabled:opacity-50"
                             >
                               {t(`assistant.feedback.${outcome}`)}
                             </button>
@@ -350,12 +347,14 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
                   <h4 className="text-sm font-black text-slate-900">{t("assistant.ownerPinTitle")}</h4>
                   <p className="mt-1 text-xs font-semibold text-slate-600">{t("assistant.ownerPinBody")}</p>
                   <input
+                    type="password"
+                    aria-label={t("assistant.ownerPinTitle")}
                     value={pin}
                     onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
                     inputMode="numeric"
                     autoComplete="off"
                     placeholder={t("assistant.ownerPinPlaceholder")}
-                    className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-center text-lg font-black tracking-[0.4em]"
+                    className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2 text-center text-lg font-black tracking-[0.4em]"
                   />
                   {planState.wrong ? (
                     <p className="mt-1.5 text-xs font-bold text-rose-600">{t("assistant.ownerPinWrong")}</p>
@@ -416,7 +415,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
               <button
                 type="button"
                 onClick={() => setShowTrace((current) => !current)}
-                className="flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-slate-700"
+                className="flex min-h-11 items-center gap-1 text-xs font-bold text-slate-500 hover:text-slate-700"
               >
                 <ChevronDown size={13} className={showTrace ? "rotate-180 transition" : "transition"} />
                 {showTrace ? t("assistant.sourcesHide") : t("assistant.sourcesToggle")}
@@ -445,7 +444,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
             disabled={busy || mic === "transcribing"}
             aria-label={mic === "listening" ? t("assistant.listening") : t("assistant.speak")}
             aria-pressed={mic === "listening"}
-            className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border transition disabled:opacity-40 ${
+            className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border transition disabled:opacity-40 ${
               mic === "listening"
                 ? "animate-pulse border-rose-300 bg-rose-50 text-rose-600"
                 : "border-slate-300 text-slate-600 hover:border-[var(--brand)] hover:text-[var(--brand)]"
@@ -465,7 +464,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
             type="submit"
             disabled={busy || planState.status === "working" || !draft.trim()}
             aria-label={t("assistant.send")}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--brand)] text-white disabled:opacity-40"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--brand)] text-white disabled:opacity-40"
           >
             {busy ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
           </button>

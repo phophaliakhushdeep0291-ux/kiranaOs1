@@ -49,14 +49,13 @@ export function BillingAssistantStrip({
   const [note, setNote] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [feedback, setFeedback] = useState<AiFeedbackOutcome | "submitting" | "failed" | null>(null);
-  // The till re-renders constantly as the cart changes; without this the same
-  // command would be asked again on every keystroke elsewhere on the screen.
-  const askedFor = useRef<string | null>(null);
+  // Keep request context current without cancelling an in-flight answer when
+  // a cashier edits the cart. Only a changed command/language starts a turn.
+  const cartContext = useRef(cart);
+  cartContext.current = cart;
+  const applyBusy = useRef(false);
 
   useEffect(() => {
-    if (askedFor.current === command) return;
-    askedFor.current = command;
-
     let cancelled = false;
     setBusy(true);
     setTurn(null);
@@ -65,7 +64,7 @@ export function BillingAssistantStrip({
 
     void (async () => {
       try {
-        const result = await sendAgentMessage(command, [], { language, cart });
+        const result = await sendAgentMessage(command, [], { language, cart: cartContext.current });
         if (!cancelled) setTurn(result);
       } catch (caught) {
         if (cancelled) return;
@@ -81,10 +80,11 @@ export function BillingAssistantStrip({
     })();
 
     return () => { cancelled = true; };
-  }, [command, cart, language, t]);
+  }, [command, language, t]);
 
   const apply = useCallback(async () => {
-    if (!turn?.planId) return;
+    if (!turn?.planId || applyBusy.current) return;
+    applyBusy.current = true;
     setApplying(true);
     try {
       const result = await confirmAgentPlan(turn.planId);
@@ -92,9 +92,12 @@ export function BillingAssistantStrip({
         .filter((action) => action.action === "add_bill_lines")
         .flatMap((action) => action.payload?.lines ?? []);
       const added = onApplyLines(lines as StagedBillLine[]);
+      const unresolved = (result.clientActions ?? []).some(action => action.action === "add_bill_lines" && action.payload?.problems?.length);
       setNote(result.requiresReview
         ? t("assistant.outcomeUnknown")
-        : added > 0 ? t("assistant.till.applied") : t("assistant.till.nothingToAdd"));
+        : unresolved || added < lines.length || !result.allSucceeded
+          ? t("assistant.till.reviewItems")
+          : added > 0 ? t("assistant.till.applied") : t("assistant.till.nothingToAdd"));
       setTurn(null);
     } catch (caught) {
       const code = agentErrorCode(caught);
@@ -103,11 +106,13 @@ export function BillingAssistantStrip({
       // beside a keypad — so say so and send them there.
       setNote(code === "OWNER_PIN_REQUIRED" ? t("assistant.ownerPinBody") : t("assistant.failed"));
     } finally {
+      applyBusy.current = false;
       setApplying(false);
     }
   }, [turn, onApplyLines, t]);
 
   const dismiss = useCallback(() => {
+    if (applyBusy.current) return;
     if (turn?.planId) void rejectAgentPlan(turn.planId).catch(() => undefined);
     onDismiss();
   }, [turn, onDismiss]);
@@ -135,7 +140,7 @@ export function BillingAssistantStrip({
             </p>
           ) : null}
           {turn?.reply ? <p className="mt-1 whitespace-pre-wrap font-semibold text-slate-800">{turn.reply}</p> : null}
-          {note ? <p className="mt-1 font-bold text-slate-700">{note}</p> : null}
+          {note ? <p role="status" className="mt-1 font-bold text-slate-700">{note}</p> : null}
 
           {turn?.plan?.length ? (
             <ul className="mt-2 grid gap-1">
@@ -159,7 +164,7 @@ export function BillingAssistantStrip({
                       type="button"
                       disabled={feedback === "submitting"}
                       onClick={() => void labelAnswer(outcome)}
-                      className="min-h-8 rounded-lg border border-slate-300 bg-white px-2 font-bold text-slate-600 disabled:opacity-50"
+                      className="min-h-11 rounded-lg border border-slate-300 bg-white px-2 font-bold text-slate-600 disabled:opacity-50"
                     >
                       {t(`assistant.feedback.${outcome}`)}
                     </button>
@@ -173,8 +178,9 @@ export function BillingAssistantStrip({
         <button
           type="button"
           onClick={dismiss}
+          disabled={applying}
           aria-label={t("assistant.till.dismiss")}
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-white"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-white disabled:opacity-50"
         >
           <X size={15} />
         </button>
@@ -186,7 +192,7 @@ export function BillingAssistantStrip({
             type="button"
             onClick={dismiss}
             disabled={applying}
-            className="flex-1 rounded-xl border border-slate-300 bg-white py-2 text-[13px] font-black text-slate-700 disabled:opacity-50"
+            className="min-h-11 flex-1 rounded-xl border border-slate-300 bg-white py-2 text-[13px] font-black text-slate-700 disabled:opacity-50"
           >
             {t("assistant.till.dismiss")}
           </button>
@@ -194,7 +200,7 @@ export function BillingAssistantStrip({
             type="button"
             onClick={apply}
             disabled={applying}
-            className="flex-1 rounded-xl bg-[var(--brand)] py-2 text-[13px] font-black text-white disabled:opacity-50"
+            className="min-h-11 flex-1 rounded-xl bg-[var(--brand)] py-2 text-[13px] font-black text-white disabled:opacity-50"
           >
             {applying ? <Loader2 size={14} className="mx-auto animate-spin" /> : t("assistant.till.apply")}
           </button>

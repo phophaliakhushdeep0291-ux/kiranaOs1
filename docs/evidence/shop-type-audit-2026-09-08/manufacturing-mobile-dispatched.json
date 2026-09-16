@@ -1,0 +1,114 @@
+{
+  "checkedAt": "2026-09-14T16:59:40.122Z",
+  "method": "Read-only database snapshot after browser UI actions",
+  "order": {
+    "id": "cmu1h6rkc000p5f5bvey5h0az",
+    "number": "QA-MOBILE-INVOICE-02",
+    "status": "dispatched"
+  },
+  "product": {
+    "id": "cmtu1yvml000al9sz3fok7miv",
+    "name": "QA Finished spice",
+    "stockBaseQty": 0
+  },
+  "packs": [
+    {
+      "name": "Finished bag 2 units",
+      "onHandQty": 0
+    },
+    {
+      "name": "Finished carton 5 units",
+      "onHandQty": 0
+    }
+  ],
+  "lots": [
+    {
+      "batchNumber": "QA-SPLIT-FINISHED-01",
+      "availableBaseQty": 0,
+      "status": "depleted"
+    }
+  ],
+  "bill": null,
+  "credit": [],
+  "stockLedger": [
+    {
+      "id": "cmu1h9bs1000y5f5bcsvqjmut",
+      "shopId": "cmtu1yvi70000l9szru5aly2a",
+      "locationId": "cmtu1yvnf000ml9szy4a1506l",
+      "productId": "cmtu1yvml000al9sz3fok7miv",
+      "productName": "QA Finished spice",
+      "sellingUnitId": "cmtu1yvmz000el9sziqje0unk",
+      "sellingUnitQty": 5,
+      "action": "trade_dispatch",
+      "changeBaseQty": -10,
+      "oldStockBaseQty": 20,
+      "newStockBaseQty": 10,
+      "purchaseBillAmount": 0,
+      "purchaseBillAmountPaise": null,
+      "calculatedBuyRate": 0,
+      "calculatedBuyRatePaise": null,
+      "invoiceNumber": null,
+      "purchasePaymentStatus": "paid",
+      "purchasePaymentMode": null,
+      "purchasePaidAmount": 0,
+      "purchasePaidAmountPaise": null,
+      "purchaseDueAmount": 0,
+      "purchaseDueAmountPaise": null,
+      "purchaseDueDate": null,
+      "supplierName": null,
+      "damageLossValue": 0,
+      "damageLossValuePaise": null,
+      "billId": null,
+      "clientMovementId": null,
+      "idempotencyKey": null,
+      "sourceDeviceId": null,
+      "sourceType": "trade_order",
+      "sourceId": "cmu1h6rkc000p5f5bvey5h0az",
+      "actorUserId": "cmtu1yvlz0002l9szybbj6xhg",
+      "actorName": "Owner User",
+      "note": "Dispatch DSP-QA-MOBILE-INVOICE-02 for QA-MOBILE-INVOICE-02",
+      "createdAt": "2026-09-14T16:48:54.986Z",
+      "updatedAt": "2026-09-14T16:48:54.986Z"
+    },
+    {
+      "id": "cmu1h9bsg00105f5b6ngq42o5",
+      "shopId": "cmtu1yvi70000l9szru5aly2a",
+      "locationId": "cmtu1yvnf000ml9szy4a1506l",
+      "productId": "cmtu1yvml000al9sz3fok7miv",
+      "productName": "QA Finished spice",
+      "sellingUnitId": "cmtu1yvn2000gl9sz0ugmx1xp",
+      "sellingUnitQty": 2,
+      "action": "trade_dispatch",
+      "changeBaseQty": -10,
+      "oldStockBaseQty": 10,
+      "newStockBaseQty": 0,
+      "purchaseBillAmount": 0,
+      "purchaseBillAmountPaise": null,
+      "calculatedBuyRate": 0,
+      "calculatedBuyRatePaise": null,
+      "invoiceNumber": null,
+      "purchasePaymentStatus": "paid",
+      "purchasePaymentMode": null,
+      "purchasePaidAmount": 0,
+      "purchasePaidAmountPaise": null,
+      "purchaseDueAmount": 0,
+      "purchaseDueAmountPaise": null,
+      "purchaseDueDate": null,
+      "supplierName": null,
+      "damageLossValue": 0,
+      "damageLossValuePaise": null,
+      "billId": null,
+      "clientMovementId": null,
+      "idempotencyKey": null,
+      "sourceDeviceId": null,
+      "sourceType": "trade_order",
+      "sourceId": "cmu1h6rkc000p5f5bvey5h0az",
+      "actorUserId": "cmtu1yvlz0002l9szybbj6xhg",
+      "actorName": "Owner User",
+      "note": "Dispatch DSP-QA-MOBILE-INVOICE-02 for QA-MOBILE-INVOICE-02",
+      "createdAt": "2026-09-14T16:48:54.986Z",
+      "updatedAt": "2026-09-14T16:48:54.986Z"
+    }
+  ],
+  "financialLedger": []
+}

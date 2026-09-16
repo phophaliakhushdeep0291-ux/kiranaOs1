@@ -20,6 +20,7 @@ import { createCustomer, recordUdharPayment } from "../../../customers/customers
 import { updateProduct, getProduct, listProducts, legacySellingUnit } from "../../../products/products.service.js";
 import { correctStock } from "../../../inventory/inventory.service.js";
 import { AppError } from "../../../../shared/errors/index.js";
+import { resolveBillLineUnit } from "./bill-line-units.js";
 import {
   baseUnitFor,
   isKnownPackUnit,
@@ -66,14 +67,14 @@ async function resolveBillItem(shopId, { query, quantity, unit }) {
   }
 
   const product = ranked[0];
+  const saleUnit = resolveBillLineUnit(product, unit, quantity);
+  if (!saleUnit.resolved) return { query, ...saleUnit };
   return {
     query,
     resolved: true,
     productId: product.id,
     name: product.name,
-    quantity,
-    unit: unit || product.rateUnit || product.baseUnit || "piece",
-    rate: product.defaultPricePerRateUnit ?? 0,
+    ...saleUnit,
     stock: product.stockBaseQty ?? null,
     tracksStock: product.stockTrackingEnabled !== false,
   };

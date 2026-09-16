@@ -26,6 +26,7 @@ import { BILLING_DRAFT_KEY, formatHeldBillAge, HELD_BILLS_KEY, isHeldBillStale, 
 import { firstSettleWarning, type SettleWarning } from "../settle-checks";
 import { recoverAssistantBillingDraft, type StagedBillLine } from "../assistant-staging";
 import { mergeAssistantCart } from "../assistant-cart";
+import { shouldWaitForBillingCatalogue } from "../catalogue-readiness";
 import { commitBillingWorkspace, prepareNewBillWorkspace, prepareResumeBillWorkspace } from "./billing-workspace";
 import { updateCustomerOrder } from "@/features/core/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
@@ -568,8 +569,8 @@ export default function Billing() {
   // work. Direct IndexedDB rows are only an instant first-paint fallback; using
   // them after an authoritative empty response resurrects removed products.
   const productRows = useMemo(
-    () => products.data === undefined ? localProductRows : products.data,
-    [products.data, localProductRows],
+    () => products.data === undefined || products.isPlaceholderData ? localProductRows : products.data,
+    [products.data, products.isPlaceholderData, localProductRows],
   );
 
   const allProducts = useMemo(() => productRows.filter((product) => product.deletedAt == null && (product as { deleted_at?: unknown }).deleted_at == null && !String(product.id ?? "").startsWith("demo_")), [productRows]);
@@ -714,7 +715,7 @@ export default function Billing() {
 
 
   useEffect(() => {
-    if (draftHydrated || (products.isLoading && productById.size === 0)) return;
+    if (draftHydrated || shouldWaitForBillingCatalogue(products, productById.size)) return;
     let active = true;
     setDraftLoadError(false);
     void Promise.all([loadBillingDraft(productById, () => active), loadSettingList<HeldBill>(HELD_BILLS_KEY, [])])
@@ -768,7 +769,7 @@ export default function Billing() {
     return () => { active = false; };
     // Hydration owns the cart until its queue and draft commit together.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftHydrated, productById, products.isLoading, draftLoadAttempt]);
+  }, [draftHydrated, productById, products.isLoading, products.isPlaceholderData, products.isFetching, draftLoadAttempt]);
 
   /**
    * Ring up whatever another screen sent over.

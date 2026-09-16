@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Factory,
@@ -116,6 +116,12 @@ export default function ManufacturingPage() {
   const [returnOwnerPin, setReturnOwnerPin] = useState("");
   const [cancelOrderId, setCancelOrderId] = useState("");
   const [flipkartShipmentId, setFlipkartShipmentId] = useState("");
+
+  useEffect(() => {
+    if (window.location.hash !== "#trade-orders") return;
+    const frame = window.requestAnimationFrame(() => document.getElementById("trade-orders")?.scrollIntoView());
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const overviewQ = useQuery({
     queryKey: ["manufacturing", "overview"],
@@ -248,12 +254,17 @@ export default function ManufacturingPage() {
         title={t("manufacturing.title")}
         description={t("manufacturing.description")}
         actions={(
+          <div className="flex flex-wrap gap-2">
+          <Button variant="outline" className="min-h-11 gap-2 rounded-xl" onClick={() => document.getElementById("trade-orders")?.scrollIntoView({ behavior: "smooth" })}>
+            <Truck size={16} /> {t("workflow.manufacturing.action.4")}
+          </Button>
           <Button
             className="min-h-11 gap-2 rounded-xl"
             onClick={() => document.getElementById("new-bom")?.scrollIntoView({ behavior: "smooth" })}
           >
             <Plus size={16} /> {t("manufacturing.newBom")}
           </Button>
+          </div>
         )}
       />
 
@@ -337,7 +348,7 @@ export default function ManufacturingPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+      <section id="trade-orders" className="scroll-mt-20 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <div className={panel}>
           <div className="border-b border-slate-100 p-4 sm:p-5">
             <h2 className="flex items-center gap-2 font-display font-black text-slate-900"><ClipboardList size={18} className="text-teal-700" />{t("manufacturing.orders.createTitle")}</h2>

@@ -48,7 +48,7 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
       { label: "workflow.manufacturing.action.1", detail: "workflow.manufacturing.action.1.detail", href: "/manufacturing", icon: "inventory" },
       { label: "workflow.manufacturing.action.2", detail: "workflow.manufacturing.action.2.detail", href: "/purchase-bills", icon: "purchase" },
       { label: "workflow.manufacturing.action.3", detail: "workflow.manufacturing.action.3.detail", href: "/products?add=1", icon: "products" },
-      { label: "workflow.manufacturing.action.4", detail: "workflow.manufacturing.action.4.detail", href: "/billing", icon: "billing" },
+      { label: "workflow.manufacturing.action.4", detail: "workflow.manufacturing.action.4.detail", href: "/manufacturing#trade-orders", icon: "purchase" },
     ],
     productEntry: {
       helper: "workflow.manufacturing.entry.helper",

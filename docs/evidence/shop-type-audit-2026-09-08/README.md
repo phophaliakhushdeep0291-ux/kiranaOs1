@@ -1,4 +1,4 @@
-# Shop workflow and mobile audit — 8–9 September 2026
+# Shop workflow and mobile audit — 8–14 September 2026
 
 The app has working core POS flows for all 12 configured shop types. This audit found and fixed concrete mobile, stock, balance and AI defects. It does **not** establish that every specialist shop has everything it needs or that the current checkout is ready for an unrestricted paid launch.
 
@@ -11,7 +11,7 @@ The app has working core POS flows for all 12 configured shop types. This audit 
 - Furniture order creation, changes, confirmation and restoration check available stock against other confirmed orders, reject products from another shop, and use a serializable transaction with bounded retries. Bill links must refer to an active bill in the same shop. Product-name search now matches the search field's promise. These holds are currently enforced within the order register; ordinary POS/catalog sales do not yet share this reservation check.
 - Opening a cosmetics tester and removing its shelf stock now commit together. An injected register-save failure rolls back stock, stock ledger and audit changes. Default tester cost uses the actual stock-movement loss, including pack conversion.
 - AI tool arguments support arrays and nested validation, so multi-item bill requests are accepted correctly. Ambiguous product names require a choice instead of selecting the shortest match. Provider calls have a bounded deadline. Capabilities and nine specialist summary tools are filtered by shop type, feature and role. Storage and unresolved-product failures no longer produce a false success message.
-- The AI billing queue now serializes append/read/clear operations. Failed reads cannot overwrite earlier items, failed clears cannot hand out items that remain queued, and a cancelled reader leaves the queue intact. Billing waits for its saved draft before merging AI lines. The queue transaction does not make the later cart/draft write crash-atomic.
+- The AI billing queue now saves the merged billing draft and consumes the matched queued lines in one transaction. Failed reads/writes and cancelled recovery preserve earlier work. Missing products, ambiguous packs and changed prices stay queued for review. The 14 September follow-up covers the catalogue-loading race and correct pack/measure pricing.
 - Opening a school book set now saves the parked sale and new draft in one transaction. Storage failures are surfaced, a full counter cannot silently evict a parked bill, and a list with no available catalogue products cannot replace the current bill. Mobile verification opened a new ₹40 set while preserving the previous ₹40 sale.
 - Sync health typing and legacy conflict identity handling were corrected; unresolved conflicts still require their actual acknowledgement.
 
@@ -31,7 +31,7 @@ Every row passed isolated SQLite tenant setup, a confirmed cash sale, durable bi
 | Furniture | Quote → confirmation → advance → ready → delivery → installation passed. Overbooking, invalid product/bill links, edit/restore conflicts and retained dues were tested. | Order holds are not shared with all sales channels. Delivery does not itself create the financial sale/stock movement. Advance/refund reconciliation with central money reporting needs completion. |
 | Cosmetics | Shade/variant stock, expiry and tester register exist. Tester opening removes stock, then close/discard persists. Failure rollback is tested. | Tester requests lack a persistent request ID across retries; a repeated request can open a second tester. Replacement requires explicitly opening the new tester. |
 | Restaurant | Tables, menu, KOT, recipes and QR ordering exist. Table → KOT → preparing → ready → served passed. | This pass does not certify every guest-order/payment/table-settlement path. Physical kitchen/receipt output and payment settlement remain unverified. |
-| Manufacturing | Multi-material recipes, split source batches, mixed output packs, saved production drafts and QC release are available. A recovered mobile draft produced 20 units in two pack sizes. Production → allocation → packing → dispatch → domestic invoice → full return now reconciles stock and money in isolated service/API checks. | The new invoice dialog still needs a live mobile browser pass. Export currency/tax accounting, partial returns and mixed settlements need further work. Recipe and wholesale-order drafts do not yet have recovery. |
+| Manufacturing | Multi-material recipes, split source batches, mixed output packs, saved production drafts and QC release are available. A recovered mobile draft produced 20 units in two pack sizes. Allocation → packing → dispatch → domestic invoice → full return passed both isolated service/API checks and a live mobile browser pass. | Export currency/tax accounting, partial returns and mixed settlements need further work. Recipe and wholesale-order drafts do not yet have recovery. |
 | Other/custom | Configurable core products, units, inventory, billing, customers and purchasing. Tenant setup and sale passed. | This is a configurable retail baseline, not complete support for every possible industry. |
 
 Specialist registers still contain English-only copy and some form labels need accessibility work. Core translation checks passing does not certify complete specialist Hindi coverage.
@@ -93,10 +93,10 @@ The final shared table selector was included in a fresh production build on 9 Se
 
 ### Priorities before selling specialist editions
 
-1. Finish mobile verification of wholesale invoicing, then export currency/tax accounting, partial returns and mixed settlements. Domestic invoicing and full returns now reconcile with dispatch as documented below.
+1. Finish export currency/tax accounting, partial returns and mixed settlements. Domestic invoicing and full returns now reconcile with dispatch in the API checks and the mobile workflow documented below.
 2. Connect rental and furniture collections/advances/refunds to the central financial ledger, and enforce furniture holds across all sale channels.
 3. Integrate serial-unit selection with electronics billing and add repair tickets if repair shops are a target market.
-4. Add durable request IDs to retryable specialist stock actions, and make AI queue consumption and draft persistence one recoverable handoff.
+4. Add durable request IDs to retryable specialist stock actions. AI queue consumption and draft persistence now share a transaction; recovery across the earlier server-confirmation/local-queue boundary still needs broader failure testing.
 5. Finish the external and exact-release checks above, followed by merchant trials for the selected shop types. Specialist requirements should be agreed with those merchants; this matrix is not an exhaustive industry specification.
 
 ### Manufacturing implementation follow-up — 9 September

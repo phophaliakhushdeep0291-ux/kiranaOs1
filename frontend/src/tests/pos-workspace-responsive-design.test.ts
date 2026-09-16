@@ -37,7 +37,9 @@ describe("POS workspace responsive design", () => {
   it("uses the local-first product catalogue inside billing", () => {
     expect(billingPage).toContain('import { useListProducts } from "@/features/core/products/queries";');
     expect(billingPage).toContain('window.addEventListener("kirana:local-data-changed", loadLocalProducts)');
-    expect(billingPage).toContain("products.data === undefined ? localProductRows : products.data");
+    // Temporary placeholder data must not hide the device catalogue while the
+    // first read is running. A real empty response remains authoritative.
+    expect(billingPage).toContain("products.data === undefined || products.isPlaceholderData ? localProductRows : products.data");
     expect(productQueries).toContain("mergeProducts(fresh, localRows)");
     expect(billingPage).not.toContain("useListProducts, type Bill");
     expect(productQueries).toContain("cached.length > 0 ? cached : undefined");
