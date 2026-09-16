@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { loginSchema as schema, authValidationKey } from "@/features/core/auth/form-schemas";
 import { useMutation } from "@tanstack/react-query";
 import { useLogin, type AuthResponse } from "@/lib/api/client";
 import { googleLogin as googleLoginRequest } from "@/features/core/auth/api";
@@ -17,16 +18,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link } from "wouter";
 import { completeDeviceReplacement, type ActiveDeviceDto } from "@/features/core/devices/api";
-import { ChevronLeft, ChevronRight, Laptop, Loader2, LockKeyhole, Store } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, EyeOff, Laptop, Loader2, LockKeyhole, Store } from "lucide-react";
 // Imported from the module, not the @/components/shared barrel: the barrel
 // re-exports ~25 components, and pulling it into an auth chunk cost ~12 kB.
 import { BrandMark } from "@/components/shared/BrandMark";
 import { LanguageToggle } from "@/features/core/settings/LanguageToggle";
 
-const schema = z.object({
-  identifier: z.string().min(3, "Enter your mobile number or email"),
-  password: z.string().min(1, "Password is required"),
-});
 type FormData = z.infer<typeof schema>;
 
 interface DeviceLimitState {
@@ -83,7 +80,8 @@ function getShopChoices(error: unknown): ShopChoice[] {
 const BRAND = { head: "Ar", tail: "tha", full: "Artha" } as const;
 
 export default function Login() {
-  const { t } = useAppLanguage();
+  const { t, language } = useAppLanguage();
+  const [showPassword, setShowPassword] = useState(false);
   const [, setLocation] = useLocation();
   const auth = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -120,7 +118,7 @@ export default function Login() {
     const shops = getShopChoices(err);
     if (errorCode === "SHOP_SELECTION_REQUIRED" || shops.length > 0) {
       if (shops.length === 0) {
-        setServerError("Select your shop to continue, but the shop list was not included. Please try again.");
+        setServerError(t("auth.shopListMissing"));
         return;
       }
       setShopChoices(shops);
@@ -135,7 +133,7 @@ export default function Login() {
       const token = typeof errorData.deviceLimitToken === "string" ? errorData.deviceLimitToken : "";
       setShopChoices(null);
       setDeviceLimit({
-        message: getErrorMessage(err, "Device limit reached"),
+        message: getErrorMessage(err, t("auth.deviceLimit")),
         activeDevices,
         deviceLimitToken: token,
         plan: typeof errorData.plan === "object" && errorData.plan ? errorData.plan as DeviceLimitState["plan"] : undefined,
@@ -145,7 +143,7 @@ export default function Login() {
       setServerError(null);
       return;
     }
-    setServerError(getErrorMessage(err, "Login failed"));
+    setServerError(getErrorMessage(err, t("auth.loginFailed")));
   };
 
   const loginMutation = useLogin({
@@ -191,7 +189,7 @@ export default function Login() {
     setLoginShopId(null);
     setDeviceLimit(null);
     setGoogleCredential(null);
-    loginMutation.mutate({ data: { identifier: values.identifier, password: values.password } });
+    loginMutation.mutate({ data: { identifier: values.identifier.trim(), password: values.password } });
   };
 
   const selectShop = (shopId: string) => {
@@ -202,7 +200,7 @@ export default function Login() {
       return;
     }
     const values = form.getValues();
-    loginMutation.mutate({ data: { identifier: values.identifier, password: values.password, shopId } });
+    loginMutation.mutate({ data: { identifier: values.identifier.trim(), password: values.password, shopId } });
   };
 
   const backToSignIn = () => {
@@ -216,17 +214,18 @@ export default function Login() {
   };
 
   const replaceSelectedDevice = async () => {
+    if (revokingDeviceId !== null) return;
     if (!deviceLimit?.deviceLimitToken) {
-      setServerError("Device management session expired. Please sign in again.");
+      setServerError(t("auth.deviceSessionExpired"));
       setDeviceLimit(null);
       return;
     }
     if (!selectedReplacementDeviceId) {
-      setServerError("Select one registered device to replace.");
+      setServerError(t("auth.selectReplacement"));
       return;
     }
     if (!/^\d{4}$/.test(replacementOwnerPin)) {
-      setServerError("Enter the 4-digit owner PIN to continue.");
+      setServerError(t("auth.ownerPinRequired"));
       return;
     }
     setRevokingDeviceId(selectedReplacementDeviceId);
@@ -239,7 +238,7 @@ export default function Login() {
       });
       handleAuthSuccess(result);
     } catch (error) {
-      setServerError(getErrorMessage(error, "Could not replace that device"));
+      setServerError(getErrorMessage(error, t("auth.replaceFailed")));
     } finally {
       setRevokingDeviceId(null);
     }
@@ -271,7 +270,7 @@ export default function Login() {
           </div>
         </section>
 
-        <div className="w-full p-6 sm:p-9">
+        <div className="w-full min-w-0 p-4 sm:p-9">
         <div className="mb-8 text-center lg:text-left">
           <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-lg bg-primary text-primary-foreground lg:hidden">
             <BrandMark className="text-primary-foreground" size={30} title={BRAND.full} />
@@ -285,7 +284,7 @@ export default function Login() {
           <LanguageToggle />
         </div>
 
-        <div className="rounded-[18px] border border-[#dce5f2] bg-white p-5 shadow-[0_12px_36px_rgba(16,35,71,0.07)]">
+        <div className="rounded-[18px] border border-[#dce5f2] bg-card p-4 sm:p-5 shadow-[0_12px_36px_rgba(16,35,71,0.07)]">
           {shopChoices ? (
             <div className="space-y-4" data-testid="shop-selection-panel">
               <div>
@@ -320,7 +319,7 @@ export default function Login() {
               </div>
 
               {serverError && (
-                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid="status-error">
+                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert" data-testid="status-error">
                   {serverError}
                 </div>
               )}
@@ -350,6 +349,7 @@ export default function Login() {
                     key={device.deviceId}
                     type="button"
                     className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${selectedReplacementDeviceId === device.deviceId ? "border-primary bg-primary/5 ring-1 ring-primary" : "bg-card hover:border-primary/50"}`}
+                    aria-pressed={selectedReplacementDeviceId === device.deviceId}
                     onClick={() => setSelectedReplacementDeviceId(device.deviceId)}
                     disabled={revokingDeviceId !== null || device.current}
                   >
@@ -359,7 +359,7 @@ export default function Login() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold text-card-foreground">{device.deviceName || t("auth.activeDevice")}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {device.userName || "Shop user"}{device.lastSeenAt ? ` - last used ${new Date(device.lastSeenAt).toLocaleString()}` : ""}
+                        {device.userName || t("auth.shopUser")}{device.lastSeenAt ? ` · ${t("auth.lastUsed", { date: new Date(device.lastSeenAt).toLocaleString(language === "hi" ? "hi-IN" : "en-IN") })}` : ""}
                       </p>
                     </div>
                     <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${selectedReplacementDeviceId === device.deviceId ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}>
@@ -377,6 +377,7 @@ export default function Login() {
                   inputMode="numeric"
                   maxLength={4}
                   autoComplete="one-time-code"
+                  disabled={revokingDeviceId !== null}
                   value={replacementOwnerPin}
                   onChange={(event) => setReplacementOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
                   placeholder={t("auth.ownerPinPlaceholder")}
@@ -385,13 +386,13 @@ export default function Login() {
               </div>
 
               {serverError && (
-                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid="status-error">
+                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert" data-testid="status-error">
                   {serverError}
                 </div>
               )}
 
               <div className="grid gap-2 sm:grid-cols-2">
-                <Button type="button" variant="outline" onClick={backToSignIn}>
+                <Button type="button" variant="outline" onClick={backToSignIn} disabled={revokingDeviceId !== null}>
                   {t("auth.backToSignIn")}
                 </Button>
                 <Button type="button" onClick={() => void replaceSelectedDevice()} disabled={!selectedReplacementDeviceId || replacementOwnerPin.length !== 4 || revokingDeviceId !== null}>
@@ -408,28 +409,48 @@ export default function Login() {
               <Label htmlFor="mobile">{t("auth.identifier")}</Label>
               <Input
                 id="mobile"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                aria-invalid={Boolean(form.formState.errors.identifier)}
+                aria-describedby={form.formState.errors.identifier ? "identifier-error" : undefined}
                 data-testid="input-mobile"
                 className="mt-1 h-11 rounded-lg"
                 placeholder={t("auth.identifierPlaceholder")}
                 {...form.register("identifier")}
               />
               {form.formState.errors.identifier && (
-                <p className="text-destructive text-xs mt-1">{form.formState.errors.identifier.message}</p>
+                <p id="identifier-error" role="alert" className="text-destructive text-xs mt-1">{t(authValidationKey(form.formState.errors.identifier.message))}</p>
               )}
             </div>
 
             <div>
               <Label htmlFor="password">{t("auth.password")}</Label>
+              <div className="relative mt-1">
               <Input
                 id="password"
                 data-testid="input-password"
-                type="password"
-                className="mt-1 h-11 rounded-lg"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                aria-invalid={Boolean(form.formState.errors.password)}
+                aria-describedby={form.formState.errors.password ? "password-error" : undefined}
+                className="h-11 rounded-lg pr-12"
                 placeholder={t("auth.passwordPlaceholder")}
                 {...form.register("password")}
               />
+              <button
+                type="button"
+                aria-label={t(showPassword ? "auth.hidePassword" : "auth.showPassword")}
+                aria-controls="password"
+                aria-pressed={showPassword}
+                onClick={() => setShowPassword((visible) => !visible)}
+                className="absolute inset-y-0 right-0 flex min-h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+              </button>
+              </div>
               {form.formState.errors.password && (
-                <p className="text-destructive text-xs mt-1">{form.formState.errors.password.message}</p>
+                <p id="password-error" role="alert" className="text-destructive text-xs mt-1">{t(authValidationKey(form.formState.errors.password.message))}</p>
               )}
             </div>
 
@@ -446,7 +467,7 @@ export default function Login() {
             </div>
 
             {serverError && (
-              <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid="status-error">
+              <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert" data-testid="status-error">
                 {serverError}
               </div>
             )}
@@ -467,7 +488,7 @@ export default function Login() {
             <div className="mt-5">
               <div className="flex items-center gap-3">
                 <span className="h-px flex-1 bg-border" />
-                <span className="text-xs font-semibold uppercase text-muted-foreground">or</span>
+                <span className="text-xs font-semibold uppercase text-muted-foreground">{t("auth.or")}</span>
                 <span className="h-px flex-1 bg-border" />
               </div>
               <div className="mt-4">

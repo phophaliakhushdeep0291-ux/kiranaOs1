@@ -48,7 +48,7 @@ import { usePanelResize } from "@/hooks/use-panel-resize";
 import { usePermission } from "@/features/core/staff/permissions";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { getProductEmoji } from "@/features/core/billing/pages/components/BillingSearch";
-import { productMatchesSearch } from "@/features/core/products/product-reliability";
+import { createProductSearchIndex } from "@/features/core/products/product-search-index";
 import {
   CATEGORIES,
   averageCost,
@@ -158,7 +158,7 @@ export default function ProductsPage() {
   const debouncedSearch = useDebounce(search.trim(), 150);
   const [localProductRows, setLocalProductRows] = useState<Product[]>([]);
 
-  const products = useListProducts({ limit: 1000 }, {
+  const products = useListProducts(undefined, {
     query: { placeholderData: (previousData: Product[] | undefined) => previousData ?? [], staleTime: 2 * 60_000 },
   });
   // `[]` is an authoritative, successfully loaded catalogue. Falling back to
@@ -283,23 +283,19 @@ export default function ProductsPage() {
     },
   });
 
-  const rows = useMemo(() => {
-    const q = debouncedSearch.toLowerCase();
-    return productRows
-      .filter((product) => !isDeletedProduct(product))
-      .filter((product) => category === "all" || (product.category ?? "general") === category)
-      .filter((product) => statusFilter === "all" || (statusFilter === "active" ? !isInactiveProduct(product) : isInactiveProduct(product)))
-      .filter((product) => {
-        if (stockFilter === "all") return true;
-        const out = Number(product.stockBaseQty ?? 0) <= 0;
-        const low = isLowStock(product) && !out;
-        if (stockFilter === "out") return out;
-        if (stockFilter === "low") return low;
-        return !out && !low; // "in"
-      })
-      .filter((product) => typeFilter === "all" || (typeFilter === "loose" ? !!product.isLooseItem : !product.isLooseItem))
-      .filter((product) => productMatchesSearch(product, q));
-  }, [productRows, category, statusFilter, stockFilter, typeFilter, debouncedSearch]);
+  const searchIndex = useMemo(() => createProductSearchIndex(productRows), [productRows]);
+  const rows = useMemo(() => searchIndex.search(debouncedSearch, (product) => {
+    if (isDeletedProduct(product)) return false;
+    if (category !== "all" && (product.category ?? "general") !== category) return false;
+    if (statusFilter !== "all" && (statusFilter === "active" ? isInactiveProduct(product) : !isInactiveProduct(product))) return false;
+    if (typeFilter !== "all" && (typeFilter === "loose" ? !product.isLooseItem : !!product.isLooseItem)) return false;
+    if (stockFilter === "all") return true;
+    const out = Number(product.stockBaseQty ?? 0) <= 0;
+    const low = isLowStock(product) && !out;
+    if (stockFilter === "out") return out;
+    if (stockFilter === "low") return low;
+    return !out && !low;
+  }), [searchIndex, category, statusFilter, stockFilter, typeFilter, debouncedSearch]);
 
   // Nothing on screen because a filter is hiding it is a different problem from a
   // shop that has not started yet, and only the second one needs a way in.

@@ -1,0 +1,30 @@
+{
+  "environment": {
+    "node": "v26.1.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "note": "Synthetic local CPU benchmark; excludes networking, React rendering and database I/O. Index construction measured separately.",
+  "measurements": [
+    {
+      "products": 1000,
+      "queriesPerRun": 10,
+      "runs": 5,
+      "buildMs": 16.83,
+      "previousMedianMs": 145.17,
+      "indexedMedianMs": 0.77,
+      "speedup": 188.3,
+      "totalMatches": 61220
+    },
+    {
+      "products": 10000,
+      "queriesPerRun": 10,
+      "runs": 5,
+      "buildMs": 121,
+      "previousMedianMs": 1182,
+      "indexedMedianMs": 3.99,
+      "speedup": 296.6,
+      "totalMatches": 612230
+    }
+  ]
+}

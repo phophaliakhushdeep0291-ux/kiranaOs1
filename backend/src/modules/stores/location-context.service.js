@@ -3,8 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
 import { ensurePrimaryLocation } from "./stores.service.js";
 
-/** Product ids bound per LocationStock lookup. Keeps a big catalogue under the driver's parameter cap. */
-const LOCATION_STOCK_LOOKUP_CHUNK = 1000;
+import { readLocationProductStockBatches } from "./location-stock-read.js";
 
 export function requestLocationId(req) {
   if (req?.locationScopeAll === true) return null;
@@ -113,10 +112,9 @@ export async function getLocationQuantity(client, shopId, location, product) {
  * per SKU: a 2,000-item shop answered /inventory in 2,002 queries, and /inventory
  * sits on the 60s device snapshot, so that ran for every till every minute.
  *
- * Every product-level row for these products is read in one pass and then read
- * twice out of memory — once as "the row at this location" for a branch, once as
- * "everything the branches hold" for the primary. The two cases want different
- * projections of the SAME rows, which is why one query can serve both.
+ * Branch requests read only that branch. Primary requests consume all branch
+ * allocations one bounded batch at a time, so memory does not retain every
+ * location row for the whole catalogue at once.
  *
  * The arithmetic is deliberately identical to the single-product form, including
  * rounding the branch total BEFORE subtracting it. round2 is paise-exact, so
@@ -128,36 +126,23 @@ export async function getLocationQuantitiesByProduct(client, shopId, location, p
   const quantities = new Map();
   if (!Array.isArray(products) || products.length === 0) return quantities;
 
-  // Chunked because the id list becomes bound parameters: an unsplit IN over a
-  // wholesaler's catalogue exceeds what the driver will bind, and the failure is
-  // at the far end of a list nobody tests with.
-  const rows = [];
-  for (let at = 0; at < products.length; at += LOCATION_STOCK_LOOKUP_CHUNK) {
-    const productIds = products.slice(at, at + LOCATION_STOCK_LOOKUP_CHUNK).map((product) => product.id);
-    const chunk = await client.locationStock.findMany({
-      // Product-level rows only, exactly as allocatedSecondaryQty selects: variant
-      // rows live in the same table but count in their own unit, not base units.
-      where: { shopId, productId: { in: productIds }, sellingUnitId: null },
-      select: { locationId: true, productId: true, stockBaseQty: true },
-    });
-    rows.push(...chunk);
-  }
-
-  if (!location.isPrimary) {
-    const here = new Map();
+  const allocated = new Map();
+  for await (const rows of readLocationProductStockBatches(client, shopId, location, products)) {
     for (const row of rows) {
-      if (row.locationId === location.id) here.set(row.productId, row.stockBaseQty);
+      if (location.isPrimary) {
+        allocated.set(row.productId, (allocated.get(row.productId) ?? 0) + Number(row.stockBaseQty || 0));
+      } else {
+        quantities.set(row.productId, round2(row.stockBaseQty ?? 0));
+      }
     }
+  }
+  if (!location.isPrimary) {
     for (const product of products) {
-      quantities.set(product.id, round2(here.get(product.id) ?? 0));
+      if (!quantities.has(product.id)) quantities.set(product.id, 0);
     }
     return quantities;
   }
 
-  const allocated = new Map();
-  for (const row of rows) {
-    allocated.set(row.productId, (allocated.get(row.productId) ?? 0) + Number(row.stockBaseQty || 0));
-  }
   for (const product of products) {
     quantities.set(
       product.id,

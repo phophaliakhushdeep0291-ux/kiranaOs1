@@ -20,6 +20,7 @@ import {
   setLocationInventory,
   writeLocationStockRow,
 } from "../stores/location-context.service.js";
+import { readLocationProductStockBatches } from "../stores/location-stock-read.js";
 import { stockLedgerProvenance } from "../inventory/stock-ledger-provenance.js";
 
 async function writeRequiredProductAudit(entry, client) {
@@ -137,20 +138,14 @@ function changedFieldsFromInput(data) {
 async function applyLocationInventory(shopId, products, locationId) {
   if (!locationId || products.length === 0) return products;
   const location = await resolveOperationalLocation(shopId, locationId);
-  const productIds = products.map((product) => product.id);
-  const rows = await db.locationStock.findMany({
-    // Product-level rows only: this builds a per-product stock figure, and the
-    // variant rows in the same table count in their own unit, not base units.
-    where: { shopId, productId: { in: productIds }, sellingUnitId: null },
-    select: { locationId: true, productId: true, stockBaseQty: true, lowStockThreshold: true },
-  });
-  const selected = new Map(
-    rows.filter((row) => row.locationId === location.id).map((row) => [row.productId, row]),
-  );
+  const selected = new Map();
   const allocated = new Map();
-  if (location.isPrimary) {
+  for await (const rows of readLocationProductStockBatches(db, shopId, location, products)) {
     for (const row of rows) {
-      allocated.set(row.productId, (allocated.get(row.productId) ?? 0) + Number(row.stockBaseQty || 0));
+      if (row.locationId === location.id) selected.set(row.productId, row);
+      if (location.isPrimary) {
+        allocated.set(row.productId, (allocated.get(row.productId) ?? 0) + Number(row.stockBaseQty || 0));
+      }
     }
   }
   return products.map((product) => {

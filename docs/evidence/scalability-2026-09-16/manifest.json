@@ -1,0 +1,35 @@
+{
+  "branch": "work/bugfix-interface-audit",
+  "base_commit": "cf0346be",
+  "date": "2026-09-16",
+  "frontend": {
+    "command": "VITE_API_BASE_URL=/api npm run prod:check",
+    "exit_code": 0,
+    "tests_passed": 2701,
+    "tests_skipped": 1,
+    "initial_js_gzip_kb": 259.0
+  },
+  "focused_backend": {
+    "command": "npm run test:variants",
+    "exit_code": 0
+  },
+  "deterministic_workloads": {
+    "concurrent_cache_read_calls": {
+      "before": 100,
+      "after": 1
+    },
+    "search_api_calls": {
+      "before": 2,
+      "after": 1
+    },
+    "branch_stock_rows_2501_products_20_branches": {
+      "before": 50020,
+      "after": 2501
+    }
+  },
+  "benchmark_sha256": "83fe49502e07bc82feb6c4808799b632912a36753407dcf125a3c725e8ef0f91",
+  "backend": {
+    "command": "npm test",
+    "exit_code": 0
+  }
+}
