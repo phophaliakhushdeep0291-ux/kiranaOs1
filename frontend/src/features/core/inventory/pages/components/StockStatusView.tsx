@@ -13,7 +13,7 @@ import {
   inventoryStockRows,
   mergeInventoryRows,
 } from "@/features/core/inventory/stock-display";
-import { productMatchesSearch } from "@/features/core/products/product-reliability";
+import { createProductSearchIndex } from "@/features/core/products/product-search-index";
 import { StockMovementDialog } from "./StockMovementDialog";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { translateCategory } from "@/features/core/settings/business-types";
@@ -52,7 +52,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:stock-panel-width");
   const debouncedSearch = useDebounce(search.trim(), 150);
 
-  const products = useListProducts({ limit: 1000 }, {
+  const products = useListProducts(undefined, {
     query: { placeholderData: (p: Product[] | undefined) => p ?? [], staleTime: 2 * 60_000 },
   });
   const inventory = useGetInventory({
@@ -70,6 +70,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
     [products.data, inventory.data],
   );
   const scoped = all;
+  const searchIndex = useMemo(() => createProductSearchIndex(scoped), [scoped]);
 
   const suppliers = useMemo(() => [...new Set(scoped.map((p) => (p.brand ?? "").trim()).filter(Boolean))].sort(), [scoped]);
 
@@ -77,14 +78,11 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
   // size has run out" is the entire question this screen answers, and a single
   // blended row for the product cannot answer it. Pooled products stay one row.
   const rows = useMemo(() => {
-    const q = debouncedSearch.toLowerCase();
-    return scoped
-      .filter((p) => {
+    return searchIndex.search(debouncedSearch, (p) => {
         if (extraF === "all") return true;
         if (mode === "in") return (p.brand ?? "").trim() === extraF;
         return extraF === "loose" ? !!p.isLooseItem : !p.isLooseItem;
       })
-      .filter((p) => productMatchesSearch(p as unknown as Product, q))
       .flatMap((p) => inventoryStockRows(p))
       .filter((row) => {
         if (mode === "in" && statusF === "all") return row.quantity > 0;
@@ -95,7 +93,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
         if (statusF === "out") return row.isOut;
         return true;
       });
-  }, [scoped, statusF, extraF, mode, debouncedSearch]);
+  }, [searchIndex, statusF, extraF, mode, debouncedSearch]);
 
   // Counted over the same rows the table shows, so "3 out of stock" always matches
   // three visible lines — for per-pack products that means per SIZE.

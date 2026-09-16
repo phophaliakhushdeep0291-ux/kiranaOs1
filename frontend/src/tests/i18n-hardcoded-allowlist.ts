@@ -96,9 +96,8 @@ export const I18N_HARDCODED_ALLOWLIST: Record<string, number> = {
   "features/core/assurance/pages/FindingsPage.tsx": 5,
   "features/core/audit-logs/pages/AuditLogsPage.tsx": 35,
   "features/core/auth/AuthContext.tsx": 2,
-  "features/core/auth/pages/ForgotPasswordPage.tsx": 9,
+  "features/core/auth/pages/ForgotPasswordPage.tsx": 1, // Proper noun: Artha brand mark.
   "features/core/auth/pages/RegisterPage.tsx": 1,
-  "features/core/auth/pages/ResetPasswordPage.tsx": 9,
   "features/core/auth/pages/VerifyEmailPage.tsx": 1,
   "features/core/bills/components/EditBillDialog.tsx": 1,
   "features/core/bills/pages/BillsPage.tsx": 4,

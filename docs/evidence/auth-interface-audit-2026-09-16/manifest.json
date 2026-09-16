@@ -1,0 +1,35 @@
+{
+  "base_commit": "cf0346be",
+  "branch": "work/bugfix-interface-audit",
+  "date": "2026-09-16",
+  "frontend": {
+    "command": "VITE_API_BASE_URL=/api npm run prod:check",
+    "exit_code": 0,
+    "tests_passed": 2672,
+    "tests_skipped": 1,
+    "translation_keys": 6032,
+    "initial_js_gzip_kb": 258.8
+  },
+  "backend": {
+    "command": "npm test",
+    "exit_code": 0
+  },
+  "screenshots": [
+    {
+      "file": "login-en-validation-production.png",
+      "sha256": "0c2a95148c79a2ea16a71e731ffe03fbee244e64366ed1d350b62996a99f222b"
+    },
+    {
+      "file": "login-hi-320.png",
+      "sha256": "8c6f9607ff0de10e5f111a2b240d1bc833ea0e0c0ffaa1d68187edf48530b55d"
+    },
+    {
+      "file": "login-hi-desktop.png",
+      "sha256": "fa7c2b4610b9b9051ca8d7f5384be3194c405babc728e6f808b1ebb03b717afc"
+    },
+    {
+      "file": "recovery-hi-production.png",
+      "sha256": "ed4003ba73b06569f2f518746cfa6a46afc9dbe92eb1070dc3e241e1646f6acd"
+    }
+  ]
+}

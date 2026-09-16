@@ -199,33 +199,40 @@ export function useListProducts(
   options?: QueryHookOptions<ListProductsResponse, ListProductsQueryKey>,
 ) {
   const extra = getQueryOptions<ListProductsResponse, ListProductsQueryKey>(options);
-  const cached = readCachedProducts(params);
   return useQuery<ListProductsResponse, ApiClientError, ListProductsResponse, ListProductsQueryKey>({
     ...extra,
     queryKey: getListProductsQueryKey(params),
-    initialData: extra.initialData ?? (cached.length > 0 ? cached : undefined),
+    initialData: extra.initialData ?? (() => {
+      const cached = readCachedProducts(params);
+      return cached.length > 0 ? cached : undefined;
+    }),
     // Dated, so the cache paints instantly WITHOUT claiming to be the server's
     // answer. Undated initialData counts as fresh from now, and under this
     // screen's staleTime the catalogue was then never fetched at all — billing
     // sat on whatever the cache held until the user reloaded the page.
     initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(productsCacheKey()),
     queryFn: async () => {
-      const liveCached = readCachedProducts(params);
-      const { active: fromDB, tombstones } = await readLocalProductState(params);
+      const liveCached = readCachedProducts();
+      const { active: fromDB, tombstones } = await readLocalProductState();
       // Tombstones last: they have to land on top of any live copy of the same
       // product still sitting in the cache or the database.
       const localRows = mergeProducts([], [...liveCached, ...fromDB, ...tombstones], true);
       if (!isBrowserOnline()) return filterCachedProducts(localRows, params);
       try {
         const fresh = await productsApi.listProducts(params);
-        if (params?.search) {
-          const fullServerRows = await productsApi.listProducts({ limit: 500 });
-          void cacheProducts(mergeProducts(fullServerRows, localRows));
+        if (params?.search || params?.category || params?.lowStock) {
+          // A filtered result is a patch, not a complete catalogue. Keep known
+          // rows and let pending local edits/tombstones win without issuing a
+          // second, unfiltered network request for every search.
+          const patched = mergeProducts(localRows, fresh, true);
+          void cacheProducts(mergeProducts(patched, localRows));
           return filterCachedProducts(mergeProducts(fresh, localRows), params);
         }
-        const merged = filterCachedProducts(mergeProducts(fresh, localRows), params);
+        // The endpoint returns the full snapshot; `limit` is a display limit.
+        // Cache before slicing so a small picker cannot truncate master data.
+        const merged = mergeProducts(fresh, localRows);
         void cacheProducts(merged);
-        return merged;
+        return filterCachedProducts(merged, params);
       } catch (error) {
         if (isRecoverableNetworkError(error)) return filterCachedProducts(localRows, params);
         throw error;

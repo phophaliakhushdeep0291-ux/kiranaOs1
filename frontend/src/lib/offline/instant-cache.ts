@@ -5,6 +5,10 @@ const CACHE_PREFIX = "kirana-os:instant-cache:";
 export const RECENT_CACHE_DAYS = 30;
 
 const memoryCache = new Map<string, unknown>();
+// Coalesce reads only while in flight: a later refresh must still see new data.
+const pendingReads = new Map<string, { request: Promise<unknown>; version: number }>();
+const writeVersions = new Map<string, number>();
+let cacheGeneration = 0;
 
 /**
  * When each key was last written, so a reader can say how old its data is.
@@ -28,8 +32,11 @@ function memKey(key: string): string {
 
 /** Wipe the in-memory instant cache — called on logout so the next user can't read it. */
 export function clearInstantMemoryCache(): void {
+  cacheGeneration += 1;
   memoryCache.clear();
   writtenAt.clear();
+  writeVersions.clear();
+  pendingReads.clear();
 }
 
 /**
@@ -115,45 +122,59 @@ export function normaliseInstantCacheValue<T>(value: T, days = RECENT_CACHE_DAYS
 export function writeInstantMemoryCache<T>(key: string, value: T, days = RECENT_CACHE_DAYS): void {
   memoryCache.set(memKey(key), normaliseInstantCacheValue(value, days));
   writtenAt.set(memKey(key), Date.now());
+  writeVersions.set(memKey(key), (writeVersions.get(memKey(key)) ?? 0) + 1);
 }
 
 export function writeInstantCache<T>(key: string, value: T, days = RECENT_CACHE_DAYS): void {
   const valueForCache = normaliseInstantCacheValue(value, days);
   memoryCache.set(memKey(key), valueForCache);
   writtenAt.set(memKey(key), Date.now());
+  writeVersions.set(memKey(key), (writeVersions.get(memKey(key)) ?? 0) + 1);
   void offlineDB.putRecentCache(key, valueForCache, days).catch(() => {
     // IndexedDB can be unavailable in private mode; in-memory cache still prevents UI crashes.
   });
 }
 
-export async function readIndexedRecentCache<T>(key: string, fallback: T): Promise<T> {
-  try {
-    const value = await offlineDB.getRecentCache<T>(key, fallback);
-    memoryCache.set(memKey(key), value);
-    return value;
-  } catch {
-    return readInstantCache<T>(key, fallback);
+/** A read belongs to the shop and cache generation that started it. Awaiting
+ * IndexedDB must never publish old-shop rows after a shop switch or logout. */
+async function hydrateIndexedValue(key: string): Promise<{ valid: boolean; value?: unknown }> {
+  const scoped = memKey(key);
+  const generation = cacheGeneration;
+  let pending = pendingReads.get(scoped);
+  if (!pending) {
+    const request = offlineDB.getRecentCache<unknown>(key, undefined).catch(() => undefined);
+    pending = { request, version: writeVersions.get(scoped) ?? 0 };
+    pendingReads.set(scoped, pending);
+    const current = pending;
+    void request.then(() => {
+      if (pendingReads.get(scoped) === current) pendingReads.delete(scoped);
+    });
   }
+  const value = await pending.request;
+  if (generation !== cacheGeneration || scoped !== memKey(key)) return { valid: false };
+  // A local edit while the read was pending wins, even within the same millisecond.
+  if (pending.version !== (writeVersions.get(scoped) ?? 0)) return { valid: true, value: memoryCache.get(scoped) };
+  if (value !== undefined) memoryCache.set(scoped, value);
+  return { valid: true, value: value ?? memoryCache.get(scoped) };
+}
+
+export async function readIndexedRecentCache<T>(key: string, fallback: T): Promise<T> {
+  const result = await hydrateIndexedValue(key);
+  return result.valid && result.value !== undefined ? result.value as T : fallback;
 }
 
 export async function hydrateInstantCacheFromIndexedDB(keys: string[]): Promise<void> {
-  await Promise.all(keys.map(async (key) => {
-    const value = await offlineDB.getRecentCache<unknown>(key, undefined).catch(() => undefined);
-    if (value !== undefined) memoryCache.set(memKey(key), value);
-  }));
+  await Promise.all(keys.map((key) => hydrateIndexedValue(key)));
 }
 
 export async function migrateLegacyInstantCache(keys: string[], days = RECENT_CACHE_DAYS): Promise<void> {
   await Promise.all(keys.map(async (key) => {
-    const existing = await offlineDB.getRecentCache<unknown>(key, undefined).catch(() => undefined);
-    if (existing !== undefined) {
-      memoryCache.set(memKey(key), existing);
-      return;
-    }
+    const result = await hydrateIndexedValue(key);
+    if (!result.valid || result.value !== undefined) return;
     const legacy = readLegacyLocalStorage<unknown>(key);
     if (legacy === null) return;
-    const valueForCache = Array.isArray(legacy) ? pruneRecentRows(legacy, days) : legacy;
-    memoryCache.set(memKey(key), valueForCache);
+    const valueForCache = normaliseInstantCacheValue(legacy, days);
+    writeInstantMemoryCache(key, valueForCache, days);
     await offlineDB.putRecentCache(key, valueForCache, days).catch(() => undefined);
   }));
 }
