@@ -45,6 +45,13 @@ function stampServiceWorkerBuild() {
       }>;
       const criticalEntries = [
         "index.html",
+        // These are lazy boot dependencies, so traversing static route imports
+        // cannot discover them. A ready install must open the shared layout and
+        // render either supported language without a prior online visit.
+        "src/components/layout/index.ts",
+        "src/features/core/settings/translations/english-deferred.ts",
+        "src/features/core/settings/translations/hindi-critical.ts",
+        "src/features/core/settings/translations/hindi-deferred.ts",
         "src/features/core/sync/BackgroundRuntime.tsx",
         "src/features/core/dashboard/pages/DashboardPage.tsx",
         "src/features/core/billing/pages/BillingPage.tsx",

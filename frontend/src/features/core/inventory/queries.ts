@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ApiClientError, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
-import { instantCacheUpdatedAt, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
+import { hydrateInstantCacheFromIndexedDB, instantCacheUpdatedAt, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import { offlineDB } from "@/lib/offline/db";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import * as inventoryApi from "@/features/core/inventory/api";
@@ -324,6 +324,12 @@ export function useGetStockLedger(
     // mount instead of allowing a recent cache write to postpone that fetch.
     initialDataUpdatedAt: extra.initialDataUpdatedAt ?? 0,
     queryFn: async () => {
+      // A reload empties memory, not the shop's persisted ledger. Hydrate through
+      // the scoped cache helper before an offline return or network fallback.
+      // It rejects reads that cross a shop switch and preserves newer local edits.
+      if (readCachedLedger().entries.length === 0) {
+        await hydrateInstantCacheFromIndexedDB([INVENTORY_MOVEMENTS_CACHE_KEY, PRODUCTS_CACHE_KEY, INVENTORY_CACHE_KEY]);
+      }
       const liveCached = readCachedLedger();
       if (!isBrowserOnline()) return liveCached;
       try {

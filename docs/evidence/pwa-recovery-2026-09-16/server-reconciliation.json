@@ -1,0 +1,57 @@
+{
+  "bills": [
+    {
+      "id": "cmu45ar6q01a8w0gifam3p816",
+      "billNo": "KOS-2026-000001",
+      "grandTotal": 25.0,
+      "clientBillId": "bill-1789565814950-t6oq2"
+    },
+    {
+      "id": "cmu45pvae000azb3z6cqggy0i",
+      "billNo": "KOS-2026-000002",
+      "grandTotal": 25.0,
+      "clientBillId": "bill-1789565896491-nbo45"
+    },
+    {
+      "id": "cmu45rbql0039zb3znwjk8b8n",
+      "billNo": "KOS-2026-000003",
+      "grandTotal": 25.0,
+      "clientBillId": "bill-1789565940961-5ra95"
+    },
+    {
+      "id": "cmu45vrq0004xzb3z8wzgtg53",
+      "billNo": "KOS-2026-000004",
+      "grandTotal": 25.0,
+      "clientBillId": "bill-1789566616087-vgqo7"
+    },
+    {
+      "id": "cmu4fovzy00u4zb3zkvzubu1p",
+      "billNo": "KOS-2026-000005",
+      "grandTotal": 25.0,
+      "clientBillId": "bill-1789583261710-rrm70"
+    }
+  ],
+  "products": [
+    {
+      "name": "Test Rice",
+      "stockBaseQty": 20.0
+    },
+    {
+      "name": "Test Soap",
+      "stockBaseQty": 25.0
+    },
+    {
+      "name": "Test Oil",
+      "stockBaseQty": 10.0
+    }
+  ],
+  "customers": [
+    {
+      "name": "Test Customer",
+      "udharAmount": 0.0
+    }
+  ],
+  "outageSalePayments": 1,
+  "outageSaleStockEntries": 1,
+  "verified": true
+}
