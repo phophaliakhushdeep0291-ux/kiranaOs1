@@ -280,7 +280,7 @@ export function BillingSearch({
       toast({
         title: t("billing.search.knowledgeFound", { name: knownProduct.name }),
         description: t("billing.search.knowledgeFoundDetail", {
-          detail: knownProduct.brand || knownProduct.category,
+          detail: knownProduct.brand || translateCategory(knownProduct.category, t),
           source: knownProduct.source,
         }),
       });
@@ -836,7 +836,7 @@ export function BillingSearch({
                         <span className="block truncate text-[11px] font-semibold text-[#837C6D]">
                           {product.barcode
                             ? t("billing.search.bindHasCode", { code: String(product.barcode) })
-                            : product.category ?? ""}
+                            : product.category ? translateCategory(product.category, t) : ""}
                         </span>
                       </span>
                       <span className="shrink-0 text-[12px] font-black text-[var(--brand)]">

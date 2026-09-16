@@ -141,7 +141,7 @@ export const I18N_HARDCODED_ALLOWLIST: Record<string, number> = {
   "features/core/reports/components/AccountingControlPanel.tsx": 26,
   "features/core/reports/components/BankReconciliationPanel.tsx": 90,
   "features/core/reports/pages/DailyClosingPage.tsx": 81,
-  "features/core/reports/pages/ReportsPage.tsx": 66,
+  "features/core/reports/pages/ReportsPage.tsx": 65,
   "features/core/returns/components/ReturnDialog.tsx": 51,
   "features/core/returns/pages/NewReturnPage.tsx": 72,
   "features/core/sales/pages/SalesOverviewPage.tsx": 50,

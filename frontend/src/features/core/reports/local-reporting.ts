@@ -20,6 +20,21 @@ import {
   inventoryPackUnitCost,
 } from "@/features/core/inventory/stock-display";
 import { isMergedBillTwin } from "@/features/core/sync/bill-reconciliation";
+import { translateCategory } from "@/features/core/settings/business-types";
+import type { Translate } from "@/features/core/settings/i18n";
+
+/**
+ * The category a report files a sale under when its product has none (or is no
+ * longer in the catalogue). Kept English in the snapshot so an exported report
+ * reads the same whatever language exported it; `reportCategoryLabel` puts it,
+ * and every real category, into the reader's words on screen.
+ */
+export const UNCATEGORISED_CATEGORY = "Uncategorised";
+
+/** A report row's category as the reader should see it. */
+export function reportCategoryLabel(category: string, t: Translate): string {
+  return category === UNCATEGORISED_CATEGORY ? t("reports.category.uncategorised") : translateCategory(category, t);
+}
 
 export interface DateRange {
   from: string;
@@ -490,7 +505,7 @@ function topProductsFromSnapshot(snapshot: FinancialAggregationSnapshot, product
   return snapshot.profitByProduct.slice(0, 10).map((row) => ({
     productId: row.productId,
     name: row.productName,
-    category: productById.get(row.productId)?.category || "Uncategorised",
+    category: productById.get(row.productId)?.category || UNCATEGORISED_CATEGORY,
     quantitySold: row.quantity,
     revenue: row.revenue,
     profitEstimate: row.profit,
@@ -502,10 +517,10 @@ function categoryPerformanceFromSnapshot(
   snapshot: FinancialAggregationSnapshot,
   products: Product[],
 ): ReportCategoryPerformance[] {
-  const categoryByProduct = new Map(products.map((product) => [product.id, product.category || "Uncategorised"]));
+  const categoryByProduct = new Map(products.map((product) => [product.id, product.category || UNCATEGORISED_CATEGORY]));
   const categories = new Map<string, ReportCategoryPerformance>();
   for (const row of snapshot.profitByProduct) {
-    const name = categoryByProduct.get(row.productId) || "Uncategorised";
+    const name = categoryByProduct.get(row.productId) || UNCATEGORISED_CATEGORY;
     const current = categories.get(name) ?? { name, revenue: 0, profit: 0 };
     current.revenue = roundMoney(current.revenue + row.revenue);
     current.profit = roundMoney(current.profit + row.profit);

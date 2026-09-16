@@ -152,6 +152,11 @@ export const reportsHi: Record<keyof typeof reportsEn, string> = {
   "reports.table.topCustomers": "बड़े ग्राहक ({credit})",
   "reports.mobile.creditDue": "{credit} बाकी",
 
+  "reports.category.uncategorised": "बिना कैटेगरी",
+
+  "reports.insight.topCategory": "कुल बिक्री में {percent}% हिस्सा {category} का है।",
+  "reports.insight.topCategoryDetail": "इस कैटेगरी के सामान का मार्जिन और स्टॉक जाँच लें।",
+
   "reports.table.topProducts": "सबसे ज़्यादा बिकने वाला सामान",
   "reports.table.topStyles": "सबसे ज़्यादा बिकने वाली स्टाइल",
   "reports.table.topModels": "सबसे ज़्यादा बिकने वाले मॉडल",

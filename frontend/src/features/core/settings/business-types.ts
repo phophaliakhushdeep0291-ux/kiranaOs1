@@ -117,10 +117,24 @@ export function categoryLabelKey(category: string): TranslationKey | null {
   return shippedCategories.has(category) ? (`shopType.category.${category}` as TranslationKey) : null;
 }
 
-/** A category in the reader's language, or as typed if the shop invented it. */
+/**
+ * A category in the reader's language, or as typed if the shop invented it.
+ *
+ * The one way a stored category reaches the screen. Every surface that prints
+ * one — billing chips, product and stock lists, reports, exports a person reads
+ * — goes through here; printing `product.category` directly shows the stored
+ * key ("finished_goods") in both languages.
+ *
+ * The words live in the deferred dictionary half, so a screen that renders
+ * before that chunk lands gets the key back from `t()`. That window is short,
+ * but a chip reading "shopType.category.grocery" is worse than one reading
+ * "grocery", so the stored value stands in until the words arrive.
+ */
 export function translateCategory(category: string, t: Translate): string {
   const key = categoryLabelKey(category);
-  return key ? t(key) : category.replace(/_/g, " ");
+  if (!key) return category.replace(/_/g, " ");
+  const words = t(key);
+  return words === key ? category.replace(/_/g, " ") : words;
 }
 
 /** Choices that may create/change a shop — mirrors OFFERED_BUSINESS_TYPES on the server. */

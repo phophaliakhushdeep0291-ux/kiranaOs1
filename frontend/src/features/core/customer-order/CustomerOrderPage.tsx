@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i18n";
+import { translateCategory } from "@/features/core/settings/business-types";
 import { useParams } from "wouter";
 import { guestWebsiteRedirect } from "./restaurant-website";
 import {
@@ -136,28 +137,40 @@ export default function CustomerOrderPage() {
 
   const products = state.kind === "ready" ? state.catalog.products : [];
 
+  // A shop files its products under category KEYS ("main_course"), so a chip
+  // that printed the stored value showed the shopkeeper's database to a
+  // customer. The key still identifies the chip; only the words are translated.
+  const categoryKey = (product: CustomerCatalogProduct) => (product.category ?? "").trim().toLowerCase();
+  const categoryWords = useCallback(
+    (product: CustomerCatalogProduct) => {
+      const stored = (product.category ?? "").trim();
+      return stored ? translateCategory(stored, t) : t("products.filter.general");
+    },
+    [t],
+  );
+
   const categories = useMemo(() => {
     const byKey = new Map<string, { label: string; product?: CustomerCatalogProduct }>();
     for (const p of products) {
-      const label = (p.category ?? "General").trim() || "General";
-      const key = label.toLowerCase();
+      const key = categoryKey(p);
+      const label = categoryWords(p);
       if (!byKey.has(key)) byKey.set(key, { label, product: p });
       if (!byKey.get(key)?.product?.imageUrl && p.imageUrl) byKey.set(key, { label, product: p });
     }
     return [...byKey.entries()]
       .map(([key, value]) => ({ key, ...value }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [products]);
+  }, [products, categoryWords]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products.filter((p) => {
-      const categoryLabel = (p.category ?? "General").trim() || "General";
-      if (category !== "all" && categoryLabel.toLowerCase() !== category) return false;
+      if (category !== "all" && categoryKey(p) !== category) return false;
       if (!q) return true;
-      return p.name.toLowerCase().includes(q) || categoryLabel.toLowerCase().includes(q);
+      // Searchable by the stored value AND by the words on the chip.
+      return p.name.toLowerCase().includes(q) || categoryKey(p).includes(q) || categoryWords(p).toLowerCase().includes(q);
     });
-  }, [products, search, category]);
+  }, [products, search, category, categoryWords]);
 
   const cartItems = useMemo<CartItem[]>(() => {
     const byId = new Map(products.map((p) => [p.id, p]));

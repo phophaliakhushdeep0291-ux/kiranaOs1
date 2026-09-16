@@ -33,7 +33,7 @@ import { inventoryStockLabel } from "@/features/core/inventory/stock-display";
 import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useBusinessType, type BusinessType, type BusinessTypeDefinition, type QuickAction, type QuickActionIconKey, type QuickActionColorKey } from "@/features/core/settings/business-types";
+import { translateCategory, useBusinessType, type BusinessType, type BusinessTypeDefinition, type QuickAction, type QuickActionIconKey, type QuickActionColorKey } from "@/features/core/settings/business-types";
 import { useModuleVisibility } from "@/features/core/settings/modules";
 import { getShopWorkflow } from "@/features/core/settings/shop-workflows";
 import { cn } from "@/lib/utils";
@@ -2038,7 +2038,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
               <div key={item.productId ?? i} className="flex items-center justify-between gap-3 border-b py-2 last:border-0">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{item.name}</p>
-                  {item.category ? <p className="text-xs text-muted-foreground capitalize">{String(item.category).replace(/_/g, " ")}</p> : null}
+                  {item.category ? <p className="text-xs text-muted-foreground capitalize">{translateCategory(String(item.category), t)}</p> : null}
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-black text-amber-600 dark:text-amber-400">
@@ -2148,7 +2148,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
               <div key={item.productId ?? i} className="flex items-center justify-between gap-3 rounded-lg border border-rose-100 bg-rose-50/40 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/20">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
-                  {item.category ? <p className="text-xs text-muted-foreground capitalize">{String(item.category).replace(/_/g, " ")}</p> : null}
+                  {item.category ? <p className="text-xs text-muted-foreground capitalize">{translateCategory(String(item.category), t)}</p> : null}
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-black text-rose-600 dark:text-rose-400">{item.stock} {item.unit ?? "pc"}</p>

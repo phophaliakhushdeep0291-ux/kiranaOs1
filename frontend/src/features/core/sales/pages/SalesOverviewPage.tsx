@@ -38,7 +38,8 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageShell, SyncBadge } from "@/components/shared";
-import { buildLocalReportSnapshot, toDateInputValue, type DateRange } from "@/features/core/reports/local-reporting";
+import { buildLocalReportSnapshot, reportCategoryLabel, toDateInputValue, type DateRange } from "@/features/core/reports/local-reporting";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { dedupeBillsForDisplay, isMergedBillTwin } from "@/features/core/sync/bill-reconciliation";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
 import { useToast } from "@/hooks/use-toast";
@@ -250,6 +251,7 @@ export default function SalesOverviewPage() {
   const requestExport = useDataExport();
   useReportView("sales", "Sales overview");
   const { toast } = useToast();
+  const { t } = useAppLanguage();
   const [period, setPeriod] = useState<SalesPeriod>("week");
   const [from, setFrom] = useState(daysAgoInput(6));
   const [to, setTo] = useState(toDateInputValue(new Date()));
@@ -367,8 +369,8 @@ export default function SalesOverviewPage() {
   const categoryRows = useMemo(() => {
     const source = snapshot?.categoryPerformance ?? [];
     const colors = [BLUE, GREEN, ORANGE, PURPLE, PINK, "#9aa8bc"];
-    return source.slice(0, 6).map((row, index) => ({ ...row, value: row.revenue, color: colors[index] ?? BLUE }));
-  }, [snapshot?.categoryPerformance]);
+    return source.slice(0, 6).map((row, index) => ({ ...row, label: reportCategoryLabel(row.name, t), value: row.revenue, color: colors[index] ?? BLUE }));
+  }, [snapshot?.categoryPerformance, t]);
 
   const hourlyRows = useMemo(() => {
     const today = toDateInputValue(new Date());
@@ -501,7 +503,7 @@ export default function SalesOverviewPage() {
           {snapshot?.topProducts.slice(0, 5).map((row, index) => (
             <tr key={row.productId} className="text-[#24385f]">
               <td className="px-3 py-2 font-bold"><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded bg-[#f5f7fb] text-[10px] text-[var(--brand)]">{index + 1}</span>{row.name}</td>
-              <td className="px-3 py-2">{row.category}</td>
+              <td className="px-3 py-2">{reportCategoryLabel(row.category, t)}</td>
               <td className="px-3 py-2 text-right font-semibold">{row.quantitySold}</td>
               <td className="px-3 py-2 text-right font-black">{money(row.revenue)}</td>
             </tr>
@@ -654,7 +656,10 @@ function PeriodPill({ value, onChange }: { value: SalesPeriod; onChange: (period
   );
 }
 
-function DonutPanel({ title, total, rows, centerLabel }: { title: string; total: number; rows: Array<{ name: string; value: number; color: string }>; centerLabel: string }) {
+// `name` identifies a slice and keys it; `label`, when given, is what the reader
+// sees. Two stored categories can share one label (a starter item's "Finished
+// Goods" beside a form's `finished_goods`), so a label cannot be the key.
+function DonutPanel({ title, total, rows, centerLabel }: { title: string; total: number; rows: Array<{ name: string; label?: string; value: number; color: string }>; centerLabel: string }) {
   const chartRows = rows.length ? rows : [{ name: "No sales", value: 1, color: "#e6ebf2" }];
   return (
     <Panel title={title}>
@@ -673,7 +678,7 @@ function DonutPanel({ title, total, rows, centerLabel }: { title: string; total:
           {rows.length === 0 ? <p className="text-center text-[11px] text-[#8290a8]">No breakdown yet</p> : rows.map((row) => (
             <div key={row.name} className="grid grid-cols-[10px_1fr_auto] items-center gap-2 text-[11px]">
               <span className="h-2 w-2 rounded-full" style={{ background: row.color }} />
-              <span className="font-semibold text-[#2c3f64]">{row.name}</span>
+              <span className="font-semibold text-[#2c3f64]">{row.label ?? row.name}</span>
               <span className="font-black text-[#15264b]">{money(row.value)} <em className="font-normal not-italic text-[#75839d]">({total ? ((row.value / total) * 100).toFixed(1) : 0}%)</em></span>
             </div>
           ))}

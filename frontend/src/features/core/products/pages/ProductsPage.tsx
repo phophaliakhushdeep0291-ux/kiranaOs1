@@ -78,7 +78,7 @@ import { offlineDB } from "@/lib/offline/db";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { TradeFocusStrip } from "@/components/shared";
-import { useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { translateCategory, useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { getShopProductsProfile } from "@/features/core/settings/shop-products";
 
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
@@ -334,9 +334,11 @@ export default function ProductsPage() {
         if (value) used.add(value);
       });
     const defaults = CATEGORIES.filter((item) => item !== "all");
+    // Ordered by the words on screen, not by the stored key: in Hindi the two
+    // orders have nothing to do with each other.
     return [...new Set([...used, ...(used.size === 0 ? defaults : [])])].sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: "base" }));
-  }, [productRows]);
+      translateCategory(a, t).localeCompare(translateCategory(b, t), undefined, { sensitivity: "base" }));
+  }, [productRows, t]);
 
   /* pagination */
   const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
@@ -577,16 +579,16 @@ export default function ProductsPage() {
         </div>
         <Select value={category} onValueChange={setCategory}>
           <SelectTrigger aria-label={t("products.filter.categoryLabel")} className="h-11 w-full rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold capitalize lg:w-52" data-testid="select-category">
-            {/* Render the label ourselves so the trigger reads "Home Care" like the
-                option does, instead of echoing the raw stored value ("home-care"). */}
+            {/* Render the label ourselves so the trigger reads the same words as
+                the option does, instead of echoing the stored key ("finished_goods"). */}
             <SelectValue placeholder={t("products.filter.allCategories")}>
-              {category === "all" ? t("products.filter.allCategories") : category.replace(/[_-]/g, " ")}
+              {category === "all" ? t("products.filter.allCategories") : translateCategory(category, t)}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("products.filter.allCategories")}</SelectItem>
             {categoryOptions.map((item) => (
-              <SelectItem key={item} value={item} className="capitalize">{item.replace(/[_-]/g, " ")}</SelectItem>
+              <SelectItem key={item} value={item} className="capitalize">{translateCategory(item, t)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -675,7 +677,7 @@ export default function ProductsPage() {
                         </span>
                       )}
                     </p>
-                    <p className="mt-0.5 truncate text-[11px] font-semibold capitalize text-[#64748b]">{product.category || t("products.filter.general")} · {unit}</p>
+                    <p className="mt-0.5 truncate text-[11px] font-semibold capitalize text-[#64748b]">{product.category ? translateCategory(product.category, t) : t("products.filter.general")} · {unit}</p>
                     {cardAlternates.length > 0 && (
                       <p
                         className="mt-0.5 truncate text-[11px] font-semibold normal-case text-[#8a97ad]"
@@ -829,8 +831,10 @@ export default function ProductsPage() {
                         </div>
                       </td>
                       <td className="px-3 py-3">
+                        {/* The colour is keyed on the STORED value so a product keeps its
+                            chip colour when the counter switches language. */}
                         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ${categoryBadge(cat)}`}>
-                          {cat.replace(/_/g, " ")}
+                          {translateCategory(cat, t)}
                         </span>
                       </td>
                       <td className="px-3 py-3"><span className="font-mono text-[12px] text-[#45577a]">{product.barcode ?? product.sku ?? "—"}</span></td>

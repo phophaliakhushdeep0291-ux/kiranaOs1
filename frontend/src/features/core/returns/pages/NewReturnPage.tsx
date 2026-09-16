@@ -38,6 +38,8 @@ import { useOfflineStatus } from "@/features/core/sync";
 import { offlineDB } from "@/lib/offline/db";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useAppLanguage } from "@/features/core/settings/i18n";
+import { translateCategory } from "@/features/core/settings/business-types";
 import type { Bill, Product } from "@/types/api";
 
 type RecordLike = Record<string, unknown>;
@@ -288,7 +290,7 @@ export default function NewReturnPage() {
       amount: money(entry.totalAmount),
       mode: supplierRefundMode(entry.refundMode),
       status: entry.status === "cancelled" ? "cancelled" : "completed",
-      items: entry.items.map((item) => ({ ...item, name: item.product?.name || "Returned item", category: item.product?.category || "General" })),
+      items: entry.items.map((item) => ({ ...item, name: item.product?.name || "Returned item", category: item.product?.category || "" })),
       purchaseReturn: entry,
     }));
     return [...salesRows, ...supplierRows].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -463,7 +465,7 @@ function buildTopItems(rows: ReturnRow[]) {
       const productId = String(item.productId ?? item.product_id ?? item.name ?? "item");
       const quantity = money(item.quantity ?? item.qty);
       const amount = money(item.lineTotal ?? item.line_total ?? Number(item.ratePerRateUnit ?? item.rate_per_rate_unit ?? 0) * quantity);
-      const current = byProduct.get(productId) ?? { name: String(item.name ?? item.productName ?? "Returned item"), category: String(item.category ?? "General"), quantity: 0, amount: 0 };
+      const current = byProduct.get(productId) ?? { name: String(item.name ?? item.productName ?? "Returned item"), category: String(item.category ?? ""), quantity: 0, amount: 0 };
       current.quantity += quantity;
       current.amount += amount;
       byProduct.set(productId, current);
@@ -489,7 +491,11 @@ function ReturnOrdersTable({ rows, loading, onCancelPurchaseReturn }: { rows: Re
 }
 
 function TopReturnedItems({ rows }: { rows: Array<{ name: string; category: string; quantity: number; amount: number }> }) {
-  return <article className={PANEL}><header className="flex h-11 items-center justify-between px-4"><h2 className="text-[13px] font-extrabold text-[var(--brand-ink)]">Top Returned Items</h2><Link href="/products" className="tap-target text-[10px] font-bold text-[var(--brand)]">View all</Link></header>{rows.length === 0 ? <div className="grid h-44 place-items-center text-[11px] text-[#8290a8]">No returned items in this period</div> : <div><div className="divide-y divide-[#e8edf4] md:hidden">{rows.map((row) => <div key={row.name} className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3"><div><p className="text-[12px] font-extrabold text-[#24385f]">{row.name}</p><p className="mt-1 text-[11px] text-[#60708e]">{row.category} • {row.quantity} returned</p></div><p className="text-right text-[12px] font-black text-[var(--brand-ink)]">{inr(row.amount)}</p></div>)}</div><div className="hidden overflow-x-auto px-3 pb-3 md:block"><table className="w-full text-[10px]"><thead><tr className="border-y border-[#e5ebf3] bg-[#f7f9fc] text-[#52617c]"><th className="px-2 py-2 text-left">Product</th><th className="px-2 py-2 text-left">Category</th><th className="px-2 py-2 text-right">Qty Returned</th><th className="px-2 py-2 text-right">Return Amount</th></tr></thead><tbody className="divide-y divide-[#e8edf4]">{rows.map((row) => <tr key={row.name}><td className="px-2 py-2 font-bold text-[#24385f]">{row.name}</td><td className="px-2 py-2 text-[#60708e]">{row.category}</td><td className="px-2 py-2 text-right font-semibold">{row.quantity}</td><td className="px-2 py-2 text-right font-bold">{inr(row.amount)}</td></tr>)}</tbody></table></div></div>}</article>;
+  const { t } = useAppLanguage();
+  // Stored as a key ("finished_goods"), read as words. A returned item whose
+  // product is gone has no category at all.
+  const label = (category: string) => (category ? translateCategory(category, t) : t("products.filter.general"));
+  return <article className={PANEL}><header className="flex h-11 items-center justify-between px-4"><h2 className="text-[13px] font-extrabold text-[var(--brand-ink)]">Top Returned Items</h2><Link href="/products" className="tap-target text-[10px] font-bold text-[var(--brand)]">View all</Link></header>{rows.length === 0 ? <div className="grid h-44 place-items-center text-[11px] text-[#8290a8]">No returned items in this period</div> : <div><div className="divide-y divide-[#e8edf4] md:hidden">{rows.map((row) => <div key={row.name} className="grid grid-cols-[1fr_auto] gap-3 px-4 py-3"><div><p className="text-[12px] font-extrabold text-[#24385f]">{row.name}</p><p className="mt-1 text-[11px] text-[#60708e]">{label(row.category)} • {row.quantity} returned</p></div><p className="text-right text-[12px] font-black text-[var(--brand-ink)]">{inr(row.amount)}</p></div>)}</div><div className="hidden overflow-x-auto px-3 pb-3 md:block"><table className="w-full text-[10px]"><thead><tr className="border-y border-[#e5ebf3] bg-[#f7f9fc] text-[#52617c]"><th className="px-2 py-2 text-left">Product</th><th className="px-2 py-2 text-left">Category</th><th className="px-2 py-2 text-right">Qty Returned</th><th className="px-2 py-2 text-right">Return Amount</th></tr></thead><tbody className="divide-y divide-[#e8edf4]">{rows.map((row) => <tr key={row.name}><td className="px-2 py-2 font-bold text-[#24385f]">{row.name}</td><td className="px-2 py-2 text-[#60708e]">{label(row.category)}</td><td className="px-2 py-2 text-right font-semibold">{row.quantity}</td><td className="px-2 py-2 text-right font-bold">{inr(row.amount)}</td></tr>)}</tbody></table></div></div>}</article>;
 }
 
 function ReturnSummary({ rows, total }: { rows: Array<{ mode: keyof typeof MODE_META; value: number; label: string; color: string }>; total: number }) {
