@@ -47,6 +47,7 @@ const PATH_NAVIGATION_KEYS: Array<[RegExp, string[]]> = [
   [/^\/bills(?:\/|$)|^\/sales-overview(?:\/|$)|^\/orders-received(?:\/|$)/, ["sales", "orders"]],
   [/^\/returns(?:\/|$)/, ["returns", "exchanges"]],
   [/^\/reports(?:\/|$)/, ["reports"]],
+  [/^\/accounting(?:\/|$)/, ["reports"]],
   [/^\/daily-closing(?:\/|$)/, ["daily-closing", "cash-payments"]],
   [/^\/money-statement(?:\/|$)/, ["cash-payments"]],
   [/^\/expenses(?:\/|$)/, ["expenses"]],

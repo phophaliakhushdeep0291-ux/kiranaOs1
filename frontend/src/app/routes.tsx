@@ -56,6 +56,7 @@ const Loyalty = lazy(() => import("@/features/core/loyalty/pages/LoyaltyPage"));
 const GiftCards = lazy(() => import("@/features/core/gift-cards/GiftCardsPage"));
 const Reports = lazy(loadReportsRoute);
 const ChannelSettlements = lazy(() => import("@/features/core/reports/pages/ChannelSettlementsPage"));
+const AccountingPage = lazy(() => import("@/features/core/accounting/pages/AccountingPage"));
 const MoneyStatementPage = lazy(() => import("@/features/core/money-statement/pages/MoneyStatementPage"));
 const DailyClosingPage = lazy(() => import("@/features/core/reports/pages/DailyClosingPage"));
 const Settings = lazy(() => import("@/features/core/settings/pages/SettingsPage"));
@@ -509,6 +510,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/channel-settlements">
         <ProtectedRoute component={ChannelSettlements} featureName="channel_settlement" onlineOnly />
+      </Route>
+      <Route path="/accounting">
+        <ProtectedRoute component={AccountingPage} onlineOnly />
       </Route>
       <Route path="/money-statement">
         <ProtectedRoute component={MoneyStatementPage} />

@@ -5,6 +5,7 @@ import {
   BadgeIndianRupee,
   BarChart3,
   Bell,
+  BookOpenCheck,
   Boxes,
   ChevronDown,
   ChevronRight,
@@ -91,6 +92,18 @@ interface NavigationItem {
   href: string;
   label: string;
   helper: string;
+  /**
+   * Set these INSTEAD of `label`/`helper` to have the drawer translate the row.
+   *
+   * Most rows below are still baked English, which is why this file carries a
+   * standing entry in the i18n allowlist. That allowlist is a ratchet, so a new
+   * row cannot add to the debt — it carries keys, the drawer resolves them
+   * through `t()`, and the count stays where it is. Converting the older rows
+   * is then a matter of moving each one onto these fields and lowering the
+   * allowlist number in the same change.
+   */
+  labelKey?: TranslationKey;
+  helperKey?: TranslationKey;
   Icon: NavIcon;
   /**
    * A section that owns several screens. The row becomes a disclosure instead
@@ -151,6 +164,7 @@ export const MORE_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
       { href: "/expenses", label: "Expenses", helper: "Track shop spending", Icon: ReceiptIndianRupee },
       { href: "/money-statement", label: "Money statement", helper: "Cash, bank and UPI", Icon: Landmark },
       { href: "/reports", label: "Reports", helper: "Profit and performance", Icon: BarChart3 },
+      { href: "/accounting", label: "", helper: "", labelKey: "accounting.title", helperKey: "accounting.entry.menuHelper", Icon: BookOpenCheck },
       { href: "/daily-closing", label: "Daily closing", helper: "Close and verify today", Icon: ShieldCheck },
       { href: "/offers", label: "Offers", helper: "Discount rules", Icon: BarChart3 },
       { href: "/loyalty", label: "Loyalty", helper: "Points and members", Icon: HandCoins },
@@ -345,7 +359,9 @@ function MoreNavigation({ location, userRole }: { location: string; userRole?: s
       .map((group) => ({
         ...group,
         items: ([
-          ...group.items,
+          ...group.items.map((item) => (item.labelKey
+            ? { ...item, label: t(item.labelKey), helper: item.helperKey ? t(item.helperKey) : item.helper }
+            : item)),
           ...extras
             .filter((entry) => entry.mobile?.group === group.label)
             .map((entry) => ({ href: entry.href, label: t(entry.label), helper: t(entry.mobile!.helper), Icon: entry.Icon })),
