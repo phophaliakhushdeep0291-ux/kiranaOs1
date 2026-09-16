@@ -252,7 +252,7 @@ expensive way to be wrong.
 
 | Gate | Command |
 |---|---|
-| Frontend | `cd frontend && npm run prod:check` (typecheck, i18n, tests, build, bundle) |
+| Frontend | `cd frontend && npm run prod:check` (typecheck, i18n, build, bundle, app check, tests last) |
 | Backend | `cd backend && npm test` and `npm run prod:check` |
 | Migrations | `cd backend && npm run migration:safety` |
 | Release certification | `cd backend && npm run release:certify:local` |
