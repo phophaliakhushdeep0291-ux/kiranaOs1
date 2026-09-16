@@ -870,6 +870,19 @@ describe("local reports and daily closing", () => {
     );
   });
 
+  it("honours litre base units, named packs, and unrounded alert comparisons", async () => {
+    setRows({ products: [
+      product("litre", { name: "Oil", baseUnit: "litre", displayUnit: "litre", stockBaseQty: 1, lowStockThreshold: 2 }),
+      product("pack", { name: "Oil bottles", baseUnit: "ml", stockUnit: "bottle-100-ml", stockBaseQty: 600, lowStockThreshold: 1000,
+        sellingUnits: [{ unitCode: "bottle-100-ml", name: "bottle 100 ml", unitType: "bottle", conversionToBase: 100, isDefault: true }] }),
+      product("rounded", { name: "Spice", baseUnit: "gram", displayUnit: "kg", stockBaseQty: 14, lowStockThreshold: 11 }),
+    ] });
+    const snapshot = await buildLocalReportSnapshot({ from: "2026-06-06", to: "2026-06-06" });
+    expect(snapshot.lowStock.find((row) => row.name === "Oil")).toMatchObject({ stock: 1, threshold: 2 });
+    expect(snapshot.lowStock.find((row) => row.name === "Oil bottles")).toMatchObject({ stock: 6, threshold: 10 });
+    expect(snapshot.lowStock.some((row) => row.name === "Spice")).toBe(false);
+  });
+
   it("marks reports as local estimates when pending sync exists", async () => {
     setRows({
       bills: [bill("bill_pending", "2026-06-06T10:00:00.000Z")],

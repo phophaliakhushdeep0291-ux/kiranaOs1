@@ -453,7 +453,7 @@ export function BillingSummary({
               <div className="flex items-center gap-3">
                 <span className="shrink-0 text-xs font-semibold text-[#6B6455]">{t("billing.summary.billType")}</span>
                 <Select value={billType} onValueChange={(v) => setBillType(v as BillTypeSelection)}>
-                  <SelectTrigger data-testid="select-bill-type" className="h-8 flex-1 text-xs font-semibold">
+                  <SelectTrigger data-testid="select-bill-type" aria-label={t("billing.summary.billType")} className="h-8 flex-1 text-xs font-semibold">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -482,7 +482,7 @@ export function BillingSummary({
                       }
                     }}
                   >
-                    <SelectTrigger data-testid="select-customer" className="h-9 text-sm">
+                    <SelectTrigger data-testid="select-customer" aria-label={t("billing.summary.customerFallback")} className="h-9 text-sm">
                       <SelectValue placeholder={t("billing.summary.walkInOption")} />
                     </SelectTrigger>
                     <SelectContent>

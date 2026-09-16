@@ -289,6 +289,7 @@ export function BillingPaymentPanel({
           <label className="mb-1 block text-xs font-medium text-muted-foreground">{t("billing.pay.cashFromCustomer")}</label>
           <Input
             data-testid="input-cash-tendered"
+            aria-label={t("billing.pay.cashFromCustomer")}
             type="number"
             inputMode="decimal"
             className="h-10 font-semibold"

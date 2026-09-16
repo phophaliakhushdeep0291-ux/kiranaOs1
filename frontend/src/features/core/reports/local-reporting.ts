@@ -650,18 +650,27 @@ function calculateLowStock(products: Product[]): ReportLowStockItem[] {
   return products
     .filter((product) => !isDeleted(product as unknown as RecordLike) && (product.stockTrackingEnabled ?? product.trackStock ?? true))
     .map((product) => {
-      // stockBaseQty AND lowStockThreshold are both stored in base units (g/ml) — the product
-      // form converts the entered alert via toBaseQty. Convert BOTH to the display unit so the
-      // comparison is unit-consistent and the numbers shown read naturally (2 kg, not 2000).
-      // Comparing display stock against a base-unit threshold flagged every weighed item as low.
       const unit = product.stockUnit ?? productDisplayUnit(product);
+      // Legacy snapshots without baseUnit store g/ml; current records can use
+      // kg/litre or a named pack. Honour the product's actual conversion, just
+      // as the inventory screen does, for both stock and its alert threshold.
+      const displayQuantity = (quantity: number) => product.baseUnit || product.sellingUnits?.length
+        ? inventoryDisplayQuantity({ ...product, stockBaseQty: quantity }, unit)
+        : fromBaseQty(quantity, unit);
       const stock = product.stockBaseQty != null
-        ? fromBaseQty(product.stockBaseQty, unit)
+        ? displayQuantity(product.stockBaseQty)
         : readNumber(product.stockQuantity, 0);
-      const threshold = fromBaseQty(readNumber(product.lowStockThreshold ?? product.lowStockAlert, 0), unit);
+      const threshold = displayQuantity(readNumber(product.lowStockThreshold ?? product.lowStockAlert, 0));
       return { product, stock, threshold, unit };
     })
-    .filter(({ stock, threshold }) => threshold > 0 && stock <= threshold)
+    .filter(({ product, stock, threshold }) => {
+      // Compare unrounded stored values: 0.014 kg must not be flagged against
+      // a 0.011 kg threshold just because both display as 0.01 kg.
+      const rawThreshold = readNumber(product.lowStockThreshold ?? product.lowStockAlert, 0);
+      return product.stockBaseQty != null
+        ? rawThreshold > 0 && product.stockBaseQty <= rawThreshold
+        : threshold > 0 && stock <= threshold;
+    })
     .sort((a, b) => a.stock - b.stock)
     .slice(0, 20)
     .map(({ product, stock, threshold, unit }) => ({

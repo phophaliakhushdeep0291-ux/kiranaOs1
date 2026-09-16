@@ -1,0 +1,11 @@
+{
+  "url": "http://localhost:5500",
+  "build": "Vite production build with local test API",
+  "pages": [
+    "login",
+    "dashboard",
+    "reports",
+    "inventory"
+  ],
+  "consoleErrors": []
+}

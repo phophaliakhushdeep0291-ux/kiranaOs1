@@ -1,0 +1,240 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- complementary:
+  - button "Resize sidebar, 260 pixels. Use left and right arrow keys."
+  - link "Artha Built for busy Indian stores":
+    - /url: /dashboard
+    - generic: Artha
+    - generic: Built for busy Indian stores
+  - button "Collapse sidebar":
+  - navigation "Main navigation":
+    - link "Dashboard":
+      - /url: /dashboard
+      - generic: Dashboard
+    - link "Billing F2":
+      - /url: /billing
+      - generic: Billing
+      - generic: F2
+    - link "Inventory Current page":
+      - /url: /inventory
+      - generic: Inventory
+      - generic: Current page
+    - button "Collapse Inventory menu" [expanded]:
+    - link "Products":
+      - /url: /products
+      - generic: Products
+    - link "Categories":
+      - /url: /categories
+      - generic: Categories
+    - link "Stock In":
+      - /url: /inventory/stock-in
+      - generic: Stock In
+    - link "Stock Out":
+      - /url: /inventory/stock-out
+      - generic: Stock Out
+    - link "Adjustments":
+      - /url: /inventory/adjustments
+      - generic: Adjustments
+    - link "Stock Transfers":
+      - /url: /inventory/stock-transfers
+      - generic: Stock Transfers
+    - link "Stock Counts":
+      - /url: /inventory/stock-counts
+      - generic: Stock Counts
+    - link "Batch & Expiry":
+      - /url: /inventory/batches
+      - generic: Batch & Expiry
+    - link "Customers / Udhar":
+      - /url: /customers
+      - generic: Customers / Udhar
+    - link "Purchases":
+      - /url: /purchase-bills
+      - generic: Purchases
+    - button "Sales":
+      - generic: Sales
+    - link "Returns":
+      - /url: /returns
+      - generic: Returns
+    - link "Reports":
+      - /url: /reports
+      - generic: Reports
+    - link "Cash & Payments":
+      - /url: /money-statement
+      - generic: Cash & Payments
+    - link "Accounting":
+      - /url: /accounting
+      - generic: Accounting
+    - button "Business Tools":
+      - generic: Business Tools
+    - link "Expenses":
+      - /url: /expenses
+      - generic: Expenses
+    - link "Settings":
+      - /url: /settings
+      - generic: Settings
+  - button "RT Readiness Test Store Readiness Test Store - Main · Jodhpur":
+    - generic: RT
+    - generic: Readiness Test Store
+    - generic: Readiness Test Store - Main · Jodhpur
+- banner:
+  - button "Toggle sidebar":
+  - heading "Inventory" [level=1]
+  - button "Readiness Test Store - Main MAIN · Primary":
+    - generic: Readiness Test Store - Main
+    - generic: MAIN · Primary
+  - generic: Synced
+  - generic: Just now
+  - generic "Rs 999 Business"
+  - link "Open sync alerts":
+    - /url: /sync-status
+  - button "RT":
+    - generic: RT
+- main:
+  - status: Inventory page loaded
+  - paragraph: Stock tools for your shop type
+  - paragraph: 🛒 Kirana / General Store
+  - paragraph: Keep loose and packed stock in the unit you actually sell in, and refill before the shelf runs empty.
+  - link "Batch and expiry":
+    - /url: /inventory/batches
+    - text: Batch and expiry
+  - link "Stock Counts":
+    - /url: /inventory/stock-counts
+    - text: Stock Counts
+  - link "Change shop type":
+    - /url: /settings/store-profile
+  - paragraph: Total Stock Value
+  - paragraph: ₹2,010
+  - paragraph: At current cost
+  - paragraph: Total SKUs
+  - paragraph: "3"
+  - paragraph: 56 units tracked
+  - paragraph: Low Stock Items
+  - paragraph: "0"
+  - paragraph: Require attention
+  - paragraph: Out of Stock Items
+  - paragraph: "0"
+  - paragraph: Take immediate action
+  - paragraph: Stock Turnover (30D)
+  - paragraph: 0.1x
+  - paragraph: Based on sold quantity
+  - button "Add Stock Increase inventory":
+    - generic: Add Stock
+    - generic: Increase inventory
+  - button "Stock Correction Adjust stock levels":
+    - generic: Stock Correction
+    - generic: Adjust stock levels
+  - button "Damage Entry Record damaged items":
+    - generic: Damage Entry
+    - generic: Record damaged items
+  - button "Supplier Purchase Create purchase entry":
+    - generic: Supplier Purchase
+    - generic: Create purchase entry
+  - button "More Actions History, bills and insights":
+    - generic: More Actions
+    - generic: History, bills and insights
+  - heading "Product Stock" [level=2]
+  - paragraph: Real-time stock from local data, ready to sync.
+  - textbox "Search by product, SKU, barcode..."
+  - button "Filters":
+    - text: Filters
+  - button "Export":
+    - text: Export
+  - combobox "All Categories":
+    - generic: All Categories
+  - combobox "All Brands":
+    - generic: All Brands
+  - combobox "All Units":
+    - generic: All Units
+  - combobox "All Stock Status":
+    - generic: All Stock Status
+  - region "Product Stock":
+    - table:
+      - rowgroup:
+        - row "Product SKU / Barcode Category Unit Stock Cost Total Value Status":
+          - columnheader "Product"
+          - columnheader "SKU / Barcode"
+          - columnheader "Category"
+          - columnheader "Unit"
+          - columnheader "Stock"
+          - columnheader "Cost"
+          - columnheader "Total Value"
+          - columnheader "Status"
+      - rowgroup:
+        - row "TE Test Oil Unbranded - General litre 10 ₹90 ₹900 In Stock":
+          - cell "TE Test Oil Unbranded":
+            - generic: TE
+            - paragraph: Test Oil
+            - paragraph: Unbranded
+          - cell "-"
+          - cell "General"
+          - cell "litre"
+          - cell "10"
+          - cell "₹90"
+          - cell "₹900"
+          - cell "In Stock":
+            - generic: In Stock
+        - row "TE Test Rice Unbranded - General kg 20 ₹36 ₹720 In Stock":
+          - cell "TE Test Rice Unbranded":
+            - generic: TE
+            - paragraph: Test Rice
+            - paragraph: Unbranded
+          - cell "-"
+          - cell "General"
+          - cell "kg"
+          - cell "20"
+          - cell "₹36"
+          - cell "₹720"
+          - cell "In Stock":
+            - generic: In Stock
+        - row "TE Test Soap Unbranded - General piece 26 ₹15 ₹390 In Stock":
+          - cell "TE Test Soap Unbranded":
+            - generic: TE
+            - paragraph: Test Soap
+            - paragraph: Unbranded
+          - cell "-"
+          - cell "General"
+          - cell "piece"
+          - cell "26"
+          - cell "₹15"
+          - cell "₹390"
+          - cell "In Stock":
+            - generic: In Stock
+  - paragraph: Showing 1 to 3 of 3 products
+  - button "Previous page" [disabled]:
+  - button "Page 1": "1"
+  - button "Next page" [disabled]:
+  - paragraph: 8 rows per page
+  - complementary:
+    - heading "Stock Overview by Location" [level=2]
+    - paragraph: Current stock distribution
+    - 'img "Stock Overview by Location: Main Store, Total Value ₹2,010"':
+    - generic: Main Store
+    - paragraph: 100% of tracked stock
+    - generic: Total Value
+    - generic: ₹2,010
+    - heading "Low Stock Alerts" [level=2]
+    - paragraph: Items needing immediate attention
+    - button "View all"
+    - paragraph: All tracked products have healthy stock.
+    - heading "Recent Stock Updates" [level=2]
+    - paragraph: Latest inventory movements
+    - button "View all"
+    - paragraph: Manual sale
+    - paragraph: Test Soap · Test Owner · 16 Sep, 7:23 PM
+    - generic: "-1 piece"
+    - paragraph: Manual sale
+    - paragraph: Test Soap · Test Owner · 16 Sep, 7:20 PM
+    - generic: "-1 piece"
+    - paragraph: Manual sale
+    - paragraph: Test Soap · Test Owner · 16 Sep, 7:19 PM
+    - generic: "-1 piece"
+    - paragraph: Manual sale
+    - paragraph: Test Soap · Test Owner · 16 Sep, 7:07 PM
+    - generic: "-1 piece"
+- button "Voice assistant":
+  - generic: Voice assistant
+- button "Report a problem":
+  - generic: Report a problem
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

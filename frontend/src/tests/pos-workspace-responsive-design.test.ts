@@ -27,7 +27,7 @@ describe("POS workspace responsive design", () => {
     expect(styles).toContain("--app-mobile-fixed-action-height");
     expect(styles).toContain("--app-mobile-content-bottom-clearance");
     expect(styles).toContain("--app-mobile-checkout-panel-clearance");
-    expect(billingPage).toContain('aria-label={mobileCheckoutOpen ? t("billing.page.reviewCollectPayment") : undefined}');
+    expect(billingPage).toContain('aria-label={mobileCheckoutOpen ? t(cart.length === 0 && lastBillNo ? "chrome.savedBillActions" : "billing.page.reviewCollectPayment") : undefined}');
     expect(billingPage).toContain("pb-[var(--app-mobile-checkout-panel-clearance)]");
     expect(billingPage).toContain("cart.length > 0 && !mobileCheckoutOpen");
     expect(billingSummary).toContain("relative flex h-full min-h-0");

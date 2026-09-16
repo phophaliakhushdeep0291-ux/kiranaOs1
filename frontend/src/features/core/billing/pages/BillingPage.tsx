@@ -16,6 +16,8 @@ import { useFeature } from "@/features/core/subscription";
 import { usePermission } from "@/features/core/staff/permissions";
 import { useDebounce } from "@/hooks/use-debounce";
 import { offlineDB } from "@/lib/offline/db";
+import { readInstantCache } from "@/lib/offline/instant-cache";
+import { syncedReceiptIdentity } from "./saved-receipt";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { BillingSearch } from "./components/BillingSearch";
 import { BillingAssistantStrip } from "./components/BillingAssistantStrip";
@@ -253,6 +255,24 @@ export default function Billing() {
   useEffect(() => { sourceOrderIdRef.current = sourceOrderId; }, [sourceOrderId]);
   const [lastBillNo, setLastBillNo] = useState<string | null>(null);
   const [lastPrintableBill, setLastPrintableBill] = useState<PrintableBill | null>(null);
+  useEffect(() => {
+    if (!lastPrintableBill?.billId) return;
+    const savedId = lastPrintableBill.billId;
+    const refreshReceipt = () => {
+      const identity = syncedReceiptIdentity(savedId, readInstantCache<Bill[]>("bills", []));
+      if (!identity) return;
+      setLastBillNo(identity.billNo);
+      setLastPrintableBill((current) => current?.billId === savedId
+        && (current.billId !== identity.billId || current.billNo !== identity.billNo)
+        ? { ...current, ...identity }
+        : current);
+    };
+    window.addEventListener("kirana:local-data-changed", refreshReceipt);
+    // Covers a sync that finished between saving and mounting this listener.
+    refreshReceipt();
+    return () => window.removeEventListener("kirana:local-data-changed", refreshReceipt);
+  }, [lastPrintableBill?.billId]);
+
   const [summaryWidth, setSummaryWidth] = useState(() => readBillSummaryWidth());
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [draftLoadError, setDraftLoadError] = useState(false);
@@ -2339,6 +2359,17 @@ export default function Billing() {
             busy={openBillTransitionPending || confirmBill.isPending}
           />
         )}
+        {cart.length === 0 && lastBillNo && lastPrintableBill && (
+          <div className="mx-3 mb-2 flex shrink-0 items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 lg:hidden">
+            <div role="status" className="min-w-0 text-emerald-800">
+              <p className="text-xs font-bold">{t("billing.summary.billSavedSafely")}</p>
+              <p className="break-all text-sm font-semibold">{lastBillNo}</p>
+            </div>
+            <Button variant="outline" className="min-h-11 shrink-0" onClick={() => setMobileCheckoutOpen(true)}>
+              {t("chrome.savedBillActions")}
+            </Button>
+          </div>
+        )}
         <BillingSearch
           railAction={<BillingOrderQrButton />}
           isOnline={isOnline}
@@ -2412,12 +2443,12 @@ export default function Billing() {
           : "hidden lg:static lg:flex lg:min-h-0"}
         role={mobileCheckoutOpen ? "dialog" : undefined}
         aria-modal={mobileCheckoutOpen ? "true" : undefined}
-        aria-label={mobileCheckoutOpen ? t("billing.page.reviewCollectPayment") : undefined}
+        aria-label={mobileCheckoutOpen ? t(cart.length === 0 && lastBillNo ? "chrome.savedBillActions" : "billing.page.reviewCollectPayment") : undefined}
       >
         <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-[#E5DFD1] bg-white px-4 lg:hidden">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7C7566]">{t("billing.page.checkout")}</p>
-            <h2 className="font-display text-[19px] font-black text-[var(--brand-ink)]">{t("billing.page.reviewCollect", { amount: grandTotal.toLocaleString("en-IN") })}</h2>
+            <h2 className="font-display text-[19px] font-black text-[var(--brand-ink)]">{cart.length === 0 && lastBillNo ? lastBillNo : t("billing.page.reviewCollect", { amount: grandTotal.toLocaleString("en-IN") })}</h2>
           </div>
           <button
             type="button"
