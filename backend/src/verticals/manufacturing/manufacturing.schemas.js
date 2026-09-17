@@ -109,6 +109,7 @@ export const createTradeInvoiceSchema = z.object({
   billType: z.enum(["normal_sale", "gst_invoice"]).default("normal_sale"),
   paymentMode: z.enum(["cash", "upi", "bank", "credit"]),
   customerId: id.optional(),
+  dispatchId: id.optional(),
 }).strict();
 export const returnTradeOrderSchema = z.object({ reason: z.string().trim().min(3).max(500), refundMode: z.enum(["cash", "upi", "bank", "udhar", "gift_card"]).default("bank") });
 export const tradeOrderListQuerySchema = z.object({ status: z.enum(["all", "draft", "confirmed", "allocated", "packed", "partially_dispatched", "dispatched", "invoiced", "returned", "cancelled"]).default("all"), limit: z.coerce.number().int().min(1).max(500).default(100) });

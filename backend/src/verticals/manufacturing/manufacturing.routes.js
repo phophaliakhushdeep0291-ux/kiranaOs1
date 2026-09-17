@@ -27,6 +27,7 @@ router.post("/trade-orders/:id/allocate", requireRole("owner", "admin"), require
 router.post("/trade-orders/:id/auto-allocate", requireRole("owner", "admin"), requireLocationAccess("inventory"), ctrl.autoAllocateTradeOrder);
 router.post("/trade-orders/:id/pack", requireRole("owner", "admin"), validate(packTradeOrderSchema), ctrl.packTradeOrder);
 router.post("/trade-orders/:id/dispatch", requireRole("owner", "admin"), requireLocationAccess("inventory"), validate(dispatchTradeOrderSchema), ctrl.dispatchTradeOrder);
+router.get("/trade-orders/:id/invoice-preview", requireRole("owner", "admin"), requireLocationAccess("sell"), validateQuery(createTradeInvoiceSchema.pick({ billType: true })), ctrl.previewTradeInvoice);
 router.post("/trade-orders/:id/invoice", requireRole("owner", "admin"), requireLocationAccess("sell"), requireOwnerPin, validate(createTradeInvoiceSchema), ctrl.createTradeInvoice);
 router.post("/trade-orders/:id/cancel", requireRole("owner", "admin"), ctrl.cancelTradeOrder);
 router.post("/trade-orders/:id/return", requireRole("owner", "admin"), requireLocationAccess("inventory"), requireOwnerPin, validate(returnTradeOrderSchema), ctrl.returnTradeOrder);

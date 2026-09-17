@@ -27,6 +27,21 @@ export function canCancelTradeOrder(order: { status: string; dispatches?: unknow
   return !order.dispatches?.length && ["draft", "confirmed", "allocated", "packed"].includes(order.status);
 }
 
+export function hasOutstandingTradeQuantity(order: { items: Array<{ quantityBaseQty: number; allocations?: Array<{ quantityBaseQty: number; dispatchId?: string | null }> }> }) {
+  return order.items.some((item) => Number(item.quantityBaseQty) - (item.allocations ?? []).filter((row) => row.dispatchId).reduce((sum, row) => sum + Number(row.quantityBaseQty), 0) > 0.001);
+}
+
+export function nextDispatchNumber(order: { orderNumber: string; dispatches?: Array<{ dispatchNumber?: string }> }) {
+  const used = new Set((order.dispatches ?? []).map((row) => row.dispatchNumber));
+  let sequence = (order.dispatches?.length ?? 0) + 1;
+  for (;;) {
+    const suffix = sequence === 1 ? "" : `-${sequence}`;
+    const number = `DSP-${order.orderNumber}`.slice(0, 64 - suffix.length) + suffix;
+    if (!used.has(number)) return number;
+    sequence += 1;
+  }
+}
+
 /**
  * Which documents an order can print. A packing list is what the packer works
  * from, so it exists once batches are allocated; a label once goods are packed.

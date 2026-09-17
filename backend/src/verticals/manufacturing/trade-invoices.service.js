@@ -28,20 +28,8 @@ function checkLocation(order, actor) {
   if (actor.locationId && order.locationId !== actor.locationId) throw new AppError("Switch to this order's location before invoicing or returning it", 403, "TRADE_ORDER_LOCATION_MISMATCH");
 }
 
-export async function createTradeInvoice(shopId, id, rawInput, actor = {}) {
-  const input = createTradeInvoiceSchema.parse(rawInput);
-  const order = await db.tradeOrder.findFirst({ where: { id, shopId }, include });
-  if (!order) throw new AppError("Trade order not found", 404, "TRADE_ORDER_NOT_FOUND");
-  checkLocation(order, actor);
-  if (order.billId && ["invoiced", "returned"].includes(order.status)) return order;
-  // An order shipped in parts is billed per consignment, oldest first, so goods
-  // that left the building last month are not billed on this month's invoice.
-  const dispatch = order.dispatches.find((row) => !row.billId);
-  if (!dispatch) {
-    if (order.dispatches.length > 0) return order;
-    fail("Dispatch this order before creating its invoice", "TRADE_ORDER_NOT_DISPATCHED");
-  }
-  if (!["dispatched", "partially_dispatched"].includes(order.status)) fail("Dispatch this order before creating its invoice", "TRADE_ORDER_NOT_DISPATCHED");
+// Preview and posting share the same consignment, currency and tax calculations.
+async function priceTradeInvoice(order, dispatch, input) {
   // Only what this consignment actually carried is billable.
   const shippedBase = new Map(order.items.map((item) => [item.id, round2(item.allocations.filter((row) => row.dispatchId === dispatch.id).reduce((sum, row) => sum + Number(row.quantityBaseQty), 0))]));
   const billable = order.items.filter((item) => shippedBase.get(item.id) > 0.001);
@@ -58,10 +46,7 @@ export async function createTradeInvoice(shopId, id, rawInput, actor = {}) {
   } else if (order.currencyCode !== "INR" || fx !== 1) {
     fail("A domestic order must be priced in INR at an exchange rate of 1", "TRADE_ORDER_CURRENCY_INVALID");
   }
-  const customerId = order.customerId || input.customerId || undefined;
-  if (order.customerId && input.customerId && order.customerId !== input.customerId) fail("Use the buyer already selected for this order", "TRADE_INVOICE_CUSTOMER_MISMATCH");
-  if (input.paymentMode === "credit" && !customerId) throw new AppError("Select a customer account for an unpaid invoice", 422, "TRADE_INVOICE_CUSTOMER_REQUIRED");
-  const products = await db.product.findMany({ where: { shopId, id: { in: order.items.map(row => row.productId) }, deletedAt: null }, include: { sellingUnits: true } });
+  const products = await db.product.findMany({ where: { shopId: order.shopId, id: { in: order.items.map(row => row.productId) }, deletedAt: null }, include: { sellingUnits: true } });
   // An export is always invoiced as a tax invoice: the zero-rating declaration is
   // part of the document, not an optional extra.
   const billType = isExport ? "gst_invoice" : input.billType;
@@ -105,6 +90,39 @@ export async function createTradeInvoice(shopId, id, rawInput, actor = {}) {
   });
   const gst = calculateInvoiceGst(priced.map(line => ({ lineTotal: line.lineTotal, gstRate: line.gstRate })), 0, gstMode).gst;
   const total = round2(priced.reduce((sum, line) => sum + line.lineTotal, 0) + gst);
+  return { shippedBase, billable, isExport, billType, gstMode, priced, total, gst };
+}
+
+export async function previewTradeInvoice(shopId, id, rawInput, actor = {}) {
+  const input = createTradeInvoiceSchema.pick({ billType: true }).parse(rawInput);
+  const order = await db.tradeOrder.findFirst({ where: { id, shopId }, include });
+  if (!order) throw new AppError("Trade order not found", 404, "TRADE_ORDER_NOT_FOUND");
+  checkLocation(order, actor);
+  const dispatch = order.dispatches.find((row) => !row.billId);
+  if (!dispatch || !["dispatched", "partially_dispatched"].includes(order.status)) fail("No dispatched consignment is waiting for an invoice", "TRADE_INVOICE_NOTHING_SHIPPED");
+  const { priced, total, gst, billType } = await priceTradeInvoice(order, dispatch, input);
+  return { dispatchId: dispatch.id, dispatchNumber: dispatch.dispatchNumber, billType, currencyCode: "INR", subtotal: round2(priced.reduce((sum, line) => sum + line.lineTotal, 0)), gst, total };
+}
+
+export async function createTradeInvoice(shopId, id, rawInput, actor = {}) {
+  const input = createTradeInvoiceSchema.parse(rawInput);
+  const order = await db.tradeOrder.findFirst({ where: { id, shopId }, include });
+  if (!order) throw new AppError("Trade order not found", 404, "TRADE_ORDER_NOT_FOUND");
+  checkLocation(order, actor);
+  if (order.billId && ["invoiced", "returned"].includes(order.status)) return order;
+  // An order shipped in parts is billed per consignment, oldest first, so goods
+  // that left the building last month are not billed on this month's invoice.
+  const dispatch = order.dispatches.find((row) => !row.billId);
+  if (!dispatch) {
+    if (order.dispatches.length > 0) return order;
+    fail("Dispatch this order before creating its invoice", "TRADE_ORDER_NOT_DISPATCHED");
+  }
+  if (input.dispatchId && input.dispatchId !== dispatch.id) fail("This shipment was already invoiced. Refresh the invoice preview", "TRADE_INVOICE_PREVIEW_CHANGED");
+  if (!["dispatched", "partially_dispatched"].includes(order.status)) fail("Dispatch this order before creating its invoice", "TRADE_ORDER_NOT_DISPATCHED");
+  const customerId = order.customerId || input.customerId || undefined;
+  if (order.customerId && input.customerId && order.customerId !== input.customerId) fail("Use the buyer already selected for this order", "TRADE_INVOICE_CUSTOMER_MISMATCH");
+  if (input.paymentMode === "credit" && !customerId) throw new AppError("Select a customer account for an unpaid invoice", 422, "TRADE_INVOICE_CUSTOMER_REQUIRED");
+  const { shippedBase, billable, isExport, billType, gstMode, priced, total } = await priceTradeInvoice(order, dispatch, input);
   const body = {
     billType, gstMode, locationId: order.locationId,
     customerId, customerName: order.customerName, discount: 0,

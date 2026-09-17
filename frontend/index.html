@@ -80,7 +80,9 @@
         function rootEmpty() {
           var root = document.getElementById("root");
           var wait = document.getElementById("artha-boot-wait");
-          return !root || root.childNodes.length === 0 || (wait && wait.parentNode === root && root.childNodes.length === 1);
+          // The formatted shell contains whitespace text nodes around the
+          // placeholder. Count elements so a failed boot still offers recovery.
+          return !root || root.children.length === 0 || (wait && wait.parentNode === root && root.children.length === 1);
         }
         function show(detail) {
           if (shown || !rootEmpty()) return;
