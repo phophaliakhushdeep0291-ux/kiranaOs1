@@ -1,6 +1,6 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
-import { round2 } from "../../utils/money.js";
+import { moneyShadows, round2 } from "../../utils/money.js";
 import { ensurePrimaryLocation } from "./stores.service.js";
 
 import { readLocationProductStockBatches } from "./location-stock-read.js";
@@ -285,6 +285,41 @@ export async function decrementLocationInventory(client, { shopId, location, pro
   };
 }
 
+/**
+ * Receiving stock recomputes the product's weighted-average cost. Billing does NOT
+ * read that number: `sellingUnitCostPrice` takes the DEFAULT selling unit's own
+ * `costPrice` whenever it is set, and that unit is a mirror of the product created
+ * by `legacySellingUnit`. So a product whose cost moved here kept quoting the cost
+ * it was created with, for the life of the shop.
+ *
+ * `syncDefaultSellingUnitPricing` already exists to stop exactly this, and its own
+ * comment says why — but it is wired only into the product EDIT path, and receiving
+ * stock does not go through it. Buying 50 kg of toor dal at Rs 120 against a
+ * catalogue seeded at Rs 137.95 left every later bill booking Rs 137.95 of cost, so
+ * a Rs 35/kg margin was reported as Rs 17.05 and the owner's profit read half of
+ * what the shop actually earned.
+ *
+ * Only the DEFAULT unit mirrors the product — alternate packs (pack, dozen, bag)
+ * carry a cost the shopkeeper typed for that size, and `sellingUnitCostPrice`
+ * scales the product cost for them when they carry none. This is the same
+ * division of responsibility the edit path uses; keep the two in step.
+ */
+async function mirrorCostOntoDefaultSellingUnit(client, { shopId, product, productData }) {
+  const nextCost = productData?.costPerRateUnit;
+  if (nextCost === undefined) return;
+  const costPrice = round2(Number(nextCost ?? 0)) || null;
+
+  // moneyShadows() omits a null, which would leave costPricePaise holding the old
+  // number while the rupee column says "no cost" — the Float/BigInt disagreement
+  // this repo is midway through migrating away from. Write both, always.
+  await client.productSellingUnit.updateMany({
+    where: { shopId, productId: product.id, isDefault: true },
+    data: costPrice === null
+      ? { costPrice: null, costPricePaise: null }
+      : { costPrice, ...moneyShadows({ costPrice }) },
+  });
+}
+
 export async function incrementLocationInventory(client, { shopId, location, product, quantityBase, expectedGlobalStockBaseQty, productData = {}, packs = null }) {
   const quantity = round2(quantityBase);
   const oldLocationStock = await getLocationQuantity(client, shopId, location, product);
@@ -296,6 +331,7 @@ export async function incrementLocationInventory(client, { shopId, location, pro
     if (expectedGlobalStockBaseQty !== undefined) throw new AppError("Stock changed while recording purchase. Please retry.", 409, "CONCURRENT_STOCK_MODIFICATION_RETRY");
     throw new AppError(`Product "${product.name}" is no longer available`, 409, "PRODUCT_NOT_AVAILABLE");
   }
+  await mirrorCostOntoDefaultSellingUnit(client, { shopId, product, productData });
   // Mirror of the decrement path: a cancelled or returned sale must put back the
   // same packs it took, or the counts drift a little further from reality on every
   // reversal until they are worthless.

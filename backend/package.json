@@ -120,7 +120,7 @@
     "test:rentals": "node tests/rental-availability.examples.js",
     "test:verticals": "node tests/business-vertical-architecture.examples.js && node tests/shop-type-plan-entitlements.examples.js",
     "test:batch-mrp": "node tests/batch-mrp.examples.js",
-    "test:pack-pricing": "node tests/pack-mrp-ceiling.examples.js && node tests/pack-cost-price.examples.js",
+    "test:pack-pricing": "node tests/pack-mrp-ceiling.examples.js && node tests/pack-cost-price.examples.js && node scripts/run-db-example-tests.js tests/stock-in-refreshes-selling-unit-cost.examples.js",
     "test:purchase-lot": "node tests/purchase-lot-capture.examples.js",
     "test:near-expiry": "node tests/near-expiry-alerts.examples.js",
     "test:schedule-h": "node tests/schedule-h-enforcement.examples.js && node tests/sale-guards.examples.js && node tests/prescription-register.examples.js",
