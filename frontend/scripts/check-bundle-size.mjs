@@ -156,10 +156,13 @@ const MAX_SHOP_OFFLINE_JS_BYTES = 4.5 * 1024 * 1024;
 //     gzip goes 285.4 -> 361.6 kB and the SW's critical-entry invariant breaks
 //     (BillsPage loses its own manifest record). Paying 76 kB of startup to save
 //     13 kB of aggregate is backwards for a till on shop wifi.
-//   - components/ui/chart.tsx namespace-imports all of recharts but is dead —
-//     no importer, no barrel, no exported symbol used — so Rollup already drops it
-//     and deleting it reclaims nothing. Left in place; it is a hygiene question,
-//     not a size one.
+//   - components/ui/chart.tsx namespace-imported all of recharts but was dead —
+//     no importer, no barrel, no exported symbol used — so Rollup already dropped it
+//     and deleting it reclaimed nothing. It was left in place as a hygiene question
+//     rather than a size one, and has since been deleted on exactly those terms,
+//     with 29 other unimported shadcn components and the 18 dependencies they were
+//     the only users of. The figures in this file did not move, which is the point:
+//     they were measured with the file present and Rollup dropping it either way.
 //   - Lowering experimentalMinChunkSize to 20 kB made the total WORSE (960.6 kB):
 //     more chunks means more module wrappers and colder gzip dictionaries.
 //
