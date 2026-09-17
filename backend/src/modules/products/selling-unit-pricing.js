@@ -34,17 +34,31 @@ function mrpForPack(mrp, sellingUnit, defaultSellingUnit) {
  * a 500 g packet sold at Rs 55 was booked as cost 80, so the bill reported minus
  * Rs 25 on a sale that actually earned Rs 15, and every profit report inherited it.
  *
- * A pack's own `costPrice` always wins — that is what the shopkeeper typed for
- * THIS size. Blank means "work it out from the product", which is the answer the
- * product form's cost box shows as its placeholder, so the two agree.
+ * An ALTERNATE pack's own `costPrice` always wins — that is what the shopkeeper
+ * typed for THIS size. Blank means "work it out from the product", which is the
+ * answer the product form's cost box shows as its placeholder, so the two agree.
+ *
+ * The DEFAULT pack is the exception, and has to be. Its `costPrice` is not an
+ * independent fact but a COPY of the product's: `legacySellingUnit` derives it from
+ * `costPerRateUnit`, `applyDefaultSellingUnitToProduct` copies it back, and
+ * `syncDefaultSellingUnitPricing` exists only to keep the two equal. A purchase,
+ * meanwhile, moves `Product.costPerRateUnit` — the weighted average every receipt
+ * recomputes — and that is the number that tracks what the shop actually pays. So
+ * reading the copy first costed every sale at whatever seeded the row and nothing
+ * the shop had bought since: a starter-catalogue item seeded at Rs 137.95, restocked
+ * at Rs 120 and sold at Rs 155 booked Rs 17.05 of profit instead of Rs 35, on the
+ * line, on the bill's grossProfit and on the owner dashboard's margin tile, forever.
+ * For the default pack the product's cost is therefore the answer, and the row's own
+ * copy survives only as the fallback for a product carrying no cost at all.
  */
 export function sellingUnitCostPrice(sellingUnit, product, defaultSellingUnit) {
   const own = round2(Number(sellingUnit?.costPrice ?? 0));
-  if (own > 0) return own;
-
   const productCost = round2(Number(product?.costPerRateUnit ?? 0));
+
+  if (!sellingUnit || sellingUnit.isDefault) return productCost > 0 ? productCost : own;
+
+  if (own > 0) return own;
   if (!(productCost > 0)) return 0;
-  if (!sellingUnit || sellingUnit.isDefault) return productCost;
 
   // A restaurant portion consumes recipe stock rather than holding a pack size,
   // so scaling its conversion into a rupee cost invents a number. Same carve-out

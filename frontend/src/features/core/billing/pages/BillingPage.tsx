@@ -35,7 +35,7 @@ import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { applyRoundOff, billNeedsCustomer, billingDiscountApprovalSummary, billingSensitiveApprovalFingerprint, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, cartItemUnitRate, clampAmount, LARGE_DISCOUNT_MIN_AMOUNT, LARGE_DISCOUNT_MIN_PERCENT, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
 import { parseQuantityQuery } from "./billing-quantity-input";
 import { resolveLinePrice } from "@/features/core/pricing/resolve-line-price";
-import { sellingUnitMaxPrice } from "@/features/core/products/pages/product-pricing";
+import { sellingUnitCostPrice, sellingUnitMaxPrice } from "@/features/core/products/pages/product-pricing";
 import { useShopPricingRules } from "@/features/core/pricing/pricing-rules-cache";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
 import { shareBillOnWhatsapp, derivePaymentModeLabel, type BillShareInput } from "@/features/core/bills/share";
@@ -1110,7 +1110,9 @@ export default function Billing() {
       // The product MRP belongs to the default pack; a bigger pack gets it scaled
       // to its own size, or its price is clamped to another size's ceiling.
       maximumRetailPrice: sellingUnitMaxPrice(selectedUnit, product, defaultSellingUnit(product)),
-      productCost: selectedUnit?.costPrice ?? undefined,
+      // The default pack's stored cost is only a copy of the product's, and a purchase
+      // moves the product — so the margin floor has to read the same basis billing does.
+      productCost: sellingUnitCostPrice(selectedUnit, product, defaultSellingUnit(product)) || undefined,
       useLegacyProductRules: selectedUnit?.isDefault !== false,
       shopRules: shopPricingRules,
       customerId: resolvedCustomerId || undefined,
