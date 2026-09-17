@@ -351,7 +351,28 @@ export default function Billing() {
 
   const debouncedSearch = useDebounce(search.trim(), 90);
   const deferredSearch = useDeferredValue(debouncedSearch);
-  const products = useListProducts({ limit: 350 }, {
+  /**
+   * The WHOLE catalogue, deliberately unpaged.
+   *
+   * This asked for `limit: 350`, and `filterCachedProducts` honours a limit by
+   * slicing — so on a 560-item shop the till could only ever find 350 of them, and
+   * which 350 was an accident of ordering: the server's order online, IndexedDB's
+   * key order offline. A product past the cut did not rank low, it did not exist.
+   * "Loose Toor Dal" sat at index 541 and returned "No results" at the counter
+   * while it was in stock, on the shelf, and billable from its own product page.
+   *
+   * The starter catalogue is 560 items, so EVERY shop that takes the one-click
+   * catalogue was over the line before it sold anything.
+   *
+   * 350 was also the lowest cap in the app — inventory, returns, pricing and the
+   * stock dialogs all read 1000, and ProductsPage reads the catalogue unpaged. Any
+   * number here is a cliff a growing shop eventually walks off, so billing takes
+   * the whole catalogue like ProductsPage does. Nothing downstream wants a page:
+   * `filteredProducts` already caps the GRID at 30, and the search index is a plain
+   * substring scan over strings that are already in memory and in IndexedDB — the
+   * offline fallback (`localProductRows`) never had a limit in the first place.
+   */
+  const products = useListProducts(undefined, {
     query: { staleTime: 2 * 60_000, placeholderData: (previousData: Product[] | undefined) => previousData ?? [] },
   });
   const customers = useListCustomers();
