@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { canCancelTradeOrder, lineCountKey, localDay, tradeOrderDocuments, tradeOrderStatusKey } from "@/features/verticals/manufacturing/trade-order-status";
+import { canCancelTradeOrder, hasOutstandingTradeQuantity, nextDispatchNumber, lineCountKey, localDay, tradeOrderDocuments, tradeOrderStatusKey } from "@/features/verticals/manufacturing/trade-order-status";
 import { manufacturingEn } from "@/features/core/settings/translations/manufacturing";
 
 const statuses = ["draft", "confirmed", "allocated", "packed", "dispatched", "invoiced", "returned", "cancelled"];
@@ -21,6 +21,23 @@ describe("part-shipped orders", () => {
     expect(open).toEqual({ packingList: true, label: true, invoice: true });
     // Without an invoice yet, only the shipping paperwork exists.
     expect(tradeOrderDocuments({ status: "partially_dispatched" }).invoice).toBe(false);
+  });
+
+  it("offers allocation for the remaining quantities and stops when every line has shipped", () => {
+    expect(page).toContain('partially_dispatched: "manufacturing.orders.action.confirmed"');
+    expect(page).toContain('hasOutstandingTradeQuantity(order)');
+    const item = { quantityBaseQty: 24, allocations: [{ quantityBaseQty: 20, dispatchId: "a" }, { quantityBaseQty: 4, dispatchId: null }] };
+    expect(hasOutstandingTradeQuantity({ items: [item] })).toBe(true);
+    expect(hasOutstandingTradeQuantity({ items: [{ ...item, allocations: [...item.allocations.slice(0, 1), { quantityBaseQty: 4, dispatchId: "b" }] }] })).toBe(false);
+  });
+
+  it("gives later consignments distinct references within the server length limit", () => {
+    expect(nextDispatchNumber({ orderNumber: "QA" })).toBe("DSP-QA");
+    expect(nextDispatchNumber({ orderNumber: "QA", dispatches: [{ dispatchNumber: "DSP-QA" }] })).toBe("DSP-QA-2");
+    expect(nextDispatchNumber({ orderNumber: "QA", dispatches: [{ dispatchNumber: "DSP-QA-2" }] })).toBe("DSP-QA-3");
+    const longOrder = "A".repeat(100);
+    expect(nextDispatchNumber({ orderNumber: longOrder, dispatches: [{ dispatchNumber: "first" }] })).toHaveLength(64);
+    expect(nextDispatchNumber({ orderNumber: longOrder, dispatches: [{ dispatchNumber: "first" }] })).toMatch(/-2$/);
   });
 
   it("lets a back-order be allocated again and invoiced per consignment", () => {
@@ -49,7 +66,7 @@ describe("export orders reach the invoice", () => {
     // export dispatched forever with its stock gone and no sale recorded.
     expect(page).not.toContain('order.status === "dispatched" && order.orderType === "domestic"');
     // The gate is the shipping state alone; the order's trade type is irrelevant.
-    expect(page).toContain('["dispatched", "partially_dispatched"].includes(order.status) ? <Button');
+    expect(page).toContain('["dispatched", "partially_dispatched"].includes(order.status) && order.dispatches?.some((dispatch) => !dispatch.billId) ? <Button');
   });
 
   it("prints an export on a commercial invoice and a domestic sale on a tax invoice", () => {

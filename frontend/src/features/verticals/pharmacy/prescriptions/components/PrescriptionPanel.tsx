@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { ClipboardPlus, Loader2, Pill, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, useQuantityDraft } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { cn } from "@/lib/utils";
@@ -443,11 +442,11 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 function Fld({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{label}</Label>
+    <label className="block">
+      <span className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{label}</span>
       {children}
-      {hint && <p className="mt-1 text-[11px] text-[#9aa6bb]">{hint}</p>}
-    </div>
+      {hint && <span className="mt-1 block text-[11px] text-[#9aa6bb]">{hint}</span>}
+    </label>
   );
 }
 

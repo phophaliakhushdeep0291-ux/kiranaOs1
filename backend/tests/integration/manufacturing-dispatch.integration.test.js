@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createIntegrationContext, assertSuccess, TEST_DATABASE_URL } from "./setup.js";
 import { createTenant, createProduct, createCustomer, login } from "./factories.js";
 import { settingsForBusinessType } from "../../src/verticals/registry.js";
-import { createTradeInvoice } from "../../src/verticals/manufacturing/trade-invoices.service.js";
+import { createTradeInvoice, previewTradeInvoice } from "../../src/verticals/manufacturing/trade-invoices.service.js";
 import { cancelBill, createSaleReturn, confirmBill } from "../../src/modules/bills/bills.service.js";
 import { buildTradePdf } from "../../src/verticals/manufacturing/trade-documents.service.js";
 import * as production from "../../src/verticals/manufacturing/manufacturing.service.js";
@@ -263,6 +263,30 @@ else {
     assert.equal(await ctx.db.tradeDispatch.count({ where: { orderId: f.order.id } }), 0);
   });
 
+  test("invoice preview prices only the oldest unbilled shipment and changes no stock or money", async () => {
+    const f = await backorderFixture();
+    await shipConsignment(f, { dispatchNumber: "PREVIEW-A" });
+    const first = await previewTradeInvoice(f.shopId, f.order.id, { billType: "normal_sale" });
+    assert.equal(first.subtotal, 200);
+    assert.equal(first.total, 200);
+    assert.equal(first.dispatchNumber, "PREVIEW-A");
+    assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
+    await assert.rejects(() => previewTradeInvoice(f.shopId, f.order.id, {}, { locationId: "elsewhere" }), { code: "TRADE_ORDER_LOCATION_MISMATCH" });
+    await assert.rejects(() => previewTradeInvoice("other-shop", f.order.id, {}), { code: "TRADE_ORDER_NOT_FOUND" });
+    await produceBags(f, 4);
+    await shipConsignment(f, { dispatchNumber: "PREVIEW-B" });
+    assert.equal((await previewTradeInvoice(f.shopId, f.order.id, {})).dispatchId, first.dispatchId);
+    await createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank", dispatchId: first.dispatchId }, { ownerPinVerified: true });
+    const next = await previewTradeInvoice(f.shopId, f.order.id, {});
+    assert.equal(next.total, 40);
+    assert.equal(next.dispatchNumber, "PREVIEW-B");
+    await assert.rejects(() => createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank", dispatchId: first.dispatchId }, { ownerPinVerified: true }), { code: "TRADE_INVOICE_PREVIEW_CHANGED" });
+    assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 1);
+    const posted = await createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank", dispatchId: next.dispatchId }, { ownerPinVerified: true });
+    assert.equal((await ctx.db.bill.findUnique({ where: { id: posted.billId } })).grandTotal, next.total);
+    await assert.rejects(() => previewTradeInvoice(f.shopId, f.order.id, {}), { code: "TRADE_INVOICE_NOTHING_SHIPPED" });
+  });
+
   test("HTTP invoice and full return reconcile two packs from one batch without repeating stock or money", async () => {
     const f = await dispatchedFixture();
     const auth = await login(ctx, f.ownerMobile, f.ownerPassword);
@@ -271,6 +295,10 @@ else {
     await assert.rejects(() => buildTradePdf(f.shopId, f.order.id, "tax-invoice"), { code: "TRADE_ORDER_INVOICE_REQUIRED" });
     assert.equal((await ctx.post(`${url}/invoice`, { billId: "unrelated-bill" }, options)).ok, false);
     assert.equal((await ctx.post(`${url}/invoice`, { paymentMode: "bank" }, { ...options, ownerPin: undefined })).status, 403);
+    assert.equal((await ctx.get(`${url}/invoice-preview?billType=normal_sale`)).status, 401);
+    const preview = assertSuccess(await ctx.get(`${url}/invoice-preview?billType=normal_sale`, { ...options, ownerPin: undefined }));
+    assert.equal(preview.total, 180);
+    assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
     const invoiced = assertSuccess(await ctx.post(`${url}/invoice`, { paymentMode: "bank" }, options), 201);
     assert.equal(invoiced.status, "invoiced");
     const bill = await ctx.db.bill.findUnique({ where: { id: invoiced.billId }, include: { items: true, payments: true } });
@@ -410,6 +438,11 @@ else {
       countryOfOrigin: "India", iec: "0388011156", lutBondReference: "AD2909230012345",
       incoterm: "FOB", portOfLoading: "INNSA1", portOfDischarge: "KEMBA",
     } });
+    const preview = await previewTradeInvoice(f.shopId, f.order.id, { billType: "normal_sale" });
+    assert.equal(preview.billType, "gst_invoice");
+    assert.equal(preview.currencyCode, "INR");
+    assert.equal(preview.total, 16200);
+    assert.equal(preview.gst, 0);
     const invoiced = await createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank" }, { ownerPinVerified: true });
     assert.equal(invoiced.status, "invoiced");
     const bill = await ctx.db.bill.findFirst({ where: { id: invoiced.billId }, include: { items: true } });
@@ -435,6 +468,11 @@ else {
     await ctx.db.tradeOrder.update({ where: { id: f.order.id }, data: {
       orderType: "export", currencyCode: "USD", exchangeRate: 90, countryOfDestination: "Kenya", iec: "0388011156",
     } });
+    const preview = await previewTradeInvoice(f.shopId, f.order.id, { billType: "normal_sale" });
+    assert.equal(preview.billType, "gst_invoice");
+    assert.equal(preview.currencyCode, "INR");
+    assert.equal(preview.total, 19116);
+    assert.equal(preview.gst, 2916);
     const invoiced = await createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank" }, { ownerPinVerified: true });
     const bill = await ctx.db.bill.findFirst({ where: { id: invoiced.billId }, include: { items: true } });
     assert.equal(bill.gst, 2916, "18% of Rs 16,200 is charged and reclaimed later");
