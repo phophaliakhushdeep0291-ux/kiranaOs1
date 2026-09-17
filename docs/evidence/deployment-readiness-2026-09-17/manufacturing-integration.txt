@@ -1,0 +1,86 @@
+
+> kiranaos-backend@1.0.0 test:integration
+> node scripts/run-with-env.js PRISMA_CLIENT_VARIANT=integration -- node scripts/run-integration-tests.js manufacturing-production.integration.test.js manufacturing-dispatch.integration.test.js
+
+Using isolated TEST_DATABASE_URL=file:/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/prisma/integration-test-17006-1789590249085.db
+Prisma schema loaded from prisma/schema.prisma
+
+✔ Generated Prisma Client (v5.14.0) to ./generated/integration-prisma-client in 1.45s
+
+Start using Prisma Client in Node.js (See: https://pris.ly/d/client)
+```
+import { PrismaClient } from './generated/integration-prisma-client'
+const prisma = new PrismaClient()
+```
+or start using Prisma Client at the edge (See: https://pris.ly/d/accelerate)
+```
+import { PrismaClient } from './generated/integration-prisma-client/edge'
+const prisma = new PrismaClient()
+```
+
+See other ways of importing Prisma Client: http://pris.ly/d/importing-client
+
+┌─────────────────────────────────────────────────────────────┐
+│  Deploying your app to serverless or edge functions?        │
+│  Try Prisma Accelerate for connection pooling and caching.  │
+│  https://pris.ly/cli/--accelerate                           │
+└─────────────────────────────────────────────────────────────┘
+
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": SQLite database "integration-test-17006-1789590249085.db" at "file:/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/prisma/integration-test-17006-1789590249085.db"
+
+The SQLite database "integration-test-17006-1789590249085.db" at "file:/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/prisma/integration-test-17006-1789590249085.db" was successfully reset.
+
+🚀  Your database is now in sync with your Prisma schema. Done in 182ms
+
+Installed 33 SQLite monotonic-sync triggers.
+Test database is ready.
+prisma:error
+Invalid `prisma.offlineSyncEvent.create()` invocation:
+
+
+Unique constraint failed on the fields: (`shopId`,`eventId`)
+Backend regression examples passed
+
+[integration] tests/integration/manufacturing-dispatch.integration.test.js
+✔ held production cannot allocate; release enables mixed-pack allocation, packing and exactly one dispatch (224.936791ms)
+✔ allocation rejects expired stock, wrong packaging and combined overbooking across order lines (171.699667ms)
+✔ an order short of stock ships what there is and stays open for the rest (183.165542ms)
+✔ a shipped order cannot be cancelled while its back-order is allocated or packed (198.619167ms)
+✔ the back-order ships later and each consignment is invoiced for its own goods (274.634125ms)
+✔ expiry after packing and a later pack shortage roll back dispatch and every earlier stock movement (195.246458ms)
+✔ HTTP invoice and full return reconcile two packs from one batch without repeating stock or money (803.015208ms)
+✔ unpaid invoice requires a buyer account and its return reverses credit without inventing a cash refund (220.622ms)
+✔ changed packaging and broken return trace roll back all invoice and return effects (221.179209ms)
+✔ GST invoices preserve saved totals and identity, and reverse GST with the credit note (231.637667ms)
+✔ an untracked product is refused when the order is created, not after it is confirmed (169.017417ms)
+✔ tax invoice names the place of supply and splits GST by it; documents name each pack (412.201375ms)
+✔ counter payloads cannot skip stock and export accounting cannot silently book foreign prices as INR (188.992375ms)
+✔ an export under LUT books INR at the exchange rate and charges no IGST (208.283333ms)
+✔ an export without an LUT charges IGST, never a CGST and SGST split (200.007791ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4403.138916
+
+[integration] tests/integration/manufacturing-production.integration.test.js
+✔ invalid materials, source lots and pack totals roll back the whole stock transaction (242.362416ms)
+✔ held production reconciles pack counts, traces sources and can release only once without adding stock again (179.174708ms)
+✔ run details enforce tenant, role and location access and filter unusable batches (711.6705ms)
+✔ split source batches and mixed output packs reconcile genealogy, stock and pack ledger through the HTTP API (329.019833ms)
+✔ a later split failure or wrong source packaging rolls back earlier sources and the run claim (167.085459ms)
+✔ a failed batch books the material loss without ever creating sellable stock (163.706041ms)
+✔ a produced batch is costed from the materials it actually consumed (171.537ms)
+✔ a planned run can be cancelled, but never one that already used materials (157.035125ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2573.947458

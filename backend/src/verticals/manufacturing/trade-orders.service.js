@@ -1,13 +1,16 @@
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
+import { dispatchIntegrationDeliveries } from "../../modules/integrations/integrations.service.js";
+import { shipmentForOrder } from "./trade-shipment.js";
 import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
 import { decrementLocationInventory, resolveOperationalLocation, getVariantLocationQuantity } from "../../modules/stores/location-context.service.js";
-import { createSaleReturn, getBill } from "../../modules/bills/bills.service.js";
+import { createSaleReturn } from "../../modules/bills/bills.service.js";
 import { stockLedgerProvenance } from "../../modules/inventory/stock-ledger-provenance.js";
 import { formatDateInTimeZone } from "../../utils/dates.js";
 import { exportTaxTreatment, tradeReturnFulfilment } from "./trade-invoices.service.js";
 
-const detailInclude = { items: { include: { allocations: true } }, dispatches: { orderBy: { dispatchDate: "asc" } } };
+const detailInclude = { items: { include: { allocations: true } }, dispatches: { orderBy: [{ dispatchDate: "asc" }, { createdAt: "asc" }, { id: "asc" }] } };
 /** Statuses whose open reservations still hold stock away from other orders. */
 const RESERVING_STATUSES = ["allocated", "packed", "partially_dispatched"];
 /** Base units of a line already shipped — an allocation tied to a consignment. */
@@ -226,40 +229,65 @@ export async function dispatchTradeOrder(shopId, id, input, actor = {}) {
 }
 
 export async function cancelTradeOrder(shopId, id) {
-  const changed = await db.tradeOrder.updateMany({ where: { id, shopId, status: { in: ["draft", "confirmed", "allocated", "packed"] } }, data: { status: "cancelled", cancelledAt: new Date() } });
+  // A back-order returns to allocated/packed after its first shipment. Guard
+  // shipment history in the same conditional write so shipped goods cannot
+  // disappear from the active order and batch trace through cancellation.
+  const changed = await db.tradeOrder.updateMany({ where: { id, shopId, dispatches: { none: {} }, status: { in: ["draft", "confirmed", "allocated", "packed"] } }, data: { status: "cancelled", cancelledAt: new Date() } });
   if (changed.count !== 1) throw new AppError("This order can no longer be cancelled", 409, "TRADE_ORDER_CANNOT_CANCEL");
   return getTradeOrder(shopId, id);
 }
 
 export async function returnTradeOrder(shopId, id, input, actor = {}) {
-  const order = await getTradeOrder(shopId, id);
-  orderLocation(order, actor);
-  if (order.status === "returned") {
-    const creditNote = await db.bill.findFirst({ where: { shopId, returnOfBillId: order.billId, clientBillId: `trade-return:${order.id}`, status: "active" }, include: { items: true, payments: true } });
-    if (creditNote) return { order, creditNote };
-  }
-  if (!order.billId || order.status !== "invoiced") throw new AppError("Create the dispatched invoice before creating a credit note", 409, "TRADE_ORDER_INVOICE_REQUIRED");
-  const bill = await getBill(shopId, order.billId);
-  if (bill.status !== "active" || bill.billType === "sales_return") throw new AppError("The linked invoice cannot be returned", 409, "TRADE_ORDER_BILL_NOT_RETURNABLE");
-  if (Number(bill.creditAmount) > 0 && Number(bill.paidAmount) > 0) throw new AppError("This invoice has mixed settlement; reconcile its credit and tender before a full return", 409, "TRADE_RETURN_MIXED_SETTLEMENT");
-  const refundMode = Number(bill.creditAmount) > 0 ? "udhar" : input.refundMode;
-  if (refundMode === "udhar" && !(Number(bill.creditAmount) > 0)) throw new AppError("Choose a refund method for this paid invoice", 422, "TRADE_RETURN_REFUND_MODE_INVALID");
-  const creditNote = await createSaleReturn(shopId, {
-    locationId: order.locationId, refundMode, gstMode: bill.gstMode,
-    customerId: bill.customerId || undefined, customerName: bill.customerName, returnOfBillId: bill.id, reason: input.reason,
-    clientBillId: `trade-return:${order.id}`, idempotencyKey: `trade-return:${order.id}`,
-    items: bill.items.map((line) => ({ originalBillItemId: line.id, productId: line.productId || undefined, name: line.name, quantity: Math.abs(Number(line.quantity)), enteredUnit: line.enteredUnit, ratePerRateUnit: Math.abs(Number(line.ratePerRateUnit)), lineDiscount: Math.abs(Number(line.lineDiscount || 0)), gstRate: Number(line.gstRate || 0), damaged: false })),
-  }, { ...actor, locationId: order.locationId }, tradeReturnFulfilment(shopId, order, actor));
-  return { order: await getTradeOrder(shopId, order.id), creditNote };
+  // One order may have several invoices. Claim it once and reverse every
+  // consignment in one transaction so a later failure cannot leave half a return.
+  const result = await serializableTransaction(async (tx) => {
+    const order = await tx.tradeOrder.findFirst({ where: { id, shopId }, include: detailInclude });
+    if (!order) throw new AppError("Trade order not found", 404, "TRADE_ORDER_NOT_FOUND");
+    orderLocation(order, actor);
+    const invoiceIds = [...new Set([...order.dispatches.map((dispatch) => dispatch.billId), order.billId].filter(Boolean))];
+    if (order.status === "returned") {
+      const creditNotes = await tx.bill.findMany({ where: { shopId, returnOfBillId: { in: invoiceIds }, status: "active", billType: "sales_return" }, include: { items: true, payments: true }, orderBy: { createdAt: "asc" } });
+      if (creditNotes.length === invoiceIds.length && creditNotes.length > 0 && invoiceIds.every((invoiceId) => creditNotes.some((note) => note.returnOfBillId === invoiceId))) return { order, creditNote: creditNotes.at(-1), creditNotes, deliveries: [] };
+      throw new AppError("This order's return records are incomplete; review its credit notes", 409, "TRADE_RETURN_INCOMPLETE");
+    }
+    if (!order.billId || order.status !== "invoiced" || order.dispatches.some((dispatch) => !dispatch.billId)) throw new AppError("Create every dispatched invoice before returning the order", 409, "TRADE_ORDER_INVOICE_REQUIRED");
+    const claimed = await tx.tradeOrder.updateMany({ where: { id, shopId, status: "invoiced" }, data: { status: "returning" } });
+    if (claimed.count !== 1) throw new AppError("This order changed. Refresh its return status", 409, "TRADE_ORDER_NOT_RETURNABLE");
+    const creditNotes = [];
+    const deliveries = [];
+    for (const invoiceId of invoiceIds) {
+      const bill = await tx.bill.findFirst({ where: { id: invoiceId, shopId }, include: { items: true, payments: true } });
+      if (!bill || bill.status !== "active" || bill.billType === "sales_return") throw new AppError("The linked invoice cannot be returned", 409, "TRADE_ORDER_BILL_NOT_RETURNABLE");
+      if (Number(bill.creditAmount) > 0 && Number(bill.paidAmount) > 0) throw new AppError("This invoice has mixed settlement; reconcile its credit and tender before a full return", 409, "TRADE_RETURN_MIXED_SETTLEMENT");
+      const refundMode = Number(bill.creditAmount) > 0 ? "udhar" : input.refundMode;
+      if (refundMode === "udhar" && !(Number(bill.creditAmount) > 0)) throw new AppError("Choose a refund method for this paid invoice", 422, "TRADE_RETURN_REFUND_MODE_INVALID");
+      // Preserve the existing single-invoice identity for replay compatibility.
+      const returnId = invoiceIds.length === 1 ? `trade-return:${order.id}` : `trade-return:${order.id}:${bill.id}`;
+      const returned = await createSaleReturn(shopId, {
+        locationId: order.locationId, refundMode, gstMode: bill.gstMode,
+        customerId: bill.customerId || undefined, customerName: bill.customerName, returnOfBillId: bill.id, reason: input.reason,
+        clientBillId: returnId, idempotencyKey: returnId,
+        items: bill.items.map((line) => ({ originalBillItemId: line.id, productId: line.productId || undefined, name: line.name, quantity: Math.abs(Number(line.quantity)), enteredUnit: line.enteredUnit, ratePerRateUnit: Math.abs(Number(line.ratePerRateUnit)), lineDiscount: Math.abs(Number(line.lineDiscount || 0)), gstRate: Number(line.gstRate || 0), damaged: false })),
+      }, { ...actor, locationId: order.locationId }, tradeReturnFulfilment(shopId, order, actor, invoiceId), { tx });
+      if (returned.bill.returnOfBillId !== invoiceId || returned.bill.billType !== "sales_return") throw new AppError("This return identity belongs to another document", 409, "TRADE_RETURN_IDENTITY_CONFLICT");
+      creditNotes.push(returned.bill);
+      deliveries.push(...returned.deliveries);
+    }
+    const updated = await tx.tradeOrder.update({ where: { id: order.id }, data: { status: "returned" }, include: detailInclude });
+    return { order: updated, creditNote: creditNotes.at(-1), creditNotes, deliveries };
+  }, { timeout: 60000 });
+  await dispatchIntegrationDeliveries(result.deliveries);
+  const { deliveries, ...response } = result;
+  return response;
 }
 
 export async function tradeDocuments(shopId, id) {
   const order = await getTradeOrder(shopId, id);
-  const latestDispatch = order.dispatches?.at(-1);
+  const { dispatch: latestDispatch, items: shipmentItems } = shipmentForOrder(order);
   const treatment = order.orderType === "export" ? exportTaxTreatment(order) : null;
   // Zero only under an LUT. An export without one carries IGST at the item rate,
   // which the exporter reclaims as a refund afterwards.
   const taxRate = (row) => (treatment?.underLut ? 0 : Number(row.gstRate));
   const totals = order.items.reduce((acc, row) => ({ quantity: acc.quantity + Number(row.quantity), subtotal: acc.subtotal + Number(row.lineTotal), gst: acc.gst + Number(row.lineTotal) * taxRate(row) / 100 }), { quantity: 0, subtotal: 0, gst: 0 });
-  return { order, packingList: { documentNumber: latestDispatch?.dispatchNumber || order.orderNumber, buyer: order.customerName, shipTo: order.shippingAddress, items: order.items.map((row) => ({ sku: row.sku, buyerProductCode: row.buyerProductCode, description: row.description, quantity: row.packedQuantity || row.quantity, batches: row.allocations.map((allocation) => allocation.batchNumber) })), packageCount: latestDispatch?.packageCount, netWeight: latestDispatch?.netWeight, grossWeight: latestDispatch?.grossWeight }, commercialInvoice: { invoiceReference: order.billId, orderNumber: order.orderNumber, buyerPoNumber: order.buyerPoNumber, currencyCode: order.currencyCode, exchangeRate: order.exchangeRate, incoterm: order.incoterm, destination: order.countryOfDestination, origin: order.countryOfOrigin, iec: order.iec, lutBondReference: order.lutBondReference, underLut: treatment?.underLut ?? false, declaration: treatment?.declaration ?? null, portOfLoading: order.portOfLoading, portOfDischarge: order.portOfDischarge, subtotal: round2(totals.subtotal), gst: round2(totals.gst), total: round2(totals.subtotal + totals.gst), paymentTerms: order.paymentTerms } };
+  return { order, packingList: { documentNumber: latestDispatch?.dispatchNumber || order.orderNumber, buyer: order.customerName, shipTo: order.shippingAddress, items: shipmentItems.map((row) => ({ sku: row.sku, buyerProductCode: row.buyerProductCode, description: row.description, quantity: row.packedQuantity || row.quantity, batches: row.allocations.map((allocation) => allocation.batchNumber) })), packageCount: latestDispatch?.packageCount, netWeight: latestDispatch?.netWeight, grossWeight: latestDispatch?.grossWeight }, commercialInvoice: { invoiceReference: order.billId, orderNumber: order.orderNumber, buyerPoNumber: order.buyerPoNumber, currencyCode: order.currencyCode, exchangeRate: order.exchangeRate, incoterm: order.incoterm, destination: order.countryOfDestination, origin: order.countryOfOrigin, iec: order.iec, lutBondReference: order.lutBondReference, underLut: treatment?.underLut ?? false, declaration: treatment?.declaration ?? null, portOfLoading: order.portOfLoading, portOfDischarge: order.portOfDischarge, subtotal: round2(totals.subtotal), gst: round2(totals.gst), total: round2(totals.subtotal + totals.gst), paymentTerms: order.paymentTerms } };
 }

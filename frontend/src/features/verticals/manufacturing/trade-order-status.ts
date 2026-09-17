@@ -22,9 +22,9 @@ export function tradeOrderStatusKey(status: string): TranslationKey {
   return STATUS_KEYS[status] ?? "manufacturing.orders.status.updating";
 }
 
-/** Draft through packed can still be called off; the server refuses anything later. */
-export function canCancelTradeOrder(status: string) {
-  return ["draft", "confirmed", "allocated", "packed"].includes(status);
+/** Reallocated back-orders still have shipped goods and cannot be cancelled. */
+export function canCancelTradeOrder(order: { status: string; dispatches?: unknown[] }) {
+  return !order.dispatches?.length && ["draft", "confirmed", "allocated", "packed"].includes(order.status);
 }
 
 /**

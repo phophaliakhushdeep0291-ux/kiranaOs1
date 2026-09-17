@@ -69,7 +69,7 @@ type Trace = {
 type TradeOrder = {
   id: string; orderNumber: string; buyerPoNumber?: string | null; customerName: string;
   orderType: "domestic" | "export"; status: string; currencyCode: string;
-  billId?: string | null; customerId?: string | null;
+  billId?: string | null; customerId?: string | null; dispatches?: Array<{ id: string }>;
   countryOfDestination?: string | null;
   items: Array<{ id: string; description: string; quantity: number; quantityBaseQty: number; lineTotal: number; gstRate?: number; allocations?: Array<{ quantityBaseQty: number; dispatchId?: string | null }> }>;
 };
@@ -395,7 +395,7 @@ export default function ManufacturingPage() {
                   {documents.packingList ? <Button size="sm" className="min-h-11" variant="outline" onClick={() => void openTradePdf(order, "packing-list")}>{t("manufacturing.orders.packingPdf")}</Button> : null}
                   {documents.label ? <Button size="sm" className="min-h-11" variant="outline" onClick={() => void openTradePdf(order, "shipping-label")}>{t("manufacturing.orders.labelPdf")}</Button> : null}
                   {order.status === "invoiced" ? <Button size="sm" className="min-h-11" variant="destructive" onClick={() => setReturnOrderId(order.id)}>{t("manufacturing.orders.return")}</Button> : null}
-                  {canCancelTradeOrder(order.status) ? <Button size="sm" className="min-h-11 text-rose-700" variant="ghost" disabled={cancelTradeOrder.isPending} onClick={() => setCancelOrderId(order.id)}>{t("manufacturing.orders.cancel")}</Button> : null}
+                  {canCancelTradeOrder(order) ? <Button size="sm" className="min-h-11 text-rose-700" variant="ghost" disabled={cancelTradeOrder.isPending} onClick={() => setCancelOrderId(order.id)}>{t("manufacturing.orders.cancel")}</Button> : null}
                 </div>
               </div>;
             })}

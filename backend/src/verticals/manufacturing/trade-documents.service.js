@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { shipmentForOrder } from "./trade-shipment.js";
 import { AppError } from "../../middleware/error.js";
 import { buildPdf } from "../../lib/documents/pdf.js";
 import { getTradeOrder } from "./trade-orders.service.js";
@@ -36,7 +37,7 @@ function commonMeta({ shop, order, customer }) {
 }
 
 function transportLines(order) {
-  const dispatch = order.dispatches?.at(-1);
+  const dispatch = shipmentForOrder(order).dispatch;
   return [
     `Transporter: ${dispatch?.transporterName || "-"}`, `Vehicle: ${dispatch?.vehicleNumber || "-"}`,
     `LR / AWB: ${dispatch?.lrAwbNumber || "-"}`, `E-way bill: ${dispatch?.ewayBillNumber || "-"}`,
@@ -52,7 +53,7 @@ const itemColumns = [
 ];
 
 function rows({ order, packNames }) {
-  return order.items.map((row) => {
+  return shipmentForOrder(order).items.map((row) => {
     const pack = packNames.get(row.sellingUnitId);
     return { sku: row.sku || "-", description: pack ? `${row.description} (${pack})` : row.description, hsn: row.hsn || "-", batches: row.allocations.map((a) => a.batchNumber).join(", ") || "-", quantity: Number(row.packedQuantity || row.quantity), rate: Number(row.unitPrice).toFixed(2), total: Number(row.lineTotal).toFixed(2) };
   });
@@ -61,7 +62,7 @@ function rows({ order, packNames }) {
 export async function buildTradePdf(shopId, orderId, kind) {
   const ctx = await context(shopId, orderId);
   const { shop, order } = ctx;
-  const dispatch = order.dispatches?.at(-1);
+  let dispatch = shipmentForOrder(order).dispatch;
   const shared = { meta: commonMeta(ctx), footer: "System generated document. Verify statutory and marketplace data before dispatch." };
   if (kind === "packing-list") return buildPdf({ ...shared, title: "PACKING LIST", subtitle: `Dispatch ${dispatch?.dispatchNumber || "pending"} | ${dateOnly(dispatch?.dispatchDate)}`, sections: [{ heading: "Ship to", lines: [shipTo(ctx)] }, { heading: "Packed goods", columns: itemColumns, rows: rows(ctx) }, { heading: "Shipment", lines: [...transportLines(order), `Packages: ${dispatch?.packageCount || "-"}`, `Net weight: ${dispatch?.netWeight || "-"}`, `Gross weight: ${dispatch?.grossWeight || "-"}`, `Container / seal: ${dispatch?.containerNumber || "-"} / ${dispatch?.sealNumber || "-"}`] }] });
   if (kind === "shipping-label") return buildPdf({ ...shared, title: "SHIPPING LABEL", subtitle: "Seller generated - use the marketplace-issued label when platform logistics requires it", meta: [{ label: "Shipment / order", value: dispatch?.lrAwbNumber || order.orderNumber }, { label: "Dispatch", value: dispatch?.dispatchNumber || "pending" }, { label: "Seller", value: shop.name }, { label: "From", value: `${shop.address}, ${shop.city}` }, { label: "Deliver to", value: order.customerName }, { label: "Address", value: shipTo(ctx) }, { label: "Packages", value: String(dispatch?.packageCount || 1) }, { label: "Transporter / vehicle", value: `${dispatch?.transporterName || "-"} / ${dispatch?.vehicleNumber || "-"}` }, { label: "E-way bill", value: dispatch?.ewayBillNumber || "-" }], sections: [{ heading: "Contents", columns: [{ key: "sku", label: "Seller SKU", width: 150 }, { key: "description", label: "Item", width: 260 }, { key: "quantity", label: "Qty", width: 70, align: "right" }], rows: rows(ctx) }, { heading: "Handling", lines: ["Scan/verify shipment ID before handover.", "Keep proof of dispatch and proof of delivery with this order record."] }] });
@@ -70,6 +71,7 @@ export async function buildTradePdf(shopId, orderId, kind) {
   if (!order.billId) throw new AppError("Create this order's accounting invoice before downloading it", 409, "TRADE_ORDER_INVOICE_REQUIRED");
   const bill = await db.bill.findFirst({ where: { id: order.billId, shopId, status: "active", deletedAt: null }, include: { items: true } });
   if (!bill) throw new AppError("The order's accounting invoice is unavailable", 409, "TRADE_ORDER_INVOICE_REQUIRED");
+  dispatch = order.dispatches.find((row) => row.billId === bill.id) || dispatch;
   const taxInvoice = bill.billType === "gst_invoice";
   // Invoice identity, parties and totals come from the saved accounting record.
   // Order drafts and mutable catalogue/shop settings are not invoice evidence.

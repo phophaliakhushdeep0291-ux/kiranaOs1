@@ -1,0 +1,222 @@
+Later full run on Node 26; failed files passed targeted Node 22 rerun (see manufacturing-returns-node22.txt).
+[integration] tests/integration/assurance-api.integration.test.js
+ℹ tests 12
+ℹ pass 12
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/assurance-cases.integration.test.js
+ℹ tests 6
+ℹ pass 6
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/assurance-engine.integration.test.js
+ℹ tests 30
+ℹ pass 30
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/auth.integration.test.js
+ℹ tests 12
+ℹ pass 12
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/backup-drill.integration.test.js
+ℹ tests 4
+ℹ pass 4
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/backups.integration.test.js
+ℹ tests 11
+ℹ pass 11
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/bank-reconciliation.integration.test.js
+ℹ tests 3
+ℹ pass 3
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/barcode-binding.integration.test.js
+ℹ tests 14
+ℹ pass 14
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/billing.integration.test.js
+ℹ tests 31
+ℹ pass 31
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/card-terminal-reconciliation.integration.test.js
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/channel-settlement.integration.test.js
+ℹ tests 2
+ℹ pass 2
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/counter-lifecycle.integration.test.js
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/customers.integration.test.js
+ℹ tests 13
+ℹ pass 13
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/device-license.integration.test.js
+ℹ tests 6
+ℹ pass 6
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/device-session-slots.integration.test.js
+ℹ tests 15
+ℹ pass 15
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/dynamic-upi-qr.integration.test.js
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/expenses.integration.test.js
+ℹ tests 2
+ℹ pass 2
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/flipkart-seller.integration.test.js
+ℹ tests 2
+ℹ pass 2
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/general-ledger.integration.test.js
+  ✖ rolls account creation, manual journals, period close, and projection back when their audit cannot be stored (424.599375ms)
+  ✖ stores each successful financial mutation and its audit exactly once (6.158041ms)
+✖ general-ledger required audit atomicity (431.30275ms)
+ℹ tests 2
+ℹ pass 0
+ℹ fail 2
+ℹ skipped 0
+✖ failing tests:
+✖ rolls account creation, manual journals, period close, and projection back when their audit cannot be stored (424.599375ms)
+✖ stores each successful financial mutation and its audit exactly once (6.158041ms)
+[integration] tests/integration/integrations.integration.test.js
+ℹ tests 4
+ℹ pass 4
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/manufacturing-dispatch.integration.test.js
+✖ a whole-order HTTP return reverses each consignment using its own credit or paid settlement (240.69675ms)
+ℹ tests 17
+ℹ pass 15
+ℹ fail 1
+ℹ skipped 1
+✖ failing tests:
+✖ a whole-order HTTP return reverses each consignment using its own credit or paid settlement (240.69675ms)
+[integration] tests/integration/manufacturing-production.integration.test.js
+ℹ tests 8
+ℹ pass 8
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/owner-pin.integration.test.js
+ℹ tests 5
+ℹ pass 5
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/p0-product-stock.integration.test.js
+ℹ tests 3
+ℹ pass 3
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/p0-token-type.integration.test.js
+ℹ tests 3
+ℹ pass 3
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/pricing-controls.integration.test.js
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/production-concurrency.integration.test.js
+﹣ production concurrency integration tests skipped on SQLite (0.3245ms) # SQLite cannot prove production concurrent write behavior; run npm run test:postgres for the PostgreSQL proof.
+ℹ tests 1
+ℹ pass 0
+ℹ fail 0
+ℹ skipped 1
+[integration] tests/integration/products.integration.test.js
+ℹ tests 18
+ℹ pass 18
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/razorpay.integration.test.js
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/rbac-pin.integration.test.js
+ℹ tests 18
+ℹ pass 18
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/reports.integration.test.js
+ℹ tests 13
+ℹ pass 13
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/restaurant-addons.integration.test.js
+ℹ tests 3
+ℹ pass 3
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/retail-operations.integration.test.js
+ℹ tests 19
+ℹ pass 19
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/retail-tender-binding.integration.test.js
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/serializable-conflicts.integration.test.js
+  ﹣ the losing transaction runs again and neither write is lost (0.247292ms) # SQLite has one writer, so two open transactions cannot be forced to overlap; PostgreSQL proves this in CI.
+ℹ tests 5
+ℹ pass 4
+ℹ fail 0
+ℹ skipped 1
+[integration] tests/integration/settings-reminders.integration.test.js
+ℹ tests 4
+ℹ pass 4
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/shop-type-flows.integration.test.js
+ℹ tests 12
+ℹ pass 12
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/subscription-device.integration.test.js
+ℹ tests 11
+ℹ pass 11
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/sync-offline-cancel-null-serverid.integration.test.js
+ℹ tests 3
+ℹ pass 3
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/sync.integration.test.js
+ℹ tests 60
+ℹ pass 60
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/tenant-isolation.integration.test.js
+ℹ tests 5
+ℹ pass 5
+ℹ fail 0
+ℹ skipped 0
+[integration] tests/integration/trade-stock-integrity.integration.test.js
+ℹ tests 2
+ℹ pass 2
+ℹ fail 0
+ℹ skipped 0

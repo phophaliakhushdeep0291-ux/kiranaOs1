@@ -1,0 +1,751 @@
+
+> kirana-os-frontend@0.0.0 prod:check
+> npm run typecheck && npm run i18n:check && npm run build && npm run security:check && npm run test
+
+
+> kirana-os-frontend@0.0.0 typecheck
+> tsc -p tsconfig.json --noEmit
+
+
+> kirana-os-frontend@0.0.0 i18n:check
+> node scripts/check-translation-placeholders.mjs
+
+accounting: 68 key(s) compared, 0 problem(s)
+assistant: 57 key(s) compared, 0 problem(s)
+assurance: 278 key(s) compared, 0 problem(s)
+billing: 673 key(s) compared, 0 problem(s)
+customers: 428 key(s) compared, 0 problem(s)
+devices: 95 key(s) compared, 0 problem(s)
+inventory: 651 key(s) compared, 0 problem(s)
+manufacturing: 278 key(s) compared, 0 problem(s)
+orders: 172 key(s) compared, 0 problem(s)
+products: 305 key(s) compared, 0 problem(s)
+reports: 156 key(s) compared, 0 problem(s)
+restaurant: 323 key(s) compared, 0 problem(s)
+settings-pages: 1034 key(s) compared, 0 problem(s)
+shell: 684 key(s) compared, 0 problem(s)
+shop-types: 333 key(s) compared, 0 problem(s)
+suppliers: 86 key(s) compared, 0 problem(s)
+sync: 230 key(s) compared, 0 problem(s)
+workflows: 253 key(s) compared, 0 problem(s)
+Translations: 6104 key(s) compared across 18 module(s)
+
+> kirana-os-frontend@0.0.0 build
+> vite build --configLoader runner --config vite.config.ts
+
+vite v6.4.3 building for production...
+(node:19825) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+transforming...
+✓ 3794 modules transformed.
+rendering chunks...
+[plugin vite:reporter]
+(!) /Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/frontend/src/features/core/sync/sync-engine.ts is dynamically imported by /Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/frontend/src/features/core/remote-support/command-runner.ts, /Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/frontend/src/features/core/remote-support/command-runner.ts, /Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/frontend/src/features/core/sync/deferred-runtime.ts but also statically imported by /Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/frontend/src/features/core/sync/index.ts, /Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/frontend/src/features/core/sync/manual-sync.ts, dynamic import will not move module into another chunk.
+
+computing gzip size...
+dist/public/index.html                                        8.81 kB │ gzip:   3.19 kB
+dist/public/.vite/manifest.json                             113.54 kB │ gzip:  11.94 kB
+dist/public/assets/index-BPk8K2Of.css                       382.55 kB │ gzip:  58.38 kB
+dist/public/assets/query-options-DZ4mp_BJ.js                  0.09 kB │ gzip:   0.09 kB
+dist/public/assets/api-DNNN4SMp.js                            0.11 kB │ gzip:   0.12 kB
+dist/public/assets/index-CxWW_46C.js                          0.15 kB │ gzip:   0.14 kB
+dist/public/assets/escape-html-DInPSGdP.js                    0.17 kB │ gzip:   0.13 kB
+dist/public/assets/capabilities-BlCwZarx.js                   0.21 kB │ gzip:   0.18 kB
+dist/public/assets/api-DqBgP7_X.js                            0.21 kB │ gzip:   0.15 kB
+dist/public/assets/index-DLkqWn8u.js                          0.24 kB │ gzip:   0.18 kB
+dist/public/assets/billing-slots-YJ8csFzi.js                  0.24 kB │ gzip:   0.20 kB
+dist/public/assets/product-search-index-8jqk_JcE.js           0.24 kB │ gzip:   0.20 kB
+dist/public/assets/useReportView-B6rEpBlW.js                  0.26 kB │ gzip:   0.22 kB
+dist/public/assets/settle-checks-BvFvcl9V.js                  0.28 kB │ gzip:   0.22 kB
+dist/public/assets/product-configurators-4cbwrayb.js          0.28 kB │ gzip:   0.21 kB
+dist/public/assets/chip-tones-cbbqDYQQ.js                     0.29 kB │ gzip:   0.20 kB
+dist/public/assets/api-D0MX0IgZ.js                            0.30 kB │ gzip:   0.24 kB
+dist/public/assets/PageShell-CoD32Ard.js                      0.30 kB │ gzip:   0.24 kB
+dist/public/assets/google-signup-4Dkdk5HI.js                  0.32 kB │ gzip:   0.22 kB
+dist/public/assets/BarChart-BekDkiwd.js                       0.35 kB │ gzip:   0.25 kB
+dist/public/assets/api-fOXxPevU.js                            0.35 kB │ gzip:   0.25 kB
+dist/public/assets/api-C2Npp7gK.js                            0.39 kB │ gzip:   0.24 kB
+dist/public/assets/queries-DYD91ZHL.js                        0.46 kB │ gzip:   0.31 kB
+dist/public/assets/reservations-api-Be4heBbj.js               0.46 kB │ gzip:   0.30 kB
+dist/public/assets/ReviewQueuePage-Bh7pfuD5.js                0.48 kB │ gzip:   0.31 kB
+dist/public/assets/BrandMark-DqEB-PJ0.js                      0.49 kB │ gzip:   0.35 kB
+dist/public/assets/queries-CcbfhJ-A.js                        0.52 kB │ gzip:   0.24 kB
+dist/public/assets/pending-cart-additions-CiRuScIE.js         0.55 kB │ gzip:   0.32 kB
+dist/public/assets/api-DKAyD0ej.js                            0.56 kB │ gzip:   0.26 kB
+dist/public/assets/PlanBadge-DxEMUFUA.js                      0.57 kB │ gzip:   0.41 kB
+dist/public/assets/BillingSettingsPage-DL92yk-L.js            0.58 kB │ gzip:   0.35 kB
+dist/public/assets/DevicesSettingsPage-CeFT26pH.js            0.62 kB │ gzip:   0.37 kB
+dist/public/assets/QrCodeView-Usn2-sun.js                     0.63 kB │ gzip:   0.45 kB
+dist/public/assets/api-D5kJhSwj.js                            0.63 kB │ gzip:   0.30 kB
+dist/public/assets/ai-client-DnsaqmpY.js                      0.69 kB │ gzip:   0.40 kB
+dist/public/assets/payment-mode-DJNE_WM0.js                   0.72 kB │ gzip:   0.38 kB
+dist/public/assets/StaffSettingsPage-DdkfrEx-.js              0.79 kB │ gzip:   0.44 kB
+dist/public/assets/restaurant-website-IRv-TSWP.js             0.79 kB │ gzip:   0.45 kB
+dist/public/assets/manual-sync-NIz3wcDZ.js                    0.79 kB │ gzip:   0.49 kB
+dist/public/assets/billing-schedule-check-CwxfKhRc.js         0.79 kB │ gzip:   0.46 kB
+dist/public/assets/billing-unfired-kot-check-Ck6jFf4y.js      0.81 kB │ gzip:   0.48 kB
+dist/public/assets/LocalDataUnavailable-DSW4zfhN.js           0.82 kB │ gzip:   0.46 kB
+dist/public/assets/shop-credit-BUbd94WT.js                    0.87 kB │ gzip:   0.26 kB
+dist/public/assets/api-dHey6fkh.js                            0.92 kB │ gzip:   0.45 kB
+dist/public/assets/PageHeader-msREentZ.js                     0.93 kB │ gzip:   0.51 kB
+dist/public/assets/hooks-CzurG8_v.js                          0.95 kB │ gzip:   0.43 kB
+dist/public/assets/api-CAxlFfFN.js                            0.96 kB │ gzip:   0.39 kB
+dist/public/assets/StockInPage-sNjJGVOT.js                    0.98 kB │ gzip:   0.51 kB
+dist/public/assets/StockOutPage-DLDWedUQ.js                   0.98 kB │ gzip:   0.51 kB
+dist/public/assets/EmptyState-BC-YhQHu.js                     1.01 kB │ gzip:   0.54 kB
+dist/public/assets/api-CWd_eTAx.js                            1.02 kB │ gzip:   0.55 kB
+dist/public/assets/category-store-jyBTyueG.js                 1.03 kB │ gzip:   0.57 kB
+dist/public/assets/SearchInputWithIcon-BaogurdG.js            1.05 kB │ gzip:   0.55 kB
+dist/public/assets/deferred-runtime-C0N-HnU5.js               1.05 kB │ gzip:   0.50 kB
+dist/public/assets/supplier-payment-history-D419q48Y.js       1.09 kB │ gzip:   0.54 kB
+dist/public/assets/api-D4R3gjXZ.js                            1.10 kB │ gzip:   0.54 kB
+dist/public/assets/purchase-orders-api-Bbwv-b9p.js            1.11 kB │ gzip:   0.38 kB
+dist/public/assets/ConfirmDialog-Do2S6GKO.js                  1.15 kB │ gzip:   0.62 kB
+dist/public/assets/useOnlineSession-BAneq6sE.js               1.18 kB │ gzip:   0.63 kB
+dist/public/assets/useSearchTracking-rfTKnFqO.js              1.23 kB │ gzip:   0.56 kB
+dist/public/assets/personalize-Cz4vV2EP.js                    1.25 kB │ gzip:   0.60 kB
+dist/public/assets/index-X-JvraRD.js                          1.33 kB │ gzip:   0.64 kB
+dist/public/assets/whatsapp-delivery-B-KMJog_.js              1.35 kB │ gzip:   0.66 kB
+dist/public/assets/SyncBadge-BHefZPku.js                      1.35 kB │ gzip:   0.61 kB
+dist/public/assets/progress-CWlW2BW7.js                       1.39 kB │ gzip:   0.74 kB
+dist/public/assets/voice-recognition-DMs16Fd1.js              1.45 kB │ gzip:   0.81 kB
+dist/public/assets/DataTableCard-7WILNPJK.js                  1.54 kB │ gzip:   0.70 kB
+dist/public/assets/LanguageToggle-KDko7MHV.js                 1.56 kB │ gzip:   0.82 kB
+dist/public/assets/ErrorState-CYDYcTKn.js                     1.58 kB │ gzip:   0.75 kB
+dist/public/assets/VerifyEmailPage-tqFBYjP-.js                1.61 kB │ gzip:   0.88 kB
+dist/public/assets/api-rQpLbOh2.js                            1.65 kB │ gzip:   0.75 kB
+dist/public/assets/queries-Cd6n5Y8T.js                        1.68 kB │ gzip:   0.83 kB
+dist/public/assets/shop-billing-CgMObzeC.js                   1.72 kB │ gzip:   0.49 kB
+dist/public/assets/use-panel-resize-CaM0swb3.js               1.95 kB │ gzip:   0.95 kB
+dist/public/assets/sheet-Cy2Jy63b.js                          2.05 kB │ gzip:   0.81 kB
+dist/public/assets/LoadingSkeleton-Q7iPAAwV.js                2.12 kB │ gzip:   0.61 kB
+dist/public/assets/cart-codec-CbubRRIW.js                     2.16 kB │ gzip:   1.16 kB
+dist/public/assets/permissions-CHZ_onEL.js                    2.36 kB │ gzip:   0.98 kB
+dist/public/assets/queries-YLktTqJo.js                        2.36 kB │ gzip:   1.09 kB
+dist/public/assets/DeviceRemovedPage-BGS8T7g9.js              2.54 kB │ gzip:   1.30 kB
+dist/public/assets/use-settings-prefs-BJFboV39.js             2.58 kB │ gzip:   1.21 kB
+dist/public/assets/SettingsShell-Xh1gryBp.js                  2.59 kB │ gzip:   1.08 kB
+dist/public/assets/product-pricing-C3rcmuVA.js                2.60 kB │ gzip:   1.15 kB
+dist/public/assets/table-store-BK_1D-RS.js                    2.62 kB │ gzip:   1.30 kB
+dist/public/assets/inventory-lots-api-BxOOKcS5.js             2.68 kB │ gzip:   1.15 kB
+dist/public/assets/open-bills-CPnY665F.js                     2.74 kB │ gzip:   1.34 kB
+dist/public/assets/queries-Cu8ZCnOn.js                        2.82 kB │ gzip:   1.28 kB
+dist/public/assets/assistant-staging-Bhz3IPw5.js              2.82 kB │ gzip:   1.25 kB
+dist/public/assets/EvidenceRequestsPage-DeDgkioH.js           2.84 kB │ gzip:   1.17 kB
+dist/public/assets/restaurant-api-HgBW4LD5.js                 2.86 kB │ gzip:   0.99 kB
+dist/public/assets/local-actions-DZ5aAzIQ.js                  2.89 kB │ gzip:   1.15 kB
+dist/public/assets/StatCard-w_qtTl6X.js                       2.93 kB │ gzip:   1.16 kB
+dist/public/assets/catalog-DlCkWiRS.js                        2.94 kB │ gzip:   1.17 kB
+dist/public/assets/backend-transcription-BcK1zSEG.js          3.02 kB │ gzip:   1.46 kB
+dist/public/assets/ForgotPasswordPage-Bx4JBpta.js             3.06 kB │ gzip:   1.27 kB
+dist/public/assets/billing-slot-CtVK4b4v.js                   3.07 kB │ gzip:   1.34 kB
+dist/public/assets/TradeFocusStrip-Diz1TP97.js                3.22 kB │ gzip:   1.35 kB
+dist/public/assets/load-starter-catalog-BPIq18Aj.js           3.29 kB │ gzip:   1.55 kB
+dist/public/assets/ModulesSettingsPage-D5LXYLq7.js            3.45 kB │ gzip:   1.53 kB
+dist/public/assets/index-BOr5M3EU.js                          3.47 kB │ gzip:   1.56 kB
+dist/public/assets/queries-Darj0bti.js                        3.56 kB │ gzip:   1.52 kB
+dist/public/assets/ResetPasswordPage-6xwHG3DL.js              3.67 kB │ gzip:   1.30 kB
+dist/public/assets/switch-wl8rlCyq.js                         3.67 kB │ gzip:   1.59 kB
+dist/public/assets/checkbox-B1HcZxAN.js                       3.90 kB │ gzip:   1.69 kB
+dist/public/assets/NearExpiryAlert-DSa3e0h6.js                4.11 kB │ gzip:   1.60 kB
+dist/public/assets/print-CBo-OlVo.js                          4.22 kB │ gzip:   1.71 kB
+dist/public/assets/trade-catalogs-D3jo5mkH.js                 4.41 kB │ gzip:   1.93 kB
+dist/public/assets/useOfflineStatus-DcMZz29s.js               4.50 kB │ gzip:   1.66 kB
+dist/public/assets/share-BJOew57w.js                          4.52 kB │ gzip:   2.11 kB
+dist/public/assets/ui-CLiGv4rr.js                             4.58 kB │ gzip:   1.54 kB
+dist/public/assets/ProblemCard-B8z5Os06.js                    4.60 kB │ gzip:   1.58 kB
+dist/public/assets/alert-dialog-BzTx9fK-.js                   4.64 kB │ gzip:   1.68 kB
+dist/public/assets/billing-addon-configurator-pPBJ6ODO.js     4.77 kB │ gzip:   1.89 kB
+dist/public/assets/FindingsPage-BoCoAD2M.js                   4.84 kB │ gzip:   1.83 kB
+dist/public/assets/billing-calculations-kAfzCgIF.js           4.96 kB │ gzip:   2.16 kB
+dist/public/assets/VoiceDictationBar-C3rPoO_S.js              5.11 kB │ gzip:   2.18 kB
+dist/public/assets/AuditRulesPage-Bo-E01JI.js                 5.14 kB │ gzip:   1.97 kB
+dist/public/assets/local-actions-BsFnLUm7.js                  5.23 kB │ gzip:   2.04 kB
+dist/public/assets/popover-DoNtYWGG.js                        5.24 kB │ gzip:   1.92 kB
+dist/public/assets/sync-types-B187FdZc.js                     5.27 kB │ gzip:   1.69 kB
+dist/public/assets/queries-D5HSEvzz.js                        5.45 kB │ gzip:   1.98 kB
+dist/public/assets/SmartToolsPage-ykfF91ry.js                 5.51 kB │ gzip:   2.29 kB
+dist/public/assets/PlansPage-BUrjWAbu.js                      5.52 kB │ gzip:   1.96 kB
+dist/public/assets/BackgroundRuntime-aDdZGdqB.js              5.85 kB │ gzip:   2.03 kB
+dist/public/assets/PlatformAdminPage-IvLWNqQh.js              5.87 kB │ gzip:   2.24 kB
+dist/public/assets/voice-text-BkOdDDiw.js                     6.00 kB │ gzip:   2.40 kB
+dist/public/assets/AuditRunsPage-DM2kMno-.js                  6.14 kB │ gzip:   2.07 kB
+dist/public/assets/ui--2Uu5tps.js                             6.35 kB │ gzip:   2.30 kB
+dist/public/assets/CartesianGrid-BfMYnQR4.js                  6.49 kB │ gzip:   2.37 kB
+dist/public/assets/ImportOrderPage-BE_eaykJ.js                6.63 kB │ gzip:   2.61 kB
+dist/public/assets/CasesPage-CsP5rLTg.js                      6.82 kB │ gzip:   2.13 kB
+dist/public/assets/OfflineConfidenceMeter-CaxGVaTj.js         6.95 kB │ gzip:   2.36 kB
+dist/public/assets/AssuranceReportPage-D7dztnPa.js            7.30 kB │ gzip:   2.15 kB
+dist/public/assets/stock-display-Bw0mQIjk.js                  7.38 kB │ gzip:   2.61 kB
+dist/public/assets/cloud-hydration-1z37QvTd.js                7.46 kB │ gzip:   2.65 kB
+dist/public/assets/demo-shop-data-CbqlCjW6.js                 7.48 kB │ gzip:   2.23 kB
+dist/public/assets/KitchenPage-C3B7LQs2.js                    7.63 kB │ gzip:   2.73 kB
+dist/public/assets/product-voice-parser-DtrT4kiI.js           7.74 kB │ gzip:   3.02 kB
+dist/public/assets/AuditLogsPage-CkzRjqIj.js                  7.85 kB │ gzip:   2.76 kB
+dist/public/assets/InventoryLotsPage-CdDNxAnf.js              8.03 kB │ gzip:   2.88 kB
+dist/public/assets/local-actions-DHxVTfFU.js                  8.74 kB │ gzip:   2.90 kB
+dist/public/assets/ReservationsPage-CiK6Vvfi.js               8.91 kB │ gzip:   2.52 kB
+dist/public/assets/pricing-rules-cache-Cijog0w0.js            9.19 kB │ gzip:   3.26 kB
+dist/public/assets/SubscriptionPage-DRXRqyfX.js               9.23 kB │ gzip:   3.34 kB
+dist/public/assets/RecycleBinPage-BJhJoq3c.js                 9.55 kB │ gzip:   3.71 kB
+dist/public/assets/GuestOrdersStrip-BM9A8QuA.js               9.98 kB │ gzip:   3.89 kB
+dist/public/assets/LoyaltyPage-D_QJFx4E.js                   10.08 kB │ gzip:   3.46 kB
+dist/public/assets/sync-engine-CMhewkNq.js                   10.14 kB │ gzip:   3.92 kB
+dist/public/assets/ActivityInsightsPage-DG1Qsg2B.js          10.35 kB │ gzip:   3.31 kB
+dist/public/assets/AreaChart-DEj15Rgt.js                     10.56 kB │ gzip:   3.99 kB
+dist/public/assets/RemoteSupportConsolePage-6cGMTZfD.js      10.67 kB │ gzip:   3.61 kB
+dist/public/assets/LineChart-CVqcudrB.js                     10.67 kB │ gzip:   4.16 kB
+dist/public/assets/AssuranceDashboardPage-DvRrxfQU.js        10.71 kB │ gzip:   3.23 kB
+dist/public/assets/ledger-drift-repair-Cqt50YXO.js           10.86 kB │ gzip:   3.57 kB
+dist/public/assets/RegisterPage-BvURwJ1t.js                  11.32 kB │ gzip:   3.27 kB
+dist/public/assets/SyncSettingsPage-BD2REAkd.js              11.36 kB │ gzip:   3.99 kB
+dist/public/assets/local-actions-Cq5TenfT.js                 11.53 kB │ gzip:   4.00 kB
+dist/public/assets/AdjustmentsPage-AtbpnJly.js               11.94 kB │ gzip:   3.76 kB
+dist/public/assets/sync-push-C3epsH1H.js                     12.29 kB │ gzip:   4.31 kB
+dist/public/assets/local-reporting-KJ3zTkl0.js               12.31 kB │ gzip:   4.40 kB
+dist/public/assets/qr-encoder-O1M434ck.js                    12.44 kB │ gzip:   4.56 kB
+dist/public/assets/KitchenStockPage-DGo_S6Wf.js              12.51 kB │ gzip:   3.90 kB
+dist/public/assets/AssistantPanel-SJfY_CEb.js                12.66 kB │ gzip:   3.98 kB
+dist/public/assets/GiftCardsPage-BVp7bA4Z.js                 12.74 kB │ gzip:   4.30 kB
+dist/public/assets/AskArthaPage-aQGW7DJp.js                  13.27 kB │ gzip:   4.57 kB
+dist/public/assets/product-import-csv-Dpi32PyT.js            13.61 kB │ gzip:   5.25 kB
+dist/public/assets/LoginPage-BJWLpTLm.js                     13.94 kB │ gzip:   4.33 kB
+dist/public/assets/shop-workflows-CEWWEHT4.js                14.56 kB │ gzip:   1.62 kB
+dist/public/assets/NotificationsSettingsPage-CV8KdeBe.js     14.58 kB │ gzip:   4.25 kB
+dist/public/assets/CategoriesPage-DsczzSJT.js                15.56 kB │ gzip:   4.87 kB
+dist/public/assets/MerchantSetupPage-DpujgCUt.js             15.72 kB │ gzip:   4.90 kB
+dist/public/assets/SuppliersPage-W4nY3_5h.js                 15.97 kB │ gzip:   4.24 kB
+dist/public/assets/local-actions-BhElOXes.js                 16.07 kB │ gzip:   4.74 kB
+dist/public/assets/FinancialAggregationService-CHBIXjxm.js   16.23 kB │ gzip:   5.20 kB
+dist/public/assets/YAxis-PgIh1dyd.js                         16.58 kB │ gzip:   4.57 kB
+dist/public/assets/AccountingPage-Ckb05a3Q.js                17.52 kB │ gzip:   4.11 kB
+dist/public/assets/DevicesPage-BIa5sUXc.js                   17.72 kB │ gzip:   5.28 kB
+dist/public/assets/FindingDetailPage-BjkyUK2H.js             17.92 kB │ gzip:   4.82 kB
+dist/public/assets/SizeRunsPage-C5qDby53.js                  17.99 kB │ gzip:   5.49 kB
+dist/public/assets/AdvancedSettingsPage-BzpzJ3Z2.js          18.56 kB │ gzip:   5.59 kB
+dist/public/assets/StockCountsPage-DOFRQMSf.js               18.65 kB │ gzip:   5.43 kB
+dist/public/assets/OffersPage-gx9V4KZz.js                    19.07 kB │ gzip:   5.97 kB
+dist/public/assets/local-actions-C6ACZrtG.js                 19.18 kB │ gzip:   6.49 kB
+dist/public/assets/SettingsPage-B8VlX57T.js                  19.24 kB │ gzip:   5.21 kB
+dist/public/assets/ProductPricingPage-BnIytWwa.js            19.43 kB │ gzip:   5.48 kB
+dist/public/assets/SecuritySettingsPage-DyOgtWMF.js          19.62 kB │ gzip:   5.85 kB
+dist/public/assets/TestersPage-DrwQm9fa.js                   19.83 kB │ gzip:   5.83 kB
+dist/public/assets/ChannelSettlementsPage-OJyVQ9mg.js        19.99 kB │ gzip:   5.38 kB
+dist/public/assets/dropdown-menu-CLx6BbfN.js                 20.36 kB │ gzip:   5.80 kB
+dist/public/assets/PrinterSettingsPage-DYxRjcXb.js           20.51 kB │ gzip:   5.74 kB
+dist/public/assets/vendor-date-FYRyL2wv.js                   20.59 kB │ gzip:   5.99 kB
+dist/public/assets/TablesPage-Ho7JPDq2.js                    21.18 kB │ gzip:   7.28 kB
+dist/public/assets/RecoveryModePage-k-cUMCE7.js              21.25 kB │ gzip:   7.29 kB
+dist/public/assets/select-CqIYl2fk.js                        21.52 kB │ gzip:   7.36 kB
+dist/public/assets/StaffPage-C0g07_tu.js                     21.54 kB │ gzip:   7.19 kB
+dist/public/assets/FitmentPage-Ba25eN_7.js                   21.62 kB │ gzip:   6.33 kB
+dist/public/assets/sync-reconcile-Dggvkf2I.js                21.62 kB │ gzip:   6.39 kB
+dist/public/assets/sync-status-repair-DNZrGQOt.js            22.28 kB │ gzip:   5.90 kB
+dist/public/assets/receipt-print-CzYo6NiE.js                 22.62 kB │ gzip:   6.54 kB
+dist/public/assets/DineInMenuPage-CtZYlyxF.js                23.09 kB │ gzip:   6.89 kB
+dist/public/assets/ReturnDialog-CBs8Ycqk.js                  23.91 kB │ gzip:   7.87 kB
+dist/public/assets/StoreProfilePage-LDQEbukG.js              24.30 kB │ gzip:   7.54 kB
+dist/public/assets/PieChart-C7GQXxyX.js                      24.65 kB │ gzip:   6.69 kB
+dist/public/assets/CustomerDetailPage-DP91Gj6g.js            26.39 kB │ gzip:   7.50 kB
+dist/public/assets/SalesOverviewPage-C17qT6_1.js             26.71 kB │ gzip:   8.43 kB
+dist/public/assets/zod-DQDEOc6Z.js                           26.87 kB │ gzip:   9.76 kB
+dist/public/assets/PrescriptionsPage-COwo4ZS9.js             27.23 kB │ gzip:   8.19 kB
+dist/public/assets/StockStatusView-BOvXcUVQ.js               28.07 kB │ gzip:   7.63 kB
+dist/public/assets/BookListsPage-ikf7szkr.js                 28.70 kB │ gzip:   8.76 kB
+dist/public/assets/TaxesSettingsPage-BVU2C4T-.js             29.77 kB │ gzip:   7.78 kB
+dist/public/assets/RentalsPage-B1Fqgao6.js                   30.24 kB │ gzip:   8.75 kB
+dist/public/assets/NewReturnPage-CwlHyAZJ.js                 30.59 kB │ gzip:   9.30 kB
+dist/public/assets/FurnitureOrdersPage-CL-HXvVH.js           31.29 kB │ gzip:   9.15 kB
+dist/public/assets/ProductUnitsPage-D4N9JPjV.js              31.62 kB │ gzip:   8.84 kB
+dist/public/assets/product-form-state-BR_BG8yg.js            31.90 kB │ gzip:   9.64 kB
+dist/public/assets/DailyClosingPage-CgJRTM9M.js              32.56 kB │ gzip:   8.96 kB
+dist/public/assets/ExpensesPage-DJLihIW5.js                  33.71 kB │ gzip:  10.19 kB
+dist/public/assets/MoneyStatementPage-DkrP6kDh.js            34.27 kB │ gzip:   8.78 kB
+dist/public/assets/BillingSearch-hLtTmsDI.js                 36.12 kB │ gzip:  10.04 kB
+dist/public/assets/BillDetailPage-zHSZG6Jx.js                36.17 kB │ gzip:   9.93 kB
+dist/public/assets/MenuPage-DYTUtIvS.js                      36.73 kB │ gzip:   9.54 kB
+dist/public/assets/OrdersReceivedPage-BiQPrhO0.js            38.39 kB │ gzip:   9.95 kB
+dist/public/assets/BillsPage-Dc4_gzB5.js                     45.09 kB │ gzip:  12.31 kB
+dist/public/assets/CustomerOrderPage-BH-NmORT.js             47.04 kB │ gzip:  11.79 kB
+dist/public/assets/IntegrationsSettingsPage-BQFnJgHP.js      47.30 kB │ gzip:  11.36 kB
+dist/public/assets/SyncStatusPage-ubGjzCNP.js                49.88 kB │ gzip:  13.08 kB
+dist/public/assets/vendor-validation-C84QDzN5.js             53.85 kB │ gzip:  12.17 kB
+dist/public/assets/StockTransfersPage-CgDPEo1Q.js            54.15 kB │ gzip:  11.78 kB
+dist/public/assets/vendor-ui-D5lRmbsI.js                     58.31 kB │ gzip:  17.40 kB
+dist/public/assets/InventoryPage-B3V5uhQ3.js                 65.22 kB │ gzip:  14.81 kB
+dist/public/assets/ManufacturingPage-CpVd07rO.js             66.54 kB │ gzip:  14.95 kB
+dist/public/assets/ReportsPage-BPbiU8Nh.js                   77.24 kB │ gzip:  20.15 kB
+dist/public/assets/CustomersPage-D2114JQE.js                 89.89 kB │ gzip:  23.46 kB
+dist/public/assets/DashboardPage-D8LHv__j.js                 96.66 kB │ gzip:  22.73 kB
+dist/public/assets/PurchaseBillsPage-BDvKv1ov.js            113.22 kB │ gzip:  29.53 kB
+dist/public/assets/i18n-hindi-critical-DzUWnWi_.js          124.75 kB │ gzip:  25.56 kB
+dist/public/assets/ProductsPage-DXO-ciNW.js                 129.20 kB │ gzip:  34.56 kB
+dist/public/assets/index-BhLQjOCm.js                        131.44 kB │ gzip:  37.93 kB
+dist/public/assets/vendor-react-CdF70ZyV.js                 135.85 kB │ gzip:  44.85 kB
+dist/public/assets/vendor-data-BaHBZjtO.js                  136.68 kB │ gzip:  44.21 kB
+dist/public/assets/BillingPage-TV6_It7_.js                  162.91 kB │ gzip:  46.00 kB
+dist/public/assets/kirana-catalog.generated-eMmGWEwQ.js     186.52 kB │ gzip:  21.77 kB
+dist/public/assets/english-deferred-C92viXM9.js             293.19 kB │ gzip:  77.51 kB
+dist/public/assets/generateCategoricalChart-9r2Xxmd_.js     334.40 kB │ gzip:  93.67 kB
+dist/public/assets/i18n-hindi-Dhvme1NB.js                   481.34 kB │ gzip:  93.36 kB
+dist/public/assets/index-C74-xEm_.js                        494.73 kB │ gzip: 146.85 kB
+✓ built in 19.07s
+
+> kirana-os-frontend@0.0.0 security:check
+> npm run bundle:check && npm run app:check
+
+
+> kirana-os-frontend@0.0.0 bundle:check
+> node scripts/check-bundle-size.mjs
+
+Bundle size check
+- index-C74-xEm_.js: 483.1 kB (143.4 kB gzip)
+- i18n-hindi-Dhvme1NB.js: 470.1 kB (91.2 kB gzip)
+- generateCategoricalChart-9r2Xxmd_.js: 326.6 kB (91.5 kB gzip)
+- english-deferred-C92viXM9.js: 286.3 kB (75.7 kB gzip)
+- kirana-catalog.generated-eMmGWEwQ.js: 182.2 kB (21.3 kB gzip)
+- BillingPage-TV6_It7_.js: 159.1 kB (44.9 kB gzip)
+- vendor-data-BaHBZjtO.js: 133.5 kB (43.2 kB gzip)
+- vendor-react-CdF70ZyV.js: 132.7 kB (43.8 kB gzip)
+- index-BhLQjOCm.js: 128.4 kB (37.0 kB gzip)
+- ProductsPage-DXO-ciNW.js: 126.2 kB (33.8 kB gzip)
+- i18n-hindi-critical-DzUWnWi_.js: 121.8 kB (25.0 kB gzip)
+- PurchaseBillsPage-BDvKv1ov.js: 110.6 kB (28.8 kB gzip)
+- DashboardPage-D8LHv__j.js: 94.4 kB (22.2 kB gzip)
+- CustomersPage-D2114JQE.js: 87.8 kB (22.9 kB gzip)
+- ReportsPage-BPbiU8Nh.js: 75.4 kB (19.7 kB gzip)
+- ManufacturingPage-CpVd07rO.js: 65.0 kB (14.6 kB gzip)
+- InventoryPage-B3V5uhQ3.js: 63.7 kB (14.5 kB gzip)
+- vendor-ui-D5lRmbsI.js: 56.9 kB (17.0 kB gzip)
+- StockTransfersPage-CgDPEo1Q.js: 52.9 kB (11.5 kB gzip)
+- vendor-validation-C84QDzN5.js: 52.6 kB (11.9 kB gzip)
+- SyncStatusPage-ubGjzCNP.js: 48.7 kB (12.8 kB gzip)
+- IntegrationsSettingsPage-BQFnJgHP.js: 46.2 kB (11.1 kB gzip)
+- CustomerOrderPage-BH-NmORT.js: 45.9 kB (11.5 kB gzip)
+- BillsPage-Dc4_gzB5.js: 44.0 kB (12.0 kB gzip)
+- OrdersReceivedPage-BiQPrhO0.js: 37.5 kB (9.7 kB gzip)
+- MenuPage-DYTUtIvS.js: 35.9 kB (9.3 kB gzip)
+- BillDetailPage-zHSZG6Jx.js: 35.3 kB (9.7 kB gzip)
+- BillingSearch-hLtTmsDI.js: 35.3 kB (9.8 kB gzip)
+- MoneyStatementPage-DkrP6kDh.js: 33.5 kB (8.6 kB gzip)
+- ExpensesPage-DJLihIW5.js: 32.9 kB (10.0 kB gzip)
+- DailyClosingPage-CgJRTM9M.js: 31.8 kB (8.7 kB gzip)
+- product-form-state-BR_BG8yg.js: 31.1 kB (9.4 kB gzip)
+- ProductUnitsPage-D4N9JPjV.js: 30.9 kB (8.6 kB gzip)
+- FurnitureOrdersPage-CL-HXvVH.js: 30.6 kB (8.9 kB gzip)
+- NewReturnPage-CwlHyAZJ.js: 29.9 kB (9.1 kB gzip)
+- RentalsPage-B1Fqgao6.js: 29.5 kB (8.5 kB gzip)
+- TaxesSettingsPage-BVU2C4T-.js: 29.1 kB (7.6 kB gzip)
+- BookListsPage-ikf7szkr.js: 28.0 kB (8.6 kB gzip)
+- StockStatusView-BOvXcUVQ.js: 27.4 kB (7.4 kB gzip)
+- PrescriptionsPage-COwo4ZS9.js: 26.6 kB (8.0 kB gzip)
+- zod-DQDEOc6Z.js: 26.2 kB (9.5 kB gzip)
+- SalesOverviewPage-C17qT6_1.js: 26.1 kB (8.2 kB gzip)
+- CustomerDetailPage-DP91Gj6g.js: 25.8 kB (7.3 kB gzip)
+- PieChart-C7GQXxyX.js: 24.1 kB (6.5 kB gzip)
+- StoreProfilePage-LDQEbukG.js: 23.7 kB (7.4 kB gzip)
+- ReturnDialog-CBs8Ycqk.js: 23.3 kB (7.7 kB gzip)
+- DineInMenuPage-CtZYlyxF.js: 22.6 kB (6.7 kB gzip)
+- receipt-print-CzYo6NiE.js: 22.1 kB (6.4 kB gzip)
+- sync-status-repair-DNZrGQOt.js: 21.8 kB (5.8 kB gzip)
+- sync-reconcile-Dggvkf2I.js: 21.1 kB (6.2 kB gzip)
+- FitmentPage-Ba25eN_7.js: 21.1 kB (6.2 kB gzip)
+- StaffPage-C0g07_tu.js: 21.0 kB (7.0 kB gzip)
+- select-CqIYl2fk.js: 21.0 kB (7.2 kB gzip)
+- RecoveryModePage-k-cUMCE7.js: 20.8 kB (7.1 kB gzip)
+- TablesPage-Ho7JPDq2.js: 20.7 kB (7.1 kB gzip)
+- vendor-date-FYRyL2wv.js: 20.1 kB (5.9 kB gzip)
+- PrinterSettingsPage-DYxRjcXb.js: 20.0 kB (5.6 kB gzip)
+- dropdown-menu-CLx6BbfN.js: 19.9 kB (5.7 kB gzip)
+- ChannelSettlementsPage-OJyVQ9mg.js: 19.5 kB (5.3 kB gzip)
+- TestersPage-DrwQm9fa.js: 19.4 kB (5.7 kB gzip)
+- SecuritySettingsPage-DyOgtWMF.js: 19.2 kB (5.7 kB gzip)
+- ProductPricingPage-BnIytWwa.js: 19.0 kB (5.4 kB gzip)
+- SettingsPage-B8VlX57T.js: 18.8 kB (5.1 kB gzip)
+- local-actions-C6ACZrtG.js: 18.7 kB (6.3 kB gzip)
+- OffersPage-gx9V4KZz.js: 18.6 kB (5.8 kB gzip)
+- StockCountsPage-DOFRQMSf.js: 18.2 kB (5.3 kB gzip)
+- AdvancedSettingsPage-BzpzJ3Z2.js: 18.1 kB (5.5 kB gzip)
+- SizeRunsPage-C5qDby53.js: 17.6 kB (5.4 kB gzip)
+- FindingDetailPage-BjkyUK2H.js: 17.5 kB (4.7 kB gzip)
+- DevicesPage-BIa5sUXc.js: 17.3 kB (5.2 kB gzip)
+- AccountingPage-Ckb05a3Q.js: 17.1 kB (4.0 kB gzip)
+- YAxis-PgIh1dyd.js: 16.2 kB (4.5 kB gzip)
+- FinancialAggregationService-CHBIXjxm.js: 15.8 kB (5.1 kB gzip)
+- local-actions-BhElOXes.js: 15.7 kB (4.6 kB gzip)
+- SuppliersPage-W4nY3_5h.js: 15.6 kB (4.1 kB gzip)
+- MerchantSetupPage-DpujgCUt.js: 15.4 kB (4.8 kB gzip)
+- CategoriesPage-DsczzSJT.js: 15.2 kB (4.8 kB gzip)
+- NotificationsSettingsPage-CV8KdeBe.js: 14.2 kB (4.2 kB gzip)
+- shop-workflows-CEWWEHT4.js: 14.2 kB (1.6 kB gzip)
+- LoginPage-BJWLpTLm.js: 13.6 kB (4.2 kB gzip)
+- product-import-csv-Dpi32PyT.js: 13.3 kB (5.1 kB gzip)
+- AskArthaPage-aQGW7DJp.js: 13.0 kB (4.5 kB gzip)
+- GiftCardsPage-BVp7bA4Z.js: 12.4 kB (4.2 kB gzip)
+- AssistantPanel-SJfY_CEb.js: 12.4 kB (3.9 kB gzip)
+- KitchenStockPage-DGo_S6Wf.js: 12.2 kB (3.8 kB gzip)
+- qr-encoder-O1M434ck.js: 12.2 kB (4.5 kB gzip)
+- local-reporting-KJ3zTkl0.js: 12.0 kB (4.3 kB gzip)
+- sync-push-C3epsH1H.js: 12.0 kB (4.2 kB gzip)
+- AdjustmentsPage-AtbpnJly.js: 11.7 kB (3.7 kB gzip)
+- local-actions-Cq5TenfT.js: 11.3 kB (3.9 kB gzip)
+- SyncSettingsPage-BD2REAkd.js: 11.1 kB (3.9 kB gzip)
+- RegisterPage-BvURwJ1t.js: 11.1 kB (3.2 kB gzip)
+- ledger-drift-repair-Cqt50YXO.js: 10.6 kB (3.5 kB gzip)
+- AssuranceDashboardPage-DvRrxfQU.js: 10.5 kB (3.2 kB gzip)
+- LineChart-CVqcudrB.js: 10.4 kB (4.1 kB gzip)
+- RemoteSupportConsolePage-6cGMTZfD.js: 10.4 kB (3.5 kB gzip)
+- AreaChart-DEj15Rgt.js: 10.3 kB (3.9 kB gzip)
+- ActivityInsightsPage-DG1Qsg2B.js: 10.1 kB (3.2 kB gzip)
+- sync-engine-CMhewkNq.js: 9.9 kB (3.8 kB gzip)
+- LoyaltyPage-D_QJFx4E.js: 9.8 kB (3.4 kB gzip)
+- GuestOrdersStrip-BM9A8QuA.js: 9.7 kB (3.8 kB gzip)
+- RecycleBinPage-BJhJoq3c.js: 9.3 kB (3.6 kB gzip)
+- SubscriptionPage-DRXRqyfX.js: 9.0 kB (3.3 kB gzip)
+- pricing-rules-cache-Cijog0w0.js: 9.0 kB (3.2 kB gzip)
+- ReservationsPage-CiK6Vvfi.js: 8.7 kB (2.5 kB gzip)
+- local-actions-DHxVTfFU.js: 8.5 kB (2.8 kB gzip)
+- InventoryLotsPage-CdDNxAnf.js: 7.8 kB (2.8 kB gzip)
+- AuditLogsPage-CkzRjqIj.js: 7.7 kB (2.7 kB gzip)
+- product-voice-parser-DtrT4kiI.js: 7.6 kB (2.9 kB gzip)
+- KitchenPage-C3B7LQs2.js: 7.4 kB (2.7 kB gzip)
+- demo-shop-data-CbqlCjW6.js: 7.3 kB (2.2 kB gzip)
+- cloud-hydration-1z37QvTd.js: 7.3 kB (2.6 kB gzip)
+- stock-display-Bw0mQIjk.js: 7.2 kB (2.5 kB gzip)
+- AssuranceReportPage-D7dztnPa.js: 7.1 kB (2.1 kB gzip)
+- OfflineConfidenceMeter-CaxGVaTj.js: 6.8 kB (2.3 kB gzip)
+- CasesPage-CsP5rLTg.js: 6.7 kB (2.1 kB gzip)
+- ImportOrderPage-BE_eaykJ.js: 6.5 kB (2.5 kB gzip)
+- CartesianGrid-BfMYnQR4.js: 6.3 kB (2.3 kB gzip)
+- ui--2Uu5tps.js: 6.2 kB (2.2 kB gzip)
+- AuditRunsPage-DM2kMno-.js: 6.0 kB (2.0 kB gzip)
+- voice-text-BkOdDDiw.js: 5.9 kB (2.3 kB gzip)
+- PlatformAdminPage-IvLWNqQh.js: 5.7 kB (2.2 kB gzip)
+- BackgroundRuntime-aDdZGdqB.js: 5.7 kB (2.0 kB gzip)
+- PlansPage-BUrjWAbu.js: 5.4 kB (1.9 kB gzip)
+- SmartToolsPage-ykfF91ry.js: 5.4 kB (2.2 kB gzip)
+- queries-D5HSEvzz.js: 5.3 kB (1.9 kB gzip)
+- sync-types-B187FdZc.js: 5.1 kB (1.6 kB gzip)
+- popover-DoNtYWGG.js: 5.1 kB (1.9 kB gzip)
+- local-actions-BsFnLUm7.js: 5.1 kB (2.0 kB gzip)
+- AuditRulesPage-Bo-E01JI.js: 5.0 kB (1.9 kB gzip)
+- VoiceDictationBar-C3rPoO_S.js: 5.0 kB (2.1 kB gzip)
+- billing-calculations-kAfzCgIF.js: 4.8 kB (2.1 kB gzip)
+- FindingsPage-BoCoAD2M.js: 4.7 kB (1.8 kB gzip)
+- billing-addon-configurator-pPBJ6ODO.js: 4.7 kB (1.8 kB gzip)
+- alert-dialog-BzTx9fK-.js: 4.5 kB (1.6 kB gzip)
+- ProblemCard-B8z5Os06.js: 4.5 kB (1.5 kB gzip)
+- ui-CLiGv4rr.js: 4.5 kB (1.5 kB gzip)
+- share-BJOew57w.js: 4.4 kB (2.1 kB gzip)
+- useOfflineStatus-DcMZz29s.js: 4.4 kB (1.6 kB gzip)
+- trade-catalogs-D3jo5mkH.js: 4.3 kB (1.9 kB gzip)
+- print-CBo-OlVo.js: 4.1 kB (1.7 kB gzip)
+- NearExpiryAlert-DSa3e0h6.js: 4.0 kB (1.6 kB gzip)
+- checkbox-B1HcZxAN.js: 3.8 kB (1.6 kB gzip)
+- switch-wl8rlCyq.js: 3.6 kB (1.6 kB gzip)
+- ResetPasswordPage-6xwHG3DL.js: 3.6 kB (1.3 kB gzip)
+- queries-Darj0bti.js: 3.5 kB (1.5 kB gzip)
+- index-BOr5M3EU.js: 3.4 kB (1.5 kB gzip)
+- ModulesSettingsPage-D5LXYLq7.js: 3.4 kB (1.5 kB gzip)
+- load-starter-catalog-BPIq18Aj.js: 3.2 kB (1.5 kB gzip)
+- TradeFocusStrip-Diz1TP97.js: 3.1 kB (1.3 kB gzip)
+- billing-slot-CtVK4b4v.js: 3.0 kB (1.3 kB gzip)
+- ForgotPasswordPage-Bx4JBpta.js: 3.0 kB (1.2 kB gzip)
+- backend-transcription-BcK1zSEG.js: 2.9 kB (1.4 kB gzip)
+- catalog-DlCkWiRS.js: 2.9 kB (1.1 kB gzip)
+- StatCard-w_qtTl6X.js: 2.9 kB (1.1 kB gzip)
+- local-actions-DZ5aAzIQ.js: 2.8 kB (1.1 kB gzip)
+- restaurant-api-HgBW4LD5.js: 2.8 kB (1.0 kB gzip)
+- EvidenceRequestsPage-DeDgkioH.js: 2.8 kB (1.1 kB gzip)
+- assistant-staging-Bhz3IPw5.js: 2.8 kB (1.2 kB gzip)
+- queries-Cu8ZCnOn.js: 2.8 kB (1.3 kB gzip)
+- open-bills-CPnY665F.js: 2.7 kB (1.3 kB gzip)
+- inventory-lots-api-BxOOKcS5.js: 2.6 kB (1.1 kB gzip)
+- table-store-BK_1D-RS.js: 2.6 kB (1.3 kB gzip)
+- product-pricing-C3rcmuVA.js: 2.5 kB (1.1 kB gzip)
+- SettingsShell-Xh1gryBp.js: 2.5 kB (1.0 kB gzip)
+- use-settings-prefs-BJFboV39.js: 2.5 kB (1.2 kB gzip)
+- DeviceRemovedPage-BGS8T7g9.js: 2.5 kB (1.3 kB gzip)
+- queries-YLktTqJo.js: 2.3 kB (1.1 kB gzip)
+- permissions-CHZ_onEL.js: 2.3 kB (1.0 kB gzip)
+- cart-codec-CbubRRIW.js: 2.1 kB (1.1 kB gzip)
+- LoadingSkeleton-Q7iPAAwV.js: 2.1 kB (0.6 kB gzip)
+- sheet-Cy2Jy63b.js: 2.0 kB (0.8 kB gzip)
+- use-panel-resize-CaM0swb3.js: 1.9 kB (0.9 kB gzip)
+- shop-billing-CgMObzeC.js: 1.7 kB (0.5 kB gzip)
+- queries-Cd6n5Y8T.js: 1.6 kB (0.8 kB gzip)
+- api-rQpLbOh2.js: 1.6 kB (0.7 kB gzip)
+- VerifyEmailPage-tqFBYjP-.js: 1.6 kB (0.9 kB gzip)
+- ErrorState-CYDYcTKn.js: 1.5 kB (0.7 kB gzip)
+- LanguageToggle-KDko7MHV.js: 1.5 kB (0.8 kB gzip)
+- DataTableCard-7WILNPJK.js: 1.5 kB (0.7 kB gzip)
+- voice-recognition-DMs16Fd1.js: 1.4 kB (0.8 kB gzip)
+- progress-CWlW2BW7.js: 1.4 kB (0.7 kB gzip)
+- SyncBadge-BHefZPku.js: 1.3 kB (0.6 kB gzip)
+- whatsapp-delivery-B-KMJog_.js: 1.3 kB (0.6 kB gzip)
+- index-X-JvraRD.js: 1.3 kB (0.6 kB gzip)
+- personalize-Cz4vV2EP.js: 1.2 kB (0.6 kB gzip)
+- useSearchTracking-rfTKnFqO.js: 1.2 kB (0.5 kB gzip)
+- useOnlineSession-BAneq6sE.js: 1.1 kB (0.6 kB gzip)
+- ConfirmDialog-Do2S6GKO.js: 1.1 kB (0.6 kB gzip)
+- purchase-orders-api-Bbwv-b9p.js: 1.1 kB (0.4 kB gzip)
+- api-D4R3gjXZ.js: 1.1 kB (0.5 kB gzip)
+- supplier-payment-history-D419q48Y.js: 1.1 kB (0.5 kB gzip)
+- deferred-runtime-C0N-HnU5.js: 1.0 kB (0.5 kB gzip)
+- SearchInputWithIcon-BaogurdG.js: 1.0 kB (0.5 kB gzip)
+- category-store-jyBTyueG.js: 1.0 kB (0.6 kB gzip)
+- api-CWd_eTAx.js: 1.0 kB (0.5 kB gzip)
+- EmptyState-BC-YhQHu.js: 1.0 kB (0.5 kB gzip)
+- StockOutPage-DLDWedUQ.js: 1.0 kB (0.5 kB gzip)
+- StockInPage-sNjJGVOT.js: 1.0 kB (0.5 kB gzip)
+- api-CAxlFfFN.js: 0.9 kB (0.4 kB gzip)
+- hooks-CzurG8_v.js: 0.9 kB (0.4 kB gzip)
+- PageHeader-msREentZ.js: 0.9 kB (0.5 kB gzip)
+- api-dHey6fkh.js: 0.9 kB (0.4 kB gzip)
+- shop-credit-BUbd94WT.js: 0.8 kB (0.3 kB gzip)
+- LocalDataUnavailable-DSW4zfhN.js: 0.8 kB (0.5 kB gzip)
+- billing-unfired-kot-check-Ck6jFf4y.js: 0.8 kB (0.5 kB gzip)
+- billing-schedule-check-CwxfKhRc.js: 0.8 kB (0.4 kB gzip)
+- manual-sync-NIz3wcDZ.js: 0.8 kB (0.5 kB gzip)
+- restaurant-website-IRv-TSWP.js: 0.8 kB (0.4 kB gzip)
+- StaffSettingsPage-DdkfrEx-.js: 0.8 kB (0.4 kB gzip)
+- payment-mode-DJNE_WM0.js: 0.7 kB (0.4 kB gzip)
+- ai-client-DnsaqmpY.js: 0.7 kB (0.4 kB gzip)
+- api-D5kJhSwj.js: 0.6 kB (0.3 kB gzip)
+- QrCodeView-Usn2-sun.js: 0.6 kB (0.4 kB gzip)
+- DevicesSettingsPage-CeFT26pH.js: 0.6 kB (0.4 kB gzip)
+- BillingSettingsPage-DL92yk-L.js: 0.6 kB (0.3 kB gzip)
+- PlanBadge-DxEMUFUA.js: 0.6 kB (0.4 kB gzip)
+- api-DKAyD0ej.js: 0.5 kB (0.3 kB gzip)
+- pending-cart-additions-CiRuScIE.js: 0.5 kB (0.3 kB gzip)
+- queries-CcbfhJ-A.js: 0.5 kB (0.2 kB gzip)
+- BrandMark-DqEB-PJ0.js: 0.5 kB (0.3 kB gzip)
+- ReviewQueuePage-Bh7pfuD5.js: 0.5 kB (0.3 kB gzip)
+- queries-DYD91ZHL.js: 0.5 kB (0.3 kB gzip)
+- reservations-api-Be4heBbj.js: 0.5 kB (0.3 kB gzip)
+- api-C2Npp7gK.js: 0.4 kB (0.2 kB gzip)
+- api-fOXxPevU.js: 0.3 kB (0.2 kB gzip)
+- BarChart-BekDkiwd.js: 0.3 kB (0.2 kB gzip)
+- google-signup-4Dkdk5HI.js: 0.3 kB (0.2 kB gzip)
+- PageShell-CoD32Ard.js: 0.3 kB (0.2 kB gzip)
+- api-D0MX0IgZ.js: 0.3 kB (0.2 kB gzip)
+- chip-tones-cbbqDYQQ.js: 0.3 kB (0.2 kB gzip)
+- product-configurators-4cbwrayb.js: 0.3 kB (0.2 kB gzip)
+- settle-checks-BvFvcl9V.js: 0.3 kB (0.2 kB gzip)
+- useReportView-B6rEpBlW.js: 0.3 kB (0.2 kB gzip)
+- product-search-index-8jqk_JcE.js: 0.2 kB (0.2 kB gzip)
+- billing-slots-YJ8csFzi.js: 0.2 kB (0.2 kB gzip)
+- index-DLkqWn8u.js: 0.2 kB (0.2 kB gzip)
+- api-DqBgP7_X.js: 0.2 kB (0.1 kB gzip)
+- capabilities-BlCwZarx.js: 0.2 kB (0.2 kB gzip)
+- escape-html-DInPSGdP.js: 0.2 kB (0.1 kB gzip)
+- index-CxWW_46C.js: 0.1 kB (0.1 kB gzip)
+- api-DNNN4SMp.js: 0.1 kB (0.1 kB gzip)
+- query-options-DZ4mp_BJ.js: 0.1 kB (0.1 kB gzip)
+Initial JS: 858.8 kB (259.3 kB gzip) across 5 files
+Total JS: 5302.9 kB (1472.3 kB gzip) — product-wide, reported only
+- shop payload (restaurant): 4447.2 kB (1251.6 kB gzip) across 184 files
+- shop payload (manufacturing): 4420.4 kB (1237.0 kB gzip) across 177 files
+- shop payload (furniture-home): 4386.0 kB (1231.3 kB gzip) across 177 files
+- shop payload (electronics): 4386.3 kB (1231.1 kB gzip) across 177 files
+- shop payload (stationery-books): 4383.4 kB (1231.0 kB gzip) across 177 files
+- shop payload (clothing): 4384.9 kB (1231.0 kB gzip) across 177 files
+- shop payload (pharmacy): 4383.1 kB (1230.9 kB gzip) across 178 files
+- shop payload (auto-parts): 4376.5 kB (1228.6 kB gzip) across 177 files
+- shop payload (beauty-cosmetics): 4374.8 kB (1228.1 kB gzip) across 177 files
+- shop payload (footwear): 4373.0 kB (1227.8 kB gzip) across 177 files
+- shop payload (kirana): 4355.4 kB (1222.4 kB gzip) across 176 files
+- shop payload (custom): 4355.4 kB (1222.4 kB gzip) across 176 files
+Largest shop offline payload (restaurant): 4447.2 kB (1251.6 kB gzip) across 184 files
+
+> kirana-os-frontend@0.0.0 app:check
+> node scripts/check-production-app.mjs
+
+Offline boot coverage: 32 entries and 177 installed assets verified.
+Production app check passed.
+
+> kirana-os-frontend@0.0.0 test
+> vitest run --configLoader runner
+
+(node:19978) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ RUN  v4.1.11 /Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/frontend
+
+(node:19996) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19998) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20000) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20003) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20002) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19997) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19995) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19994) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20004) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20006) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20005) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20015) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20016) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20012) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20020) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20021) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20025) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19999) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20028) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20030) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20032) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20037) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20039) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20048) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20046) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20051) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20054) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20058) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20059) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20062) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20064) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20065) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20067) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20071) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20075) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20070) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20072) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20078) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20081) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20082) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20083) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20085) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20087) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20086) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20096) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20095) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20093) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20104) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20106) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20127) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20367) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20358) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20434) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20492) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20572) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20673) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20447) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20576) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20892) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20784) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21104) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21190) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21160) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21284) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21383) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21395) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21509) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21607) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21625) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22002) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22151) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22080) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22236) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22230) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22266) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22341) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22310) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22514) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22579) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22665) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22695) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22699) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22698) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22750) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22762) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22766) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  373 passed | 1 skipped (374)
+      Tests  2780 passed | 1 skipped (2781)
+   Start at  01:56:18
+   Duration  29.83s (transform 14.69s, setup 0ms, import 83.58s, tests 14.99s, environment 135ms)
