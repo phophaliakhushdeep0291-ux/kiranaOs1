@@ -1,0 +1,69 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Billing" [level=1]
+  - generic: Readiness Test Store · Cloud paused
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+    - generic: "2"
+- text: Cloud backup is paused because the backend is not reachable. Local billing still works.
+- link "Open Sync Status ->":
+  - /url: /sync-status
+- generic: 2 changes waiting to back up
+- generic: Will retry automatically when the connection is healthy.
+- button "Retry now":
+  - text: Retry now
+- link "View":
+  - /url: /sync-status
+- main:
+  - status: Billing page loaded
+  - status:
+    - paragraph: Bill saved safely
+    - paragraph: PENDING-BAD833
+  - button "Saved bill actions"
+  - generic: Offline — changes save locally and sync when back online.
+  - textbox "Search products"
+  - button "Scan barcode":
+  - button "Open voice billing":
+  - button "All"
+  - button "General"
+  - button "Order QR":
+    - text: Order QR
+  - button "Test Rice kg ₹60.00 +":
+    - generic: 🍚
+    - paragraph: Test Rice
+    - paragraph: kg
+    - generic: ₹60.00
+    - generic: +
+  - button "Test Soap piece ₹25.00 +":
+    - generic: 🧼
+    - paragraph: Test Soap
+    - paragraph: piece
+    - generic: ₹25.00
+    - generic: +
+  - button "Test Oil litre ₹150.00 +":
+    - generic: 🫙
+    - paragraph: Test Oil
+    - paragraph: litre
+    - generic: ₹150.00
+    - generic: +
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- region "Notifications (F8)":
+  - list

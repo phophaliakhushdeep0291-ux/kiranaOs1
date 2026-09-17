@@ -1,0 +1,71 @@
+{
+  "baseCommit": "fd347a3e30e9f87dced9c8b4e3d0d0c617f8740f",
+  "validationDate": "2026-09-17",
+  "files": [
+    {
+      "file": "billing-outage-saved.png",
+      "bytes": 40556,
+      "sha256": "e371a845b0c9cdd72ff3e48e368889c05f3431be3b44b463d8b1ed6dacc884e8"
+    },
+    {
+      "file": "billing-outage-saved.txt",
+      "bytes": 1891,
+      "sha256": "4489f42e8ff62a0f4317d4bf608db264407537b0defff3079b0acac380cfbe27"
+    },
+    {
+      "file": "billing-reconnected.png",
+      "bytes": 29011,
+      "sha256": "5b1b6e2b5508ad54cfef483ff358143e933ce27176552aae769fc4dbf087f7c7"
+    },
+    {
+      "file": "billing-reconnected.txt",
+      "bytes": 1457,
+      "sha256": "d170788c15bd05bfceefabbc6121a205a6b34c19ad06201800042df8a3a14f1c"
+    },
+    {
+      "file": "fresh-tab-outage-lock.txt",
+      "bytes": 661,
+      "sha256": "58d1fc6755850d8bc83bc1121452abf92b26fff63618997aeb5450f2968f1f73"
+    },
+    {
+      "file": "frontend-prod-check.txt",
+      "bytes": 54090,
+      "sha256": "817654267dfdbc0880122c80f01a992ec6a166e0088dfeb86fb1e4935fd5faf8"
+    },
+    {
+      "file": "inventory-outage-after.txt",
+      "bytes": 4130,
+      "sha256": "a262cd031636549b7f97c84297c333f2363842e90710045afb53dcab2dfe455a"
+    },
+    {
+      "file": "inventory-outage.png",
+      "bytes": 35768,
+      "sha256": "c510556c507b6c19a527e7af61357d5f201735701f7cc7d21b20e9f84da0e68d"
+    },
+    {
+      "file": "ledger-api-outage-reload.png",
+      "bytes": 41239,
+      "sha256": "697016ec2a997c7c524db7c6127096fc724f34acdaed2c8800168d186a5dfc39"
+    },
+    {
+      "file": "ledger-api-outage-reload.txt",
+      "bytes": 8303,
+      "sha256": "18241bbba5887b669b05468ace86551610edbc82a5fd0b0a5ac45a580d6fd657"
+    },
+    {
+      "file": "outage-inventory-before-fix.txt",
+      "bytes": 925,
+      "sha256": "4edb89b74379d69639c66cf6f1e8253752687381c8e192b52ce4366a99878f55"
+    },
+    {
+      "file": "readiness-online.txt",
+      "bytes": 4031,
+      "sha256": "caf1dc460e97318e588a3d289a26f9d3219870be6fe6195ac8ac0eae038b08f3"
+    },
+    {
+      "file": "server-reconciliation.json",
+      "bytes": 1228,
+      "sha256": "e25ce0e05c87dd3e9b5656b3701732c055f679909af18f0e6c7dc0b8f904e19a"
+    }
+  ]
+}

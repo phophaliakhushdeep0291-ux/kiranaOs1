@@ -1,0 +1,58 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Billing" [level=1]
+  - generic: Readiness Test Store · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: Billing page loaded
+  - status:
+    - paragraph: Bill saved safely
+    - paragraph: KOS-2026-000005
+  - button "Saved bill actions"
+  - textbox "Search products"
+  - button "Scan barcode":
+  - button "Open voice billing":
+  - button "All"
+  - button "General"
+  - button "Order QR":
+    - text: Order QR
+  - button "Test Oil litre ₹150.00 +":
+    - generic: 🫙
+    - paragraph: Test Oil
+    - paragraph: litre
+    - generic: ₹150.00
+    - generic: +
+  - button "Test Rice kg ₹60.00 +":
+    - generic: 🍚
+    - paragraph: Test Rice
+    - paragraph: kg
+    - generic: ₹60.00
+    - generic: +
+  - button "Test Soap piece ₹25.00 +":
+    - generic: 🧼
+    - paragraph: Test Soap
+    - paragraph: piece
+    - generic: ₹25.00
+    - generic: +
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- region "Notifications (F8)":
+  - list

@@ -86,7 +86,14 @@ const MAX_INITIAL_GZIP_BYTES = 300 * 1024;
 // The atomic all-route install adds route entry code, not duplicate modules, and
 // leaves first paint unchanged. Keep a small measured ceiling above the current
 // 3.34 MB kirana / 3.42 MB largest-vertical payload.
-const MAX_SHOP_OFFLINE_JS_BYTES = 3.5 * 1024 * 1024;
+// 2026-09-16: the 3.5 MB measurement omitted lazy boot dependencies. The shared
+// layout and all three language chunks are required for offline restarts, but
+// static route traversal never reached them. Adding their unique closure costs
+// about 1.02 MB raw / 229 kB gzip; this is existing app code, not new features.
+// Complete largest-shop install measured 4.34 MB / 1.223 MB gzip; keep bounded
+// headroom and verify boot coverage in check-production-app.mjs. Startup stays
+// at 259.3 kB gzip and its 300 kB limit does not move.
+const MAX_SHOP_OFFLINE_JS_BYTES = 4.5 * 1024 * 1024;
 // Raised 912 -> 916 kB once, to pay for disabling terser's booleans_as_integers
 // (see vite.config.ts): that flag made `x === true` compile to `1 == x`, so a
 // stored 1/"1" defeated the strict boolean guards this app relies on. The
@@ -244,7 +251,7 @@ const MAX_SHOP_OFFLINE_JS_BYTES = 3.5 * 1024 * 1024;
 // shell. Anything much below ~250 kB is a startup-sequencing change — booting
 // the till before the sync engine, settings and subscription — not a chunking
 // one.
-const MAX_SHOP_OFFLINE_GZIP_BYTES = 1.15 * 1024 * 1024;
+const MAX_SHOP_OFFLINE_GZIP_BYTES = 1.25 * 1024 * 1024;
 
 
 async function collectFiles(dir) {

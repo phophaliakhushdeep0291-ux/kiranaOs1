@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertOfflineBootAssets } from "./offline-boot-assets.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const publicRoot = path.join(repoRoot, "public");
@@ -155,11 +156,31 @@ function checkOfflinePage() {
   if (!offline.includes("location.reload()")) fail("offline.html should provide a retry action");
 }
 
+function checkOfflineBootBuild() {
+  try {
+    const output = path.resolve(repoRoot, process.env.KIRANA_OUT_DIR || "dist/public");
+    const manifest = JSON.parse(fs.readFileSync(path.join(output, ".vite/manifest.json"), "utf8"));
+    const worker = fs.readFileSync(path.join(output, "sw.js"), "utf8");
+    const match = worker.match(/const CORE_ASSETS = (\[[^;]+\]);/);
+    if (!match) throw new Error("Built service worker is missing its core asset manifest");
+    const assets = JSON.parse(match[1]);
+    const entries = assertOfflineBootAssets(manifest, assets);
+    for (const asset of assets) {
+      const file = path.join(output, asset.replace(/^\/+/, ""));
+      if (!fs.existsSync(file) || fs.statSync(file).size === 0) throw new Error(`Offline asset is missing or empty: ${asset}`);
+    }
+    console.log(`Offline boot coverage: ${entries} entries and ${assets.length} installed assets verified.`);
+  } catch (error) {
+    fail(`Offline build check: ${error.message}`);
+  }
+}
+
 checkManifest();
 checkHtmlShell();
 checkServiceWorker();
 checkPackageScripts();
 checkOfflinePage();
+checkOfflineBootBuild();
 
 if (failures.length > 0) {
   console.error("Production app check failed:");

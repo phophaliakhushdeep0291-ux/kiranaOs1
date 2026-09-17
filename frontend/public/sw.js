@@ -4,6 +4,7 @@ const CACHE_VERSION = `kiranaos-shell-v11-${BUILD_ID}`;
 const NAVIGATION_NETWORK_TIMEOUT_MS = 3500;
 const CORE_ASSETS = __KIRANA_CORE_ASSETS__;
 const VERTICAL_ASSETS = __KIRANA_VERTICAL_ASSETS__;
+const BUILD_ASSETS = new Set([...CORE_ASSETS, ...Object.values(VERTICAL_ASSETS).flat()]);
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -21,6 +22,7 @@ const NEVER_CACHE_PATTERNS = [
   // (the owner previewing on their own phone) must not serve a stale shell or a
   // half-cached chunk to someone who is standing at the counter trying to order.
   /^\/order(\/|$)/i,
+  /^\/t\//i,
   /\/api\//i,
   /\/sync\//i,
   /\/auth\//i,
@@ -77,6 +79,12 @@ function shouldBypass(request, url) {
   return NEVER_CACHE_PATTERNS.some((pattern) => pattern.test(url.pathname + url.search));
 }
 
+async function cachedNavigationShell(cache) {
+  return (await cache.match("/index.html")) ||
+    (await cache.match("/")) ||
+    (await cache.match("/offline.html"));
+}
+
 async function networkFirstNavigation(request) {
   const cache = await caches.open(CACHE_VERSION);
   let timer;
@@ -90,16 +98,20 @@ async function networkFirstNavigation(request) {
         timer = setTimeout(() => reject(new Error("navigation network timeout")), NAVIGATION_NETWORK_TIMEOUT_MS);
       }),
     ]);
-    if (response && response.ok && response.type === "basic") {
-      cache.put("/index.html", response.clone()).catch(() => undefined);
+    // A gateway error is an outage too: keep the installed till usable. Leave
+    // explicit access/not-found responses intact, and retain the host's response
+    // if this device has no cached shell to fall back to.
+    if (response && (response.status >= 500 || response.status === 408 || response.status === 429)) {
+      return (await cachedNavigationShell(cache)) || response;
     }
+    // Online HTML can belong to a newer release whose chunks are not installed
+    // yet. Never overwrite this build's verified shell with it: an interrupted
+    // update would otherwise leave a "ready" cache pointing at missing scripts.
+    // Only the new worker's atomic install publishes its new offline shell.
     return response;
   } catch (error) {
     // Offline: serve the cached SPA shell so any in-app route can boot, then fall back to offline.html.
-    const shell =
-      (await cache.match("/index.html")) ||
-      (await cache.match("/")) ||
-      (await cache.match("/offline.html"));
+    const shell = await cachedNavigationShell(cache);
     // A navigation that resolves undefined is a hard failure and shows a blank
     // page instead of the browser's own error.
     if (!shell) throw error;
@@ -114,7 +126,12 @@ async function cacheFirstStatic(request) {
   // Only read from this worker's build-scoped cache. During an atomic upgrade an
   // older cache can briefly coexist, and a global caches.match() could otherwise
   // mix files from two releases.
-  const cached = await cache.match(request);
+  // Module imports can send an Origin header while install-time addAll does
+  // not. Hosts returning Vary: Origin then miss an otherwise complete cache.
+  // These same-origin, content-hashed build files have identical bytes for
+  // either request. Preserve normal Vary handling for every other resource.
+  const isBuildAsset = BUILD_ASSETS.has(new URL(request.url).pathname);
+  const cached = await cache.match(request, { ignoreVary: isBuildAsset });
   // Content-hashed assets inside a build-scoped, atomically installed cache are
   // immutable. Do not start a background network request for a cache hit: during
   // a hard disconnect those requests can remain pending and eventually starve a

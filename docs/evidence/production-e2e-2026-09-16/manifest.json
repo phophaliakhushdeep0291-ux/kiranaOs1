@@ -1,0 +1,40 @@
+{
+  "capturedAt": "2026-09-16T17:33:45.254992+00:00",
+  "baseCommit": "71c849449ce2d83d29cfa9705af83218b2748ab5",
+  "branch": "work/production-e2e-readiness",
+  "nodeVersion": "v26.1.0",
+  "checks": {
+    "frontendProdCheck": "passed",
+    "frontendTests": {
+      "passed": 2750,
+      "skipped": 1,
+      "failed": 0
+    },
+    "translations": 6104,
+    "startupGzipKb": 259.3,
+    "backendProdCheck": "passed",
+    "httpCounterLifecycle": "passed on isolated SQLite",
+    "sourceParse": "passed",
+    "repositoryHygiene": "passed",
+    "productionBrowser": "login, dashboard, reports, inventory; zero observed console errors"
+  },
+  "limits": [
+    "Local server used NODE_ENV=test and SQLite",
+    "PostgreSQL/Redis proof delegated to required CI",
+    "No physical printer, live provider, Windows installer, or deployed backup certification"
+  ],
+  "sha256": {
+    "backend-prod-check.txt": "c2c15401227790183209c68dda6f8eac92c59157692d613e3907da872b98a23f",
+    "browser-server-check.json": "1f1f750e0ee5c7677393e7bcd9f67776d3f48e22500d6e77958bc7dc27752cc1",
+    "counter-lifecycle.txt": "821fe9349eeec763a6c26ca66327b9ce4fa3d2a25894217caac0e84afc6ad1a0",
+    "frontend-prod-check.txt": "9b49794c57a2d0fb42c755869efeeba92f7dc18adc7f1d30d7f7f4c62b29face",
+    "mobile-checkout.png": "ce9e360173076831d9ff5c87bc35d626edceaee36c7e1f03cecff1c6896f1bb3",
+    "mobile-dashboard.png": "67b3231a9c7368ac37760705de00cc9dbec164983af1e5772237d0bcdb7c21e5",
+    "mobile-saved-receipt.png": "12e0fdc06e45311aedd01d42e0a712c3218761abfe08526898f3b68b4ce1e204",
+    "production-browser.json": "8f10eb59340078cb0932697fd5c5d80a2aeb08efb26c03bbf0e4914c5766c495",
+    "production-dashboard.png": "961cb972b79c42bbf81e7d820045bd37d93dcd3bd404953896e31327d5de7625",
+    "production-inventory.txt": "f77f0b2f41c431842b531636c928e7ff787f90efcb6c10400a8a874e43801ded",
+    "production-reports.txt": "f2d2836247527f2eb1113bf826096a4b7189ba0894bbfede627a247bd76bae30",
+    "synced-receipt-desktop.png": "902c51baa1f3ceeccee936408d1936dc09f6a77c59602e10a83ff0026b552ef2"
+  }
+}

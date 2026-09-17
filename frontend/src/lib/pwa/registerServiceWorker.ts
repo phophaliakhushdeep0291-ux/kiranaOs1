@@ -195,14 +195,28 @@ export function registerServiceWorker(): void {
  * clears the app-shell cache and unregisters the SW so the reload fetches the fresh index/chunks.
  *
  * Safety: only busts caches when ONLINE. Doing it offline would strip an offline-first POS of the
- * very cache it needs to run, so when offline we just reload (the SW keeps serving the shell).
+ * very cache it needs to run. Automatic recovery stays on the fallback while offline.
  */
-export async function recoverFromStaleDeploy(): Promise<void> {
-  if (typeof window === "undefined") return;
+export async function recoverFromStaleDeploy({ automatic = false }: { automatic?: boolean } = {}): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+
+  // Both shell and page boundaries use this guard. A missing chunk may remain
+  // missing after a reload; a timer-based guard also loops on slow connections.
+  // Persist once per build and tab BEFORE awaiting cache cleanup. If storage is
+  // blocked, leave a manual retry instead of risking an unbounded reload loop.
+  if (automatic && typeof navigator !== "undefined" && navigator.onLine === false) return false;
+  const build = typeof __KIRANA_BUILD_ID__ === "string" ? __KIRANA_BUILD_ID__ : "development";
+  const recoveryKey = "kirana:stale-deploy-recovered-build";
+  try {
+    if (automatic && window.sessionStorage.getItem(recoveryKey) === build) return false;
+    window.sessionStorage.setItem(recoveryKey, build);
+  } catch {
+    if (automatic) return false;
+  }
 
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     window.location.reload();
-    return;
+    return true;
   }
 
   try {
@@ -219,6 +233,7 @@ export async function recoverFromStaleDeploy(): Promise<void> {
     // Ignore; a fresh reload re-registers the SW on next load.
   }
   window.location.reload();
+  return true;
 }
 
 export function activateWaitingServiceWorker(): void {

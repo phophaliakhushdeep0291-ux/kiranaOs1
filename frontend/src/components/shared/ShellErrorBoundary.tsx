@@ -68,7 +68,7 @@ export class ShellErrorBoundary extends Component<ShellErrorBoundaryProps, Shell
     // is a real defect and worth a report, because at this level it took the
     // whole till down rather than one screen.
     if (isChunkLoadError(error.message)) {
-      void recoverFromStaleDeploy().catch(() => undefined);
+      void recoverFromStaleDeploy({ automatic: true }).catch(() => undefined);
       return;
     }
     reportClientError({ source: "react-shell-boundary", message: error.message, stack: error.stack });
@@ -107,7 +107,13 @@ export class ShellErrorBoundary extends Component<ShellErrorBoundaryProps, Shell
           <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "0 0 20px", color: "#475569" }}>{copy.body}</p>
           <button
             type="button"
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              if (isChunkLoadError(this.state.message)) {
+                void recoverFromStaleDeploy().catch(() => window.location.reload());
+              } else {
+                window.location.reload();
+              }
+            }}
             style={{
               // 44px, because this is tapped on a phone at a counter.
               minHeight: "44px",

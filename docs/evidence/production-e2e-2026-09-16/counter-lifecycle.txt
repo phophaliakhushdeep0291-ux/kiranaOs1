@@ -1,0 +1,59 @@
+
+> kiranaos-backend@1.0.0 test:integration
+> node scripts/run-with-env.js PRISMA_CLIENT_VARIANT=integration -- node scripts/run-integration-tests.js counter-lifecycle.integration.test.js
+
+Using isolated TEST_DATABASE_URL=file:<worktree>/backend/prisma/integration-test-95858-1789566612353.db
+Prisma schema loaded from prisma/schema.prisma
+
+✔ Generated Prisma Client (v5.14.0) to ./generated/integration-prisma-client in 7.24s
+
+Start using Prisma Client in Node.js (See: https://pris.ly/d/client)
+```
+import { PrismaClient } from './generated/integration-prisma-client'
+const prisma = new PrismaClient()
+```
+or start using Prisma Client at the edge (See: https://pris.ly/d/accelerate)
+```
+import { PrismaClient } from './generated/integration-prisma-client/edge'
+const prisma = new PrismaClient()
+```
+
+See other ways of importing Prisma Client: http://pris.ly/d/importing-client
+
+┌─────────────────────────────────────────────────────────────┐
+│  Deploying your app to serverless or edge functions?        │
+│  Try Prisma Accelerate for connection pooling and caching.  │
+│  https://pris.ly/cli/--accelerate                           │
+└─────────────────────────────────────────────────────────────┘
+
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": SQLite database "integration-test-95858-1789566612353.db" at "file:<worktree>/backend/prisma/integration-test-95858-1789566612353.db"
+
+The SQLite database "integration-test-95858-1789566612353.db" at "file:<worktree>/backend/prisma/integration-test-95858-1789566612353.db" was successfully reset.
+
+🚀  Your database is now in sync with your Prisma schema. Done in 1.07s
+
+Installed 33 SQLite monotonic-sync triggers.
+Test database is ready.
+prisma:error
+Invalid `prisma.offlineSyncEvent.create()` invocation:
+
+
+Unique constraint failed on the fields: (`shopId`,`eventId`)
+Backend regression examples passed
+
+[integration] tests/integration/counter-lifecycle.integration.test.js
+prisma:error
+Invalid `prisma.offlineSyncEvent.create()` invocation:
+
+
+Unique constraint failed on the fields: (`shopId`,`eventId`)
+✔ receive stock, replay an offline split sale, collect credit, and return stock through HTTP (4271.187666ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6199.907584

@@ -34,36 +34,7 @@ export function isChunkLoadError(message?: string): boolean {
   );
 }
 
-// Recover at most once per window, so a chunk that genuinely 404s (or an offline shop) can never
-// spin in a reload loop; the second failure shows a real button instead.
-const STALE_RECOVERY_KEY = "kirana:stale-deploy-recovered-at";
-const STALE_RECOVERY_COOLDOWN_MS = 30_000;
 const RECOVERY_SPINNER_TIMEOUT_MS = 8_000;
-
-function recentlyAttemptedRecovery(): boolean {
-  try {
-    const last = Number(window.sessionStorage.getItem(STALE_RECOVERY_KEY) ?? 0);
-    return Number.isFinite(last) && Date.now() - last < STALE_RECOVERY_COOLDOWN_MS;
-  } catch {
-    return false;
-  }
-}
-
-function markRecoveryAttempt(): void {
-  try {
-    window.sessionStorage.setItem(STALE_RECOVERY_KEY, String(Date.now()));
-  } catch {
-    // sessionStorage blocked; recovery still runs, just without the loop guard.
-  }
-}
-
-function clearRecoveryAttempt(): void {
-  try {
-    window.sessionStorage.removeItem(STALE_RECOVERY_KEY);
-  } catch {
-    // Storage can be blocked; the recovery helper can still try.
-  }
-}
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, chunkError: false, recovering: false, resetKey: 0 };
@@ -87,31 +58,27 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     if (this.recoveryTimer) window.clearTimeout(this.recoveryTimer);
   }
 
-  private startChunkRecovery = () => {
+  private startChunkRecovery = (automatic = true) => {
     if (this.recoveryTimer) window.clearTimeout(this.recoveryTimer);
 
-    // Stale-deploy chunk errors are transient: recover silently once by busting the PWA cache and
-    // reloading. If it still fails, show a card with a manual retry so the user is never stuck.
-    if (recentlyAttemptedRecovery()) {
-      this.setState({ recovering: false });
-      return;
-    }
-
-    markRecoveryAttempt();
     this.setState({ recovering: true });
     this.recoveryTimer = window.setTimeout(() => {
       this.setState((state) => (state.recovering ? { recovering: false } : null));
     }, RECOVERY_SPINNER_TIMEOUT_MS);
 
-    void recoverFromStaleDeploy().catch(() => {
+    void recoverFromStaleDeploy({ automatic }).then((reloading) => {
+      if (!reloading) {
+        if (this.recoveryTimer) window.clearTimeout(this.recoveryTimer);
+        this.setState({ recovering: false });
+      }
+    }).catch(() => {
       if (this.recoveryTimer) window.clearTimeout(this.recoveryTimer);
       this.setState({ recovering: false });
     });
   };
 
   private retryChunkRecovery = () => {
-    clearRecoveryAttempt();
-    this.startChunkRecovery();
+    this.startChunkRecovery(false);
   };
 
   reset = () => {

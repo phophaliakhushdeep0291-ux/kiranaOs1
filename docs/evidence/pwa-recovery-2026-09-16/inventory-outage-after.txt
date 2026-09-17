@@ -1,0 +1,126 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Inventory" [level=1]
+  - generic: Readiness Test Store · Cloud paused
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- text: Cloud backup is paused because the backend is not reachable. Local billing still works.
+- link "Open Sync Status ->":
+  - /url: /sync-status
+- main:
+  - status: Inventory page loaded
+  - paragraph: Stock tools for your shop type
+  - paragraph: 🛒 Kirana / General Store
+  - button "Stock tools for your shop type":
+  - paragraph: Total Stock Value
+  - paragraph: ₹2,010
+  - paragraph: At current cost
+  - paragraph: Total SKUs
+  - paragraph: "3"
+  - paragraph: 56 units tracked
+  - paragraph: Low Stock Items
+  - paragraph: "0"
+  - paragraph: Require attention
+  - paragraph: Out of Stock Items
+  - paragraph: "0"
+  - paragraph: Take immediate action
+  - paragraph: Stock Turnover (30D)
+  - paragraph: 0x
+  - paragraph: No sales movement yet
+  - button "Add Stock Increase inventory":
+    - generic: Add Stock
+    - generic: Increase inventory
+  - button "Stock Correction Adjust stock levels":
+    - generic: Stock Correction
+    - generic: Adjust stock levels
+  - button "Damage Entry Record damaged items":
+    - generic: Damage Entry
+    - generic: Record damaged items
+  - button "Supplier Purchase Create purchase entry":
+    - generic: Supplier Purchase
+    - generic: Create purchase entry
+  - button "More Actions History, bills and insights":
+    - generic: More Actions
+    - generic: History, bills and insights
+  - heading "Product Stock" [level=2]
+  - paragraph: Real-time stock from local data, ready to sync.
+  - textbox "Search by product, SKU, barcode..."
+  - button "Filters":
+    - text: Filters
+  - button "Export":
+    - text: Export
+  - combobox "All Categories":
+    - generic: All Categories
+  - combobox "All Brands":
+    - generic: All Brands
+  - combobox "All Units":
+    - generic: All Units
+  - combobox "All Stock Status":
+    - generic: All Stock Status
+  - 'button "TE Test Rice SKU: - Category: General 20 kg Value: ₹720 In Stock"':
+    - generic: TE
+    - generic: Test Rice
+    - generic: "SKU: -"
+    - generic: "Category: General"
+    - generic: 20 kg
+    - generic: "Value: ₹720"
+    - generic: In Stock
+  - 'button "TE Test Soap SKU: - Category: General 26 piece Value: ₹390 In Stock"':
+    - generic: TE
+    - generic: Test Soap
+    - generic: "SKU: -"
+    - generic: "Category: General"
+    - generic: 26 piece
+    - generic: "Value: ₹390"
+    - generic: In Stock
+  - 'button "TE Test Oil SKU: - Category: General 10 litre Value: ₹900 In Stock"':
+    - generic: TE
+    - generic: Test Oil
+    - generic: "SKU: -"
+    - generic: "Category: General"
+    - generic: 10 litre
+    - generic: "Value: ₹900"
+    - generic: In Stock
+  - paragraph: Showing 1 to 3 of 3 products
+  - button "Previous page" [disabled]:
+  - button "Page 1": "1"
+  - button "Next page" [disabled]:
+  - paragraph: 8 rows per page
+  - complementary:
+    - heading "Stock Overview by Location" [level=2]
+    - paragraph: Current stock distribution
+    - 'img "Stock Overview by Location: Main Store, Total Value ₹2,010"':
+    - generic: Main Store
+    - paragraph: 100% of tracked stock
+    - generic: Total Value
+    - generic: ₹2,010
+    - heading "Low Stock Alerts" [level=2]
+    - paragraph: Items needing immediate attention
+    - button "View all"
+    - paragraph: All tracked products have healthy stock.
+    - heading "Recent Stock Updates" [level=2]
+    - paragraph: Latest inventory movements
+    - button "View all"
+    - paragraph: No stock updates recorded yet.
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

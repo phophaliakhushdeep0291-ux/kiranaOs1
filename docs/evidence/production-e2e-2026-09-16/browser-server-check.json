@@ -1,0 +1,43 @@
+{
+  "capturedAt": "2026-09-16T13:56:25.878Z",
+  "environment": "Isolated local SQLite test database; browser at localhost:5174",
+  "flows": [
+    "cash sale",
+    "API unavailable: credit sale and cash repayment",
+    "API restored: automatic sync",
+    "desktop permanent receipt number",
+    "mobile checkout"
+  ],
+  "bills": [
+    {
+      "billNo": "KOS-2026-000001",
+      "grandTotal": 25
+    },
+    {
+      "billNo": "KOS-2026-000002",
+      "grandTotal": 25
+    },
+    {
+      "billNo": "KOS-2026-000003",
+      "grandTotal": 25
+    },
+    {
+      "billNo": "KOS-2026-000004",
+      "grandTotal": 25
+    }
+  ],
+  "customerBalance": 0,
+  "customerLedger": [
+    {
+      "type": "debit",
+      "amount": 25
+    },
+    {
+      "type": "payment",
+      "amount": 25
+    }
+  ],
+  "soapStartingStock": 30,
+  "soapEndingStock": 26,
+  "assertions": "passed"
+}
