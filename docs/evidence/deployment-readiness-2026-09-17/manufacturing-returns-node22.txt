@@ -1,0 +1,268 @@
+
+> kiranaos-backend@1.0.0 test:integration
+> node scripts/run-with-env.js PRISMA_CLIENT_VARIANT=integration -- node scripts/run-integration-tests.js manufacturing-dispatch.integration.test.js general-ledger.integration.test.js
+
+Using isolated TEST_DATABASE_URL=file:/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/prisma/integration-test-36682-1789627784835.db
+Prisma schema loaded from prisma/schema.prisma
+
+✔ Generated Prisma Client (v5.14.0) to ./generated/integration-prisma-client in 2.17s
+
+Start using Prisma Client in Node.js (See: https://pris.ly/d/client)
+```
+import { PrismaClient } from './generated/integration-prisma-client'
+const prisma = new PrismaClient()
+```
+or start using Prisma Client at the edge (See: https://pris.ly/d/accelerate)
+```
+import { PrismaClient } from './generated/integration-prisma-client/edge'
+const prisma = new PrismaClient()
+```
+
+See other ways of importing Prisma Client: http://pris.ly/d/importing-client
+
+┌─────────────────────────────────────────────────────────────┐
+│  Deploying your app to serverless or edge functions?        │
+│  Try Prisma Accelerate for connection pooling and caching.  │
+│  https://pris.ly/cli/--accelerate                           │
+└─────────────────────────────────────────────────────────────┘
+
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": SQLite database "integration-test-36682-1789627784835.db" at "file:/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/prisma/integration-test-36682-1789627784835.db"
+
+The SQLite database "integration-test-36682-1789627784835.db" at "file:/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/prisma/integration-test-36682-1789627784835.db" was successfully reset.
+
+🚀  Your database is now in sync with your Prisma schema. Done in 193ms
+
+Installed 33 SQLite monotonic-sync triggers.
+Test database is ready.
+prisma:error
+Invalid `prisma.offlineSyncEvent.create()` invocation:
+
+
+Unique constraint failed on the fields: (`shopId`,`eventId`)
+Backend regression examples passed
+
+[integration] tests/integration/general-ledger.integration.test.js
+TAP version 13
+# prisma:error
+# Invalid `prisma.auditLog.create()` invocation:
+# Foreign key constraint failed on the field: `foreign key`
+# Audit log failed PrismaClientKnownRequestError:
+# Invalid `prisma.auditLog.create()` invocation:
+# Foreign key constraint failed on the field: `foreign key`
+#     at In.handleRequestError (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:122:6877)
+#     at In.handleAndLogRequestError (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:122:6211)
+#     at In.request (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:122:5919)
+#     at async l (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:127:11167)
+#     at async createAuditLog (file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/audit/audit.service.js:124:12)
+#     at async writeRequiredLedgerAudit (file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/finance/general-ledger.controller.js:26:17)
+#     at async file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/finance/general-ledger.controller.js:52:5
+#     at async Proxy._transactionWithCallback (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:127:9534)
+#     at async addAccount (file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/finance/general-ledger.controller.js:109:18) {
+#   code: 'P2003',
+#   clientVersion: '5.14.0',
+#   meta: { modelName: 'AuditLog', field_name: 'foreign key' }
+# }
+# {"level":"error","time":"2026-09-17T06:49:51.470Z","type":"unhandled_error","requestId":"cd97c74c-c32c-46b5-a8d5-172622f9ae72","method":"POST","path":"/api/accounting/chart-of-accounts","userId":"cmu566hcs0002tf9rk8ias9bt","shopId":"cmu566h8q0000tf9reewukptp","deviceId":"integration-device-ZnLdiaxcGgoA-1789627791367","errorName":"Error","errorMessage":"The ledger change was not saved because its audit record could not be stored"}
+# prisma:error
+# Invalid `prisma.auditLog.create()` invocation:
+# Foreign key constraint failed on the field: `foreign key`
+# Audit log failed PrismaClientKnownRequestError:
+# Invalid `prisma.auditLog.create()` invocation:
+# Foreign key constraint failed on the field: `foreign key`
+#     at In.handleRequestError (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:122:6877)
+#     at In.handleAndLogRequestError (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:122:6211)
+#     at In.request (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:122:5919)
+#     at async l (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:127:11167)
+#     at async createAuditLog (file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/audit/audit.service.js:124:12)
+#     at async writeRequiredLedgerAudit (file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/finance/general-ledger.controller.js:26:17)
+#     at async file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/finance/general-ledger.controller.js:52:5
+#     at async Proxy._transactionWithCallback (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:127:9534)
+#     at async manualJournal (file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/finance/general-ledger.controller.js:152:18) {
+#   code: 'P2003',
+#   clientVersion: '5.14.0',
+#   meta: { modelName: 'AuditLog', field_name: 'foreign key' }
+# }
+# {"level":"error","time":"2026-09-17T06:49:51.566Z","type":"unhandled_error","requestId":"ce7d1371-eb9e-457c-a43c-1b6967eb2c95","method":"POST","path":"/api/accounting/journals","userId":"cmu566hcs0002tf9rk8ias9bt","shopId":"cmu566h8q0000tf9reewukptp","deviceId":"integration-device-ZnLdiaxcGgoA-1789627791367","errorName":"Error","errorMessage":"The ledger change was not saved because its audit record could not be stored"}
+# prisma:error
+# Invalid `prisma.auditLog.create()` invocation:
+# Foreign key constraint failed on the field: `foreign key`
+# Audit log failed PrismaClientKnownRequestError:
+# Invalid `prisma.auditLog.create()` invocation:
+# Foreign key constraint failed on the field: `foreign key`
+#     at In.handleRequestError (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:122:6877)
+#     at In.handleAndLogRequestError (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:122:6211)
+#     at In.request (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:122:5919)
+#     at async l (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:127:11167)
+#     at async createAuditLog (file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/audit/audit.service.js:124:12)
+#     at async writeRequiredLedgerAudit (file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/finance/general-ledger.controller.js:26:17)
+#     at async file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/finance/general-ledger.controller.js:52:5
+#     at async Proxy._transactionWithCallback (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:127:9534)
+#     at async closePeriod (file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/finance/general-ledger.controller.js:212:18) {
+#   code: 'P2003',
+#   clientVersion: '5.14.0',
+#   meta: { modelName: 'AuditLog', field_name: 'foreign key' }
+# }
+# {"level":"error","time":"2026-09-17T06:49:51.732Z","type":"unhandled_error","requestId":"88c9f8ec-0c09-4d1a-8e52-f94bb6f9099b","method":"POST","path":"/api/accounting/periods/cmu566hpe002jtf9r01fx43kj/close","userId":"cmu566hcs0002tf9rk8ias9bt","shopId":"cmu566h8q0000tf9reewukptp","deviceId":"integration-device-ZnLdiaxcGgoA-1789627791367","errorName":"Error","errorMessage":"The ledger change was not saved because its audit record could not be stored"}
+# prisma:error
+# Invalid `prisma.auditLog.create()` invocation:
+# Foreign key constraint failed on the field: `foreign key`
+# Audit log failed PrismaClientKnownRequestError:
+# Invalid `prisma.auditLog.create()` invocation:
+# Foreign key constraint failed on the field: `foreign key`
+#     at In.handleRequestError (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:122:6877)
+#     at In.handleAndLogRequestError (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:122:6211)
+#     at In.request (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:122:5919)
+#     at async l (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:127:11167)
+#     at async createAuditLog (file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/audit/audit.service.js:124:12)
+#     at async writeRequiredLedgerAudit (file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/finance/general-ledger.controller.js:26:17)
+#     at async file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/finance/general-ledger.controller.js:52:5
+#     at async Proxy._transactionWithCallback (/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/generated/integration-prisma-client/runtime/library.js:127:9534)
+#     at async project (file:///Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/src/modules/finance/general-ledger.controller.js:84:18) {
+#   code: 'P2003',
+#   clientVersion: '5.14.0',
+#   meta: { modelName: 'AuditLog', field_name: 'foreign key' }
+# }
+# {"level":"error","time":"2026-09-17T06:49:51.825Z","type":"unhandled_error","requestId":"318f9962-a1e5-47ef-a02b-49796b59b671","method":"POST","path":"/api/accounting/general-ledger/project","userId":"cmu566hcs0002tf9rk8ias9bt","shopId":"cmu566h8q0000tf9reewukptp","deviceId":"integration-device-ZnLdiaxcGgoA-1789627791367","errorName":"Error","errorMessage":"The ledger change was not saved because its audit record could not be stored"}
+# Subtest: general-ledger required audit atomicity
+    # Subtest: rolls account creation, manual journals, period close, and projection back when their audit cannot be stored
+    ok 1 - rolls account creation, manual journals, period close, and projection back when their audit cannot be stored
+      ---
+      duration_ms: 790.051542
+      type: 'test'
+      ...
+    # Subtest: stores each successful financial mutation and its audit exactly once
+    ok 2 - stores each successful financial mutation and its audit exactly once
+      ---
+      duration_ms: 383.500625
+      type: 'test'
+      ...
+    1..2
+ok 1 - general-ledger required audit atomicity
+  ---
+  duration_ms: 1174.054084
+  type: 'suite'
+  ...
+1..1
+# tests 2
+# suites 1
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1674.044958
+
+[integration] tests/integration/manufacturing-dispatch.integration.test.js
+TAP version 13
+# Subtest: held production cannot allocate; release enables mixed-pack allocation, packing and exactly one dispatch
+ok 1 - held production cannot allocate; release enables mixed-pack allocation, packing and exactly one dispatch
+  ---
+  duration_ms: 225.637
+  type: 'test'
+  ...
+# Subtest: allocation rejects expired stock, wrong packaging and combined overbooking across order lines
+ok 2 - allocation rejects expired stock, wrong packaging and combined overbooking across order lines
+  ---
+  duration_ms: 170.82025
+  type: 'test'
+  ...
+# Subtest: an order short of stock ships what there is and stays open for the rest
+ok 3 - an order short of stock ships what there is and stays open for the rest
+  ---
+  duration_ms: 189.015792
+  type: 'test'
+  ...
+# Subtest: a shipped order cannot be cancelled while its back-order is allocated or packed
+ok 4 - a shipped order cannot be cancelled while its back-order is allocated or packed
+  ---
+  duration_ms: 210.264583
+  type: 'test'
+  ...
+# Subtest: the back-order ships later and each consignment is invoiced for its own goods
+ok 5 - the back-order ships later and each consignment is invoiced for its own goods
+  ---
+  duration_ms: 318.770333
+  type: 'test'
+  ...
+# Subtest: a whole-order HTTP return reverses each consignment using its own credit or paid settlement
+ok 6 - a whole-order HTTP return reverses each consignment using its own credit or paid settlement
+  ---
+  duration_ms: 640.573792
+  type: 'test'
+  ...
+# Subtest: concurrent whole-order returns refund and restore each consignment only once
+ok 7 - concurrent whole-order returns refund and restore each consignment only once # SKIP PostgreSQL is required to prove concurrent returns
+  ---
+  duration_ms: 0.07275
+  type: 'test'
+  ...
+# Subtest: expiry after packing and a later pack shortage roll back dispatch and every earlier stock movement
+ok 8 - expiry after packing and a later pack shortage roll back dispatch and every earlier stock movement
+  ---
+  duration_ms: 186.472166
+  type: 'test'
+  ...
+# Subtest: HTTP invoice and full return reconcile two packs from one batch without repeating stock or money
+ok 9 - HTTP invoice and full return reconcile two packs from one batch without repeating stock or money
+  ---
+  duration_ms: 797.394833
+  type: 'test'
+  ...
+# Subtest: unpaid invoice requires a buyer account and its return reverses credit without inventing a cash refund
+ok 10 - unpaid invoice requires a buyer account and its return reverses credit without inventing a cash refund
+  ---
+  duration_ms: 230.791875
+  type: 'test'
+  ...
+# Subtest: changed packaging and broken return trace roll back all invoice and return effects
+ok 11 - changed packaging and broken return trace roll back all invoice and return effects
+  ---
+  duration_ms: 253.791375
+  type: 'test'
+  ...
+# Subtest: GST invoices preserve saved totals and identity, and reverse GST with the credit note
+ok 12 - GST invoices preserve saved totals and identity, and reverse GST with the credit note
+  ---
+  duration_ms: 462.170708
+  type: 'test'
+  ...
+# Subtest: an untracked product is refused when the order is created, not after it is confirmed
+ok 13 - an untracked product is refused when the order is created, not after it is confirmed
+  ---
+  duration_ms: 255.998459
+  type: 'test'
+  ...
+# Subtest: tax invoice names the place of supply and splits GST by it; documents name each pack
+ok 14 - tax invoice names the place of supply and splits GST by it; documents name each pack
+  ---
+  duration_ms: 429.375625
+  type: 'test'
+  ...
+# Subtest: counter payloads cannot skip stock and export accounting cannot silently book foreign prices as INR
+ok 15 - counter payloads cannot skip stock and export accounting cannot silently book foreign prices as INR
+  ---
+  duration_ms: 208.878167
+  type: 'test'
+  ...
+# Subtest: an export under LUT books INR at the exchange rate and charges no IGST
+ok 16 - an export under LUT books INR at the exchange rate and charges no IGST
+  ---
+  duration_ms: 215.662291
+  type: 'test'
+  ...
+# Subtest: an export without an LUT charges IGST, never a CGST and SGST split
+ok 17 - an export without an LUT charges IGST, never a CGST and SGST split
+  ---
+  duration_ms: 226.598542
+  type: 'test'
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 1
+# todo 0
+# duration_ms 5459.348042

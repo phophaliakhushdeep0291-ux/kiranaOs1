@@ -1032,7 +1032,7 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
   });
 
   if (!bill) throw new AppError("Bill not found", 404);
-  if (await db.tradeOrder.findFirst({ where: { shopId, billId: bill.id } })) {
+  if (await db.tradeOrder.findFirst({ where: { shopId, OR: [{ billId: bill.id }, { dispatches: { some: { billId: bill.id } } }] } })) {
     throw new AppError("Use the wholesale order return to reverse this dispatched invoice", 409, "TRADE_INVOICE_USE_ORDER_RETURN");
   }
   // Idempotent: a bill can be cancelled then "deleted" (both map to this op), or the same
@@ -1193,7 +1193,10 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
 // customer's udhar. Reuses the reversal primitives proven in cancelBill; runs in one
 // transaction; idempotent on the same bill identity as CREATE_BILL.
 // ─────────────────────────────────────────────────────────────
-export async function createSaleReturn(shopId, body, actor = {}, fulfilment = null) {
+// transactionContext is trusted server composition only. Its caller owns the
+// transaction and must dispatch the returned deliveries after commit. HTTP and
+// offline-sync callers never populate it from request bodies.
+export async function createSaleReturn(shopId, body, actor = {}, fulfilment = null, transactionContext = null) {
   const {
     items = [],
     refundMode = "cash",
@@ -1219,7 +1222,10 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
   let bill;
   let integrationDeliveries = [];
   try {
-    const transactionResult = await db.$transaction(async (tx) => {
+    const runTransaction = transactionContext
+      ? (work) => work(transactionContext.tx)
+      : (work) => db.$transaction(work);
+    const transactionResult = await runTransaction(async (tx) => {
       const existing = await findExistingBillByIdentity(tx, shopId, billIdentity);
       if (existing) return { bill: existing, deliveries: [] };
 
@@ -1228,7 +1234,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
         ? await tx.bill.findFirst({ where: { id: returnOfBillId, shopId }, include: { items: true } })
         : null;
       if (returnOfBillId && !original) throw new AppError("Original sale not found", 404);
-      const linkedTradeOrder = original ? await tx.tradeOrder.findFirst({ where: { shopId, billId: original.id } }) : null;
+      const linkedTradeOrder = original ? await tx.tradeOrder.findFirst({ where: { shopId, OR: [{ billId: original.id }, { dispatches: { some: { billId: original.id } } }] } }) : null;
       if (linkedTradeOrder && !fulfilment) throw new AppError("Use the wholesale order return to reverse this dispatched invoice", 409, "TRADE_INVOICE_USE_ORDER_RETURN");
       if (fulfilment) await fulfilment.prepare(tx, original);
       if (original && original.status !== "active") {
@@ -1742,6 +1748,9 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
     bill = transactionResult.bill;
     integrationDeliveries = transactionResult.deliveries;
   } catch (error) {
+    // The outer transaction owns rollback/retry; never recover through another
+    // connection or deliver external events while its writes are uncommitted.
+    if (transactionContext) throw error;
     if (isUniqueConstraintError(error) && hasBillIdentity(billIdentity)) {
       const existingBill = await findExistingBillByIdentity(db, shopId, billIdentity);
       if (!existingBill) throw error;
@@ -1751,6 +1760,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
     }
   }
 
+  if (transactionContext) return { bill, deliveries: integrationDeliveries };
   await dispatchIntegrationDeliveries(integrationDeliveries);
   return bill;
 }

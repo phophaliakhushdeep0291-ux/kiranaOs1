@@ -43,7 +43,7 @@ The backend `Dockerfile` runs migrations automatically on every boot — you do 
 prisma migrate deploy --schema prisma-postgres/schema.prisma   # applies pending migrations (idempotent)
   && prisma generate --schema prisma-postgres/schema.prisma
   && node scripts/verify-product-schema.js                      # fails boot if schema is incomplete
-  && npm start
+  && npm run start:runtime
 ```
 
 Steps:

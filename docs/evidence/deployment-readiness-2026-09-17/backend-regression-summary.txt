@@ -1,0 +1,222 @@
+npm test completed with exit code 0 on final billing implementation.
+> kiranaos-backend@1.0.0 pretest
+ℹ fail 0
+db-example-isolation.examples.js OK
+local-sqlite-schema-workflow.examples.js OK
+> kiranaos-backend@1.0.0 test
+> kiranaos-backend@1.0.0 test:isolated-suite
+> kiranaos-backend@1.0.0 test:billing
+ℹ fail 0
+Billing calculation examples passed
+Bill amount field examples passed
+Bill profit examples passed
+Bill estimate examples passed
+Owner permission examples passed
+Product recycle bin examples passed
+Offline queue examples passed
+Sync push examples passed
+Frontend-backend connection examples passed
+AI command schema examples passed
+AI upload examples passed
+Frontend manual checklist examples passed
+Deployment readiness examples passed
+Report export permission examples passed
+Bill counter examples passed
+Audit log examples passed
+Security middleware examples passed
+serializable-transaction.examples.js OK
+sync-error-classification.examples.js OK
+Auth session examples passed
+Auth rate-limit scope examples passed
+Offline sync hardening examples passed
+Money safety examples passed
+round-off.examples.js: all assertions passed
+Observability examples passed
+Final gap audit/permission examples passed
+Job tenant isolation examples passed
+Phase 1 security examples passed
+Phase 2 RBAC examples passed
+Phase 3 migration/runtime examples passed
+Phase 4A sync pull pagination examples passed
+Phase 4C sync push limits/summary examples passed
+Phase 4E sync logging examples passed
+Phase 4F sync indexes examples passed
+Phase 4G sync docs examples passed
+Phase 5 integration infrastructure examples passed
+Phase 6 SaaS foundation examples passed
+Phase 7 Razorpay integration examples passed
+Phase 8 device license security examples passed
+Phase 10 background worker infrastructure examples passed
+Phase 11 shopkeeper reports examples passed
+Phase 12 daily closing snapshots examples passed
+Phase 13 report export jobs examples passed
+Phase 14 production CI/deployment examples passed
+Phase 15 object storage and observability examples passed
+Phase 16 monitoring/provider validation examples passed
+Phase 17 WhatsApp reminder examples passed
+Phase 18 production hardening examples passed
+Phase 19 production correctness examples passed
+Phase 20 financial and identity hardening examples passed
+Phase 21 auth production proof examples passed
+Phase 22 payment webhook ops examples passed
+Phase 23 worker health readiness examples passed
+production-runtime.examples.js OK
+Phase 24 API contract proof examples passed
+Phase 25 production proof examples passed
+Phase 26 operational proof examples passed
+Phase 27 money paise migration examples passed
+Restore fidelity behavior: non-empty business proof, same-count tampering, exact large integers, target alias/override safety and URL redaction passed
+Phase 28 disaster recovery proof examples passed
+Phase 29 release gate examples passed
+Phase 30 sync repair examples passed
+Phase 31 sync status repair examples passed
+sync feed integrity examples passed
+Phase 32 Prisma schema relation examples passed
+Phase 33 auth register frontend compatibility examples passed
+Phase 35 sync status endpoint examples passed
+Phase 41 device bootstrap examples passed
+Phase 42 device context compatibility examples passed
+Phase 44 multi-session rate limit examples passed
+Phase 45 multi-device device-limit examples passed
+Phase 46 multi-device smoothness examples passed
+Phase 47 supplier sync/soft-delete examples passed
+Phase 48 sellable hardening examples passed
+phase49 integration maturity examples passed
+Product loose item migration examples passed
+report-range-days.examples.js OK
+subscription-grace.examples.js OK
+shop-context-header.examples.js OK
+report-month-timezone.examples.js OK
+report-range-start-timezone.examples.js OK
+expense-overview-timezone.examples.js OK
+webhook-event-id.examples.js OK
+Final production check examples passed
+Bill return reference migration examples passed
+public-catalog.examples.js OK
+customer-orders.examples.js OK
+financial-ledger-summary.examples.js OK
+accounting-control.examples.js OK
+accounting-journal-postings.examples.js OK
+bank-reconciliation.examples.js OK
+Reorder recommendation examples passed
+Production frontend/auth readiness examples passed
+google-auth.examples.js OK
+pricing-engine.examples.js OK
+Release certification examples passed
+Procurement reconciliation examples passed
+> kiranaos-backend@1.0.0 test:compliance
+Compliance tax and HSN examples passed
+GST invoice discount examples passed
+> kiranaos-backend@1.0.0 test:tally
+tally-voucher.examples.js: all assertions passed
+> kiranaos-backend@1.0.0 test:loyalty
+Loyalty maturity examples passed
+> kiranaos-backend@1.0.0 test:atomic-offers
+offer-bill-atomicity.examples.js OK
+> kiranaos-backend@1.0.0 test:ai-safety
+Integration today-range timezone examples passed
+ai-agent-bill-items.examples.js OK
+ai-agent-pack-sizes.examples.js OK
+AI agent atomic plan execution examples passed
+ai-agent-tools.examples.js OK
+AI agent response grounding examples passed
+AI evidence-backed turn and audit runtime examples passed
+AI privacy-safe feedback examples passed
+Invoice OCR safety examples passed
+Shop maintenance lock examples passed
+> kiranaos-backend@1.0.0 test:retail-payment
+Payment credential encryption examples passed
+Retail payment integrity examples passed
+Dynamic UPI QR source contracts passed
+Payment provider connection examples passed
+retail QR image decoding examples passed
+ℹ fail 0
+> kiranaos-backend@1.0.0 test:card-terminal
+Card terminal seam examples passed
+> kiranaos-backend@1.0.0 test:channel-settlement
+Channel settlement calculation examples passed
+> kiranaos-backend@1.0.0 test:flipkart
+Flipkart seller connector examples passed
+> kiranaos-backend@1.0.0 test:report-documents
+report-documents.examples.js OK
+> kiranaos-backend@1.0.0 test:event-bus
+event-bus.examples.js OK
+> kiranaos-backend@1.0.0 test:event-bus-redis
+event-bus-redis.examples.js OK
+> kiranaos-backend@1.0.0 test:activity
+activity-personalization.examples.js OK
+> kiranaos-backend@1.0.0 test:rentals
+> kiranaos-backend@1.0.0 test:prescriptions
+prescription-register: all checks passed
+> kiranaos-backend@1.0.0 test:serial-units
+product-unit-register: all checks passed
+> kiranaos-backend@1.0.0 test:fitment
+part-fitment: all checks passed
+> kiranaos-backend@1.0.0 test:size-runs
+footwear-size-runs: all checks passed
+> kiranaos-backend@1.0.0 test:book-lists
+book-lists: all checks passed
+> kiranaos-backend@1.0.0 test:furniture-orders
+furniture-orders: all checks passed
+> kiranaos-backend@1.0.0 test:testers
+cosmetics-testers: all checks passed
+> kiranaos-backend@1.0.0 test:restaurant
+restaurant-tables-menu.examples.js OK
+kitchen-tickets.examples.js OK
+Restaurant service ops examples passed
+guest-order-cancellation.examples.js OK
+guest-order-settlement.examples.js OK
+restaurant-guest-experience.examples.js OK
+> kiranaos-backend@1.0.0 test:verticals
+ℹ fail 0
+> kiranaos-backend@1.0.0 test:manufacturing
+ℹ fail 0
+> kiranaos-backend@1.0.0 test:sync-conflicts
+Sync conflict entity matrix examples passed
+Sync id-format examples passed
+> kiranaos-backend@1.0.0 test:barcode
+Barcode binding examples passed
+Product knowledge lookup examples passed
+> kiranaos-backend@1.0.0 test:trade-attributes
+ℹ fail 0
+> kiranaos-backend@1.0.0 test:batch-mrp
+ℹ fail 0
+> kiranaos-backend@1.0.0 test:pack-pricing
+pack-mrp-ceiling.examples.js OK
+pack-cost-price.examples.js OK
+> kiranaos-backend@1.0.0 test:purchase-lot
+purchase lot capture: 5/5 passed
+> kiranaos-backend@1.0.0 test:near-expiry
+ℹ fail 0
+> kiranaos-backend@1.0.0 test:schedule-h
+ℹ fail 0
+ℹ fail 0
+prescription-register: all checks passed
+> kiranaos-backend@1.0.0 test:restore-drill
+> kiranaos-backend@1.0.0 test:devices-signed-in
+device-signed-in-listing.examples.js OK
+> kiranaos-backend@1.0.0 posttest
+> kiranaos-backend@1.0.0 test:packaging-db
+change-log-shop-cascade.examples.js OK
+packaging-mode-guard.examples.js OK
+ℹ fail 0
+ℹ fail 0
+per-pack-low-stock.examples.js OK
+per-pack-return.examples.js OK
+per-pack-stock-in.examples.js OK
+per-pack-stock-out.examples.js OK
+per-pack-sync-stock.examples.js OK
+pack-removal-writes-off-stock.examples.js OK
+ℹ fail 0
+ℹ fail 0
+backup-metadata-follows-client.examples.js OK
+ℹ fail 0
+> kiranaos-backend@1.0.0 test:reports-db
+report-deleted-bills.examples.js OK
+ledger-deleted-bills.examples.js OK
+daily-closing-atomicity.examples.js OK
+> kiranaos-backend@1.0.0 test:general-ledger-db
+general-ledger-db.examples.js OK
+> kiranaos-backend@1.0.0 test:accounting-documents
+accounting-document-workflow.examples.js OK
+shared-test-database-guard.examples.js OK

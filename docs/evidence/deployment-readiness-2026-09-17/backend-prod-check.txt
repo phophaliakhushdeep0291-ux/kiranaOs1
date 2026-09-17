@@ -1,0 +1,8 @@
+
+> kiranaos-backend@1.0.0 prod:check
+> node scripts/check-app-module-graph.js && node scripts/production-check.js && node tests/dependency-security.examples.js
+
+Production application module graph: OK
+node_modules exists locally after install; this is OK because .gitignore/.dockerignore exclude it from production packages.
+Production readiness checks passed
+Dependency security regressions passed: patched query parsers, enforced array limits, safe constructor handling, ordinary query compatibility

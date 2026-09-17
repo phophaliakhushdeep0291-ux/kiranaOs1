@@ -1,0 +1,219 @@
+Final code commit: 52b2c04b
+Runtime: Node 22.23.2
+Command: npm run test:integration
+Exit code: 0
+42 files; 382 passed; 0 failed; 3 PostgreSQL-only skips.
+
+[integration] tests/integration/assurance-api.integration.test.js
+# tests 12
+# pass 12
+# fail 0
+# skipped 0
+[integration] tests/integration/assurance-cases.integration.test.js
+# tests 6
+# pass 6
+# fail 0
+# skipped 0
+[integration] tests/integration/assurance-engine.integration.test.js
+# tests 30
+# pass 30
+# fail 0
+# skipped 0
+[integration] tests/integration/auth.integration.test.js
+# tests 12
+# pass 12
+# fail 0
+# skipped 0
+[integration] tests/integration/backup-drill.integration.test.js
+# tests 4
+# pass 4
+# fail 0
+# skipped 0
+[integration] tests/integration/backups.integration.test.js
+# tests 11
+# pass 11
+# fail 0
+# skipped 0
+[integration] tests/integration/bank-reconciliation.integration.test.js
+# tests 3
+# pass 3
+# fail 0
+# skipped 0
+[integration] tests/integration/barcode-binding.integration.test.js
+# tests 14
+# pass 14
+# fail 0
+# skipped 0
+[integration] tests/integration/billing.integration.test.js
+# tests 31
+# pass 31
+# fail 0
+# skipped 0
+[integration] tests/integration/card-terminal-reconciliation.integration.test.js
+# tests 1
+# pass 1
+# fail 0
+# skipped 0
+[integration] tests/integration/channel-settlement.integration.test.js
+# tests 2
+# pass 2
+# fail 0
+# skipped 0
+[integration] tests/integration/counter-lifecycle.integration.test.js
+# tests 1
+# pass 1
+# fail 0
+# skipped 0
+[integration] tests/integration/customers.integration.test.js
+# tests 13
+# pass 13
+# fail 0
+# skipped 0
+[integration] tests/integration/device-license.integration.test.js
+# tests 6
+# pass 6
+# fail 0
+# skipped 0
+[integration] tests/integration/device-session-slots.integration.test.js
+# tests 15
+# pass 15
+# fail 0
+# skipped 0
+[integration] tests/integration/dynamic-upi-qr.integration.test.js
+# tests 1
+# pass 1
+# fail 0
+# skipped 0
+[integration] tests/integration/expenses.integration.test.js
+# tests 2
+# pass 2
+# fail 0
+# skipped 0
+[integration] tests/integration/flipkart-seller.integration.test.js
+# tests 2
+# pass 2
+# fail 0
+# skipped 0
+[integration] tests/integration/general-ledger.integration.test.js
+# tests 2
+# pass 2
+# fail 0
+# skipped 0
+[integration] tests/integration/integrations.integration.test.js
+# tests 4
+# pass 4
+# fail 0
+# skipped 0
+[integration] tests/integration/manufacturing-dispatch.integration.test.js
+ok 7 - concurrent whole-order returns refund and restore each consignment only once # SKIP PostgreSQL is required to prove concurrent returns
+# tests 17
+# pass 16
+# fail 0
+# skipped 1
+[integration] tests/integration/manufacturing-production.integration.test.js
+# tests 8
+# pass 8
+# fail 0
+# skipped 0
+[integration] tests/integration/owner-pin.integration.test.js
+# tests 5
+# pass 5
+# fail 0
+# skipped 0
+[integration] tests/integration/p0-product-stock.integration.test.js
+# tests 3
+# pass 3
+# fail 0
+# skipped 0
+[integration] tests/integration/p0-token-type.integration.test.js
+# tests 3
+# pass 3
+# fail 0
+# skipped 0
+[integration] tests/integration/pricing-controls.integration.test.js
+# tests 1
+# pass 1
+# fail 0
+# skipped 0
+[integration] tests/integration/production-concurrency.integration.test.js
+ok 1 - production concurrency integration tests skipped on SQLite # SKIP SQLite cannot prove production concurrent write behavior; run npm run test:postgres for the PostgreSQL proof.
+# tests 1
+# pass 0
+# fail 0
+# skipped 1
+[integration] tests/integration/products.integration.test.js
+# tests 18
+# pass 18
+# fail 0
+# skipped 0
+[integration] tests/integration/razorpay.integration.test.js
+# tests 1
+# pass 1
+# fail 0
+# skipped 0
+[integration] tests/integration/rbac-pin.integration.test.js
+# tests 18
+# pass 18
+# fail 0
+# skipped 0
+[integration] tests/integration/reports.integration.test.js
+# tests 13
+# pass 13
+# fail 0
+# skipped 0
+[integration] tests/integration/restaurant-addons.integration.test.js
+# tests 3
+# pass 3
+# fail 0
+# skipped 0
+[integration] tests/integration/retail-operations.integration.test.js
+# tests 19
+# pass 19
+# fail 0
+# skipped 0
+[integration] tests/integration/retail-tender-binding.integration.test.js
+# tests 1
+# pass 1
+# fail 0
+# skipped 0
+[integration] tests/integration/serializable-conflicts.integration.test.js
+    ok 1 - the losing transaction runs again and neither write is lost # SKIP SQLite has one writer, so two open transactions cannot be forced to overlap; PostgreSQL proves this in CI.
+# tests 5
+# pass 4
+# fail 0
+# skipped 1
+[integration] tests/integration/settings-reminders.integration.test.js
+# tests 4
+# pass 4
+# fail 0
+# skipped 0
+[integration] tests/integration/shop-type-flows.integration.test.js
+# tests 12
+# pass 12
+# fail 0
+# skipped 0
+[integration] tests/integration/subscription-device.integration.test.js
+# tests 11
+# pass 11
+# fail 0
+# skipped 0
+[integration] tests/integration/sync-offline-cancel-null-serverid.integration.test.js
+# tests 3
+# pass 3
+# fail 0
+# skipped 0
+[integration] tests/integration/sync.integration.test.js
+# tests 60
+# pass 60
+# fail 0
+# skipped 0
+[integration] tests/integration/tenant-isolation.integration.test.js
+# tests 5
+# pass 5
+# fail 0
+# skipped 0
+[integration] tests/integration/trade-stock-integrity.integration.test.js
+# tests 2
+# pass 2
+# fail 0
+# skipped 0

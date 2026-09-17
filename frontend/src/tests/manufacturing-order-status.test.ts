@@ -36,7 +36,7 @@ describe("part-shipped orders", () => {
 
   it("still refuses to cancel an order once goods have gone out", () => {
     for (const status of ["dispatched", "partially_dispatched", "invoiced"]) {
-      expect(canCancelTradeOrder(status)).toBe(false);
+      expect(canCancelTradeOrder({ status })).toBe(false);
     }
   });
 });
@@ -74,8 +74,14 @@ describe("wholesale order register status", () => {
     for (const status of [...statuses, "updating"]) expect(manufacturingEn).toHaveProperty(`manufacturing.orders.status.${status}`);
   });
 
+  it("refuses cancellation after a shipment even when the back-order is allocated or packed", () => {
+    for (const status of ["allocated", "packed"]) {
+      expect(canCancelTradeOrder({ status, dispatches: [{ id: "dispatch-1" }] })).toBe(false);
+    }
+  });
+
   it("offers cancellation exactly where the server accepts it", () => {
-    expect(statuses.filter(canCancelTradeOrder)).toEqual(["draft", "confirmed", "allocated", "packed"]);
+    expect(statuses.filter((status) => canCancelTradeOrder({ status }))).toEqual(["draft", "confirmed", "allocated", "packed"]);
   });
 
   it("prints documents only for goods that are being packed or have shipped", () => {

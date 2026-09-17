@@ -6,7 +6,7 @@ import { multiplyMoney, round2, subtractMoney } from "../../utils/money.js";
 import { baseQtyToRateQty } from "../../utils/units.js";
 import { createTradeInvoiceSchema } from "./manufacturing.schemas.js";
 
-const include = { items: { include: { allocations: true } }, dispatches: { orderBy: { dispatchDate: "asc" } } };
+const include = { items: { include: { allocations: true } }, dispatches: { orderBy: [{ dispatchDate: "asc" }, { createdAt: "asc" }, { id: "asc" }] } };
 const same = (a, b) => Math.abs(Number(a) - Number(b)) < 0.001;
 function fail(message, code = "TRADE_INVOICE_DISPATCH_MISMATCH") { throw new AppError(message, 409, code); }
 /**
@@ -184,13 +184,13 @@ export async function createTradeInvoice(shopId, id, rawInput, actor = {}) {
   return updated;
 }
 
-export function tradeReturnFulfilment(shopId, order, actor) {
+export function tradeReturnFulfilment(shopId, order, actor, invoiceId = order.billId) {
   checkLocation(order, actor);
   return {
     async prepare(tx, original) {
-      if (original?.id !== order.billId) fail("The return does not match the dispatched invoice");
-      const claimed = await tx.tradeOrder.updateMany({ where: { id: order.id, shopId, billId: original.id, status: "invoiced" }, data: { status: "returning" } });
-      if (claimed.count !== 1) fail("This order changed. Refresh its return status", "TRADE_ORDER_NOT_RETURNABLE");
+      if (original?.id !== invoiceId) fail("The return does not match the dispatched invoice");
+      const claimed = await tx.tradeOrder.findFirst({ where: { id: order.id, shopId, status: "returning" } });
+      if (!claimed) fail("This order changed. Refresh its return status", "TRADE_ORDER_NOT_RETURNABLE");
       if (await tx.bill.count({ where: { shopId, returnOfBillId: original.id, status: "active" } })) fail("This invoice already has a return; review its credit notes", "TRADE_INVOICE_HAS_RETURNS");
     },
     async restoreLots(tx, original, returnBill) {
@@ -204,7 +204,6 @@ export function tradeReturnFulfilment(shopId, order, actor) {
           await tx.billItemLotAllocation.create({ data: { billItemId: line.id, inventoryLotId: source.inventoryLotId, quantityBaseQty: -source.quantityBaseQty } });
         }
       }
-      await tx.tradeOrder.update({ where: { id: order.id }, data: { status: "returned" } });
     },
   };
 }

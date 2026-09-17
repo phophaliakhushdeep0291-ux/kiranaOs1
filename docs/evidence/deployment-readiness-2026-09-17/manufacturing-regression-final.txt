@@ -1,0 +1,33 @@
+
+> kiranaos-backend@1.0.0 test:manufacturing
+> node scripts/run-db-example-tests.js tests/manufacturing-vertical.examples.js
+
+Preparing guarded DB-example environment at file:/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/prisma/db-example-23479-1789590660644.db
+Using isolated TEST_DATABASE_URL=file:/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/prisma/db-example-23479-1789590660644.db
+Reusing the existing compatible Prisma client (generation explicitly skipped).
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": SQLite database "db-example-23479-1789590660644.db" at "file:/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/prisma/db-example-23479-1789590660644.db"
+
+The SQLite database "db-example-23479-1789590660644.db" at "file:/Users/shivanimaheshwari/Documents/KIRANAOS/kiranaOs1/backend/prisma/db-example-23479-1789590660644.db" was successfully reset.
+
+🚀  Your database is now in sync with your Prisma schema. Done in 195ms
+
+Installed 33 SQLite monotonic-sync triggers.
+Test database is ready.
+Running isolated DB example: tests/manufacturing-vertical.examples.js
+✔ manufacturing is an isolated, production-aware business profile (0.616625ms)
+✔ BOM input rejects self-consumption and duplicate materials (13.109792ms)
+✔ production completion requires dated, QC-classified, reconciled input shapes (0.652583ms)
+✔ both databases carry the manufacturing migration and packaging SKU (1.635292ms)
+✔ production completion is one transaction with stock ledger and lot genealogy (0.947334ms)
+✔ trade fulfilment exposes PDFs, returns, and guarded lifecycle routes (1.871208ms)
+✔ official Flipkart documents use OAuth and never hard-code an access token (1.396ms)
+✔ shipment paperwork excludes unshipped lines and previous consignment batches (1.414042ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 26.505083

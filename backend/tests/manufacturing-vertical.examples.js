@@ -81,3 +81,24 @@ test("official Flipkart documents use OAuth and never hard-code an access token"
   assert.match(routes, /flipkart\/status/);
   assert.match(routes, /flipkart\/shipments/);
 });
+
+test("shipment paperwork excludes unshipped lines and previous consignment batches", async () => {
+  const { shipmentForOrder } = await import("../src/verticals/manufacturing/trade-shipment.js");
+  const order = { status: "allocated", dispatches: [{ id: "first" }], items: [
+    { id: "a", quantity: 12, quantityBaseQty: 24, lineTotal: 240, allocations: [
+      { dispatchId: "first", quantityBaseQty: 20, batchNumber: "OLD" },
+      { dispatchId: null, quantityBaseQty: 4, batchNumber: "NEW" },
+    ] },
+    { id: "b", quantity: 3, quantityBaseQty: 3, lineTotal: 90, allocations: [] },
+  ] };
+  const pending = shipmentForOrder(order);
+  assert.equal(pending.dispatch, null);
+  assert.equal(pending.items.length, 1);
+  assert.equal(pending.items[0].quantity, 2);
+  assert.equal(pending.items[0].lineTotal, 40);
+  assert.deepEqual(pending.items[0].allocations.map(row => row.batchNumber), ["NEW"]);
+  const shipped = shipmentForOrder({ ...order, status: "partially_dispatched" });
+  assert.equal(shipped.dispatch.id, "first");
+  assert.equal(shipped.items[0].quantity, 10);
+  assert.deepEqual(shipped.items[0].allocations.map(row => row.batchNumber), ["OLD"]);
+});
