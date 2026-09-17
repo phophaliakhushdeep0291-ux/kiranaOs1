@@ -19,11 +19,11 @@ Manufacturing is a vertical in main. Its export and partial-dispatch features we
 
 - Frontend `VITE_API_BASE_URL=/api npm run prod:check`: 373 test files passed, one skipped; 2,780 tests passed, one skipped. Typecheck, 6,104 translation keys, production build, bundle budgets and offline boot coverage passed.
 - Full backend `npm test`: passed again after the shared billing changes, including manufacturing, restaurant, vertical architecture/entitlements, accounting, inventory, synchronization and security checks.
-- The initial 42-file integration run passed 381 tests with two PostgreSQL-only skips. After adding multi-invoice returns, the full run exposed a Prisma native-engine panic in the general-ledger test under system Node 26 and an incorrect field name in the new test assertion. The assertion was corrected. Both affected files then passed under production Node 22.23.2: 18 tests passed and the new PostgreSQL-only concurrent-return test skipped. The other 40 files passed the later full run.
+- Final committed implementation `52b2c04b`: all 42 integration files passed under production Node 22.23.2; 382 tests passed, zero failed, three PostgreSQL-only concurrency tests skipped on SQLite. This includes concurrent-return coverage that will execute in PostgreSQL CI. The earlier Node 26 accounting-engine failure did not recur in the complete Node 22 run.
 - Manufacturing coverage includes consumption rollback, QC release, split-batch genealogy, pack stock, partial dispatch, cancellation guards, shipment paperwork, consignment invoices, exports, multi-invoice return rollback/replay, HTTP owner-PIN enforcement, and credit-versus-paid refunds.
 - Backend production checks, PostgreSQL schema validation, migration safety, append-only migrations, source parsing, repository hygiene and whitespace checks passed. No schema migration is added.
 
-Frontend dependencies were installed with pinned pnpm 9.15.9 and the frozen lockfile. Local database tests use disposable SQLite databases. Node 22 targeted verification matches production; earlier broad checks used system Node 26.1.0. `/api` was only a build-validation value, not a live backend configuration.
+Frontend dependencies were installed with pinned pnpm 9.15.9 and the frozen lockfile. Local database tests use disposable SQLite databases. The complete integration suite used production Node 22; frontend and backend example-suite checks used system Node 26.1.0. `/api` was only a build-validation value, not a live backend configuration.
 
 ## Release gates
 
@@ -33,6 +33,6 @@ Frontend dependencies were installed with pinned pnpm 9.15.9 and the frozen lock
 4. Deploy the exact certified candidate, check `/health/ready`, and smoke-test two-device sync, offline recovery and production → partial shipments → invoices → whole-order return in a designated test shop.
 5. Complete target-device printing/offline-auth checks from `PRODUCTION_CHECKLIST.md` and record rollback/version metadata before strict certification.
 
-Docker, PostgreSQL/Redis services, restore-test configuration and live API configuration were unavailable locally. GitHub reported successful Vercel and Railway deployments for the original base commit `71c84944`; that is not proof for this candidate. Historical browser evidence in the earlier readiness reports remains historical; this review did not rerun those browser scenarios or certify a cold browser restart with the frontend host unavailable.
+Docker, PostgreSQL/Redis services, restore-test configuration and live API configuration were unavailable locally. GitHub reported successful Vercel and Railway deployments for refreshed main `f6ffc9da`; that is not proof for this candidate. Historical browser evidence in the earlier readiness reports remains historical; this review did not rerun those browser scenarios or certify a cold browser restart with the frontend host unavailable.
 
 Evidence: `docs/evidence/deployment-readiness-2026-09-17/`.
