@@ -90,7 +90,14 @@ export default function ImportOrderPage() {
   const payload = parseState.kind === "ready" ? parseState.payload : null;
   const [adding, setAdding] = useState(false);
 
-  const productsQuery = useListProducts({ limit: 350 }, { query: { staleTime: 60_000 } });
+  // The WHOLE catalogue. billFromImportedCart matches each order line by id against
+  // exactly these rows and drops anything it cannot find into `skipped`, so a page of
+  // the catalogue silently loses the customer's order lines — and tells the owner they
+  // "didn't match your products", which reads as "you don't stock this" rather than
+  // "the till only loaded part of your shop". `limit: 350` against a 560-item starter
+  // catalogue made that reachable on a shop's first day. Same cut BillingPage carried;
+  // an order is even less forgiving than a search, because nobody is there to retype it.
+  const productsQuery = useListProducts(undefined, { query: { staleTime: 60_000 } });
   const products = useMemo(
     () => (productsQuery.data ?? []).filter((p) => p.deletedAt == null),
     [productsQuery.data],
