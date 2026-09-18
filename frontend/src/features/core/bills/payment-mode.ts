@@ -20,6 +20,20 @@ function num(value: unknown): number {
 
 const CREDIT_STATUSES = ["credit", "partial", "unpaid", "due"];
 
+export function isSalesReturnBill(bill: Record<string, unknown>): boolean {
+  return String(bill.billType ?? bill.bill_type ?? "").toLowerCase() === "sales_return";
+}
+
+/** Refunds carry negative tender rows and may reduce debt without any tender. */
+export function resolveReturnRefundMode(bill: Record<string, unknown>): string {
+  const explicit = String(bill.refundMode ?? bill.refund_mode ?? bill.paymentMode ?? bill.payment_mode ?? "").toLowerCase();
+  if (explicit) return explicit === "credit" ? "udhar" : explicit;
+  const payments = Array.isArray(bill.payments) ? bill.payments as Array<Record<string, unknown>> : [];
+  const modes = [...new Set(payments.filter((payment) => num(payment.amount) < 0)
+    .map((payment) => String(payment.mode ?? "").toLowerCase()).filter(Boolean))];
+  return modes.length > 1 ? "split" : modes[0] ?? "cash";
+}
+
 export function billOutstandingAmount(bill: Record<string, unknown>): number {
   return Math.max(
     num(bill.creditAmount ?? bill.credit_amount),
@@ -30,6 +44,7 @@ export function billOutstandingAmount(bill: Record<string, unknown>): number {
 }
 
 export function resolveBillPaymentMode(bill: Record<string, unknown>): BillPaymentModeName {
+  if (isSalesReturnBill(bill)) return resolveReturnRefundMode(bill);
   const status = String(bill.paymentStatus ?? bill.payment_status ?? "").toLowerCase();
   if (billOutstandingAmount(bill) > 0 || CREDIT_STATUSES.includes(status)) return "udhar";
 

@@ -16,6 +16,7 @@ import {
   isMergedBillTwin,
 } from "@/features/core/sync/bill-reconciliation";
 import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
+import { isSalesReturnBill } from "@/features/core/bills/payment-mode";
 
 type RecordLike = Record<string, unknown>;
 
@@ -385,10 +386,6 @@ function billPaid(bill: RecordLike): number {
  * no payment rows at all, so clamping it left the udhar slice showing the sale
  * in full while TOTAL SALES beside it had already dropped by the refund.
  */
-function isSalesReturnBill(bill: RecordLike): boolean {
-  return String(bill.billType ?? bill.bill_type ?? "").toLowerCase() === "sales_return";
-}
-
 function billCredit(bill: RecordLike): number {
   const signed = isSalesReturnBill(bill);
   const clamp = (value: number) => (signed ? value : Math.max(0, value));

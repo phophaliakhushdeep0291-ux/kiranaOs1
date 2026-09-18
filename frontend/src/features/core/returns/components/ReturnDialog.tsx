@@ -13,7 +13,7 @@ import { apiRequest } from "@/lib/api/http";
 import { useOfflineStatus } from "@/features/core/sync";
 import { BillPaymentMode, type BillInput } from "@/types/api";
 import { ArrowLeftRight, Copy, Gift, Plus, Trash2 } from "lucide-react";
-import { consumeReturnLine, unlinkedReturnLineAmount, type ReturnLineBalance } from "@/features/core/returns/return-math";
+import { consumeReturnLine, returnPreviewQuantity, unlinkedReturnLineAmount, type ReturnLineBalance } from "@/features/core/returns/return-math";
 
 type ReturnRefundMode = RefundMode | "gift_card";
 /** Exchanges settle in immediate tender only — udhar/store-credit stay plain returns. */
@@ -90,10 +90,15 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
   const [exchangeLines, setExchangeLines] = useState<ExchangeLine[]>([]);
   const [exchangeProductId, setExchangeProductId] = useState("");
 
-  const getQty = (i: number) => (qty[i] ?? 0);
+  const getQty = (i: number) => {
+    const requested = qty[i] ?? 0;
+    const balance = lines[i]?.returnBalance;
+    return balance ? returnPreviewQuantity(requested, balance) : requested;
+  };
   const refundTotal = useMemo(
     () => roundMoney(lines.reduce((sum, line, i) => {
       const returnQty = getQty(i);
+      if (returnQty <= 0) return sum;
       if (line.returnBalance) {
         const linked = consumeReturnLine({ ...line.returnBalance }, returnQty);
         return sum + linked.subtotal + (gstMode === "exclusive" ? linked.gst : 0);

@@ -320,7 +320,7 @@ async function updatePurchaseLocalUnlocked(displayRow: SupplierDueRow, input: Pu
   });
   await offlineDB.transaction(["purchase_bills", "inventory_movements", "sync_outbox", "products"], async (tx) => {
     for (const match of matches) {
-      let patched = withPurchasePatch(match.row, input);
+      let patched: MutableRow = { ...withPurchasePatch(match.row, input), local_purchase_operation_id: outbox.clientEventId };
       if (newBaseSigned != null && match.tableName === "inventory_movements") {
         patched = { ...patched, quantityDelta: newBaseSigned, quantity_delta: newBaseSigned };
       }
@@ -411,7 +411,7 @@ async function recordPurchasePaymentLocalUnlocked(
     payload: { ...locator, paymentId, amount, mode: payment.mode, reference: payment.reference?.trim() || null, paidAt: now },
   });
   await offlineDB.transaction(["purchase_bills", "inventory_movements", "payments", "sync_outbox"], async (tx) => {
-    for (const match of matches) await tx.put(match.tableName, withPurchasePatch(match.row, patch));
+    for (const match of matches) await tx.put(match.tableName, { ...withPurchasePatch(match.row, patch), local_purchase_operation_id: outbox.clientEventId });
     await tx.put("payments", paymentRow);
     await tx.enqueueOutboxOperation(outbox);
   });
@@ -476,9 +476,9 @@ async function reverseSupplierPaymentLocalUnlocked(
   const patch: PurchasePatchInput = { supplierName: displayRow.supplierName, invoiceNumber: displayRow.invoiceNumber === "-" ? "" : displayRow.invoiceNumber, amount: currentAmount, paid, due, paymentMode: displayRow.paymentMode, status: paid > 0 ? "partial" : "due" };
   // The supplier-payment ledger is keyed by the immutable client payment id. Sync's generic
   // `server_id` may point at the reconciled purchase history, so it is not a payment locator.
-  const outbox = buildOutboxOperation({ entity_type: "payment", entity_id: paymentId, operation_type: "REVERSE_SUPPLIER_PAYMENT", payload: { paymentId, reason, ownerPin: input.ownerPin } });
+  const outbox = buildOutboxOperation({ entity_type: "payment", entity_id: paymentId, operation_type: "REVERSE_SUPPLIER_PAYMENT", payload: { ...buildPurchaseSyncPayload(displayRow, patch, matches), paymentId, reason, ownerPin: input.ownerPin } });
   await offlineDB.transaction(["purchase_bills", "inventory_movements", "payments", "sync_outbox"], async (tx) => {
-    for (const match of matches) await tx.put(match.tableName, withPurchasePatch(match.row, patch));
+    for (const match of matches) await tx.put(match.tableName, { ...withPurchasePatch(match.row, patch), local_purchase_operation_id: outbox.clientEventId });
     await tx.put("payments", { ...currentPayment, status: "reversed", reversed_at: new Date().toISOString(), reversal_reason: reason, sync_status: "pending_sync" });
     await tx.enqueueOutboxOperation(outbox);
   });
@@ -518,6 +518,7 @@ async function deletePurchaseLocalUnlocked(displayRow: SupplierDueRow, input: { 
     for (const match of matches) {
       await tx.put(match.tableName, {
         ...withLocalPurchaseOverride(match.row, "deleted"),
+        local_purchase_operation_id: outbox.clientEventId,
         deleted_at: match.row.deleted_at ?? now,
         deletedAt: match.row.deletedAt ?? now,
         updated_at: now,

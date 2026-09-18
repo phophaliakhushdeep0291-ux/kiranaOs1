@@ -1868,6 +1868,45 @@ if (ctx.skip) {
       assert.equal(disabled.code, "GST_PROVIDER_NOT_CONFIGURED");
     });
 
+    test("credit returns cannot erase a refund above the remaining customer debt", async () => {
+      const { tenant, auth } = await ownerContext();
+      const customer = await createCustomer(ctx.db, tenant.shop.id);
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 20 });
+      const sale = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        customerId: customer.id, customerName: customer.name, quantity: 2,
+        buyerPaidAmount: 0, payments: [{ mode: "credit", amount: 40 }],
+      }), { token: auth.accessToken }), 201);
+      assertSuccess(await ctx.post(`/api/customers/${customer.id}/udhar-payment`, {
+        amount: 20, mode: "cash", idempotencyKey: "partial-before-return",
+      }, { token: auth.accessToken }));
+      const counts = async () => ({
+        bills: await ctx.db.bill.count({ where: { shopId: tenant.shop.id } }),
+        movements: await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id } }),
+        ledger: await ctx.db.udharLedger.count({ where: { shopId: tenant.shop.id } }),
+        stock: (await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty,
+        debt: (await ctx.db.customer.findUnique({ where: { id: customer.id } })).udharAmount,
+      });
+      const before = await counts();
+      const payload = {
+        refundMode: "udhar", customerId: customer.id, returnOfBillId: sale.id,
+        reason: "Return after partial credit collection",
+        items: [{ originalBillItemId: sale.items[0].id, productId: product.id, name: product.name,
+          quantity: 2, enteredUnit: "piece", ratePerRateUnit: 20 }],
+      };
+      const rejected = assertFailure(await ctx.post("/api/bills/returns", payload,
+        { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
+      assert.equal(rejected.code, "RETURN_EXCEEDS_UDHAR");
+      assert.deepEqual(await counts(), before, "rejected return must roll back all financial and stock writes");
+      const accepted = assertSuccess(await ctx.post("/api/bills/returns", {
+        ...payload, clientBillId: "return-remaining-credit", idempotencyKey: "return-remaining-credit",
+        items: [{ ...payload.items[0], quantity: 1 }],
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(accepted.grandTotal, -20);
+      assert.equal((await counts()).debt, 0);
+      assert.equal((await counts()).stock, 9);
+      assert.equal(await ctx.db.udharLedger.count({ where: { shopId: tenant.shop.id, mode: "system_repair" } }), 0);
+    });
+
     test("creates authoritative GST credit notes from immutable original sale lines", async () => {
       const { tenant, auth } = await ownerContext();
       const customer = await createCustomer(ctx.db, tenant.shop.id, {

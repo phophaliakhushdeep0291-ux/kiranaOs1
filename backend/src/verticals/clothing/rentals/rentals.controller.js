@@ -89,6 +89,13 @@ export async function cancel(req, res, next) {
   } catch (err) { next(err); }
 }
 
+export async function settle(req, res, next) {
+  try {
+    const booking = await svc.settleRental(req.shopId, req.params.id, req.body, { userId: req.user?.userId, req });
+    res.json({ success: true, data: booking });
+  } catch (err) { next(err); }
+}
+
 export async function remove(req, res, next) {
   try {
     const booking = await svc.softDeleteRental(req.shopId, req.params.id);

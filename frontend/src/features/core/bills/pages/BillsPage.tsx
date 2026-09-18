@@ -64,6 +64,7 @@ import { useAuth } from "@/features/core/auth/useAuth";
 import { billRecordToShareInput, resolveBillCustomerMobile, shareBillOnWhatsapp } from "@/features/core/bills/share";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { cn } from "@/lib/utils";
+import { isSalesReturnBill, resolveReturnRefundMode } from "@/features/core/bills/payment-mode";
 
 interface BillRecord extends Bill, Record<string, unknown> {}
 
@@ -112,6 +113,7 @@ const modeMeta = (t: Translate): Record<string, { label: string; chip: string; c
   split: { label: t("billing.pay.split"), chip: CHIP_TONES.blue, color: "var(--brand)" },
   udhar: { label: t("billing.bills.credit"), chip: CHIP_TONES.amber, color: "#ff7a1a" },
   bank: { label: t("billing.bills.bankTransfer"), chip: CHIP_TONES.blue, color: "#0ea5e9" },
+  gift_card: { label: t("billing.bills.storeCredit"), chip: CHIP_TONES.violet, color: "#0f9f78" },
 });
 
 const STATUS_CLS: Record<string, string> = {
@@ -189,6 +191,7 @@ function syncStatusOf(bill: BillRecord) {
 
 function paymentStatusOf(bill: BillRecord, t: Translate) {
   if (bill.status === "cancelled") return "Cancelled";
+  if (isSalesReturnBill(bill)) return t("billing.bills.returnRecorded");
   const paid = billPaid(bill);
   const credit = billCredit(bill);
   const total = billTotal(bill);
@@ -199,6 +202,7 @@ function paymentStatusOf(bill: BillRecord, t: Translate) {
 }
 
 function paymentModeOf(bill: BillRecord) {
+  if (isSalesReturnBill(bill)) return resolveReturnRefundMode(bill);
   const payments = Array.isArray(bill.payments) ? bill.payments.map(asRecord) : [];
   const nonCreditModes = Array.from(new Set(payments
     .filter((p) => String(p.mode ?? "") !== "credit" && readNumber(p.amount, 0) > 0)
@@ -226,7 +230,8 @@ function modeLabel(mode: string, t: Translate) {
   return modeMeta(t)[mode]?.label ?? mode.charAt(0).toUpperCase() + mode.slice(1);
 }
 
-function billTypeOf(bill: BillRecord) {
+function billTypeOf(bill: BillRecord, t: Translate) {
+  if (isSalesReturnBill(bill)) return t("billing.bills.returnRefund");
   if (isEstimateBill(bill)) return "Estimate";
   const raw = String(bill.saleType ?? bill.billType ?? "retail").toLowerCase();
   if (raw === "wholesale") return "Wholesale";
@@ -542,7 +547,7 @@ export default function BillsPage() {
       const key = paymentModeOf(bill);
       totals.set(key, (totals.get(key) ?? 0) + billTotal(bill));
     }
-    const order = ["cash", "upi", "card", "split", "udhar", "bank"];
+    const order = ["cash", "upi", "card", "split", "udhar", "bank", "gift_card"];
     return order
       .map((key) => ({ key, value: totals.get(key) ?? 0, ...modeMeta(t)[key] }))
       .filter((row) => row.value > 0);
@@ -556,6 +561,8 @@ export default function BillsPage() {
       ? t("billing.bills.activity.estimateSaved", { customer })
       : bill.status === "cancelled"
       ? t("billing.bills.activity.billCancelled", { customer })
+      : isSalesReturnBill(bill)
+      ? t("billing.bills.returnActivity", { customer })
       : status === "Udhar"
         ? t("billing.bills.activity.udharCreated", { customer })
         : status === "Partial"
@@ -849,7 +856,7 @@ export default function BillsPage() {
                   <article key={bill.id} className={cn("rounded-[16px] border border-[#e4ebf4] bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]", deleted && "opacity-70")}>
                     <div className="flex items-start justify-between gap-3">
                       <Link href={`/bills/${bill.id}`} className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-extrabold text-[var(--brand)]">{t("billing.bills.billNo", { number: compactBillNo(billNo(bill)) })}</p>
+                        <p className="truncate text-[14px] font-extrabold text-[var(--brand)]">{isSalesReturnBill(bill) ? billNo(bill) : t("billing.bills.billNo", { number: compactBillNo(billNo(bill)) })}</p>
                         <p className="mt-1 truncate text-xs font-bold text-[var(--brand-ink)]">{bill.customerName || t("billing.bills.walkInCustomer")}</p>
                         <p className="mt-0.5 text-[11px] font-medium text-[#71809b]">{date.date} {date.time ? `• ${date.time}` : ""} • {itemsCount(bill) || 0} items</p>
                       </Link>
@@ -860,7 +867,7 @@ export default function BillsPage() {
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <ModeBadge mode={mode} />
-                      <span className="rounded-[6px] bg-[var(--brand-soft)] px-2 py-1 text-[10px] font-black text-[var(--brand)]">{billTypeOf(bill)}</span>
+                      <span className="rounded-[6px] bg-[var(--brand-soft)] px-2 py-1 text-[10px] font-black text-[var(--brand)]">{billTypeOf(bill, t)}</span>
                       <SyncBadgeMini sync={sync} />
                     </div>
                     {/* This is the phone card's whole action set, so each button
@@ -946,7 +953,7 @@ export default function BillsPage() {
                         </td>
                         <td className="px-4 py-2.5 text-right font-bold">{itemsCount(bill) || "-"}</td>
                         <td className="px-4 py-2.5"><ModeBadge mode={mode} /></td>
-                        <td className="px-4 py-2.5"><span className="rounded-[5px] bg-[var(--brand-soft)] px-2 py-1 text-[10px] font-black text-[var(--brand)]">{billTypeOf(bill)}</span></td>
+                        <td className="px-4 py-2.5"><span className="rounded-[5px] bg-[var(--brand-soft)] px-2 py-1 text-[10px] font-black text-[var(--brand)]">{billTypeOf(bill, t)}</span></td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right font-black text-[var(--brand-ink)]">{money(billTotal(bill))}</td>
                         <td className="px-4 py-2.5"><StatusBadge status={status} /></td>
                         <td className="px-4 py-2.5 font-semibold">{staffNameOf(bill, staffFallback)}</td>

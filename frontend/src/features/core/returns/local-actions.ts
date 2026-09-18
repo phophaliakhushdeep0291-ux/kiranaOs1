@@ -11,6 +11,8 @@ import { makeLocalEntity, readNumber, roundMoney } from "@/lib/offline/actions/u
 import { normaliseLocalCustomer } from "@/features/core/customers/local-actions";
 import { buildAuditLogOutboxInput, buildAuditLogRow } from "@/features/core/audit-logs/local-actions";
 import { buildReturnLineBalances, consumeReturnLine } from "@/features/core/returns/return-math";
+import { withCustomerFinancialLock } from "@/features/core/ledger/customer-financial-lock";
+import { dedupeBillItemsForDisplay, dedupeBillsForDisplay } from "@/features/core/sync/bill-reconciliation";
 import type { Bill, Customer, Product } from "@/types/api";
 
 const BILL_CACHE_KEY = "bills";
@@ -74,7 +76,14 @@ function findCachedProduct(productId: string | undefined): Product | undefined {
  * is queued as a CREATE_SALE_RETURN outbox op; the server recomputes authoritative
  * money/stock on sync. Owner PIN is required (re-verified server-side).
  */
-export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promise<Bill> {
+export function createSaleReturnLocalFirst(input: SaleReturnInput): Promise<Bill> {
+  if (input.refundMode === "udhar" && input.customerId) {
+    return withCustomerFinancialLock(input.customerId, () => createSaleReturnLocalUnlocked(input));
+  }
+  return createSaleReturnLocalUnlocked(input);
+}
+
+async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bill> {
   const items = (input.items ?? [])
     .filter((item) => readNumber(item.quantity, 0) > 0)
     // enteredUnit is mandatory server-side (toBaseQty). A quick/standalone return may omit it,
@@ -103,8 +112,9 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
         offlineDB.getAll<Record<string, unknown>>("bill_items").catch(() => []),
       ])
     : [[], []];
+  const reconciledBills = dedupeBillsForDisplay(storedBills, { includeUserDeleted: true });
   const originalBill = input.originalBillId
-    ? storedBills.find((row) => row.id === input.originalBillId || row.local_id === input.originalBillId || row.server_id === input.originalBillId)
+    ? reconciledBills.find((row) => row.id === input.originalBillId || row.local_id === input.originalBillId || row.server_id === input.originalBillId)
     : undefined;
   const gstMode = originalBill?.billType === "estimate" ? "none" : originalBill?.gstMode ?? input.gstMode ?? "inclusive";
   const recordIds = (record: Record<string, unknown>) => new Set([
@@ -113,10 +123,10 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
   ].map((value) => String(value ?? "")).filter(Boolean));
   const originalIds = originalBill ? recordIds(originalBill) : new Set<string>();
   const originalRows = originalBill
-    ? storedBillItems.filter((row) => originalIds.has(String(row.billId ?? row.bill_id ?? row.localBillId ?? row.local_bill_id ?? "")))
+    ? dedupeBillItemsForDisplay(storedBillItems.filter((row) => originalIds.has(String(row.billId ?? row.bill_id ?? row.localBillId ?? row.local_bill_id ?? ""))), Math.abs(readNumber(originalBill?.subtotal, 0)))
     : [];
   const activePreviousReturns = originalBill
-    ? storedBills.filter((row) => {
+    ? reconciledBills.filter((row) => {
         const returnOf = String(row.returnOfBillId ?? row.return_of_bill_id ?? "");
         return originalIds.has(returnOf)
           && String(row.billType ?? row.bill_type ?? "") === "sales_return"
@@ -145,8 +155,8 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
           return {
             gst: Math.abs(readNumber(returnBill.gst, 0)),
             gstMode: (returnBill.gstMode ?? returnBill.gst_mode ?? gstMode) as "inclusive" | "exclusive" | "none",
-            items: storedBillItems
-              .filter((row) => returnIds.has(String(row.billId ?? row.bill_id ?? row.localBillId ?? row.local_bill_id ?? "")))
+            items: dedupeBillItemsForDisplay(storedBillItems
+              .filter((row) => returnIds.has(String(row.billId ?? row.bill_id ?? row.localBillId ?? row.local_bill_id ?? ""))), Math.abs(readNumber(returnBill.subtotal, 0)))
               .map((row) => ({
                 originalBillItemId: String(row.originalBillItemId ?? row.original_bill_item_id ?? "") || null,
                 quantity: Math.abs(readNumber(row.quantity, 0)),
@@ -224,10 +234,19 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
   const refundAmount = roundMoney(grandTotalMagnitude);
 
   // Resolve customer (for udhar refund) from cache; reduce local balance immediately.
-  const cachedCustomers = readInstantCache<Customer[]>(CUSTOMER_CACHE_KEY, []).map(normaliseLocalCustomer) as Array<Customer & Record<string, unknown>>;
+  const storedCustomers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers");
+  const cachedCustomers = storedCustomers.map(normaliseLocalCustomer) as Array<Customer & Record<string, unknown>>;
   const existingCustomer = input.customerId
     ? cachedCustomers.find((c) => c.id === input.customerId || c.local_id === input.customerId || c.server_id === input.customerId)
     : undefined;
+
+  if (refundMode === "udhar") {
+    if (!existingCustomer) throw new Error("Customer is not available on this device. Refresh the customer list before returning to udhar.");
+    const outstanding = roundMoney(Math.max(0, readNumber(existingCustomer.udharAmount ?? existingCustomer.totalUdhar, 0)));
+    if (refundAmount > outstanding) {
+      throw new Error(`Return ₹${refundAmount} exceeds the outstanding udhar ₹${outstanding}. Reduce the return amount or choose another refund method.`);
+    }
+  }
 
   const negativeBill = makeLocalEntity({
     id: billId,
@@ -318,8 +337,15 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
       totalUdhar: nextBalance,
       updatedAt: now,
     }) as Customer & Record<string, unknown>;
+    updatedCustomer.udhar_amount = nextBalance;
+    updatedCustomer.total_udhar = nextBalance;
+    updatedCustomer.udharAmountPaise = Math.round(nextBalance * 100);
     updatedCustomer.updated_at = now;
-    updatedCustomer.sync_status = "pending_sync";
+    // This is a ledger projection, not an independent customer-profile edit.
+    // The return owns the queued write; preserve real profile edits while
+    // allowing the server balance to merge after the return is acknowledged.
+    updatedCustomer.sync_status = String(existingCustomer.sync_status ?? "synced");
+    updatedCustomer.balance_derived_from_local_ledger = true;
     const ledgerId = `ledger_${billId}_return`;
     udharLedgerEntry = makeLocalEntity({
       id: ledgerId,

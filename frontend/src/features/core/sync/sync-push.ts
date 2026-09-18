@@ -1,3 +1,4 @@
+import { acknowledgeCompletedPurchaseRows } from "@/features/core/sync/purchase-acknowledgement";
 import {
   filterRowsForCurrentScope,
   offlineDB,
@@ -361,6 +362,14 @@ async function discardRejectedOptimisticAdjustment(
   }
 }
 
+/** Operations whose optimistic purchase/stock rows are released once they settle. */
+const PURCHASE_ACK_OPERATIONS = new Set([
+  "UPDATE_PURCHASE_BILL",
+  "DELETE_PURCHASE_BILL",
+  "RECORD_SUPPLIER_PAYMENT",
+  "REVERSE_SUPPLIER_PAYMENT",
+]);
+
 async function handlePushResults(
   prepared: PreparedOperation[],
   results: SyncPushEventResult[],
@@ -381,6 +390,7 @@ async function handlePushResults(
   // recounts of a 575-row queue on top of 200 writes. They all end in the same
   // state, so they settle together at the end of the batch.
   const settled: PendingSyncEvent[] = [];
+  let needsPurchaseAck = false;
   let pushed = 0;
   let failed = 0;
   let conflicts = 0;
@@ -430,6 +440,10 @@ async function handlePushResults(
         await markEntitySynced(item.event, serverEntity, serverId);
       }
       settled.push(item.event);
+      // Deferred with the settle below: acknowledging a purchase row requires
+      // its operation to already read SYNCED, which now happens once the batch
+      // finishes rather than mid-loop.
+      if (PURCHASE_ACK_OPERATIONS.has(item.event.operation_type)) needsPurchaseAck = true;
       pushed += 1;
       continue;
     }
@@ -535,6 +549,9 @@ async function handlePushResults(
   // And one queue write for everything the server accepted. Last, so a row is
   // only called settled once its merge and its references have both landed.
   if (settled.length > 0) await updateOutboxStatus(settled, "SYNCED");
+  // Only now: a purchase row is released when its operation reads SYNCED, which
+  // is what the line above just made true.
+  if (needsPurchaseAck) await acknowledgeCompletedPurchaseRows();
 
   return { pushed, failed, conflicts, deferred };
 }

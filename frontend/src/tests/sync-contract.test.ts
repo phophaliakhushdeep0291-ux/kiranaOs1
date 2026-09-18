@@ -329,6 +329,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { syncPush } from "@/features/core/sync/api";
+import { acknowledgeCompletedPurchaseRows } from "@/features/core/sync/purchase-acknowledgement";
 import {
   pullServerChanges,
   pushPendingOutboxOperations,
@@ -510,6 +511,73 @@ describe("sync backend contract", () => {
         server_version: "52",
       },
     });
+  });
+
+  function seedSupplierPayment(status = "PENDING", marker: string | null = "op_supplier_1") {
+    const event = seedProductOutbox({
+      clientEventId: "op_supplier_1", op_id: "op_supplier_1", idempotency_key: "op_supplier_1",
+      type: "RECORD_SUPPLIER_PAYMENT", operation_type: "RECORD_SUPPLIER_PAYMENT",
+      entity_type: "payment", entity_id: "supplier_payment_1", status,
+      sync_status: status === "SYNCED" ? "synced" : "pending_sync",
+      last_attempt_at: "2026-06-06T12:00:00.000Z",
+      payload: { paymentId: "supplier_payment_1", amount: 30, mode: "upi",
+        purchaseHistoryId: "server_purchase_1", stockLedgerId: "server_stock_1",
+        affectedRows: [{ tableName: "purchase_bills", id: "server_purchase_1" },
+          { tableName: "inventory_movements", id: "server_stock_1" }] },
+    });
+    for (const [table, id] of [["purchase_bills", "server_purchase_1"], ["inventory_movements", "server_stock_1"]]) {
+      dbState.putInto(table, { ...dbState.scope, id, server_id: id, action: "purchase",
+        billAmount: 50, purchasePaidAmount: 50, purchaseDueAmount: 0, quantityDelta: 5,
+        sync_status: "pending_sync", local_purchase_action: "paid",
+        localPurchaseAction: "paid", local_purchase_operation_id: marker,
+        local_purchase_override_at: "2026-06-06T11:58:00.000Z" });
+    }
+    dbState.putInto("payments", { ...dbState.scope, id: "supplier_payment_1", amount: 30, sync_status: "pending_sync" });
+    return event;
+  }
+
+  it("acknowledges purchase and stock projections after supplier payment, then accepts stock pull", async () => {
+    const event = seedSupplierPayment();
+    mockedSyncPush.mockResolvedValueOnce({ results: [{ op_id: event.op_id, status: "SYNCED",
+      result: { paymentId: "supplier_payment_1", ledgerEntryId: "server_supplier_ledger_1", purchaseHistoryId: "server_purchase_1" } }] });
+    expect(await pushPendingOutboxOperations()).toEqual(expect.objectContaining({ pushed: 1, failed: 0 }));
+    for (const table of ["purchase_bills", "inventory_movements"]) {
+      expect(scopedRows(table)[0].sync_status).toBe("synced");
+      expect(scopedRows(table)[0]).not.toHaveProperty("local_purchase_action");
+      expect(scopedRows(table)[0]).not.toHaveProperty("localPurchaseAction");
+      expect(scopedRows(table)[0].purchasePaidAmount).toBe(50);
+    }
+    syncPullMock.mockResolvedValueOnce({ changes: [{ entity_type: "stock_ledger", entity: {
+      id: "server_stock_1", productId: "server_product_1", quantityDelta: 5,
+    } }], cursor: "after_supplier_payment" });
+    expect(await pullServerChanges()).toEqual(expect.objectContaining({ conflicts: 0 }));
+    expect(scopedRows("inventory_movements")[0].quantityDelta).toBe(5);
+  });
+
+  it.each(["PENDING", "SYNCING", "FAILED", "CONFLICT"])("preserves a newer %s supplier payment", async (status) => {
+    seedSupplierPayment("SYNCED");
+    dbState.putInto("sync_outbox", { ...dbState.rows("sync_outbox")[0], clientEventId: "op_supplier_2", op_id: "op_supplier_2", status });
+    expect(await acknowledgeCompletedPurchaseRows()).toBe(0);
+    expect(scopedRows("inventory_movements")[0].sync_status).toBe("pending_sync");
+  });
+
+  it("preserves unknown operation markers and another shop's records", async () => {
+    seedSupplierPayment("SYNCED", "op_unknown");
+    dbState.putInto("inventory_movements", { ...scopedRows("inventory_movements")[0],
+      id: "other_shop_stock", tenant_id: "other_shop", local_purchase_operation_id: "op_supplier_1" });
+    expect(await acknowledgeCompletedPurchaseRows()).toBe(0);
+    expect(dbState.rows("inventory_movements").every((row) => row.sync_status === "pending_sync")).toBe(true);
+  });
+
+  it("recovers legacy projection flags only when the acknowledgement follows the override", async () => {
+    seedSupplierPayment("SYNCED", null);
+    expect(await acknowledgeCompletedPurchaseRows()).toBe(2);
+    expect(await acknowledgeCompletedPurchaseRows()).toBe(0);
+    seedSupplierPayment("SYNCED", null);
+    for (const table of ["purchase_bills", "inventory_movements"]) {
+      dbState.rows(table)[0].local_purchase_override_at = "2026-06-06T12:01:00.000Z";
+    }
+    expect(await acknowledgeCompletedPurchaseRows()).toBe(0);
   });
 
   it("POST /sync/push successful CREATE_BILL maps local IDs to server IDs", async () => {

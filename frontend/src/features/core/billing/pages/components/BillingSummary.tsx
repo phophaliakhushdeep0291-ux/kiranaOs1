@@ -502,6 +502,7 @@ export function BillingSummary({
                     <Input
                       ref={customerNameInputRef}
                       data-testid="input-customer-name"
+                      aria-label={t("billing.summary.namePlaceholder", { credit: words.credit })}
                       className="h-9 text-sm"
                       placeholder={t("billing.summary.namePlaceholder", { credit: words.credit })}
                       value={customerName}
@@ -509,6 +510,7 @@ export function BillingSummary({
                     />
                     <Input
                       data-testid="input-customer-mobile"
+                      aria-label={t("billing.summary.mobilePlaceholder")}
                       className="h-9 text-sm"
                       inputMode="numeric"
                       placeholder={t("billing.summary.mobilePlaceholder")}

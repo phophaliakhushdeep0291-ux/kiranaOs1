@@ -136,7 +136,7 @@ describe("stock adjustment transaction safety", () => {
       expect.arrayContaining(["inventory_movements", "products", "local_audit_logs", "sync_outbox", "settings"]),
       expect.any(Function),
     );
-    expect(tableRows("products")[0]).toEqual(expect.objectContaining({ id: "product_1", stockBaseQty: 15, sync_status: "pending_sync" }));
+    expect(tableRows("products")[0]).toEqual(expect.objectContaining({ id: "product_1", stockBaseQty: 15, sync_status: "synced" }));
     expect(tableRows("inventory_movements")).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: "stock_purchase_1",

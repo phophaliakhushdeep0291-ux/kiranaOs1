@@ -20,6 +20,7 @@ import {
   Sparkles, Store, Thermometer, Trash2, Truck, Users, Utensils, Wallet, Wrench, X, Zap,
 } from "lucide-react";
 import { listExpenses, getExpenseOverview } from "@/features/core/expenses/api";
+import { expenseDateInput, expenseDateTimestamp } from "@/features/core/expenses/dates";
 import { cacheServerExpenses, createExpenseLocalFirst, deleteExpenseLocalFirst, listLocalExpenses, mergeExpenseSnapshots, updateExpenseLocalFirst } from "@/features/core/expenses/local-actions";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
@@ -501,12 +502,12 @@ function ExpensePanel({ open, editing, categories, saving, width, onResizeStart,
       category: editing?.category ?? categories[0],
       paymentMode: (editing?.paymentMode as ExpenseFormData["paymentMode"]) ?? "cash",
       status: (editing?.status as ExpenseFormData["status"]) ?? "paid",
-      spentAt: (editing?.spentAt ?? new Date().toISOString()).slice(0, 10),
+      spentAt: expenseDateInput(editing?.spentAt),
       vendor: editing?.vendor ?? "",
       notes: editing?.notes ?? "",
       recurring: Boolean(editing && editing.recurringInterval !== "none"),
       recurringInterval: (editing?.recurringInterval && editing.recurringInterval !== "none" ? editing.recurringInterval : "monthly") as ExpenseFormData["recurringInterval"],
-      nextDueOn: editing?.nextDueOn ? editing.nextDueOn.slice(0, 10) : "",
+      nextDueOn: editing?.nextDueOn ? expenseDateInput(editing.nextDueOn) : "",
     },
   });
   const recurring = form.watch("recurring");
@@ -521,11 +522,11 @@ function ExpensePanel({ open, editing, categories, saving, width, onResizeStart,
       category: v.category,
       paymentMode: v.paymentMode,
       status: v.status,
-      spentAt: new Date(v.spentAt).toISOString(),
+      spentAt: expenseDateTimestamp(v.spentAt),
       vendor: v.vendor?.trim() || undefined,
       notes: v.notes?.trim() || undefined,
       recurringInterval: v.recurring ? v.recurringInterval : "none",
-      nextDueOn: v.recurring && v.nextDueOn ? new Date(v.nextDueOn).toISOString() : undefined,
+      nextDueOn: v.recurring && v.nextDueOn ? expenseDateTimestamp(v.nextDueOn) : undefined,
     };
     onSubmit(data, editing ? ownerPin : undefined);
   }

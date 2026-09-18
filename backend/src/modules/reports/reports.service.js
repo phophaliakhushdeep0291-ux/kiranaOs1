@@ -220,9 +220,9 @@ function paymentModesForBill(bill) {
   return modes;
 }
 
-async function countPendingSync(shopId) {
+async function countPendingSync(shopId, client = db) {
   try {
-    return await db.offlineSyncEvent.count({
+    return await client.offlineSyncEvent.count({
       where: { shopId, status: { not: "synced" } },
     });
   } catch {
@@ -233,59 +233,59 @@ async function countPendingSync(shopId) {
 // ─────────────────────────────────────────────────────────────
 // DAILY CLOSING — shopkeeper dashboard report
 // ─────────────────────────────────────────────────────────────
-export async function getDailyClosing(shopId, { date, locationId, allLocations = false } = {}) {
+export async function getDailyClosing(shopId, { date, locationId, allLocations = false } = {}, client = db) {
   const day = date ? parseDateOnly(date) : new Date();
   const start = startOfDay(day);
   const end = endOfDay(day);
   const dateKey = date ?? formatDateInTimeZone(start, env.DAILY_CLOSING_TIMEZONE);
 
   const [activeBills, cancelledBills, roughBillsCount, oldUdharRecovered, pendingSyncCount, lowStockProducts, topProducts, purchaseReceipts, quickPurchases, cashExpenses, cashPurchaseReturns] = await Promise.all([
-    db.bill.findMany({
+    client.bill.findMany({
       where: activeSalesWhere(shopId, start, end, locationId),
       include: { payments: true },
     }),
-    db.bill.findMany({
+    client.bill.findMany({
       where: { shopId, ...(locationId && { locationId }), ...CANCELLED_BILL_FILTER, businessDate: { gte: start, lte: end } },
       select: { id: true, grandTotal: true },
     }),
-    db.bill.count({ where: { shopId, ...(locationId && { locationId }), billType: "estimate", deletedAt: null, businessDate: { gte: start, lte: end } } }),
-    db.udharLedger.findMany({
+    client.bill.count({ where: { shopId, ...(locationId && { locationId }), billType: "estimate", deletedAt: null, businessDate: { gte: start, lte: end } } }),
+    client.udharLedger.findMany({
       where: { shopId, ...(locationId && { locationId }), type: "payment", mode: { in: ["cash", "upi", "bank"] }, businessDate: { gte: start, lte: end }, reversedAt: null },
       select: { amount: true, mode: true },
     }),
-    countPendingSync(shopId),
-    db.product.findMany({
+    countPendingSync(shopId, client),
+    client.product.findMany({
       where: { shopId, deletedAt: null, lowStockThreshold: { gt: 0 } },
       select: { id: true, name: true, stockBaseQty: true, lowStockThreshold: true, baseUnit: true },
       orderBy: { stockBaseQty: "asc" },
       take: 20,
     }),
-    getTopProducts(shopId, { from: dateKey, to: dateKey, limit: 5, includeProfit: false, locationId }),
-    db.purchaseReceipt.findMany({
+    getTopProducts(shopId, { from: dateKey, to: dateKey, limit: 5, includeProfit: false, locationId }, client),
+    client.purchaseReceipt.findMany({
       where: { shopId, ...(locationId && { locationId }), createdAt: { gte: start, lte: end }, paidAmount: { gt: 0 }, paymentMode: "cash" },
       select: { paidAmount: true },
     }),
-    db.purchaseHistory.findMany({
+    client.purchaseHistory.findMany({
       where: { shopId, ...(locationId && { locationId }), purchaseReceiptId: null, createdAt: { gte: start, lte: end }, purchasePaidAmount: { gt: 0 }, purchasePaymentMode: "cash" },
       select: { purchasePaidAmount: true },
     }),
-    db.expense.findMany({
+    client.expense.findMany({
       where: { shopId, ...(locationId && { locationId }), deletedAt: null, status: "paid", paymentMode: "cash", spentAt: { gte: start, lte: end } },
       select: { amount: true },
     }),
-    db.purchaseReturn.findMany({
+    client.purchaseReturn.findMany({
       where: { shopId, ...(locationId && { locationId }), status: "active", refundMode: "cash", createdAt: { gte: start, lte: end }, refundAmount: { gt: 0 } },
       select: { refundAmount: true },
     }),
   ]);
 
-  const reportLocation = allLocations ? null : await resolveOperationalLocation(shopId, locationId);
+  const reportLocation = allLocations ? null : await resolveOperationalLocation(shopId, locationId, client);
   // One lookup for the whole list, not one per product. Bounded at 20 by the take
   // above, so this is smaller than the /inventory case it mirrors — but it is the
   // same shape, and the closing report runs at every till at end of day.
   const lowStockQuantities = allLocations
     ? null
-    : await getLocationQuantitiesByProduct(db, shopId, reportLocation, lowStockProducts);
+    : await getLocationQuantitiesByProduct(client, shopId, reportLocation, lowStockProducts);
   const lowStockAtLocation = lowStockQuantities
     ? lowStockProducts.map((product) => ({
       ...product,
@@ -301,7 +301,7 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
   // The comparison is done here rather than in the query because it is between two
   // columns of the same row, which Prisma cannot express in a where clause.
   const lowStockPacks = (
-    await db.productSellingUnit.findMany({
+    await client.productSellingUnit.findMany({
       where: {
         shopId,
         isActive: true,
@@ -778,12 +778,12 @@ export async function getMonthlyBreakdown(shopId, { year, untilMonth, locationId
 // ─────────────────────────────────────────────────────────────
 // TOP PRODUCTS by revenue/quantity
 // ─────────────────────────────────────────────────────────────
-export async function getTopProducts(shopId, { from, to, locationId, limit = DEFAULT_TOP_LIMIT, includeProfit = false } = {}) {
+export async function getTopProducts(shopId, { from, to, locationId, limit = DEFAULT_TOP_LIMIT, includeProfit = false } = {}, client = db) {
   const safeLimit = Math.min(Math.max(Number(limit) || DEFAULT_TOP_LIMIT, 1), MAX_TOP_LIMIT);
   const range = normalizeDateRange({ from, to });
   const billFilter = activeSalesWhere(shopId, range.start, range.end, locationId);
 
-  const items = await db.billItem.findMany({
+  const items = await client.billItem.findMany({
     where: { bill: billFilter },
     select: {
       name: true,

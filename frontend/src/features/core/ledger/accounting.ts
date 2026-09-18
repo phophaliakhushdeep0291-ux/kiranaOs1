@@ -78,10 +78,14 @@ export function normaliseLedgerType(type: unknown, sourceType?: unknown): Ledger
   if (raw === "CORRECTION" || raw === "PAYMENT_REVERSAL") return "CORRECTION";
   // Backend stores udhar bill entries as `debit` because debt is debited to the customer.
   // For our local statement sign rules, debit/credit bill debt must increase udhar.
-  if (raw === "BILL" || raw === "CREDIT" || raw === "DEBIT" || source === "BILL") return "BILL";
-  if (raw === "PAYMENT" || source === "PAYMENT") return "PAYMENT";
+  if (raw === "BILL" || raw === "CREDIT" || raw === "DEBIT") return "BILL";
+  if (raw === "PAYMENT") return "PAYMENT";
   if (raw === "ADJUSTMENT" || raw === "MANUAL_ADJUSTMENT") return "ADJUSTMENT";
   if (raw === "REFUND") return "REFUND";
+  // A source identifies the document, not the direction. A credit return is a
+  // PAYMENT sourced from a bill and must reduce debt, like its server echo.
+  if (source === "BILL") return "BILL";
+  if (source === "PAYMENT") return "PAYMENT";
   return "ADJUSTMENT";
 }
 

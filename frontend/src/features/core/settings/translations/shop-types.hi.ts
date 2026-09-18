@@ -10,6 +10,23 @@
 import type { shopTypesEn } from "./shop-types";
 
 export const shopTypesHi: Record<keyof typeof shopTypesEn, string> = {
+  "rental.collection.saved": "भुगतान दर्ज हुआ — किराये का बकाया चुक गया",
+  "rental.collection.failed": "भुगतान दर्ज नहीं हो सका",
+  "rental.collection.action": "भुगतान दर्ज करें",
+  "rental.collection.title": "किराये का भुगतान दर्ज करें",
+  "rental.collection.balance": "लेना बाकी",
+  "rental.collection.help": "बाकी किराया और शुल्क मिलने के बाद इसे दर्ज करें। सुरक्षा जमा अलग से लौटाएँ।",
+  "rental.collection.mode": "भुगतान का तरीका",
+  "rental.collection.reference": "संदर्भ (वैकल्पिक)",
+  "rental.collection.cash": "नकद",
+  "rental.collection.upi": "UPI",
+  "rental.collection.bank": "बैंक ट्रांसफर",
+  "rental.collection.card": "कार्ड",
+  "rental.collection.other": "अन्य",
+  "rental.collection.cancel": "रद्द करें",
+  "rental.collection.saving": "सहेज रहे हैं…",
+  "rental.collection.confirm": "पूरा भुगतान दर्ज करें",
+
   // ── किराना / जनरल स्टोर ───────────────────────────────────────────────────
   "shopType.kirana.label": "किराना / जनरल स्टोर",
   "shopType.kirana.description": "राशन, रोज़ का सामान, FMCG",

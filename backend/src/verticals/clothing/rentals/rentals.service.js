@@ -4,6 +4,8 @@ import { round2 } from "../../../utils/money.js";
 import { dateRangeForDateOnly, formatDateInTimeZone } from "../../../utils/dates.js";
 import { listProducts } from "../../../modules/products/products.service.js";
 import { registerCatalogAvailabilityFilter } from "../../../shared/catalog-availability.js";
+import { serializableTransaction } from "../../../lib/transactions.js";
+import { createAuditLog } from "../../../modules/audit/audit.service.js";
 
 /**
  * Cloth rental bookings.
@@ -428,6 +430,35 @@ export async function cancelRental(shopId, id, { reason } = {}) {
     include: { items: true },
   });
   return serialize(updated);
+}
+
+/** Close a returned booking's remaining rent/fees without reopening its stock hold. */
+export async function settleRental(shopId, id, data, { userId = null, req = null } = {}) {
+  return serializableTransaction(async (tx) => {
+    const booking = await tx.rentalBooking.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true } });
+    if (!booking) throw new AppError("Booking not found", 404);
+    if (booking.status !== "returned") throw new AppError("Return the items before recording final collection", 409, "RENTAL_BAD_STATUS");
+    const due = serialize(booking).balanceDue;
+    const amount = round2(data.amount);
+    const targetPaid = round2(data.expectedAdvancePaid + amount);
+    // An absolute target makes a retry after a lost response harmless. Returned
+    // bookings cannot be edited, so neither their charges nor their advance can
+    // change underneath a completed settlement.
+    if (due === 0 && round2(booking.advancePaid) === targetPaid) return serialize(booking);
+    if (round2(booking.advancePaid) !== round2(data.expectedAdvancePaid) || due !== amount) {
+      throw new AppError("The balance changed. Refresh the booking before recording collection.", 409, "RENTAL_BALANCE_CHANGED");
+    }
+    const updated = await tx.rentalBooking.update({ where: { id: booking.id }, data: { advancePaid: targetPaid }, include: { items: true } });
+    const audit = await createAuditLog({
+      shopId, userId, req, client: tx, module: "payments", action: "RENTAL_BALANCE_COLLECTED",
+      entityType: "RentalBooking", entityId: booking.id,
+      before: { advancePaid: booking.advancePaid, balanceDue: due },
+      after: { advancePaid: targetPaid, balanceDue: 0 },
+      metadata: { amount, paymentMode: data.paymentMode, reference: data.reference || null, bookingNumber: booking.bookingNumber },
+    });
+    if (!audit) throw new AppError("Collection was not saved because its audit record could not be stored", 503, "RENTAL_COLLECTION_AUDIT_FAILED");
+    return serialize(updated);
+  });
 }
 
 export async function softDeleteRental(shopId, id) {
