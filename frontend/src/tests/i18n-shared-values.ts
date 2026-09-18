@@ -26,6 +26,10 @@ export const SHARED_TRANSLATION_VALUES = new Set<string>([
   "Artha",
   // Protocol name in the webhook delivery table. Nobody writes it in Devanagari.
   "HTTP",
+  // The key-cap legend on the global search chip. It names the two keys the
+  // shopkeeper presses, and those keys are printed in Latin on the keyboard
+  // itself, so a Devanagari rendering would name nothing on the hardware.
+  "Ctrl K",
   // Order-channel badges. Both are read as Latin acronyms at a counter, the same
   // way UPI and GST above are.
   "POS",

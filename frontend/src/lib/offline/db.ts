@@ -507,6 +507,54 @@ function isOutboxPendingOrRetryable(event: PendingSyncEvent): boolean {
 
 export const MAX_AUTOMATIC_RETRY_ATTEMPTS = 12;
 
+/**
+ * Operations that carry money or stock movement. These are pushed before catalogue
+ * rows — see `outboxPushRank`.
+ */
+const MONEY_BEARING_OPERATIONS = new Set([
+  "CREATE_BILL",
+  "CREATE_SALE_RETURN",
+  "CANCEL_BILL_PENDING",
+  "SOFT_DELETE_BILL_PENDING",
+  "RESTORE_BILL_PENDING",
+  "RECORD_PAYMENT",
+  "REVERSE_PAYMENT",
+  "CREATE_LEDGER_ADJUSTMENT",
+  "RECORD_SUPPLIER_PAYMENT",
+  "REVERSE_SUPPLIER_PAYMENT",
+  "STOCK_PURCHASE",
+  "STOCK_PURCHASE_BATCH",
+  "STOCK_SALE",
+  "STOCK_DAMAGE",
+  "STOCK_CORRECTION",
+  "UPDATE_PURCHASE_BILL",
+  "DELETE_PURCHASE_BILL",
+  "CREATE_EXPENSE",
+  "UPDATE_EXPENSE",
+  "DELETE_EXPENSE",
+  "RECORD_DRAWER_COUNT",
+]);
+
+/**
+ * Push order: a row that carries money goes ahead of a row that carries catalogue.
+ *
+ * The queue used to be strict creation order, which is fine until a shop loads the
+ * 560-item starter catalogue in one click. The first real sale of that day is then
+ * queued behind ~560 product rows, and on the patchy connection these shops actually
+ * have it is the LAST thing to reach the server — the opposite of what matters if the
+ * device is lost or stolen before the queue drains.
+ *
+ * Reordering is safe because `preparePendingOperations` resolves dependencies by
+ * re-scanning (`collectUnmappedLocalIds` plus the `madeProgress` loop) rather than by
+ * trusting queue order: a bill whose offline-created product is not mapped yet is
+ * skipped on the first pass and picked up on the next, inside the same request.
+ * Relative order WITHIN a rank is still creation order, so two writes to the same row
+ * keep their sequence, and a bill and its later cancellation stay in order.
+ */
+export function outboxPushRank(event: Pick<PendingSyncEvent, "operation_type">): number {
+  return MONEY_BEARING_OPERATIONS.has(event.operation_type) ? 0 : 1;
+}
+
 function isOutboxPendingNow(
   event: PendingSyncEvent,
   now = Date.now(),
@@ -988,11 +1036,13 @@ class OfflineDBFacade {
     await this.init();
     const now = Date.now();
     const scope = getOfflineScope();
-    return dexieDB.sync_outbox
+    const due = await dexieDB.sync_outbox
       .where("[tenant_id+store_id]")
       .equals([scope.tenant_id, scope.store_id])
       .filter((event) => isOutboxPendingNow(event, now))
       .sortBy("createdAt");
+    // Stable: `sortBy` already ordered by creation time, so rows of equal rank keep it.
+    return due.sort((a, b) => outboxPushRank(a) - outboxPushRank(b));
   }
 
   async getPendingCount(): Promise<number> {

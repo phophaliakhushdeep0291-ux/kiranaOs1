@@ -1152,7 +1152,7 @@ export default function SyncStatusPage() {
       const row = await dexieDB.sync_conflicts.get(conflictId)
         ?? snapshot.conflicts.find((conflict) => conflict.id === conflictId);
       const scope = getOfflineScope();
-      if (row && (row.tenant_id !== scope.tenant_id || row.store_id !== scope.store_id)) throw new Error("Conflict not found");
+      if (row && (row.tenant_id !== scope.tenant_id || row.store_id !== scope.store_id)) throw new Error(t("sync.conflict.notFound"));
       let serverConflictId = typeof row?.server_conflict_id === "string" ? row.server_conflict_id : conflictId;
       if (row && !row.server_conflict_id) {
         const reported = await reportSyncConflict({

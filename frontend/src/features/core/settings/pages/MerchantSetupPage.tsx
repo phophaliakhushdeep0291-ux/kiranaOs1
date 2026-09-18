@@ -14,7 +14,8 @@ import {
   UsersRound,
 } from "lucide-react";
 import { offlineDB } from "@/lib/offline/db";
-import type { Shop } from "@/types/api";
+import type { Product, Shop } from "@/types/api";
+import { mergeProducts } from "@/features/core/products/queries";
 import type { BusinessType } from "@/features/core/settings/business-type-store";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +31,7 @@ import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import {
   MERCHANT_SETUP_KEY,
   buildMerchantSetupProgress,
+  countLiveRows,
   normaliseMerchantSetupState,
   type MerchantSetupFacts,
   type MerchantSetupState,
@@ -83,19 +85,22 @@ function businessTypeKeyOf(prefs?: Record<string, unknown>): string | undefined 
   return text(profile.businessTypeKey) || undefined;
 }
 
+
 async function loadFacts(shop?: Shop | null, prefs?: Record<string, unknown>): Promise<MerchantSetupFacts> {
   const [products, customers, suppliers, bills] = await Promise.all([
-    offlineDB.getAll("products").catch(() => []),
+    offlineDB.getAll<Product>("products").catch(() => [] as Product[]),
     offlineDB.getAll("customers").catch(() => []),
     offlineDB.getAll("suppliers").catch(() => []),
     offlineDB.getAll("bills").catch(() => []),
   ]);
   return {
     storeProfileReady: isStoreProfileReady(shop, prefs),
-    productCount: products.length,
-    customerCount: customers.length,
-    supplierCount: suppliers.length,
-    billCount: bills.length,
+    // Counted the way the catalogue screen counts, so the two never disagree:
+    // `mergeProducts` folds a server echo onto the device row it came from.
+    productCount: countLiveRows(mergeProducts([], products, true)),
+    customerCount: countLiveRows(customers),
+    supplierCount: countLiveRows(suppliers),
+    billCount: countLiveRows(bills),
     businessTypeKey: businessTypeKeyOf(prefs),
   };
 }
@@ -406,14 +411,14 @@ export default function MerchantSetupPage() {
           <Card>
             <CardHead title={t("settings.setup.readinessTitle")} sub={t("settings.setup.realCounts")} />
             <div className="space-y-3 px-5 pb-5">
-              {[
-                ["Products", facts.productCount],
-                ["Customers", facts.customerCount],
-                ["Suppliers", facts.supplierCount],
-                ["Bills created", facts.billCount],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between rounded-[10px] border border-[#eef2f8] px-3 py-2">
-                  <span className="text-[12px] font-semibold text-[#64748b]">{label}</span>
+              {([
+                ["settings.setup.count.products", facts.productCount],
+                ["settings.setup.count.customers", facts.customerCount],
+                ["settings.setup.count.suppliers", facts.supplierCount],
+                ["settings.setup.count.bills", facts.billCount],
+              ] as const).map(([labelKey, value]) => (
+                <div key={labelKey} className="flex items-center justify-between rounded-[10px] border border-[#eef2f8] px-3 py-2">
+                  <span className="text-[12px] font-semibold text-[#64748b]">{t(labelKey)}</span>
                   <span className="font-display text-[18px] font-black text-[var(--brand-ink)]">{value}</span>
                 </div>
               ))}
@@ -423,15 +428,15 @@ export default function MerchantSetupPage() {
           <Card>
             <CardHead title={t("settings.setup.guardrailsTitle")} sub={t("settings.setup.guardrailsSub")} />
             <div className="space-y-2 px-5 pb-5">
-              {[
-                "Bills without shop identity or mobile number.",
-                "Products missing units, pack sizes, or import review.",
-                "Wrong receipt behavior at the counter.",
-                "Udhar or purchase workflows used before owner review.",
-              ].map((item) => (
-                <div key={item} className="flex gap-2 rounded-[10px] bg-[#f8fbff] px-3 py-2">
+              {([
+                "settings.setup.guardrail.billIdentity",
+                "settings.setup.guardrail.productGaps",
+                "settings.setup.guardrail.receiptBehavior",
+                "settings.setup.guardrail.ownerReview",
+              ] as const).map((itemKey) => (
+                <div key={itemKey} className="flex gap-2 rounded-[10px] bg-[#f8fbff] px-3 py-2">
                   <Circle size={8} className="mt-1.5 shrink-0 fill-[var(--brand)] text-[var(--brand)]" />
-                  <p className="text-[12px] leading-5 text-[#52627e]">{item}</p>
+                  <p className="text-[12px] leading-5 text-[#52627e]">{t(itemKey)}</p>
                 </div>
               ))}
             </div>

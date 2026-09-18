@@ -147,3 +147,38 @@ export function consumeReturnLine(balance: ReturnLineBalance, quantity: number) 
   balance.returnedCost = roundMoney(balance.returnedCost + cost);
   return { quantity: requestedQuantity, gross, subtotal, gst, cost, lineDiscount, finalReturn };
 }
+
+/**
+ * Price one return line that has no original sale behind it.
+ *
+ * `ReturnLineInput.soldQty` carries two meanings: on a bill-linked return it is
+ * the quantity sold, and the refund is that line's money apportioned by how much
+ * comes back. On a standalone return — the "New Return" form, which builds its
+ * rows straight from the catalogue — it is 0, documented as "unlimited", because
+ * there is no original sale to cap or apportion against.
+ *
+ * Reading the second case as "sold nothing" priced every standalone refund at
+ * zero, and "Process return" is disabled while the refund is not positive, so the
+ * standalone flow could not be completed at all. When there is no sale to
+ * apportion, the shopkeeper is stating the quantity, and that is what it prices.
+ */
+export function unlinkedReturnLineAmount(input: {
+  returnQty: number;
+  soldQty: number;
+  ratePerRateUnit: number;
+  lineDiscount?: number;
+  soldLineTotal?: number;
+  gstRate?: number;
+  gstMode: GstMode;
+}): { net: number; tax: number; total: number } {
+  const returnQty = Math.max(0, Number(input.returnQty) || 0);
+  const soldQty = Math.max(0, Number(input.soldQty) || 0);
+  const fraction = soldQty > 0 ? returnQty / soldQty : 1;
+  const pricedQty = soldQty > 0 ? soldQty : returnQty;
+  const soldNet = typeof input.soldLineTotal === "number" && Number.isFinite(input.soldLineTotal)
+    ? Math.abs(input.soldLineTotal)
+    : Math.max(0, pricedQty * (Number(input.ratePerRateUnit) || 0) - (Number(input.lineDiscount) || 0));
+  const net = roundMoney(soldNet * fraction);
+  const tax = input.gstMode === "exclusive" ? roundMoney(net * (Number(input.gstRate) || 0) / 100) : 0;
+  return { net, tax, total: roundMoney(net + tax) };
+}

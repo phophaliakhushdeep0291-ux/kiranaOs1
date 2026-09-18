@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 
 export interface OwnerPinConfirmPayload {
   ownerPin: string;
@@ -33,9 +34,14 @@ export function OwnerPinModal({
   onConfirm,
   loading = false,
   error,
-  confirmLabel = "Confirm",
-  reasonLabel = "Reason for audit trail",
+  confirmLabel,
+  reasonLabel,
 }: OwnerPinModalProps) {
+  const { t } = useAppLanguage();
+  // Defaults resolve through the dictionary rather than the parameter list, so a
+  // caller that passes nothing still gets the shopkeeper's language.
+  const resolvedConfirmLabel = confirmLabel ?? t("ownerPin.modal.confirm");
+  const resolvedReasonLabel = reasonLabel ?? t("ownerPin.modal.reasonLabel");
   const pinId = useId();
   const reasonId = useId();
   const pinRef = useRef<HTMLInputElement | null>(null);
@@ -60,11 +66,11 @@ export function OwnerPinModal({
     const cleanReason = reason.trim();
 
     if (!/^\d{4}$/.test(cleanPin)) {
-      setLocalError("Enter the 4-digit owner PIN.");
+      setLocalError(t("ownerPin.modal.invalidPin"));
       return;
     }
     if (reasonRequired && cleanReason.length < 3) {
-      setLocalError("Please enter a short reason for the audit trail.");
+      setLocalError(t("ownerPin.modal.reasonTooShort"));
       return;
     }
 
@@ -89,11 +95,11 @@ export function OwnerPinModal({
 
         <form className="space-y-4" onSubmit={(event) => void handleSubmit(event)}>
           <p id="owner-pin-default-description" className="text-sm text-muted-foreground">
-            {description ?? "Owner PIN is required. This approval is saved in the local audit trail and backend must enforce it again during sync."}
+            {description ?? t("ownerPin.modal.defaultDescription")}
           </p>
 
           <div className="space-y-1.5">
-            <Label htmlFor={pinId}>Owner PIN *</Label>
+            <Label htmlFor={pinId}>{t("ownerPin.modal.pinLabel")}</Label>
             <Input
               id={pinId}
               ref={pinRef}
@@ -103,18 +109,18 @@ export function OwnerPinModal({
               maxLength={4}
               value={ownerPin}
               onChange={(event) => setOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
-              placeholder="Enter owner PIN"
+              placeholder={t("ownerPin.modal.pinPlaceholder")}
               disabled={loading}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor={reasonId}>{reasonLabel}{reasonRequired ? " *" : ""}</Label>
+            <Label htmlFor={reasonId}>{resolvedReasonLabel}{reasonRequired ? " *" : ""}</Label>
             <Textarea
               id={reasonId}
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              placeholder={reasonRequired ? "Reason required for audit trail" : "Optional note for audit trail"}
+              placeholder={reasonRequired ? t("ownerPin.modal.reasonPlaceholderRequired") : t("ownerPin.modal.reasonPlaceholderOptional")}
               disabled={loading}
             />
           </div>
@@ -122,8 +128,8 @@ export function OwnerPinModal({
           {(localError || error) ? <p className="text-sm text-destructive" role="alert">{localError || error}</p> : null}
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={cancel} disabled={loading}>Cancel</Button>
-            <Button type="submit" disabled={loading}>{loading ? "Checking..." : confirmLabel}</Button>
+            <Button type="button" variant="outline" onClick={cancel} disabled={loading}>{t("ownerPin.modal.cancel")}</Button>
+            <Button type="submit" disabled={loading}>{loading ? t("ownerPin.modal.checking") : resolvedConfirmLabel}</Button>
           </div>
         </form>
       </DialogContent>
