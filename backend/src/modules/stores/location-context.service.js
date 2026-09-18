@@ -286,37 +286,42 @@ export async function decrementLocationInventory(client, { shopId, location, pro
 }
 
 /**
- * Receiving stock recomputes the product's weighted-average cost. Billing does NOT
- * read that number: `sellingUnitCostPrice` takes the DEFAULT selling unit's own
- * `costPrice` whenever it is set, and that unit is a mirror of the product created
- * by `legacySellingUnit`. So a product whose cost moved here kept quoting the cost
- * it was created with, for the life of the shop.
+ * A receipt that moves the product's cost has to move the default pack's copy of it.
  *
- * `syncDefaultSellingUnitPricing` already exists to stop exactly this, and its own
- * comment says why — but it is wired only into the product EDIT path, and receiving
- * stock does not go through it. Buying 50 kg of toor dal at Rs 120 against a
- * catalogue seeded at Rs 137.95 left every later bill booking Rs 137.95 of cost, so
- * a Rs 35/kg margin was reported as Rs 17.05 and the owner's profit read half of
- * what the shop actually earned.
+ * `Product.costPerRateUnit` is the weighted average a purchase recomputes;
+ * `ProductSellingUnit.costPrice` on the DEFAULT row is a COPY of that number, which
+ * the product-edit path keeps in step through syncDefaultSellingUnitPricing. Every
+ * purchase path — Stock In, its offline replay, and receiving a purchase order — wrote
+ * only the product, so the copy kept whatever created it (for a starter-catalogue item,
+ * the catalogue's price) however much the shop's real cost moved afterwards. Billing
+ * read the copy, so gross profit on every bill was computed against a price the shop
+ * had stopped paying: seeded at Rs 137.95, restocked at Rs 120, sold at Rs 155, booked
+ * at Rs 17.05 of profit rather than Rs 35. sellingUnitCostPrice no longer trusts the
+ * copy for the default pack, and this keeps it honest for everything that still reads
+ * the row directly — the per-pack inventory rows, the pricing preview, the product form.
  *
- * Only the DEFAULT unit mirrors the product — alternate packs (pack, dozen, bag)
- * carry a cost the shopkeeper typed for that size, and `sellingUnitCostPrice`
- * scales the product cost for them when they carry none. This is the same
- * division of responsibility the edit path uses; keep the two in step.
+ * ALTERNATE packs are deliberately untouched. Their `costPrice` is what the shopkeeper
+ * typed for THAT size, a fact about a real purchase of it and often better than the
+ * multiple, which is the whole reason bulk packs are worth buying; sellingUnitCostPrice
+ * already scales the product cost onto the ones left blank.
  */
-async function mirrorCostOntoDefaultSellingUnit(client, { shopId, product, productData }) {
-  const nextCost = productData?.costPerRateUnit;
-  if (nextCost === undefined) return;
-  const costPrice = round2(Number(nextCost ?? 0)) || null;
-
-  // moneyShadows() omits a null, which would leave costPricePaise holding the old
-  // number while the rupee column says "no cost" — the Float/BigInt disagreement
-  // this repo is midway through migrating away from. Write both, always.
+async function mirrorProductCostOntoDefaultPack(client, { shopId, product, productData }) {
+  if (!Object.hasOwn(productData ?? {}, "costPerRateUnit")) return;
+  const cost = round2(Number(productData.costPerRateUnit));
+  if (!Number.isFinite(cost)) return;
+  // The column is nullable and "no cost" is stored as NULL everywhere else
+  // (legacySellingUnit, syncDefaultSellingUnitPricing), not as a zero price.
+  const costPrice = cost > 0 ? cost : null;
   await client.productSellingUnit.updateMany({
     where: { shopId, productId: product.id, isDefault: true },
-    data: costPrice === null
-      ? { costPrice: null, costPricePaise: null }
-      : { costPrice, ...moneyShadows({ costPrice }) },
+    data: {
+      costPrice,
+      // moneyShadows drops a null rather than writing one, which is right for a
+      // field being left alone and wrong here: clearing the rupee column while the
+      // paise column kept the old figure would leave the row stating two costs, and
+      // the money-integrity rules compare exactly these pairs.
+      ...(costPrice == null ? { costPricePaise: null } : moneyShadows({ costPrice })),
+    },
   });
 }
 
@@ -331,7 +336,9 @@ export async function incrementLocationInventory(client, { shopId, location, pro
     if (expectedGlobalStockBaseQty !== undefined) throw new AppError("Stock changed while recording purchase. Please retry.", 409, "CONCURRENT_STOCK_MODIFICATION_RETRY");
     throw new AppError(`Product "${product.name}" is no longer available`, 409, "PRODUCT_NOT_AVAILABLE");
   }
-  await mirrorCostOntoDefaultSellingUnit(client, { shopId, product, productData });
+  // Only once the product write is known to have landed, so a rejected receipt
+  // never leaves the pack quoting a cost the product never took.
+  await mirrorProductCostOntoDefaultPack(client, { shopId, product, productData });
   // Mirror of the decrement path: a cancelled or returned sale must put back the
   // same packs it took, or the counts drift a little further from reality on every
   // reversal until they are worthless.
