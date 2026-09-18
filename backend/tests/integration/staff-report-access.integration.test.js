@@ -55,15 +55,19 @@ if (ctx.skip) {
   describe("what a cashier can read", () => {
     let owner;
     let staff;
+    let manager;
 
     before(async () => {
       await resetDatabase(ctx.db);
       const tenant = await createTenant(ctx.db, { shopName: "Cashier Visibility Shop" });
       const hired = await createStaff(ctx.db, tenant.shop.id, { role: "staff" });
+      const promoted = await createStaff(ctx.db, tenant.shop.id, { role: "admin", name: "Manager User" });
 
       owner = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
       staff = await login(ctx, hired.staffMobile, hired.staffPassword);
+      manager = await login(ctx, promoted.staffMobile, promoted.staffPassword);
       assert.equal(staff.user.role, "staff", "the fixture must actually be a cashier");
+      assert.equal(manager.user.role, "admin", "and the other one a manager");
 
       // Bought at 6, sold at 10. An empty report cannot leak a margin, so the
       // leak check is only worth anything with a real sale behind it.
@@ -84,6 +88,19 @@ if (ctx.skip) {
         assertFailure(await ctx.get(path, { token: staff.accessToken }), 403);
       });
     }
+
+    // A manager is not an owner. The Staff screen used to promise them the
+    // profit report; the route is requireRole("owner") and answers 403.
+    test("profit and loss refuses a manager too", async () => {
+      assertFailure(await ctx.get("/api/reports/pnl?range=daily", { token: manager.accessToken }), 403);
+      assertFailure(await ctx.get("/api/reports/top-products", { token: manager.accessToken }), 403);
+      assertFailure(await ctx.get("/api/reports/monthly-breakdown?year=2026", { token: manager.accessToken }), 403);
+    });
+
+    test("though a manager does get the staff-sales report a cashier cannot", async () => {
+      // requireRole("owner", "admin") — the one owner-ish report they share.
+      assertSuccess(await ctx.get("/api/reports/staff-sales", { token: manager.accessToken }));
+    });
 
     test("and the owner still gets their own profit report", async () => {
       // Proves the refusals above are about WHO asked, not a broken route

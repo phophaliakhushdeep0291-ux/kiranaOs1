@@ -48,6 +48,28 @@ export const ROLE_LABELS: Record<StaffRole, string> = {
   viewer: "Viewer",
 };
 
+/**
+ * What each role can actually do, as the server enforces it.
+ *
+ * The Staff screen prints this as a role x permission matrix under the heading
+ * "Role access enforced by the server", so every cell is a promise about the
+ * API. Two cells were not true, and both were checked by asking the server as
+ * each role (backend: tests/integration/staff-report-access.integration.test.js):
+ *
+ *   - A cashier CAN read the operational reports. Sales summary, daily closing,
+ *     payment modes, inventory health and GST are open to every shop user by
+ *     design: a cashier closing the till has to see the day's takings. The
+ *     matrix showed a dash and told the owner otherwise.
+ *
+ *   - A manager CANNOT see profit. /reports/pnl, /top-products and
+ *     /monthly-breakdown are requireRole("owner") — "profit/cost-sensitive
+ *     reports remain owner-only". The matrix showed a tick.
+ *
+ * The owner PIN, not the role, is what stands between a cashier and stock
+ * corrections, cancellations and shop settings; without it the server answers
+ * "Owner PIN required" to all of them. Those stay dashes here because that is
+ * what the cashier experiences.
+ */
 export const ROLE_PERMISSIONS: Record<StaffRole, PermissionName[]> = {
   owner: [...POS_PERMISSIONS],
   manager: [
@@ -61,10 +83,9 @@ export const ROLE_PERMISSIONS: Record<StaffRole, PermissionName[]> = {
     "manage_inventory",
     "export_data",
     "change_settings",
-    "view_profit",
     "apply_discount",
   ],
-  cashier: ["create_bill", "record_payment", "manage_customers", "apply_discount"],
+  cashier: ["create_bill", "record_payment", "manage_customers", "apply_discount", "view_reports"],
   viewer: ["view_reports"],
 };
 
