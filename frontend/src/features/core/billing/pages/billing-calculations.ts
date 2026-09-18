@@ -1,6 +1,7 @@
 import { applyRoundOff, roundMoney, roundToRupee } from "@/lib/money";
 import type { Product, ProductSellingUnit } from "@/lib/api/client";
 import { addonUnitPrice, type CartItem } from "./billing-types";
+import { sellingUnitMaxPrice } from "@/features/core/products/pages/product-pricing";
 
 export function clampAmount(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -226,6 +227,31 @@ export function productSellingPrice(product: Product, quantity = 1): number {
   if (wholesaleFrom > 0 && quantity >= wholesaleFrom && wholesale > 0) return roundMoney(wholesale);
   if (retailFrom > 0 && quantity >= retailFrom && retail > 0) return roundMoney(retail);
   return roundMoney(base);
+}
+
+/**
+ * The price to show on a product tile: what the counter will actually charge.
+ *
+ * The tile read the selling unit's listed `defaultPrice` raw, while the cart
+ * prices the line through the pricing engine, which caps it at the unit's
+ * ceiling — the same ceiling billing enforces server-side with
+ * PRICE_ABOVE_CONFIGURED_MAXIMUM. When the two disagree the cashier reads one
+ * number off the screen and the bill prints another: a ₹10 biscuit listed at ₹25
+ * was quoted at ₹25 and rung at ₹10.
+ *
+ * Saving a price above MRP is refused now, so for healthy data this returns the
+ * listed price unchanged. It still matters for alternate packs, which carry
+ * their own ceiling, and for rows saved before that guard existed.
+ */
+export function productTilePrice(
+  product: Product,
+  sellingUnit?: ProductSellingUnit | null,
+  defaultUnit?: ProductSellingUnit | null,
+): number {
+  const listed = Number(sellingUnit?.defaultPrice ?? productSellingPrice(product, 1));
+  const ceiling = sellingUnitMaxPrice(sellingUnit, product, defaultUnit ?? sellingUnit);
+  if (!(ceiling > 0)) return roundMoney(listed);
+  return roundMoney(Math.min(listed, ceiling));
 }
 
 export function productMinSellingPrice(product: Product): number {

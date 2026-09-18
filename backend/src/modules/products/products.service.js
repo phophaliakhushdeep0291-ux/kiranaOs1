@@ -1466,6 +1466,24 @@ async function syncDefaultSellingUnitPricing(tx, shopId, productId, product) {
   const maximumPrice = Number(product.mrp ?? 0) || null;
   const costPrice = Number(product.costPerRateUnit ?? 0) || null;
 
+  // A price above the product's own MRP must be refused here, not discovered at
+  // the counter. Billing caps every line at this same ceiling
+  // (PRICE_ABOVE_CONFIGURED_MAXIMUM), so a product saved above it is not "priced
+  // high" — it is unsellable at its own listed price, and the owner is not told.
+  // Observed: raising a ₹10 product to ₹25 without touching its ₹10 MRP was
+  // accepted by both the REST route and offline sync. The catalogue then
+  // advertised ₹25 while the till quietly rang ₹10 from the retail tier, so the
+  // shop lost the margin it thought it had just taken.
+  if (maximumPrice != null && maximumPrice > 0 && defaultPrice > maximumPrice + 0.005) {
+    const error = new AppError(
+      `Price for "${product.name ?? "this product"}" (Rs ${defaultPrice}) is above its MRP of Rs ${maximumPrice}. `
+      + "Raise the MRP too, or lower the price — the counter refuses to sell above MRP.",
+      400,
+    );
+    error.code = "PRICE_ABOVE_CONFIGURED_MAXIMUM";
+    throw error;
+  }
+
   await tx.productSellingUnit.update({
     where: { id: unit.id },
     data: {
