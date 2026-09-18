@@ -57,6 +57,32 @@ export function normalizeSearchText(value: string): string {
     .trim();
 }
 
+/**
+ * How well a product's search text answers what the cashier typed. Higher is a
+ * better match; 0 is no match, so the counter can rank without a second pass.
+ *
+ *   3  the whole phrase starts the text     ("amul bu" → Amul Butter 100g)
+ *   2  the whole phrase appears in it       ("butter 100" → Amul Butter 100g)
+ *   1  every word appears, in any order     ("colgate teeth", "strong colgate")
+ *   0  no match
+ *
+ * Tier 1 is the one that was missing. Matching only a contiguous run meant
+ * "aashirvaad atta" found nothing at a counter stocking "Aashirvaad Multigrain
+ * Atta 1kg", though either word alone found it — and typing two words is how a
+ * cashier narrows a long catalogue. It stays an AND across words, so "amul rice"
+ * still finds nothing rather than returning everything with either word.
+ *
+ * Both sides must already be through `normalizeSearchText`.
+ */
+export function productMatchRank(searchText: string, query: string): 0 | 1 | 2 | 3 {
+  if (!query) return 3;
+  if (searchText.startsWith(query)) return 3;
+  if (searchText.includes(query)) return 2;
+  const words = query.split(" ").filter(Boolean);
+  if (words.length > 1 && words.every((word) => searchText.includes(word))) return 1;
+  return 0;
+}
+
 export function productSearchText(product: Product): string {
   return normalizeSearchText([
     product.name,
