@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { billNumberLabel, billNumberShort } from "@/features/core/billing/bill-number";
 import { BillInputBillType, BillPaymentMode, getListBillsQueryKey, useConfirmBill, useListCustomers, type Bill, type Customer, type Product, type ProductSellingUnit } from "@/lib/api/client";
 import { useListProducts } from "@/features/core/products/queries";
 import { bindProductBarcodeLocalFirst } from "@/features/core/products/local-actions";
@@ -361,6 +362,11 @@ export default function Billing() {
    * "Loose Toor Dal" sat at index 541 and returned "No results" at the counter
    * while it was in stock, on the shelf, and billable from its own product page.
    *
+   * Everything a cashier can reach is derived from this one call — the search
+   * index, the category chips, `productById` for the cart, and the scan resolver —
+   * so the cap decided which products existed, and a barcode scan found nothing
+   * with no sign the list had been cut.
+   *
    * The starter catalogue is 560 items, so EVERY shop that takes the one-click
    * catalogue was over the line before it sold anything.
    *
@@ -368,9 +374,10 @@ export default function Billing() {
    * stock dialogs all read 1000, and ProductsPage reads the catalogue unpaged. Any
    * number here is a cliff a growing shop eventually walks off, so billing takes
    * the whole catalogue like ProductsPage does. Nothing downstream wants a page:
-   * `filteredProducts` already caps the GRID at 30, and the search index is a plain
-   * substring scan over strings that are already in memory and in IndexedDB — the
-   * offline fallback (`localProductRows`) never had a limit in the first place.
+   * `filteredProducts` already caps the GRID at 30 and `categories` at 14, and the
+   * search index is a plain substring scan over strings that are already in memory
+   * and in IndexedDB — the offline fallback (`localProductRows`) never had a limit
+   * in the first place.
    */
   const products = useListProducts(undefined, {
     query: { staleTime: 2 * 60_000, placeholderData: (previousData: Product[] | undefined) => previousData ?? [] },
@@ -1057,7 +1064,7 @@ export default function Billing() {
         queryClient.invalidateQueries({ queryKey: ["loyalty-account"] });
         queryClient.invalidateQueries({ queryKey: ["loyalty-accounts"] });
         playCounterBeep("success"); // honours Settings → Advanced → Sound effects
-        toast({ title: t("billing.page.billSaved", { billNo }), description: isOnline ? t("billing.page.billSavedOnline") : t("billing.page.billSavedOffline") });
+        toast({ title: t("billing.page.billSaved", { billNo: billNumberShort(billNo) }), description: isOnline ? t("billing.page.billSavedOnline") : t("billing.page.billSavedOffline") });
       },
       onError: (err: unknown) => {
         pendingReceiptRef.current = null;
@@ -1909,7 +1916,13 @@ export default function Billing() {
       const first = negativeStockWarnings[0];
       toast({
         title: t("billing.page.negativeStockTitle"),
-        description: `${first.productName}: ${first.available} ${first.unit} available, ${first.requested} ${first.unit} selling. Stock will become ${first.after} ${first.unit}.`,
+        description: t("billing.page.negativeStockDetail", {
+          product: first.productName,
+          available: first.available,
+          requested: first.requested,
+          after: first.after,
+          unit: first.unit,
+        }),
       });
     }
 
@@ -2384,7 +2397,7 @@ export default function Billing() {
           <div className="mx-3 mb-2 flex shrink-0 items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 lg:hidden">
             <div role="status" className="min-w-0 text-emerald-800">
               <p className="text-xs font-bold">{t("billing.summary.billSavedSafely")}</p>
-              <p className="break-all text-sm font-semibold">{lastBillNo}</p>
+              <p className="break-all text-sm font-semibold">{billNumberLabel(lastBillNo, t)}</p>
             </div>
             <Button variant="outline" className="min-h-11 shrink-0" onClick={() => setMobileCheckoutOpen(true)}>
               {t("chrome.savedBillActions")}
@@ -2469,7 +2482,7 @@ export default function Billing() {
         <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-[#E5DFD1] bg-white px-4 lg:hidden">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7C7566]">{t("billing.page.checkout")}</p>
-            <h2 className="font-display text-[19px] font-black text-[var(--brand-ink)]">{cart.length === 0 && lastBillNo ? lastBillNo : t("billing.page.reviewCollect", { amount: grandTotal.toLocaleString("en-IN") })}</h2>
+            <h2 className="font-display text-[19px] font-black text-[var(--brand-ink)]">{cart.length === 0 && lastBillNo ? billNumberLabel(lastBillNo, t) : t("billing.page.reviewCollect", { amount: grandTotal.toLocaleString("en-IN") })}</h2>
           </div>
           <button
             type="button"

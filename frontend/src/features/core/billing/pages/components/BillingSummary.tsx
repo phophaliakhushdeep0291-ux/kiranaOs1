@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type Dispatch, type ReactNode, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
 import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
+import { billNumberLabel } from "@/features/core/billing/bill-number";
 import { Button } from "@/components/ui/button";
 import { Input, useMoneyDraft, useNumericDraft } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -774,7 +775,7 @@ export function BillingSummary({
                 <CheckCircle size={16} />
                 <span>{t("billing.summary.billSavedSafely")}</span>
               </div>
-              <p className="mt-1 text-[11px] font-semibold text-emerald-700">{t("billing.summary.nextBillReady", { billNo: lastBillNo })}</p>
+              <p className="mt-1 text-[11px] font-semibold text-emerald-700">{t("billing.summary.nextBillReady", { billNo: billNumberLabel(lastBillNo, t) })}</p>
             </div>
           )}
         </div>

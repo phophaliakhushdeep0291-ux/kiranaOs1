@@ -17,7 +17,9 @@ describe("estimate bills work like real bills under their own number series", ()
     expect(billingPage).toContain('EST-${year}-LOCAL-');
     expect(billsPage).toContain('function activeEstimateRows');
     expect(billsPage).toContain('value: "estimate", label: t("billing.bills.tab.estimate")');
-    expect(billsPage).toContain('Clear Estimates');
+    // The label moved into the dictionary; the estimate-clearing action itself is
+    // what this guards, so assert the key the button renders.
+    expect(billsPage).toContain('t("billing.bills.clearEstimates")');
     expect(billsPage).toContain('clear_estimates');
     // Wording moved into the dictionary; the estimate/real split is still pinned.
     expect(billsPage).toContain('billing.bills.moveEstimateToBin');

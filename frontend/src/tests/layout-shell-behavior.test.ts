@@ -140,7 +140,9 @@ describe("desktop app shell behavior", () => {
     expect(layout).toContain("shellRef.current?.style.setProperty");
     expect(layout).toContain("transition-none");
     expect(styles).toContain("will-change: width");
-    expect(layout).toContain("Resize sidebar");
+    // The handle keeps its accessible name; the copy now comes from the dictionary
+    // so a Hindi counter hears it in Hindi.
+    expect(layout).toContain('t("chrome.sidebar.resize"');
     expect(layout).toContain("handleResizeKeyDown");
     expect(layout).toContain('event.key === "ArrowLeft"');
     expect(layout).toContain('event.key === "ArrowRight"');
@@ -150,8 +152,8 @@ describe("desktop app shell behavior", () => {
     expect(styles).toContain("opacity: .35");
     // Collapse: dedicated collapse/expand controls backed by a persisted flag.
     expect(layout).toContain("setCollapsed");
-    expect(layout).toContain("Collapse sidebar");
-    expect(layout).toContain("Expand sidebar");
+    expect(layout).toContain('t("chrome.sidebar.collapse")');
+    expect(layout).toContain('t("chrome.sidebar.expand")');
   });
 
   it("inherits a stable section title on record-detail routes", () => {

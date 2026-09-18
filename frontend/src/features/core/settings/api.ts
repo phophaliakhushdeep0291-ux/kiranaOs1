@@ -2,6 +2,7 @@ import { ApiClientError, apiRequest, isBrowserOnline, isRecoverableNetworkError 
 import { loadAuthSession } from "@/lib/storage/auth-storage";
 import type { Shop } from "@/types/api";
 import { isBusinessType, type BusinessType } from "./business-type-store";
+import { rememberCounterPin } from "@/lib/storage/counter-pin-offline";
 
 export function getShop() {
   return apiRequest<Shop>("/shops");
@@ -123,11 +124,22 @@ export function checkOwnerPin() {
 }
 
 /** Server-side PIN check; throws on a wrong PIN. Used by the lock screen and Danger Zone. */
-export function verifyOwnerPin(pin: string) {
-  return apiRequest<{ valid: boolean }>("/auth/pin/verify", {
+export async function verifyOwnerPin(pin: string) {
+  const result = await apiRequest<{ valid: boolean }>("/auth/pin/verify", {
     method: "POST",
     cache: "no-store",
     timeoutMs: 10_000,
     body: JSON.stringify({ pin }),
   });
+  // An unambiguous "yes" from the server is what arms this device's offline screen
+  // unlock, and this endpoint is the only place that gives one. Actions that send
+  // the PIN as an `x-owner-pin` header are NOT used for this: the client cannot
+  // tell whether that route enforced the header or ignored it, and arming from an
+  // unchecked PIN would store a verifier that refuses the owner's real PIN during
+  // the next outage — the very lockout this exists to prevent.
+  //
+  // In practice a counter arms on its first online idle-lock of the day, which is
+  // before any realistic outage. Never block the caller on it.
+  if (result?.valid === true) void rememberCounterPin(pin);
+  return result;
 }

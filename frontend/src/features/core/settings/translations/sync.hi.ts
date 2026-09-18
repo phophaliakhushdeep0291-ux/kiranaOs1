@@ -9,6 +9,7 @@ import type { syncEn } from "./sync";
 
 export const syncHi: Record<keyof typeof syncEn, string> = {
   "sync.local.setupNeeded": "ऑफ़लाइन सेटअप ज़रूरी है",
+  "sync.conflict.notFound": "टकराव का रिकॉर्ड नहीं मिला",
   "sync.local.reviewNeeded": "समीक्षा ज़रूरी है",
   "sync.local.checking": "लोकल डेटा जाँचा जा रहा है",
   "sync.local.unavailable": "लोकल डेटा की पुष्टि नहीं हो सकी",

@@ -2,7 +2,7 @@
 
 Current decision: **NO-GO — candidate/external/manual evidence incomplete**
 Gate owner: Release owner  
-Last evaluated: 2026-08-20
+Last evaluated: 2026-09-17
 
 No new feature should enter a release branch while the P0 production gate is red. This document records the decision; `PRODUCTION_CHECKLIST.md` contains the full operational checklist.
 
@@ -22,19 +22,51 @@ Run against a clean checkout with supported Node versions and frozen installs.
 
 | Gate | Command/evidence | Status |
 |---|---|---|
-| Frontend typecheck | `cd frontend && npm run typecheck` | Local working tree passed 2026-08-20 |
-| Frontend tests | `cd frontend && npm run test` | Local working tree passed 2026-08-20: 1,597 passed, 1 skipped across 251 passed files and 1 skipped file |
-| Hardware bridge software/installer contract | `cd hardware-bridge && npm test` plus PowerShell parser | Local working tree passed 2026-08-20: 32/32 software tests and `windows/build-installer.ps1` syntax. Native .NET setup compilation, signed workflow artifact, clean-Windows install and physical printer runs remain external evidence. |
-| Frontend production build/security | `cd frontend && npm run prod:check` | Local working tree passed 2026-08-20: 4,606 translation keys across 14 modules; startup 879.7 kB raw / 261.2 kB gzip across 5 files; total JavaScript 4,719.6 kB raw / 1,314.1 kB gzip; largest offline shop payload restaurant 3,416.6 kB raw / 1,011.6 kB gzip across 181 files; typecheck, tests, build, fixed bundle budgets and production-app checks passed. Vite still reports that `sync-engine` and `cloud-hydration` are both statically and dynamically imported; the measured bundles remain inside the enforced budgets. |
-| Backend tests | `cd backend && npm test` | Full local working-tree suite passed 2026-08-20, including guarded isolated database pretest/posttest, authoritative pricing-rule approval, billing, money, sync/source contracts, tenant, compliance, provider-contract, vertical, restaurant, packaging and reports groups. DB example groups now reuse only an exact-schema integration client and receive per-process SQLite files, preventing concurrent certification from replacing a loaded Windows query engine or resetting another suite's data. |
-| Backend production check | `cd backend && npm run prod:check` | Local working tree passed 2026-08-20 after packaging, auth, current-plan and transactional daily-closing audit checks |
-| Integration tests | Isolated DB run, including billing/sync/tenant paths | The full isolated SQLite matrix last passed 28/28 files on 2026-08-10; only the explicitly PostgreSQL-only production-concurrency test was skipped. Current 2026-08-11 focused evidence adds owner/RBAC 18/18, subscription/device 11/11 and device-licence 6/6, including audit rollback, concurrent staff seats, signed-plan refresh and non-renewing fallback trials. |
-| Migration safety | `cd backend && npm run migration:safety` | Local working tree passed 2026-08-20 with 0 warnings after assigning unique sequence numbers to the unreleased purchase-input-GST and purchase-return-tax migrations |
-| Existing release gate | `cd backend && npm run release:gate` | Local working tree passed 2026-08-20; the explicit missing human `RELEASE_APPROVED` warning remains |
-| CI certification | `.github/workflows/release-certification.yml` run URL | Candidate run URL not recorded. Run #316 (2026-08-09) was refused by GitHub before it started — "recent account payments have failed or your spending limit needs to be increased" — so no certification evidence exists for the current commit. It now runs on every pull request into `main` as well as after each merge, and the pull-request run is a required check, so nothing merges uncertified. Pull-request and merge runs defer the Docker image proof to the weekly and manual runs (`RELEASE_CERT_SKIP_IMAGE`), where it is recorded as a skip with its reason; strict certification still requires the image, so a release cannot be certified without one. |
-| Local certification (interim, not a substitute for CI) | `cd backend && npm run release:certify:local` | `local-passed` on 2026-08-20 at recorded commit `0eb44bd7` with a dirty working tree: 14 passed, 0 failed, 0 blocked, 9 skipped in 420s. It includes backend source and full isolated SQLite integration, frontend production, hardware contracts, schema, migration, API, Razorpay-fixture, AI-safety and local-storage proofs. Evidence: `docs/evidence/local-release-certification-latest.json` and `backend/release-artifacts/release-certification-latest.json`. The 9 skips are proofs needing infrastructure this machine does not have — release metadata, PostgreSQL, Redis/worker, Docker image, live API smoke, cloud object storage, and the restore drill — so this run does **not** stand in for CI or external certification. |
+| Frontend typecheck | `cd frontend && npm run typecheck` | Passed 2026-09-17 at commit `64850f99`, inside the full `prod:check` run recorded below. |
+| Frontend tests | `cd frontend && npm run test` | Passed 2026-09-17 at commit `64850f99`: 2,784 passed, 1 skipped across 373 passed files and 1 skipped file. The figure this row carried until now (1,597 across 251 files, 2026-08-20) predated 508 commits. |
+| Hardware bridge software/installer contract | `cd hardware-bridge && npm test` plus PowerShell parser | Passed 2026-09-17 in a clean worktree at commit `e8a23d9a`: 32/32 software tests. Native .NET setup compilation, signed workflow artifact, clean-Windows install and physical printer runs remain external evidence. |
+| Frontend production build/security | `cd frontend && npm run prod:check` | Passed 2026-09-17 at commit `64850f99`: 6,105 translation keys across 18 modules; startup 858.8 kB raw / 259.2 kB gzip across 5 files against the fixed 300 kB gzip ceiling; product-wide JavaScript 5,304.5 kB raw / 1,472.6 kB gzip (reported, not budgeted); largest shop offline payload restaurant 4,447.3 kB raw / 1,251.7 kB gzip across 184 files against the 4.5 MB / 1.25 MB ceilings. Offline boot coverage verified 32 entries and 177 installed assets. **The offline payload now sits at 96.5% of its raw ceiling and 97.8% of its gzip ceiling, leaving 28.3 kB of gzip headroom.** The rise from the 2026-08-20 figure (1,011.6 kB gzip) is the 2026-09-16 measurement correction that folded in the lazy boot dependencies an offline restart needs, not feature growth; see the note in `frontend/scripts/check-bundle-size.mjs`. Startup gzip is flat (261.2 -> 259.2 kB) and its limit has not moved. |
+| Backend tests | `cd backend && npm test` | Passed 2026-09-17 in a clean `npm ci` worktree at commit `e8a23d9a`: 41 suite groups, 0 failures, including the guarded isolated-database pretest/posttest, billing, money, sync/source contracts, tenant, compliance, provider-contract, vertical, restaurant, packaging and reports groups. This is a cleaner run than the 2026-08-20 entry, which was a dirty working tree. |
+| Backend production check | `cd backend && npm run prod:check` | Passed 2026-09-17 in a clean `npm ci` worktree at commit `e8a23d9a`: application module graph OK, production readiness checks passed, dependency security regressions passed. |
+| Integration tests | Isolated DB run, including billing/sync/tenant paths | Passed 2026-09-17 at commit `52b2c04b` on Node 22.23.2: 42 files, 382 passed, 0 failed, 3 PostgreSQL-only skips. Evidence: `docs/evidence/deployment-readiness-2026-09-17/integration-summary.txt`. Supersedes the 28/28 run of 2026-08-10 this row previously cited. |
+| Migration safety | `cd backend && npm run migration:safety` | Passed 2026-09-17 in a clean `npm ci` worktree at commit `e8a23d9a` with 0 warnings. |
+| Existing release gate | `cd backend && npm run release:gate` | Passed 2026-09-17 in a clean `npm ci` worktree at commit `e8a23d9a`, version 1.0.0, 1 warning: `RELEASE_APPROVED` is not true, so this stays documentation/proof-only and is not a human approval record. |
+| CI certification | `.github/workflows/release-certification.yml` run URL | **Still the one automated gate with no evidence at all.** Candidate run URL not recorded. Run #316 (2026-08-09) was refused by GitHub before it started - "recent account payments have failed or your spending limit needs to be increased" - and no certification run has been recorded for any commit since; main has advanced 508 commits past the last evaluation. The workflow itself is correctly wired: it runs on every pull request into `main` as a required check and again after each merge, so nothing merges uncertified once the account can run it. Pull-request and merge runs defer the Docker image proof to the weekly and manual runs (`RELEASE_CERT_SKIP_IMAGE`), recorded as a skip with its reason; strict certification still requires the image. Clearing the billing block is the cheapest remaining unlock on this table. |
+| Local certification (interim, not a substitute for CI) | `cd backend && npm run release:certify:local` | **`local-passed` on 2026-09-17 at commit `72af0226`: 17 passed, 0 failed, 0 blocked, 9 skipped in 344s.** This replaces two superseded claims: the 2026-08-20 pass, which was a dirty working tree, and the 2026-09-08 status file recording the 2026-09-02 run as failed on the required `source-snapshot-stability` stage. That stage passes here - the run was made against a single committed snapshot - which is the proof `docs/evidence/local-release-certification-status-2026-09-08.json` named as next required. Covered: both Prisma schemas, migration safety and sequence, release documentation and rollback, backend source and calculation tests, warehouse/replenishment workflows, the full isolated-SQLite regression and integration suite (198.9s), backend production readiness, AI hallucination-safety gates, the static API contract, the Razorpay signature fixture, hardware-bridge pairing/recovery/installer contracts, the complete frontend typecheck/test/build/security gate, and local object storage. **The 9 skips are exactly the proofs this machine cannot produce** and each names its own unblocking condition: PostgreSQL migrations/concurrency/reconciliation, Redis queue and worker execution, deployed worker heartbeat, live API contract smoke, live backend workflow smoke, production object-storage signed URLs, the PostgreSQL backup and isolated restore drill, and the production Docker image. Those skips are why this row is evidence and not a substitute for CI, and why it does not by itself move the decision. Evidence: `docs/evidence/local-release-certification-latest.json`. |
 
 Any failure is red. Skips require a written exception below; P0 financial, migration, tenant or offline safety checks cannot be waived.
+
+### What changed at the 2026-09-17 re-evaluation
+
+This table had drifted 508 commits behind the code. Every automated row above was
+re-run rather than re-asserted, and the numbers in several of them had been wrong
+for weeks - frontend tests read 1,597 when the suite is 2,784, and the translation
+catalogue read 4,606 keys across 14 modules when it is 6,105 across 18.
+
+What the re-run establishes:
+
+- **Everything runnable on one machine is green**, and on better evidence than
+  before: the backend suite, its production check, migration safety and the release
+  gate all passed in a clean `npm ci` worktree at `e8a23d9a`, where the superseded
+  entries were dirty-working-tree runs. Hardware-bridge software passes 32/32.
+- **One blocker was closed on the day.** A complete local certification now stands
+  again - `local-passed`, 17/0/9, against a single committed snapshot - after the
+  2026-09-02 attempt failed for changing its own source mid-run. It is still local
+  evidence, not CI.
+- **Nothing else green here is external.** The decision stays NO-GO, and the reason
+  is unchanged in substance: no CI certification exists for any commit, no printer
+  has been physically certified, and no automated daily backup runs in production.
+- **One row is newly at risk rather than newly passing.** The largest shop's offline
+  install is at 97.8% of its gzip ceiling with 28.3 kB to spare. That ceiling was
+  last moved on 2026-09-16 for an honest reason - the measurement had been omitting
+  lazy boot dependencies that an offline restart genuinely needs - so the number is
+  a truer figure, not a regression. It is still the row most likely to fail next,
+  and `frontend/scripts/check-bundle-size.mjs` records roughly ten chunking
+  approaches already measured and rejected. The lever it names is the service
+  worker's asset groups and startup sequencing, not Rollup configuration.
+
+Re-triage `BUG_BACKLOG.md` alongside this document; it was last triaged 2026-08-24,
+408 commits ago.
 
 ## Manual P0 gate
 
