@@ -4,7 +4,7 @@ import { nowIso } from "@/lib/offline/context";
 import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
 import { buildBackendSyncOperation } from "@/features/core/sync/sync-operation-normalizer";
 import { calculateSyncQueueCounts, type SyncQueueCounts } from "@/features/core/sync/sync-health";
-import { replaceLocalEntityId } from "@/features/core/sync/sync-id-mapping";
+import { replaceLocalEntityId, replaceReferencesMany } from "@/features/core/sync/sync-id-mapping";
 import { tableNameForEntity } from "@/features/core/sync/sync-types";
 
 export type { SyncQueueCounts } from "@/features/core/sync/sync-health";
@@ -682,7 +682,7 @@ export async function clearRetryBackoffAfterReconnect(): Promise<number> {
  * is provably a superseded echo, and merging it is the same operation the push
  * verdict would have performed.
  */
-async function collapseSupersededLocalEchoes(): Promise<number> {
+export async function collapseSupersededLocalEchoes(): Promise<number> {
   await dexieDB.open();
   const mappings = filterRowsForCurrentScope(
     await offlineDB
@@ -743,9 +743,12 @@ async function collapseSupersededLocalEchoes(): Promise<number> {
     }
   }
 
+  // One reference pass for the whole sweep, not one per echo.
+  const mergedIds = new Map<string, string>();
   for (const { entityType, localId, serverId } of collapsible) {
-    await replaceLocalEntityId(entityType, localId, serverId);
+    await replaceLocalEntityId(entityType, localId, serverId, undefined, mergedIds);
   }
+  await replaceReferencesMany(mergedIds);
   return collapsible.length;
 }
 

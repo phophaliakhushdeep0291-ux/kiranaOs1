@@ -24,6 +24,7 @@ import {
   markEntitySynced,
   putIdMapping,
   replaceLocalEntityId,
+  replaceReferencesMany,
 } from "@/features/core/sync/sync-id-mapping";
 import { getStoredCursor, setStoredCursor } from "@/features/core/sync/sync-pull";
 import { refreshBusinessCaches } from "@/features/core/sync/sync-reconcile";
@@ -370,6 +371,10 @@ async function handlePushResults(
   });
 
   const handled = new Set<string>();
+  // Re-pointing references to a merged id walks all twelve offline tables, and
+  // that walk costs the same for two hundred ids as for one. Collect the batch's
+  // pairs and make the pass once, at the end, instead of once per accepted row.
+  const mergedIds = new Map<string, string>();
   let pushed = 0;
   let failed = 0;
   let conflicts = 0;
@@ -402,7 +407,7 @@ async function handlePushResults(
             ?? readString(movement.movementId);
           if (!movementLocalId || !movementServerId) continue;
           await putIdMapping("inventory_movement", movementLocalId, movementServerId);
-          await replaceLocalEntityId("inventory_movement", movementLocalId, movementServerId, movement);
+          await replaceLocalEntityId("inventory_movement", movementLocalId, movementServerId, movement, mergedIds);
           await markEntitySynced({ ...item.event, entity_id: movementLocalId }, movement, movementServerId);
         }
         await updateOutboxStatus([item.event], "SYNCED");
@@ -415,7 +420,7 @@ async function handlePushResults(
       );
       if (!reconciledBill) {
         await putIdMapping(entityType, localId, serverId);
-        await replaceLocalEntityId(entityType, localId, serverId, serverEntity);
+        await replaceLocalEntityId(entityType, localId, serverId, serverEntity, mergedIds);
         await markEntitySynced(item.event, serverEntity, serverId);
       }
       await updateOutboxStatus([item.event], "SYNCED");
@@ -500,7 +505,7 @@ async function handlePushResults(
       const entityType = entityTypeFromOperation(event.operation_type, event.entity_type);
       const serverId = idMap[event.entity_id];
       await putIdMapping(entityType, event.entity_id, serverId);
-      await replaceLocalEntityId(entityType, event.entity_id, serverId);
+      await replaceLocalEntityId(entityType, event.entity_id, serverId, undefined, mergedIds);
       await markEntitySynced(event, undefined, serverId);
     }
     if (mapped.length > 0) {
@@ -516,6 +521,11 @@ async function handlePushResults(
       failed += unmapped.length;
     }
   }
+
+  // One walk of the offline tables for every id this batch merged. Must happen
+  // before the caller reports the batch done: until it runs, a queued bill can
+  // still be carrying the local product id the server has now replaced.
+  await replaceReferencesMany(mergedIds);
 
   return { pushed, failed, conflicts, deferred };
 }
