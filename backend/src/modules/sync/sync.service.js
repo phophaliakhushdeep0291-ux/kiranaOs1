@@ -1719,23 +1719,23 @@ async function applySyncEvent(shopId, event, user, context) {
       // Static contract: applyCreateBill(shopId, event, user) receives authenticated sync user.
       return applyCreateBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CANCEL_BILL:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyCancelBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_BILL:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyRestoreBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_BILL:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyDeleteBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_DELETED_BILL:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyRestoreDeletedBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.SALE_RETURN:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyCreateSaleReturn(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CREATE_PRODUCT:
       assertProductManagementPermission(user);
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyCreateProduct(shopId, event, user);
     case SYNC_EVENT_TYPES.UPDATE_PRODUCT:
       assertProductManagementPermission(user);
@@ -1747,14 +1747,14 @@ async function applySyncEvent(shopId, event, user, context) {
       return applyBindProductBarcode(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_PRODUCT:
       assertProductManagementPermission(user);
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyDeleteProduct(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_PRODUCT:
       assertProductManagementPermission(user);
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyRestoreProduct(shopId, event, user, context);
     case SYNC_EVENT_TYPES.ADJUST_STOCK:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyAdjustStock(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CREATE_CUSTOMER:
       return applyCreateCustomer(shopId, event, user);
@@ -1763,16 +1763,16 @@ async function applySyncEvent(shopId, event, user, context) {
     case SYNC_EVENT_TYPES.UDHAR_PAYMENT:
       return applyUdharPayment(shopId, event, context);
     case SYNC_EVENT_TYPES.REVERSE_UDHAR_PAYMENT:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyReverseUdharPayment(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CREATE_LEDGER_ADJUSTMENT:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyLedgerAdjustment(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_CUSTOMER:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyDeleteCustomer(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_CUSTOMER:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyRestoreCustomer(shopId, event, user, context);
     case SYNC_EVENT_TYPES.STOCK_PURCHASE:
       return applyStockPurchase(shopId, event, user, context);
@@ -1781,33 +1781,33 @@ async function applySyncEvent(shopId, event, user, context) {
     case SYNC_EVENT_TYPES.STOCK_SALE:
       return applyStockSale(shopId, event, user, context);
     case SYNC_EVENT_TYPES.UPDATE_PURCHASE_BILL:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyUpdatePurchaseBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_PURCHASE_BILL:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyDeletePurchaseBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RECORD_SUPPLIER_PAYMENT:
       return applyRecordSupplierPayment(shopId, event, user, context);
     case SYNC_EVENT_TYPES.REVERSE_SUPPLIER_PAYMENT:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyReverseSupplierPayment(shopId, event, user);
     case SYNC_EVENT_TYPES.CREATE_SUPPLIER:
       return applyCreateSupplier(shopId, event, user);
     case SYNC_EVENT_TYPES.UPDATE_SUPPLIER:
       return applyUpdateSupplier(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_SUPPLIER:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyDeleteSupplier(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_SUPPLIER:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyRestoreSupplier(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CREATE_EXPENSE:
       return applyCreateExpense(shopId, event, user, context);
     case SYNC_EVENT_TYPES.UPDATE_EXPENSE:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyUpdateExpense(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_EXPENSE:
-      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
       return applyDeleteExpense(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RECORD_DRAWER_COUNT:
       return applyRecordDrawerCount(shopId, event, user);
@@ -1853,7 +1853,7 @@ async function applyCreateBill(shopId, event, user, context) {
   parsed.sensitiveActions = sensitiveBillActions;
   if (sensitiveBillActions.length > 0) {
     assertSensitiveBillReason(sensitiveBillActions, parsed.reason);
-    await assertOwnerPermission(shopId, user, parsed.ownerPin);
+    await assertOwnerPermission(shopId, user, parsed.ownerPin, context);
   }
   const creditLedgerClientId = getCreateBillCreditLedgerClientId(payload, billBody);
   // Cashier attribution is server-authoritative. Ignore any frontend-created createdByUserId.
@@ -2282,7 +2282,7 @@ async function applyUpdateProduct(shopId, event, user, context) {
   const existing = await getProduct(shopId, productId);
   const protectedChanges = protectedProductChanges(existing, changes);
   if (protectedChanges.length) {
-    await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+    await assertOwnerPermission(shopId, user, getEventOwnerPin(event), context);
   }
   const product = await updateProduct(shopId, productId, changes, {
     actor: {
@@ -3841,6 +3841,8 @@ function createPushContext(shopId, user) {
     shopId,
     user,
     mappings: new Map(),
+    // One owner-PIN proof per distinct PIN in this push. See assertOwnerPermission.
+    ownerPinProofs: new Map(),
   };
 }
 
@@ -4252,8 +4254,27 @@ function structuredCloneSafe(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-async function assertOwnerPermission(shopId, user, ownerPin) {
-  return verifyOwnerPinProof({
+/**
+ * Prove the owner's intent once per push, not once per operation in it.
+ *
+ * The owner types the PIN once and approves one batch, and every event in that
+ * batch carries the same value. Verifying each one separately means a bcrypt
+ * compare per event — 63ms here — plus four audit reads and an audit write. The
+ * starter catalog is 560 products approved by a single PIN entry, so that was
+ * 35 seconds of re-hashing the same four digits and 560 identical
+ * OWNER_PIN_VERIFIED rows, and it was ~84% of the time the whole push took.
+ *
+ * The cache lives on the push context, so it cannot outlive the request that
+ * built it or reach another shop, user or device. It is keyed by the PIN value,
+ * so a batch that somehow mixes two PINs still proves each one.
+ *
+ * A rejection is cached too, and deliberately: a batch carrying one wrong PIN is
+ * one wrong answer from one person. Counting it once is both the honest reading
+ * and the safe one — a 200-event batch would otherwise burn through the lockout
+ * threshold on a single mistyped digit and lock the owner out of their own till.
+ */
+async function assertOwnerPermission(shopId, user, ownerPin, context = null) {
+  const verify = () => verifyOwnerPinProof({
     shopId,
     user,
     ownerPin,
@@ -4261,6 +4282,20 @@ async function assertOwnerPermission(shopId, user, ownerPin) {
     method: "POST",
     metadata: { channel: "offline_sync" },
   });
+
+  const proofs = context?.ownerPinProofs;
+  if (!proofs) return verify();
+
+  const key = typeof ownerPin === "string" ? ownerPin : "";
+  const cached = proofs.get(key);
+  if (cached) return cached;
+
+  const proof = verify();
+  proofs.set(key, proof);
+  // Every later event in the batch awaits this same promise. Mark it handled so
+  // a batch that fails before reaching them is not an unhandled rejection.
+  proof.catch(() => {});
+  return proof;
 }
 
 function assertProductManagementPermission(user) {

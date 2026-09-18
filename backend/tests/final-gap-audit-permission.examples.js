@@ -18,7 +18,11 @@ assert.match(
 
 assert.match(
   syncService,
-  /case SYNC_EVENT_TYPES\.RESTORE_PRODUCT:[\s\S]*assertOwnerPermission\(shopId, user, getEventOwnerPin\(event\)\)[\s\S]*return applyRestoreProduct/,
+  // The trailing argument is the push context, which carries the batch's
+  // owner-PIN proof so one approval is verified once rather than once per event.
+  // What this asserts is unchanged: the gate is still here, and still before the
+  // restore.
+  /case SYNC_EVENT_TYPES\.RESTORE_PRODUCT:[\s\S]*assertOwnerPermission\(shopId, user, getEventOwnerPin\(event\)(?:, context)?\)[\s\S]*return applyRestoreProduct/,
   "offline RESTORE_PRODUCT sync must assert owner permission before restore"
 );
 
