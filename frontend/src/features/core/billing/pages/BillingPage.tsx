@@ -351,7 +351,15 @@ export default function Billing() {
 
   const debouncedSearch = useDebounce(search.trim(), 90);
   const deferredSearch = useDeferredValue(debouncedSearch);
-  const products = useListProducts({ limit: 350 }, {
+  // NO `limit` here, deliberately. `useListProducts` treats one as a hard slice of
+  // the catalogue, and everything the counter can reach is derived from what this
+  // returns: the search index, the category chips, `productById` for the cart, and
+  // the scan resolver. A limit of 350 against the 560-item starter catalogue left
+  // the rest unsellable — search answered "No results" and a barcode scan found
+  // nothing, with no sign the list had been cut. Rendering is already bounded
+  // downstream (`filteredProducts` shows 30, `categories` 14), so the cap was never
+  // protecting the grid; it only decided which products existed.
+  const products = useListProducts(undefined, {
     query: { staleTime: 2 * 60_000, placeholderData: (previousData: Product[] | undefined) => previousData ?? [] },
   });
   const customers = useListCustomers();

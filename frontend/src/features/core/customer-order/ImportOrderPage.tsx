@@ -90,7 +90,11 @@ export default function ImportOrderPage() {
   const payload = parseState.kind === "ready" ? parseState.payload : null;
   const [adding, setAdding] = useState(false);
 
-  const productsQuery = useListProducts({ limit: 350 }, { query: { staleTime: 60_000 } });
+  // Unlimited for the same reason as the counter: a `limit` slices the catalogue,
+  // and `billFromImportedCart` can only match a scanned line against a product it
+  // was handed. Anything past the cut came back as unmatched — dropped from the
+  // customer's order with nothing to say it had been.
+  const productsQuery = useListProducts(undefined, { query: { staleTime: 60_000 } });
   const products = useMemo(
     () => (productsQuery.data ?? []).filter((p) => p.deletedAt == null),
     [productsQuery.data],
