@@ -969,8 +969,9 @@ export default function PurchaseBillsPage() {
           <div className="space-y-4">
             <div className={reversingPayment ? "hidden" : "contents"}>
             <div>
-              <Label>Amount to pay now</Label>
+              <Label htmlFor="purchase-pay-amount">Amount to pay now</Label>
               <Input
+                id="purchase-pay-amount"
                 data-testid="input-purchase-pay-amount"
                 className="mt-1 h-11"
                 type="number"
@@ -995,9 +996,9 @@ export default function PurchaseBillsPage() {
               </div>
             </div>
             <div>
-              <Label>Payment mode</Label>
+              <Label htmlFor="purchase-pay-mode">Payment mode</Label>
               <Select value={payMode} onValueChange={setPayMode}>
-                <SelectTrigger className="mt-1 h-11"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="purchase-pay-mode" className="mt-1 h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="upi">UPI / bank</SelectItem>
@@ -1006,15 +1007,15 @@ export default function PurchaseBillsPage() {
               <p className="mt-1.5 text-[11px] text-[#8290a8]">Paying part cash, part UPI? Record two payments — one in each mode.</p>
             </div>
             <div>
-              <Label>Reference (optional)</Label>
-              <Input className="mt-1 h-11" value={payReference} onChange={(event) => setPayReference(event.target.value)} placeholder="UPI reference, cheque or note" maxLength={120} />
+              <Label htmlFor="purchase-pay-reference">Reference (optional)</Label>
+              <Input id="purchase-pay-reference" className="mt-1 h-11" value={payReference} onChange={(event) => setPayReference(event.target.value)} placeholder="UPI reference, cheque or note" maxLength={120} />
             </div>
             <div className="border-t border-slate-200 pt-4">
               <div className="mb-3 flex items-center justify-between"><div><p className="text-sm font-black text-slate-900">Payment history</p><p className="text-xs text-slate-500">Payments and reversals remain traceable.</p></div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{supplierPayments.length}</span></div>
               <div className="space-y-2">
                 {supplierPayments.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">No separate supplier payments recorded yet.</div> : supplierPayments.map((payment) => {
                   const reversed = String(payment.status ?? "active") === "reversed";
-                  return <div key={String(payment.id)} className="rounded-xl border border-slate-200 p-3"><div className="flex items-start justify-between gap-3"><div><p className={cn("font-black", reversed ? "text-slate-400 line-through" : "text-slate-900")}>{fmt(Number(payment.amount ?? 0))}</p><p className="text-xs text-slate-500">{modeLabel(String(payment.mode ?? "cash"))} Â· {safeDate(String(payment.paid_at ?? payment.created_at ?? ""))}</p></div>{reversed ? <span className="text-xs font-bold text-rose-700">Reversed</span> : <Button variant="outline" className="h-11 text-xs text-rose-700" onClick={() => setReversingPayment(payment)}>Reverse</Button>}</div></div>;
+                  return <div key={String(payment.id)} className="rounded-xl border border-slate-200 p-3"><div className="flex items-start justify-between gap-3"><div><p className={cn("font-black", reversed ? "text-slate-400 line-through" : "text-slate-900")}>{fmt(Number(payment.amount ?? 0))}</p><p className="text-xs text-slate-500">{modeLabel(String(payment.mode ?? "cash"))} · {safeDate(String(payment.paid_at ?? payment.created_at ?? ""))}</p></div>{reversed ? <span className="text-xs font-bold text-rose-700">Reversed</span> : <Button variant="outline" className="h-11 text-xs text-rose-700" onClick={() => setReversingPayment(payment)}>Reverse</Button>}</div></div>;
                 })}
               </div>
             </div>

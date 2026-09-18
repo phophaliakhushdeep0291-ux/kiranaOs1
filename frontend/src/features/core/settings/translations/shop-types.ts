@@ -13,6 +13,23 @@
 // read back by `businessTypeFromLabel`, so it stays English on both sides of the
 // network. `shopType.<key>.label` below is what a shopkeeper actually reads.
 export const shopTypesEn = {
+  "rental.collection.saved": "Collection recorded — rental balance cleared",
+  "rental.collection.failed": "Could not record collection",
+  "rental.collection.action": "Record collection",
+  "rental.collection.title": "Record rental collection",
+  "rental.collection.balance": "Balance to collect",
+  "rental.collection.help": "Record this after receiving the remaining rent and fees. Refund the security deposit separately.",
+  "rental.collection.mode": "Payment mode",
+  "rental.collection.reference": "Reference (optional)",
+  "rental.collection.cash": "Cash",
+  "rental.collection.upi": "UPI",
+  "rental.collection.bank": "Bank transfer",
+  "rental.collection.card": "Card",
+  "rental.collection.other": "Other",
+  "rental.collection.cancel": "Cancel",
+  "rental.collection.saving": "Saving…",
+  "rental.collection.confirm": "Record full collection",
+
   // ── Kirana / general store ────────────────────────────────────────────────
   "shopType.kirana.label": "Kirana / General Store",
   "shopType.kirana.description": "Grocery, FMCG, daily essentials",

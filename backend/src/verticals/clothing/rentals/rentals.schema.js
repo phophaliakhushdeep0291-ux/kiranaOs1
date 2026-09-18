@@ -71,3 +71,10 @@ export const returnRentalSchema = z.object({
 export const cancelRentalSchema = z.object({
   reason: z.string().trim().max(500).nullish(),
 });
+
+export const settleRentalSchema = z.object({
+  expectedAdvancePaid: z.number().finite().nonnegative(),
+  amount: z.number().finite().positive().multipleOf(0.01),
+  paymentMode: z.enum(["cash", "upi", "bank", "card", "other"]),
+  reference: z.string().trim().max(160).optional(),
+});

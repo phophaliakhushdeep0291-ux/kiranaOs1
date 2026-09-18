@@ -21,6 +21,34 @@ if (ctx.skip) {
   }
 
   describe("sync integration", () => {
+    test("drawer recount refreshes an old snapshot after an expense moves into the closing day", async () => {
+      const { tenant, ownerAuth, device, deviceHeaders } = await ownerCtx();
+      const options = { token: ownerAuth.accessToken, headers: deviceHeaders };
+      const date = "2026-08-30";
+      const expense = assertSuccess(await ctx.post("/api/expenses", {
+        idempotencyKey: "closing-expense", title: "Packing", amount: 25, category: "Packing Material",
+        paymentMode: "cash", status: "paid", spentAt: "2026-08-29T04:00:00.000Z",
+      }, options), 201);
+      const snapshot = assertSuccess(await ctx.post("/api/reports/daily-closing/snapshot", { date }, options), 201);
+      assert.equal(snapshot.expectedCashPaise, 0);
+      assertSuccess(await ctx.patch(`/api/expenses/${expense.id}`, { spentAt: "2026-08-29T18:30:00.000Z" }, { ...options, ownerPin: "1234" }));
+      const stale = assertSuccess(await ctx.get(`/api/reports/daily-closing?date=${date}&source=snapshot`, options));
+      assert.equal(stale.snapshot.staleness.stale, true);
+      const event = {
+        eventId: "drawer-count-after-expense", type: "RECORD_DRAWER_COUNT", device_id: device.deviceId,
+        payload: { date, openingCashPaise: 10000, manualCashInPaise: 1000, manualCashOutPaise: 500,
+          countedCashPaise: 8000, clientExpectedCashPaise: 8000, baseRevision: 0, countedAt: "2026-08-30T16:00:00.000Z" },
+      };
+      const saved = assertSuccess(await ctx.post("/api/sync/push", { events: [event] }, options));
+      assert.equal(saved.summary.synced, 1, JSON.stringify(saved.results));
+      assert.equal(saved.results[0].drawer.expectedCashPaise, 8000);
+      assert.equal(saved.results[0].drawer.variancePaise, 0);
+      const stored = await ctx.db.dailyClosingSnapshot.findFirstOrThrow({ where: { shopId: tenant.shop.id } });
+      assert.equal(stored.expectedCashPaise, -2500);
+      assert.equal(stored.drawerExpectedCashPaise, 8000);
+      assert.equal(stored.cashVariancePaise, 0);
+    });
+
     test("offline drawer count is exact-once, attributed, and version-conflict safe", async () => {
       const { tenant, ownerAuth, device, deviceHeaders } = await ownerCtx();
       const date = "2026-08-30";

@@ -186,6 +186,20 @@ function purchaseDisplayRow(overrides: Partial<SupplierDueRow> = {}): SupplierDu
 }
 
 describe("front office local-first cashier flow", () => {
+  it.each(["synced", "pending_sync", "failed", undefined])("keeps product edit status %s while a purchase awaits sync", async (status) => {
+    rows("products")[0].sync_status = status;
+    await recordPurchaseBatchLocalFirst([
+      { productId: "product_sugar", quantity: 2, enteredUnit: "kg", costPerRateUnit: 40 },
+      { productId: "product_sugar", quantity: 3, enteredUnit: "kg", costPerRateUnit: 40 },
+    ]);
+
+    expect(rows("products")[0]).toMatchObject({ stockBaseQty: 15, sync_status: status ?? "synced" });
+    expect(rows("inventory_movements")).toHaveLength(2);
+    expect(rows("inventory_movements").every((row) => row.sync_status === "pending_sync")).toBe(true);
+    expect(rows("sync_outbox").filter((row) => row.operation_type === "STOCK_PURCHASE_BATCH")).toHaveLength(1);
+    expect(rows("sync_outbox").some((row) => row.entity_type === "product")).toBe(false);
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     dbState.idCounter = 0;

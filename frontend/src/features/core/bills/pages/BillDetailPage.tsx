@@ -30,6 +30,7 @@ import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
 import { getPrinterConfigSync } from "@/features/core/settings/printer-config";
 import { deliverBillWhatsapp, type BillWhatsappState } from "@/features/core/bills/whatsapp-delivery";
 import { billItemAddons } from "@/features/core/bills/bill-item-options";
+import { isSalesReturnBill } from "@/features/core/bills/payment-mode";
 
 interface BillRecord extends Bill, Record<string, unknown> {}
 type AnyRow = Record<string, unknown>;
@@ -110,6 +111,7 @@ function BillItemDescription({ item }: { item: AnyRow }) {
 
 function paymentStatus(bill: BillRecord, payments: AnyRow[], t: Translate) {
   if (bill.status === "cancelled") return "Cancelled";
+  if (isSalesReturnBill(bill)) return t("billing.bills.returnRecorded");
   if (bill.billType === "estimate") return "Rough/Estimate";
   const paidFromRows = payments.reduce((sum, row) => String(row.mode ?? "") === "credit" ? sum : sum + readNumber(row.amount, 0), 0);
   const paid = Math.max(readNumber(bill.paidAmount ?? bill.buyerPaidAmount, 0), paidFromRows);

@@ -25,6 +25,18 @@ describe("customer ledger accounting", () => {
   });
 
 
+  it("a credit return reduces debt even when its source is a bill", () => {
+    const sale = { ...entry("sale", "debit", 20, 1), source_type: "bill" };
+    const payment = entry("collection", "payment", 10, 0);
+    const localReturn = { ...entry("return", "PAYMENT", 10, 0), source_type: "bill" };
+    const serverReturn = { ...localReturn, type: "payment" };
+    expect(ledgerSignedAmount(localReturn)).toBe(-10);
+    expect(ledgerSignedAmount(serverReturn)).toBe(-10);
+    expect(calculateLedgerBalance([sale, payment, localReturn])).toBe(0);
+    expect(calculateLedgerBalance([sale, payment, serverReturn])).toBe(0);
+    expect(ledgerSignedAmount({ ...entry("adjustment", "ADJUSTMENT", -5, 0), source_type: "bill" })).toBe(-5);
+  });
+
   it("hides local pending udhar ledger echo after the server ledger arrives", () => {
     const rows = dedupeLedgerEntries([
       {

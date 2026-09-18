@@ -1376,8 +1376,8 @@ export function dedupeBillItemsForDisplay<T extends object>(items: T[], expected
     picked.push(item);
   }
 
-  const expected = Number(expectedTotal ?? 0);
-  const total = picked.reduce((sum, item) => sum + itemAmount(item as Record<string, unknown>), 0);
+  const expected = Math.abs(Number(expectedTotal ?? 0));
+  const total = picked.reduce((sum, item) => sum + Math.abs(itemAmount(item as Record<string, unknown>)), 0);
   if (!Number.isFinite(expected) || expected <= 0 || total <= expected + 0.01) {
     return picked.sort((a, b) => String((a as Record<string, unknown>).createdAt ?? (a as Record<string, unknown>).created_at ?? "").localeCompare(String((b as Record<string, unknown>).createdAt ?? (b as Record<string, unknown>).created_at ?? "")));
   }

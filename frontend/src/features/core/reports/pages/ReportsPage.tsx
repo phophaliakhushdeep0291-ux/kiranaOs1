@@ -727,7 +727,7 @@ export default function ReportsPage() {
               <>
                 <p><strong className="text-[var(--brand-ink)]">{hourLabel(peakHour.hour)}</strong> is your busiest hour — {fmt(peakHour.sales)} across {peakHour.bills} bill{peakHour.bills === 1 ? "" : "s"} in this period.</p>
                 {quietHour ? <p>Quietest selling hour with any sales: <strong className="text-[var(--brand-ink)]">{hourLabel(quietHour.hour)}</strong> ({fmt(quietHour.sales)}). Schedule restocking, cleaning, or supplier calls there instead of the rush.</p> : null}
-                <p className="text-[11px] text-[#6a758a]">Counted from every non-cancelled sale in the selected period, using each bill's local time.</p>
+                <p className="text-[11px] text-[#6a758a]">Counted from every non-cancelled bill in the selected period using its own local time. Refunds are deducted from the hour they were recorded in, so these hours add up to Total Sales; the bill count stays the number of sales you rang up.</p>
               </>
             ) : (
               <p>No sales recorded in the selected period yet — the hourly pattern appears after a few billing days.</p>

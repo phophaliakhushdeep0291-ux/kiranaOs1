@@ -1727,10 +1727,13 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
             note: `Sale return refunded to udhar: ${returnBill.billNo}`,
           },
         });
-        await syncCustomerUdharBalance(tx, shopId, resolvedCustomerId, {
-          repairNegative: true,
-          repairNote: `System repair after sale return ${returnBill.billNo}: udhar balance went negative`,
-        });
+        const balanceAfterReturn = await syncCustomerUdharBalance(tx, shopId, resolvedCustomerId);
+        if (balanceAfterReturn.isNegative) {
+          // A return must not erase an excess refund through a balancing debit.
+          // Reject the whole transaction so the owner can choose a refund method
+          // that accounts for money already collected from this customer.
+          throw new AppError("Return exceeds outstanding udhar. Reduce the return amount or choose another refund method.", 409, "RETURN_EXCEEDS_UDHAR");
+        }
       }
 
       const issuedGiftCard = normalizedRefundMode === "gift_card"

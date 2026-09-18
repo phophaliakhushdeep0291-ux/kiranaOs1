@@ -124,6 +124,45 @@ hydration remains a catch-up path. The ack must keep firing regardless: it write
 - The retry ladder is 2.5s, 5, 10, 20, 40, 80 then 120s for ordinary work, capped
   at 30s for bills, and retires at 12 attempts. Reconnecting clears the backoff
   but **not** the count, so a genuinely refused operation still retires.
+- **Re-pointing references is a per-batch operation, never a per-row one.** When a
+  local row is merged under its server id, every reference to the old id has to
+  move with it — a queued bill's items, a stock movement, an outbox payload — so
+  `replaceReferences` walks all twelve offline tables. That walk costs the same
+  for two hundred ids as for one. Calling it per merged row measured 4.3s each on
+  a shop holding the starter catalog, which made applying one 200-operation push
+  over ten minutes of local work; `isSyncing` stayed true throughout, and it is
+  the first thing `syncNow` checks, so the Sync Status screen's Force sync
+  returned instantly having done nothing and only a reload recovered. Callers now
+  pass a `Map` to `replaceLocalEntityId` and flush it once with
+  `replaceReferencesMany` — after a push's results, after a pull page — **before**
+  the batch or page is acknowledged. A reference must not outlive the page that
+  replaced it.
+- A merge that never runs leaves the local row behind as a second, permanently
+  unsynced copy: `preserveLocalPending` keeps it and drops the server row it
+  collides with, so that entity silently stops receiving updates, and the next
+  server edit to it raises a conflict card for a decision nobody made. One
+  interrupted catalog sync produced 120. `collapseSupersededLocalEchoes` sweeps
+  them using the id map as proof, but the merge running on time is the real fix.
+- A push carries up to `SYNC_BATCH_SIZE` operations and the server applies them
+  one at a time. The client's timeout therefore **scales with the batch**
+  (`syncPushTimeoutMs`), because the generic 30s POST budget is sized for one
+  request. An abort does not stop the server: it commits everything and only the
+  verdict is lost, which is the worst outcome available — the work is done and the
+  rows still sit in `SYNCING` until the 2-minute repair frees them.
+- **Per-row work on a batch path is the thing to look for.** Three separate
+  defects in the same shape cost a new shop minutes of "backing up" on its first
+  screen: an owner-PIN bcrypt per event rather than per approval (35s of the 43s
+  a 560-product push took), a reference walk of twelve tables per merged row
+  rather than per batch, and a `Collection.modify` that wrote all ~1,200 offline
+  rows on each of those walks to change none of them. Before adding anything to
+  a loop over push results or pull changes, ask what it costs times two hundred.
+- Settling the outbox is a batch write for the same reason: every
+  `kirana:sync-queue-updated` makes its listeners re-read the whole queue to
+  recount, so marking rows SYNCED one at a time recounted a 575-row queue two
+  hundred times per batch. It happens once, after the merges and the reference
+  pass, because a row must not read settled before either has landed — and
+  `acknowledgeCompletedPurchaseRows` has to run after that write, since it
+  releases an optimistic purchase row only once its operation reads SYNCED.
 
 **The invariant that keeps a till's queue alive:** a failure that is not the
 operation's fault must never be able to retire it. `retry_count` rises only on

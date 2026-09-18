@@ -1,3 +1,4 @@
+import { acknowledgeCompletedPurchaseRows } from "@/features/core/sync/purchase-acknowledgement";
 import {
   filterRowsForCurrentScope,
   offlineDB,
@@ -24,6 +25,7 @@ import {
   markEntitySynced,
   putIdMapping,
   replaceLocalEntityId,
+  replaceReferencesMany,
 } from "@/features/core/sync/sync-id-mapping";
 import { getStoredCursor, setStoredCursor } from "@/features/core/sync/sync-pull";
 import { refreshBusinessCaches } from "@/features/core/sync/sync-reconcile";
@@ -360,6 +362,14 @@ async function discardRejectedOptimisticAdjustment(
   }
 }
 
+/** Operations whose optimistic purchase/stock rows are released once they settle. */
+const PURCHASE_ACK_OPERATIONS = new Set([
+  "UPDATE_PURCHASE_BILL",
+  "DELETE_PURCHASE_BILL",
+  "RECORD_SUPPLIER_PAYMENT",
+  "REVERSE_SUPPLIER_PAYMENT",
+]);
+
 async function handlePushResults(
   prepared: PreparedOperation[],
   results: SyncPushEventResult[],
@@ -370,6 +380,17 @@ async function handlePushResults(
   });
 
   const handled = new Set<string>();
+  // Re-pointing references to a merged id walks all twelve offline tables, and
+  // that walk costs the same for two hundred ids as for one. Collect the batch's
+  // pairs and make the pass once, at the end, instead of once per accepted row.
+  const mergedIds = new Map<string, string>();
+  // Marking rows SYNCED one at a time is one IndexedDB transaction and one
+  // `kirana:sync-queue-updated` per row, and every listener of that event
+  // re-reads the whole outbox to recount. For a 200-operation batch that was 200
+  // recounts of a 575-row queue on top of 200 writes. They all end in the same
+  // state, so they settle together at the end of the batch.
+  const settled: PendingSyncEvent[] = [];
+  let needsPurchaseAck = false;
   let pushed = 0;
   let failed = 0;
   let conflicts = 0;
@@ -402,10 +423,10 @@ async function handlePushResults(
             ?? readString(movement.movementId);
           if (!movementLocalId || !movementServerId) continue;
           await putIdMapping("inventory_movement", movementLocalId, movementServerId);
-          await replaceLocalEntityId("inventory_movement", movementLocalId, movementServerId, movement);
+          await replaceLocalEntityId("inventory_movement", movementLocalId, movementServerId, movement, mergedIds);
           await markEntitySynced({ ...item.event, entity_id: movementLocalId }, movement, movementServerId);
         }
-        await updateOutboxStatus([item.event], "SYNCED");
+        settled.push(item.event);
         pushed += 1;
         continue;
       }
@@ -415,10 +436,14 @@ async function handlePushResults(
       );
       if (!reconciledBill) {
         await putIdMapping(entityType, localId, serverId);
-        await replaceLocalEntityId(entityType, localId, serverId, serverEntity);
+        await replaceLocalEntityId(entityType, localId, serverId, serverEntity, mergedIds);
         await markEntitySynced(item.event, serverEntity, serverId);
       }
-      await updateOutboxStatus([item.event], "SYNCED");
+      settled.push(item.event);
+      // Deferred with the settle below: acknowledging a purchase row requires
+      // its operation to already read SYNCED, which now happens once the batch
+      // finishes rather than mid-loop.
+      if (PURCHASE_ACK_OPERATIONS.has(item.event.operation_type)) needsPurchaseAck = true;
       pushed += 1;
       continue;
     }
@@ -500,7 +525,7 @@ async function handlePushResults(
       const entityType = entityTypeFromOperation(event.operation_type, event.entity_type);
       const serverId = idMap[event.entity_id];
       await putIdMapping(entityType, event.entity_id, serverId);
-      await replaceLocalEntityId(entityType, event.entity_id, serverId);
+      await replaceLocalEntityId(entityType, event.entity_id, serverId, undefined, mergedIds);
       await markEntitySynced(event, undefined, serverId);
     }
     if (mapped.length > 0) {
@@ -516,6 +541,17 @@ async function handlePushResults(
       failed += unmapped.length;
     }
   }
+
+  // One walk of the offline tables for every id this batch merged. Must happen
+  // before the caller reports the batch done: until it runs, a queued bill can
+  // still be carrying the local product id the server has now replaced.
+  await replaceReferencesMany(mergedIds);
+  // And one queue write for everything the server accepted. Last, so a row is
+  // only called settled once its merge and its references have both landed.
+  if (settled.length > 0) await updateOutboxStatus(settled, "SYNCED");
+  // Only now: a purchase row is released when its operation reads SYNCED, which
+  // is what the line above just made true.
+  if (needsPurchaseAck) await acknowledgeCompletedPurchaseRows();
 
   return { pushed, failed, conflicts, deferred };
 }

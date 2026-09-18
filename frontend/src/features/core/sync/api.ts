@@ -33,10 +33,39 @@ function encodeCursorMap(cursors?: Record<string, string | null | undefined> | n
   return Object.keys(clean).length > 0 ? JSON.stringify(clean) : undefined;
 }
 
+/**
+ * A push must outlive the work it asks the server to do.
+ *
+ * The generic 30s POST timeout is sized for one request, but a push carries up
+ * to SYNC_BATCH_SIZE operations and the server applies them one at a time, each
+ * in its own audited transaction. A full starter-catalog batch measured 16-27s
+ * against local SQLite, and a shop's first sync runs against Postgres over a
+ * mobile link. The abort does NOT stop the server: it finishes and commits every
+ * operation, and only the verdict is lost. Those rows then sit in SYNCING until
+ * the two-minute stale repair frees them, so the queue advances one batch per
+ * two minutes while the counter reads "backing up" the whole time.
+ *
+ * So the budget scales with the batch — enough for the server to answer, while a
+ * small push against a dead backend still fails fast instead of hanging a till.
+ */
+const SYNC_PUSH_BASE_TIMEOUT_MS = 30_000;
+const SYNC_PUSH_MS_PER_OPERATION = 400;
+const SYNC_PUSH_MAX_TIMEOUT_MS = 180_000;
+
+export function syncPushTimeoutMs(operationCount: number): number {
+  const count = Number.isFinite(operationCount) ? Math.max(0, operationCount) : 0;
+  return Math.min(
+    SYNC_PUSH_MAX_TIMEOUT_MS,
+    SYNC_PUSH_BASE_TIMEOUT_MS + count * SYNC_PUSH_MS_PER_OPERATION,
+  );
+}
+
 export function syncPush(body: SyncPushRequest) {
+  const operationCount = body.operations?.length ?? body.events?.length ?? 0;
   return apiRequest<SyncPushResponse>("/sync/push", {
     method: "POST",
     body: JSON.stringify(body),
+    timeoutMs: syncPushTimeoutMs(operationCount),
   });
 }
 
