@@ -149,6 +149,20 @@ hydration remains a catch-up path. The ack must keep firing regardless: it write
   request. An abort does not stop the server: it commits everything and only the
   verdict is lost, which is the worst outcome available — the work is done and the
   rows still sit in `SYNCING` until the 2-minute repair frees them.
+- **Per-row work on a batch path is the thing to look for.** Three separate
+  defects in the same shape cost a new shop minutes of "backing up" on its first
+  screen: an owner-PIN bcrypt per event rather than per approval (35s of the 43s
+  a 560-product push took), a reference walk of twelve tables per merged row
+  rather than per batch, and a `Collection.modify` that wrote all ~1,200 offline
+  rows on each of those walks to change none of them. Before adding anything to
+  a loop over push results or pull changes, ask what it costs times two hundred.
+- Settling the outbox is a batch write for the same reason: every
+  `kirana:sync-queue-updated` makes its listeners re-read the whole queue to
+  recount, so marking rows SYNCED one at a time recounted a 575-row queue two
+  hundred times per batch. It happens once, after the merges and the reference
+  pass, because a row must not read settled before either has landed — and
+  `acknowledgeCompletedPurchaseRows` has to run after that write, since it
+  releases an optimistic purchase row only once its operation reads SYNCED.
 
 **The invariant that keeps a till's queue alive:** a failure that is not the
 operation's fault must never be able to retire it. `retry_count` rises only on
