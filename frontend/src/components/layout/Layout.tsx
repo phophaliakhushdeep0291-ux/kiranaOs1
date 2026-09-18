@@ -647,10 +647,10 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
     setSidebarWidth(nextWidth);
   }, [collapsed, sidebarWidth]);
 
-  const storeName = shop?.name ?? user?.name ?? "My Store";
+  const storeName = shop?.name ?? user?.name ?? t("chrome.defaultStoreName");
   const storeLocation = activeStoreLocation
     ? `${activeStoreLocation.name}${activeStoreLocation.city ? ` · ${activeStoreLocation.city}` : ""}`
-    : [shop?.city, shop?.address].filter(Boolean)[0] ?? user?.email ?? "Owner";
+    : [shop?.city, shop?.address].filter(Boolean)[0] ?? user?.email ?? t("chrome.defaultOwner");
   const mobileStoreLocation = activeStoreLocation
     ? `${activeStoreLocation.code || activeStoreLocation.name}${activeStoreLocation.city ? ` · ${activeStoreLocation.city}` : ""}`
     : storeLocation;
@@ -681,8 +681,8 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
       >
         {/* resize handle */}
         <button type="button"
-          aria-label={`Resize sidebar, ${sidebarWidth} pixels. Use left and right arrow keys.`}
-          title="Drag, use arrow keys, or press Home/End to resize the sidebar"
+          aria-label={t("chrome.sidebar.resize", { width: sidebarWidth })}
+          title={t("chrome.sidebar.resizeHint")}
           disabled={collapsed}
           onPointerDown={handleResize}
           onKeyDown={handleResizeKeyDown}
@@ -706,7 +706,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
             )}
           </Link>
           {!collapsed && (
-            <button type="button" aria-label="Collapse sidebar" onClick={() => setCollapsed(true)}
+            <button type="button" aria-label={t("chrome.sidebar.collapse")} onClick={() => setCollapsed(true)}
               className="tap-target ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground/40 hover:bg-white/10 hover:text-white transition-colors">
               <ChevronRight size={14} className="rotate-180" aria-hidden="true" />
             </button>
@@ -714,7 +714,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
         </div>
 
         {/* Nav */}
-        <nav aria-label="Main navigation" className={cn("app-scrollbar flex-1 overflow-y-auto py-4", collapsed ? "space-y-1 px-2" : "space-y-1 px-3")}>
+        <nav aria-label={t("chrome.sidebar.mainNav")} className={cn("app-scrollbar flex-1 overflow-y-auto py-4", collapsed ? "space-y-1 px-2" : "space-y-1 px-3")}>
           {nav.map(item =>
             item.kind === "link"
               ? <SidebarLink key={item.href} item={item} loc={loc} collapsed={collapsed} labelOverride={labelOverrides[item.href]} />
@@ -726,11 +726,11 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
         <div className={cn("border-t border-white/10", collapsed ? "p-2 space-y-1.5" : "p-4 space-y-3")}>
           {collapsed ? (
             <>
-              <button type="button" onClick={() => setCollapsed(false)} aria-label="Expand sidebar"
+              <button type="button" onClick={() => setCollapsed(false)} aria-label={t("chrome.sidebar.expand")}
                 className="flex h-10 w-10 items-center justify-center rounded-lg text-sidebar-foreground/50 hover:bg-white/10 hover:text-white transition-colors">
                 <ChevronRight size={16} aria-hidden="true" />
               </button>
-              <button type="button" onClick={logout} aria-label="Logout"
+              <button type="button" onClick={logout} aria-label={t("chrome.logout")}
                 className="flex h-10 w-10 items-center justify-center rounded-lg text-sidebar-foreground/50 hover:bg-white/10 hover:text-white transition-colors">
                 <LogOut size={16} aria-hidden="true" />
               </button>
@@ -748,7 +748,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
                 </div>
                 <p className="mt-1 text-[11px] text-sidebar-foreground/50">{connectionDetail}</p>
                 <Link href="/sync-status" className="app-sidebar-sync-link tap-target">
-                  <RefreshCw size={13} aria-hidden="true" /> Sync Now
+                  <RefreshCw size={13} aria-hidden="true" /> {t("chrome.syncNow")}
                 </Link>
               </div>}
 
@@ -768,22 +768,22 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="top" align="start" className="w-52">
                   {locations.length > 1 && <>
-                    <div className="px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-muted-foreground">Working location</div>
+                    <div className="px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-muted-foreground">{t("chrome.workingLocation")}</div>
                     {locations.map((location) => (
                       <DropdownMenuItem key={location.id} onClick={() => switchLocation(location.id)} className={cn(location.id === activeStoreLocation?.id && "bg-primary/8 text-primary")}>
                         <Store size={14} className="mr-2" />
                         <span className="min-w-0 flex-1 truncate">{location.name}</span>
-                        {location.id === activeStoreLocation?.id && <span className="ml-2 text-[10px] font-black">ACTIVE</span>}
+                        {location.id === activeStoreLocation?.id && <span className="ml-2 text-[10px] font-black">{t("chrome.locationActive")}</span>}
                       </DropdownMenuItem>
                     ))}
                     <DropdownMenuSeparator />
                   </>}
-                  <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
-                  <DropdownMenuItem asChild><Link href="/sync-status">Sync Status</Link></DropdownMenuItem>
-                  {isModuleOn("ask_artha") && <DropdownMenuItem asChild><Link href="/help">Ask Artha</Link></DropdownMenuItem>}
+                  <DropdownMenuItem asChild><Link href="/settings">{t("chrome.settings")}</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link href="/sync-status">{t("chrome.syncStatus")}</Link></DropdownMenuItem>
+                  {isModuleOn("ask_artha") && <DropdownMenuItem asChild><Link href="/help">{t("chrome.askArtha")}</Link></DropdownMenuItem>}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
-                    <LogOut size={14} className="mr-2" aria-hidden="true" /> Logout
+                    <LogOut size={14} className="mr-2" aria-hidden="true" /> {t("chrome.logout")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -803,7 +803,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
         <header className="app-desktop-topbar">
           <button
             type="button"
-            aria-label="Toggle sidebar"
+            aria-label={t("chrome.sidebar.toggle")}
             onClick={() => setCollapsed((c) => !c)}
             className="app-topbar-icon-button"
           >
@@ -822,13 +822,13 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
                 <Store size={16} className="shrink-0 text-primary" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[11px] font-black text-[var(--brand-ink)]">{activeStoreLocation.name}</span>
-                  <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-[#7C7566]">{activeStoreLocation.code}{activeStoreLocation.isPrimary ? " · Primary" : " · Branch"}</span>
+                  <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-[#7C7566]">{activeStoreLocation.code}{activeStoreLocation.isPrimary ? t("chrome.location.primarySuffix") : t("chrome.location.branchSuffix")}</span>
                 </span>
                 <ChevronDown size={13} className="shrink-0 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-60">
-              <div className="px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-muted-foreground">All operations use this location</div>
+              <div className="px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-muted-foreground">{t("chrome.location.allOperations")}</div>
               {locations.map((location) => (
                 <DropdownMenuItem key={location.id} onClick={() => switchLocation(location.id)} className={cn(location.id === activeStoreLocation.id && "bg-primary/8 text-primary")}>
                   <Store size={14} className="mr-2" />
@@ -837,30 +837,30 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild><Link href="/inventory/stock-transfers">Manage locations & transfers</Link></DropdownMenuItem>
+              <DropdownMenuItem asChild><Link href="/inventory/stock-transfers">{t("chrome.location.manage")}</Link></DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>}
 
           {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            aria-label="Search products, bills, and customers"
+            aria-label={t("chrome.search.label")}
             className="app-topbar-search"
           >
             <Search size={17} aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">Search products, bills, customers...</span>
-            <span className="app-topbar-shortcut">Ctrl K</span>
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{t("chrome.search.placeholder")}</span>
+            <span className="app-topbar-shortcut">{t("chrome.search.shortcut")}</span>
           </button>}
 
           {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && <div className={cn("app-topbar-connection", connectionBadgeClass)}>
             <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
             <span className="truncate">{connectionLabel}</span>
-            {isOnline && !isSyncing && !hasPendingSync && !hasSyncProblems && <span className="opacity-60">Just now</span>}
+            {isOnline && !isSyncing && !hasPendingSync && !hasSyncProblems && <span className="opacity-60">{t("chrome.justNow")}</span>}
           </div>}
 
           {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} plan={snapshot.plan} />}
 
-          <Link href="/sync-status" aria-label="Open sync alerts" className="app-topbar-icon-button app-topbar-alerts">
+          <Link href="/sync-status" aria-label={t("chrome.openSyncAlerts")} className="app-topbar-icon-button app-topbar-alerts">
             <Bell size={18} aria-hidden="true" />
             {attentionCount > 0 && (
               <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-white">
@@ -883,11 +883,11 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
-              <DropdownMenuItem asChild><Link href="/sync-status">Sync Status</Link></DropdownMenuItem>
+              <DropdownMenuItem asChild><Link href="/settings">{t("chrome.settings")}</Link></DropdownMenuItem>
+              <DropdownMenuItem asChild><Link href="/sync-status">{t("chrome.syncStatus")}</Link></DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
-                <LogOut size={14} className="mr-2" aria-hidden="true" /> Logout
+                <LogOut size={14} className="mr-2" aria-hidden="true" /> {t("chrome.logout")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1009,6 +1009,7 @@ function SidebarLink({ item, loc, collapsed, labelOverride }: {
 function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides }: {
   item: GroupItem; loc: string; collapsed: boolean; expanded: boolean; onToggle: () => void; labelOverrides: Record<string, string>;
 }) {
+  const { t } = useAppLanguage();
   const groupActive = item.triggerPaths.some(p => isActive(loc, p)) || item.children.some(c => isActive(loc, c.href));
   // The trade's own word for this section. `navConfig.inventory` is set for all
   // twelve trades and was read by nobody: the override is keyed on `/inventory`,
@@ -1039,9 +1040,9 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
           <Link href={item.overviewHref} className="flex min-h-[44px] min-w-0 flex-1 items-center gap-3 rounded-l-[10px] px-3">
             <item.Icon size={18} aria-hidden="true" />
             <span className="flex-1 truncate text-left text-[14px] font-semibold">{label}</span>
-            {overviewActive ? <span className="sr-only">Current page</span> : null}
+            {overviewActive ? <span className="sr-only">{t("chrome.currentPage")}</span> : null}
           </Link>
-          <button type="button" onClick={onToggle} aria-label={`${expanded ? "Collapse" : "Expand"} ${label} menu`} aria-expanded={expanded}
+          <button type="button" onClick={onToggle} aria-label={expanded ? t("chrome.sidebar.collapseMenu", { label }) : t("chrome.sidebar.expandMenu", { label })} aria-expanded={expanded}
             className="grid min-h-[44px] w-10 shrink-0 place-items-center rounded-r-[10px] text-sidebar-foreground/50 transition-colors hover:bg-white/10 hover:text-white">
             <ChevronDown size={13} aria-hidden="true" className={cn("transition-transform duration-200", expanded && "rotate-180")} />
           </button>
@@ -1103,6 +1104,7 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
 }
 
 function BackendUnreachableBanner({ apiBaseUrl }: { apiBaseUrl: string }) {
+  const { t } = useAppLanguage();
   // A localhost URL is actionable developer information, but it is misleading
   // in an installed production/PWA build: the cashier only needs to know that
   // cloud backup is paused and local billing remains safe.
@@ -1112,8 +1114,8 @@ function BackendUnreachableBanner({ apiBaseUrl }: { apiBaseUrl: string }) {
     <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
       <WifiOff size={15} className="shrink-0 text-amber-600" aria-hidden="true" />
       <span className="flex-1 leading-tight">
-        {showLocalhostDiagnostic ? "Backend URL points to localhost. Make sure the backend server is running on this machine. " : "Cloud backup is paused because the backend is not reachable. Local billing still works. "}
-        <Link href="/sync-status" className="font-semibold underline underline-offset-2">Open Sync Status -&gt;</Link>
+        {showLocalhostDiagnostic ? t("chrome.backendUnreachable.localhost") : t("chrome.backendUnreachable.paused")}
+        <Link href="/sync-status" className="font-semibold underline underline-offset-2">{t("chrome.openSyncStatus")}</Link>
       </span>
     </div>
   );
