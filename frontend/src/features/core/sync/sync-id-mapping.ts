@@ -273,11 +273,27 @@ export async function replaceReferencesMany(
           Record<string, unknown>,
           string
         >;
-        if (!table || typeof table.filter !== "function") continue;
-        await table.filter(rowMatchesCurrentScope).modify((row) => {
+        if (!table || typeof table.toArray !== "function") continue;
+        // Read, decide, then write back only what actually moved.
+        //
+        // `Collection.modify` puts every row the cursor visits, whether or not
+        // the callback changed anything. A shop holding the starter catalog has
+        // ~1,200 rows across these tables and almost none of them mention the id
+        // being re-pointed, so that was 1,200 IndexedDB writes to change nothing
+        // — 12.7s per pass, measured. `deepReplaceMany` returns the row it was
+        // given when there is nothing to replace, so identity is the test.
+        const rows = await table.toArray();
+        const moved: Record<string, unknown>[] = [];
+        for (const row of rows) {
+          if (!rowMatchesCurrentScope(row)) continue;
           const replaced = deepReplaceMany(row, effective);
-          if (isRecord(replaced) && replaced !== row) Object.assign(row, replaced);
-        });
+          if (isRecord(replaced) && replaced !== row) moved.push(replaced);
+        }
+        // Written one at a time on purpose: `moved` holds only the rows that
+        // actually mention one of these ids, which is normally none and never
+        // many. The saving was never in batching the writes — it was in not
+        // making ~1,200 of them to change nothing.
+        for (const row of moved) await table.put(row);
       }
     },
   );

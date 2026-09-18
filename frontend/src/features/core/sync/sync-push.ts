@@ -375,6 +375,12 @@ async function handlePushResults(
   // that walk costs the same for two hundred ids as for one. Collect the batch's
   // pairs and make the pass once, at the end, instead of once per accepted row.
   const mergedIds = new Map<string, string>();
+  // Marking rows SYNCED one at a time is one IndexedDB transaction and one
+  // `kirana:sync-queue-updated` per row, and every listener of that event
+  // re-reads the whole outbox to recount. For a 200-operation batch that was 200
+  // recounts of a 575-row queue on top of 200 writes. They all end in the same
+  // state, so they settle together at the end of the batch.
+  const settled: PendingSyncEvent[] = [];
   let pushed = 0;
   let failed = 0;
   let conflicts = 0;
@@ -410,7 +416,7 @@ async function handlePushResults(
           await replaceLocalEntityId("inventory_movement", movementLocalId, movementServerId, movement, mergedIds);
           await markEntitySynced({ ...item.event, entity_id: movementLocalId }, movement, movementServerId);
         }
-        await updateOutboxStatus([item.event], "SYNCED");
+        settled.push(item.event);
         pushed += 1;
         continue;
       }
@@ -423,7 +429,7 @@ async function handlePushResults(
         await replaceLocalEntityId(entityType, localId, serverId, serverEntity, mergedIds);
         await markEntitySynced(item.event, serverEntity, serverId);
       }
-      await updateOutboxStatus([item.event], "SYNCED");
+      settled.push(item.event);
       pushed += 1;
       continue;
     }
@@ -526,6 +532,9 @@ async function handlePushResults(
   // before the caller reports the batch done: until it runs, a queued bill can
   // still be carrying the local product id the server has now replaced.
   await replaceReferencesMany(mergedIds);
+  // And one queue write for everything the server accepted. Last, so a row is
+  // only called settled once its merge and its references have both landed.
+  if (settled.length > 0) await updateOutboxStatus(settled, "SYNCED");
 
   return { pushed, failed, conflicts, deferred };
 }
