@@ -5,6 +5,8 @@ import { nowIso } from "@/lib/offline/context";
 import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
 import { buildBackendSyncOperation } from "@/features/core/sync/sync-operation-normalizer";
 import { calculateSyncQueueCounts, type SyncQueueCounts } from "@/features/core/sync/sync-health";
+import { replaceLocalEntityId } from "@/features/core/sync/sync-id-mapping";
+import { tableNameForEntity } from "@/features/core/sync/sync-types";
 
 export type { SyncQueueCounts } from "@/features/core/sync/sync-health";
 
@@ -657,6 +659,101 @@ export async function clearRetryBackoffAfterReconnect(): Promise<number> {
   return cleared;
 }
 
+/**
+ * Collapse local rows the server has already accepted under its own id.
+ *
+ * A create is written locally as `product_<uuid>`, pushed, and the push verdict
+ * carries the server id back — at which point `replaceLocalEntityId` merges the
+ * two and deletes the echo. When that verdict is lost (an aborted batch, a tab
+ * closed mid-push, a reload) the server copy still arrives later through the
+ * pull feed, so the device ends up holding BOTH rows: the server's, synced, and
+ * the echo, still marked pending with no queue entry left to resolve it.
+ *
+ * Nothing retries an echo in that state, and it is not cosmetic:
+ *
+ *  - `preserveLocalPending` keeps any unsynced row and drops the server row it
+ *    collides with, so the counter keeps showing the stale copy and never sees
+ *    another device's price or stock change for that product again;
+ *  - `applyServerChange` reads "unsynced local changes" from it, so the next
+ *    server edit to that entity raises a conflict card for a decision the owner
+ *    never made. One interrupted starter-catalog sync produced 120 of them.
+ *
+ * The id map is the proof: it holds local -> server only once the server has
+ * answered for that row. So a local row with no `server_id` whose id is mapped
+ * is provably a superseded echo, and merging it is the same operation the push
+ * verdict would have performed.
+ */
+async function collapseSupersededLocalEchoes(): Promise<number> {
+  await dexieDB.open();
+  const mappings = filterRowsForCurrentScope(
+    await offlineDB
+      .getAll<{ local_id?: string; server_id?: string; entity_type?: string }>("id_mappings")
+      .catch(() => []),
+  );
+  if (mappings.length === 0) return 0;
+
+  // Read the queue once: this runs on every sync cycle, and a starter catalog
+  // makes both of these lists hundreds long.
+  const claimedByQueue = new Set(
+    filterRowsForCurrentScope(
+      await offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
+    )
+      .filter((event) => !isSyncedOutbox(event))
+      .map((event) => event.entity_id),
+  );
+
+  // Group by table and read each one once. Doing a get() per mapping is 2n
+  // IndexedDB transactions — for a shop that loaded the starter catalog that is
+  // over two thousand, on a path that runs on every sync cycle.
+  const byTable = new Map<string, { entityType: string; localId: string; serverId: string }[]>();
+  for (const mapping of mappings) {
+    const localId = readString(mapping.local_id);
+    const serverId = readString(mapping.server_id);
+    const entityType = readString(mapping.entity_type);
+    if (!localId || !serverId || !entityType || localId === serverId) continue;
+    if (claimedByQueue.has(localId)) continue;
+    const tableName = tableNameForEntity(entityType);
+    if (!tableName || tableName === "settings") continue;
+    const list = byTable.get(tableName);
+    if (list) list.push({ entityType, localId, serverId });
+    else byTable.set(tableName, [{ entityType, localId, serverId }]);
+  }
+  if (byTable.size === 0) return 0;
+
+  const collapsible: { entityType: string; localId: string; serverId: string }[] = [];
+  for (const [tableName, candidates] of byTable) {
+    const rows = filterRowsForCurrentScope(
+      await offlineDB.getAll<MutableRow>(tableName).catch(() => []),
+    );
+    if (rows.length === 0) continue;
+    const byId = new Map<string, MutableRow>();
+    for (const row of rows) {
+      const id = readString(row.id);
+      if (id) byId.set(id, row);
+    }
+    for (const candidate of candidates) {
+      const echo = byId.get(candidate.localId);
+      if (!echo) continue;
+      // A row that already carries its server id is the merged one, not an echo.
+      if (readStringFrom(echo, ["server_id", "serverId"])) continue;
+      if (isSyncedRow(echo)) continue;
+      // Only collapse once the server copy is actually here. Without it the echo
+      // is still the only record of that entity on this device.
+      if (!byId.has(candidate.serverId)) continue;
+      collapsible.push(candidate);
+    }
+  }
+
+  for (const { entityType, localId, serverId } of collapsible) {
+    await replaceLocalEntityId(entityType, localId, serverId);
+  }
+  return collapsible.length;
+}
+
+function isSyncedRow(row: MutableRow): boolean {
+  return String(row.sync_status ?? "synced").toLowerCase() === "synced";
+}
+
 export async function repairResolvedSyncStatusNoise(options: {
   /**
    * The caller owns the origin-wide sync lock, so no live tab can still own a
@@ -669,6 +766,7 @@ export async function repairResolvedSyncStatusNoise(options: {
   const staleSyncingRepaired = await repairStaleSyncingOutboxEvents(
     options.recoverAbandonedSyncing === true,
   ).catch(() => 0);
+  const echoesCollapsed = await collapseSupersededLocalEchoes().catch(() => 0);
   const retryableValidationRepaired = await repairRetryableBillValidationConflicts().catch(() => 0);
   const retryablePurchaseAndLedgerRepaired = await repairRetryablePurchaseAndLedgerValidationConflicts().catch(() => 0);
   const cancellationRepaired = await repairRetryableBillCancellationConflicts().catch(() => 0);
@@ -676,7 +774,7 @@ export async function repairResolvedSyncStatusNoise(options: {
   const billRepaired = await repairStaleSyncedBillOutboxFailures().catch(() => 0);
   const duplicateKeyRepaired = await repairResolvedDuplicateKeyOutboxFailures().catch(() => 0);
   const purchaseAcknowledged = await acknowledgeCompletedPurchaseRows().catch(() => 0);
-  const repaired = purchaseAcknowledged + staleSyncingRepaired + retryableValidationRepaired + retryablePurchaseAndLedgerRepaired + cancellationRepaired + financialRepaired + billRepaired + duplicateKeyRepaired;
+  const repaired = purchaseAcknowledged + staleSyncingRepaired + echoesCollapsed + retryableValidationRepaired + retryablePurchaseAndLedgerRepaired + cancellationRepaired + financialRepaired + billRepaired + duplicateKeyRepaired;
   if (repaired > 0 && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
   }
