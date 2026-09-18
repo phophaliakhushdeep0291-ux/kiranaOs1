@@ -31,6 +31,7 @@ import {
   SYNC_EVENT_STATUSES,
   SYNC_EVENT_TYPES,
 } from "../../utils/syncRules.js";
+import { describeZodError } from "../../utils/validationMessage.js";
 import { decodeCursor, encodeCursor, PULL_DEFAULT_LIMIT, PULL_MAX_LIMIT } from "./sync.schema.js";
 import { explainSyncFailure } from "./sync-explain.js";
 import { EVENT_TOPICS, publishEvent } from "../../lib/eventBus.js";
@@ -1671,7 +1672,11 @@ async function processOneSyncEvent(shopId, event, user, context) {
     });
   } catch (error) {
     const classified = classifySyncError(error);
-    const message = error?.message || "Sync event failed";
+    // A ZodError's own `message` is the whole issue array re-serialised as
+    // JSON. This string is what the parked row shows the shopkeeper on the
+    // "needs review" card, so it has to be a sentence, not a payload.
+    const message = (error?.name === "ZodError" ? describeZodError(error, "This change was rejected") : error?.message)
+      || "Sync event failed";
     let durableConflict = null;
 
     if (classified.syncStatus === SYNC_EVENT_STATUSES.CONFLICT) {

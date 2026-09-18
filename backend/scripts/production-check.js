@@ -2299,6 +2299,38 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   }
 }
 
+/*
+ * Every test file has to be run by something.
+ *
+ * The suite is a hand-written chain of npm scripts, so a new tests/*.examples.js
+ * only ever runs if somebody remembers to name it. Twenty-seven did not get
+ * named — including live guards on udhar sync atomicity, plan entitlements and
+ * purchase stock traceability. Three of those had gone red against code that had
+ * moved on, and nobody found out, because a test nothing runs is not a test.
+ *
+ * tests/integration/ is exempt: run-integration-tests.js discovers that
+ * directory itself, so files there are wired by existing.
+ */
+{
+  const testsDir = path.join(root, "tests");
+  if (fs.existsSync(testsDir)) {
+    const scriptText = Object.values(readJson("package.json").scripts ?? {}).join("\n");
+    const runnerText = fs.readdirSync(path.join(root, "scripts"))
+      .filter((name) => name.endsWith(".js"))
+      .map((name) => read(`scripts/${name}`))
+      .join("\n");
+    const named = `${scriptText}\n${runnerText}`;
+    const unrun = fs.readdirSync(testsDir)
+      .filter((name) => /\.(examples|test)\.js$/.test(name))
+      // Match on a path boundary: "foo.examples.js" must not count as named
+      // because some script mentions "other-foo.examples.js".
+      .filter((name) => !new RegExp(`(^|[\\s/"'])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(named));
+    for (const name of unrun) {
+      errors.push(`tests/${name} is not run by any npm script or scripts/ runner — wire it into test:isolated-suite or delete it`);
+    }
+  }
+}
+
 if (errors.length) {
   console.error("Production readiness checks failed:");
   for (const error of errors) console.error(`- ${error}`);
