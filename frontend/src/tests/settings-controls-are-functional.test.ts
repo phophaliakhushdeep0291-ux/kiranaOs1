@@ -236,7 +236,11 @@ describe("settings pages no longer ship placeholder content", () => {
     const gate = readFileSync("src/features/core/settings/SessionLockGate.tsx", "utf8");
     expect(gate).toContain("counterStartupDecision");
     expect(gate).toContain("counterIdleDecision");
-    expect(gate).toContain("verifyCounterPin(value)");
+    // The lock screen is the one caller allowed the offline fallback, so an
+    // outage cannot strand the counter. It must still delegate the decision:
+    // no `navigator.onLine` branch of its own, and no turning a thrown network
+    // error into an unlock.
+    expect(gate).toContain("verifyCounterPin(value, { allowOffline: true })");
     expect(gate).toContain("verifyBiometric()");
     expect(gate).not.toContain("if (!navigator.onLine");
     expect(gate).not.toContain("err instanceof TypeError");

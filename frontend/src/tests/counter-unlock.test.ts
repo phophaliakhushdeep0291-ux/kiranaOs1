@@ -3,7 +3,8 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { verifyCounterPin } from "@/features/core/settings/counter-unlock";
 import { enrolBiometric, verifyBiometric, isBiometricEnrolled, forgetBiometric } from "@/features/core/settings/biometric-unlock";
 import { saveAuthSession, clearAuthStorage } from "@/lib/storage/auth-storage";
-import { DEVICE_UNLOCK_KEY, LEGACY_DEVICE_UNLOCK_KEY } from "@/lib/storage/device-unlock-storage";
+import { COUNTER_PIN_OFFLINE_KEY, DEVICE_UNLOCK_KEY, LEGACY_DEVICE_UNLOCK_KEY } from "@/lib/storage/device-unlock-storage";
+import { canVerifyCounterPinOffline, rememberCounterPin } from "@/lib/storage/counter-pin-offline";
 import { counterIdleDecision, counterStartupDecision, markCounterActive, markCounterSessionStarted } from "@/features/core/settings/counter-lock-policy";
 import { DEFAULT_SECURITY_POLICY } from "@/features/core/settings/security-policy";
 
@@ -204,6 +205,91 @@ describe("scoped, signed offline device unlock", () => {
     vi.spyOn(localStorage, "getItem").mockImplementation(() => { throw new Error("storage denied"); });
     expect(isBiometricEnrolled()).toBe(false);
     await expect(verifyBiometric()).rejects.toThrow("Enroll");
+  });
+});
+
+describe("offline counter unlock with the owner PIN", () => {
+  const offline = () => vi.stubGlobal("navigator", { onLine: false, credentials: { create: vi.fn(), get: vi.fn() } });
+
+  /**
+   * Arm this device the way a real counter does. In production `verifyOwnerPin`
+   * does this itself on the server's "yes"; that module is mocked here, so stand
+   * in for it explicitly — the arming link is covered in `owner-pin-arming.test.ts`.
+   */
+  async function trustThisDevice(pin = "2468") {
+    await verifyCounterPin(pin);
+    await rememberCounterPin(pin);
+    expect(canVerifyCounterPinOffline()).toBe(true);
+  }
+
+  it("still refuses when the device was never verified online", async () => {
+    offline();
+    expect(canVerifyCounterPinOffline()).toBe(false);
+    await expect(verifyCounterPin("2468", { allowOffline: true })).rejects.toThrow("needs a connection");
+    expect(mocks.pin).not.toHaveBeenCalled();
+  });
+
+  it("unlocks offline with the PIN the server already accepted", async () => {
+    await trustThisDevice();
+    offline();
+    mocks.pin.mockClear();
+    await expect(verifyCounterPin("2468", { allowOffline: true })).resolves.toBeUndefined();
+    expect(mocks.pin).not.toHaveBeenCalled();
+  });
+
+  it("refuses a wrong PIN offline, and locks out after repeated attempts", async () => {
+    await trustThisDevice();
+    offline();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await expect(verifyCounterPin("1111", { allowOffline: true })).rejects.toThrow("did not match");
+    }
+    // The lockout holds even for the correct PIN.
+    await expect(verifyCounterPin("2468", { allowOffline: true })).rejects.toThrow("Too many wrong PINs");
+  });
+
+  it("does not fall back unless the caller asks, so enrolment stays server-checked", async () => {
+    await trustThisDevice();
+    offline();
+    await expect(verifyCounterPin("2468")).rejects.toThrow("needs a connection");
+  });
+
+  it("is scoped to one account and device", async () => {
+    await trustThisDevice();
+    session("owner-b", "shop-b");
+    expect(canVerifyCounterPinOffline()).toBe(false);
+    session();
+    expect(canVerifyCounterPinOffline()).toBe(true);
+    mocks.device = "another-device";
+    expect(canVerifyCounterPinOffline()).toBe(false);
+  });
+
+  it("stops trusting a verifier the server has not re-confirmed in 30 days", async () => {
+    await trustThisDevice();
+    const row = JSON.parse(localStorage.getItem(COUNTER_PIN_OFFLINE_KEY)!);
+    localStorage.setItem(COUNTER_PIN_OFFLINE_KEY, JSON.stringify({ ...row, verifiedAt: Date.now() - 31 * 24 * 60 * 60_000 }));
+    expect(canVerifyCounterPinOffline()).toBe(false);
+    offline();
+    await expect(verifyCounterPin("2468", { allowOffline: true })).rejects.toThrow("needs a connection");
+  });
+
+  it("treats a corrupted record as 'not armed' rather than throwing at the lock screen", async () => {
+    await trustThisDevice();
+    const row = JSON.parse(localStorage.getItem(COUNTER_PIN_OFFLINE_KEY)!);
+    localStorage.setItem(COUNTER_PIN_OFFLINE_KEY, JSON.stringify({ ...row, salt: "not valid base64!!" }));
+    expect(canVerifyCounterPinOffline()).toBe(false);
+    offline();
+    await expect(verifyCounterPin("2468", { allowOffline: true })).rejects.toThrow("needs a connection");
+  });
+
+  it("never stores the PIN itself", async () => {
+    await trustThisDevice("2468");
+    expect(localStorage.getItem(COUNTER_PIN_OFFLINE_KEY)).not.toContain("2468");
+  });
+
+  it("is cleared on sign-out", async () => {
+    await trustThisDevice();
+    clearAuthStorage();
+    expect(localStorage.getItem(COUNTER_PIN_OFFLINE_KEY)).toBeNull();
   });
 });
 
