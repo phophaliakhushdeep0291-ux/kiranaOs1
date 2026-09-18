@@ -8,7 +8,6 @@ const routeTransition = read("../components/shared/RouteTransition.tsx");
 const dataTable = read("../components/shared/DataTableCard.tsx");
 const textInput = read("../components/forms/TextInput.tsx");
 const selectInput = read("../components/forms/SelectInput.tsx");
-const form = read("../components/ui/form.tsx");
 const toast = read("../components/ui/toast.tsx");
 const confirmDialog = read("../components/shared/ConfirmDialog.tsx");
 const taxes = read("../features/core/settings/pages/TaxesSettingsPage.tsx");
@@ -32,8 +31,10 @@ describe("premium UX foundations", () => {
     expect(textInput).toContain("useId");
     expect(selectInput).toContain("useId");
     expect(selectInput).toContain("aria-describedby={describedBy}");
-    expect(form).toContain('role="alert"');
-    expect(form).toContain('aria-live="polite"');
+    // components/ui/form.tsx was asserted here too, for the same role="alert" /
+    // aria-live="polite" pair. It was unreachable shadcn scaffolding that no screen
+    // imported, so the assertion proved an accessibility promise to nobody. The
+    // controls below are the ones a shopkeeper actually types into.
     expect(settingsUi).toContain("labelControl(pill, label, descriptionId)");
     expect(settingsUi).toContain('role="group"');
   });

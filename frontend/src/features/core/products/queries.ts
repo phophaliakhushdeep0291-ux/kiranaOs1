@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ApiClientError, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
 import { instantCacheUpdatedAt, KEEP_EVERY_ROW, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
-import { offlineDB } from "@/lib/offline/db";
+import { dexieDB, offlineDB } from "@/lib/offline/db";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import * as productsApi from "@/features/core/products/api";
 import { createProductLocalFirst, deleteProductLocalFirst, updateProductLocalFirst } from "@/features/core/products/local-actions";
@@ -45,9 +45,39 @@ export async function cacheProducts(products: Product[]) {
   writeInstantCache(productsCacheKey(), products, KEEP_EVERY_ROW);
   try {
     await offlineDB.putMany("products", products);
+    await dropSupersededLocalRows(products);
   } catch {
     // LocalStorage cache is still available for instant paint.
   }
+}
+
+/**
+ * Delete the device-minted row a product had before the server answered.
+ *
+ * Sync already removes it (replaceLocalEntityId), but for a while the merge above
+ * handed the row back under its old id and putMany re-created it, so a shop that
+ * imported a catalogue is carrying orphans that nothing will ever clear: their
+ * outbox rows are SYNCED, so no retry will revisit them. They stayed invisible
+ * because the merge dedupes for display — the tell was an SKU count above the
+ * real catalogue, and 894 IndexedDB rows for 560 products.
+ *
+ * Every row written here that carries a `clientProductId` names its own superseded
+ * twin, so the set to delete needs no extra read. Deleting an id we are also
+ * writing would undo this write, which is why the server ids are excluded.
+ *
+ * One bulkDelete rather than a delete per id: after a catalogue import EVERY row
+ * carries a client id, so the naive loop was 560 IndexedDB round trips on a screen
+ * that refetches, and normally all 560 would be deletes of rows that are already
+ * gone. bulkDelete is one transaction and ignores keys that are not there.
+ */
+async function dropSupersededLocalRows(products: Product[]): Promise<void> {
+  const keep = new Set(products.map((product) => product.id));
+  const superseded = products
+    .map((product) => (product as Product & { clientProductId?: unknown }).clientProductId)
+    .filter((id): id is string => typeof id === "string" && id.length > 0)
+    .filter((id) => !keep.has(id));
+  if (superseded.length === 0) return;
+  await dexieDB.table("products").bulkDelete(superseded);
 }
 
 function readCachedProducts(params?: ListProductsParams): Product[] {
@@ -159,6 +189,36 @@ function isDeviceOwnedProduct(product: Product): boolean {
   return ["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(String(row.sync_status ?? "").toLowerCase());
 }
 
+/**
+ * Which id the merged row keeps.
+ *
+ * Merging two rows is last-write-wins on every field, and `id` must not play that
+ * game. A local row and the server row it became are matched here by
+ * `clientProductId`, and the local twin is added SECOND — so its device-minted id
+ * overwrote the server id, and the single merged row went back to IndexedDB under
+ * the id sync had just deleted. The server row was still there under its own id,
+ * so one product became two rows, and a catalogue import repeated that 334 times.
+ *
+ * Deduping for DISPLAY hid it: search and the grid showed one product, so the only
+ * visible symptom was an SKU count that counted higher than the shop's catalogue.
+ *
+ * `clientProductId` is the authority, per the same rule productKeys documents: the
+ * row carrying it is the server's echo of a create, so its id is the real one.
+ *
+ * ONLY that case. A pending local EDIT of an already-synced product is a different
+ * shape — it is linked by `server_id`, keeps its own local id on purpose, and the
+ * outbox row references that id (see product-offline-repository.examples: "applies
+ * a pending local edit using its mapped server identity"). Preferring a server id
+ * on id SHAPE rather than on the create link took that case too, and broke it.
+ */
+function canonicalProductId(existing: Product, incoming: Product): string {
+  const existingRow = existing as Product & { clientProductId?: unknown };
+  const incomingRow = incoming as Product & { clientProductId?: unknown };
+  if (existingRow.clientProductId === incoming.id) return existing.id;
+  if (incomingRow.clientProductId === existing.id) return incoming.id;
+  return incoming.id;
+}
+
 export function mergeProducts(serverRows: Product[], localRows: Product[], retainSyncedLocal = false): Product[] {
   const rows: Product[] = [];
   const keyToIndex = new Map<string, number>();
@@ -170,7 +230,20 @@ export function mergeProducts(serverRows: Product[], localRows: Product[], retai
       keys.forEach((key) => keyToIndex.set(key, nextIndex));
       return;
     }
-    rows[index] = { ...rows[index], ...product };
+    const existing = rows[index];
+    // `clientProductId` is the only thing tying a device-minted row to the server
+    // row it became, so a merge must never be able to drop it. The local twin does
+    // not carry one, and a row whose key is present but undefined still wins a
+    // spread — which erased the link on the merged row and left the superseded
+    // twin unidentifiable, so nothing could clean it up afterwards.
+    const link = (existing as Product & { clientProductId?: unknown }).clientProductId
+      ?? (product as Product & { clientProductId?: unknown }).clientProductId;
+    rows[index] = {
+      ...existing,
+      ...product,
+      id: canonicalProductId(existing, product),
+      ...(typeof link === "string" && link ? { clientProductId: link } : {}),
+    };
     productKeys(rows[index]).forEach((key) => keyToIndex.set(key, index));
   };
 
