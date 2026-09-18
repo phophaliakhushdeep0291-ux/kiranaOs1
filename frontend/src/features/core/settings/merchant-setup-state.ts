@@ -51,6 +51,8 @@ export interface MerchantSetupState {
 export interface MerchantSetupFacts {
   storeProfileReady: boolean;
   productCount: number;
+  /** Of those, how many the shop can actually sell without going negative. */
+  productsInStockCount: number;
   customerCount: number;
   supplierCount: number;
   billCount: number;
@@ -205,11 +207,19 @@ export function buildMerchantSetupProgress(
       href: "/products?import=1",
       actionLabel: t("setup.step.products.action"),
       required: true,
-      complete: facts.productCount > 0,
+      // Products alone are not a sellable shelf. The starter catalogue ships with
+      // Opening Stock 0 on every row — correctly, since nobody but the shopkeeper
+      // knows what is actually on the shelf — so loading it left a counter with
+      // 560 items, every one reading "Out", while this step said Ready. The step
+      // describes itself as "price, unit, pack size, AND stock"; it now checks
+      // that last word too, and keeps pointing at where to fix it.
+      complete: facts.productCount > 0 && facts.productsInStockCount > 0,
       skipped: false,
-      detail: facts.productCount > 0
-        ? countLabel(facts.productCount, t("setup.count.product"), t("setup.count.products"))
-        : t("setup.step.products.todo"),
+      detail: facts.productCount === 0
+        ? t("setup.step.products.todo")
+        : facts.productsInStockCount === 0
+          ? t("setup.step.products.noStock", { count: facts.productCount })
+          : countLabel(facts.productCount, t("setup.count.product"), t("setup.count.products")),
       quickAction: starterCatalogQuickAction(facts, t),
     },
     {
