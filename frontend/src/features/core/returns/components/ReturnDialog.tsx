@@ -13,7 +13,7 @@ import { apiRequest } from "@/lib/api/http";
 import { useOfflineStatus } from "@/features/core/sync";
 import { BillPaymentMode, type BillInput } from "@/types/api";
 import { ArrowLeftRight, Copy, Gift, Plus, Trash2 } from "lucide-react";
-import { consumeReturnLine, returnPreviewQuantity, type ReturnLineBalance } from "@/features/core/returns/return-math";
+import { consumeReturnLine, returnPreviewQuantity, unlinkedReturnLineAmount, type ReturnLineBalance } from "@/features/core/returns/return-math";
 
 type ReturnRefundMode = RefundMode | "gift_card";
 /** Exchanges settle in immediate tender only — udhar/store-credit stay plain returns. */
@@ -103,10 +103,15 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
         const linked = consumeReturnLine({ ...line.returnBalance }, returnQty);
         return sum + linked.subtotal + (gstMode === "exclusive" ? linked.gst : 0);
       }
-      const fraction = line.soldQty > 0 ? returnQty / line.soldQty : 1;
-      const soldNet = typeof line.soldLineTotal === "number" && Number.isFinite(line.soldLineTotal) ? Math.abs(line.soldLineTotal) : Math.max(0, line.soldQty * Number(line.ratePerRateUnit || 0) - Number(line.lineDiscount || 0));
-      const net = roundMoney(soldNet * fraction);
-      const tax = gstMode === "exclusive" ? roundMoney(net * Number(line.gstRate ?? 0) / 100) : 0;
+      const { net, tax } = unlinkedReturnLineAmount({
+        returnQty,
+        soldQty: line.soldQty,
+        ratePerRateUnit: Number(line.ratePerRateUnit || 0),
+        lineDiscount: Number(line.lineDiscount || 0),
+        soldLineTotal: line.soldLineTotal,
+        gstRate: Number(line.gstRate ?? 0),
+        gstMode,
+      });
       return sum + net + tax;
     }, 0)),
     [gstMode, lines, qty],

@@ -1,4 +1,5 @@
 import { useDataExport } from "@/features/core/reports/DataExportProvider";
+import { billNumberLabel } from "@/features/core/billing/bill-number";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
@@ -555,22 +556,22 @@ export default function BillsPage() {
   const recentActivities = useMemo(() => filtered.filter((bill) => !isDeleted(bill)).slice(0, 4).map((bill) => {
     const status = paymentStatusOf(bill, t);
     const mode = paymentModeOf(bill);
-    const customer = String(bill.customerName || "Walk-in customer");
+    const customer = String(bill.customerName || t("billing.bills.walkInCustomer"));
     const title = isEstimateBill(bill)
-      ? `Estimate saved for ${customer}`
+      ? t("billing.bills.activity.estimateSaved", { customer })
       : bill.status === "cancelled"
-      ? `Bill cancelled for ${customer}`
+      ? t("billing.bills.activity.billCancelled", { customer })
       : isSalesReturnBill(bill)
       ? t("billing.bills.returnActivity", { customer })
       : status === "Udhar"
-        ? `Udhar bill created for ${customer}`
+        ? t("billing.bills.activity.udharCreated", { customer })
         : status === "Partial"
-          ? `Partial payment from ${customer}`
-          : `Payment received from ${customer}`;
+          ? t("billing.bills.activity.partialPayment", { customer })
+          : t("billing.bills.activity.paymentReceived", { customer });
     return {
       id: bill.id,
       title,
-      sub: `${billNo(bill)} - ${money(billTotal(bill))}`,
+      sub: `${billNumberLabel(billNo(bill), t)} - ${money(billTotal(bill))}`,
       time: formatBillDateParts(billDate(bill)).time || formatBillDateParts(billDate(bill)).date,
       tone: isEstimateBill(bill) ? "violet" : bill.status === "cancelled" ? "rose" : mode === "udhar" ? "orange" : "emerald",
       bill,
@@ -741,13 +742,13 @@ export default function BillsPage() {
             </DropdownMenu>
           </div>
           <Button variant="outline" className="hidden h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[#24385f] lg:inline-flex" onClick={() => document.getElementById("billing-history-table")?.scrollIntoView({ block: "start", behavior: "smooth" })}>
-            <Filter size={15} /> Filters
+            <Filter size={15} /> {t("billing.bills.filters")}
           </Button>
           <Button onClick={() => requestExport({ reportType: "bills", format: "csv" }, exportCsv)} disabled={filtered.length === 0} variant="outline" className="hidden h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[var(--brand)] lg:inline-flex">
-            <Download size={15} /> Export
+            <Download size={15} /> {t("billing.bills.export")}
           </Button>
           <Button onClick={requestEstimateCleanup} disabled={counts.estimates === 0 || isSaving} variant="outline" className="hidden h-10 rounded-[8px] border-rose-100 bg-white px-4 text-[12px] font-bold text-rose-600 hover:border-rose-200 hover:bg-rose-50 lg:inline-flex">
-            <Trash2 size={15} /> Clear Estimates
+            <Trash2 size={15} /> {t("billing.bills.clearEstimates")}
           </Button>
           <Button asChild variant="outline" className="h-12 w-full rounded-[14px] border-[#dfe7f2] bg-white px-3 text-[11px] font-bold text-[var(--brand)] lg:mouse:h-10 lg:w-auto lg:rounded-[8px] lg:px-4 lg:text-[12px]">
             <Link href="/billing?billType=estimate"><FileText size={15} />{t("billing.bills.newEstimate")}</Link>
@@ -969,7 +970,7 @@ export default function BillsPage() {
                                 onClick={() => requestPinAction("delete", bill)}
                                 className="inline-flex h-11 items-center gap-1 whitespace-nowrap rounded-xl border border-rose-200 bg-rose-50 px-3 text-[11px] font-bold text-rose-600 transition-colors hover:border-rose-300 hover:bg-rose-100"
                               >
-                                <Trash2 size={13} /> Delete
+                                <Trash2 size={13} /> {t("billing.bills.delete")}
                               </button>
                             )}
                             <DropdownMenu>

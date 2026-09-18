@@ -913,7 +913,10 @@ export default function CustomersPage() {
     if (moneyExceeds(amount, outstanding)) {
       toast({
         title: t("customers.toast.amountExceeds"),
-        description: `${customer?.name ?? t("customers.detail.thisCustomer")} owes ${fmtMoney(outstanding)}. Enter that amount or less.`,
+        description: t("customers.toast.amountExceedsDetail", {
+          name: customer?.name ?? t("customers.detail.thisCustomer"),
+          amount: fmtMoney(outstanding),
+        }),
         variant: "destructive",
       });
       return;
@@ -1078,7 +1081,7 @@ export default function CustomersPage() {
           <div className="flex items-center justify-between px-4 py-3">
             <p className="text-[12px] font-bold text-[#64748b]">{t("customers.list.sort")} <span className="text-[var(--brand-ink)]">{t("customers.sort.highestBalance")}</span></p>
             <Button onClick={openCreate} variant="outline" className="h-8 rounded-[9px] px-3 text-[12px] font-bold">
-              <Plus size={14} className="mr-1" /> Add
+              <Plus size={14} className="mr-1" /> {t("customers.action.add")}
             </Button>
           </div>
 
@@ -1143,7 +1146,7 @@ export default function CustomersPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <h2 className="truncate font-display text-[21px] font-black tracking-tight text-[var(--brand-ink)]">{selectedCustomer.name}</h2>
                         <button onClick={() => openEdit(selectedCustomer)} className="inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[12px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)]">
-                          <Pencil size={13} /> Edit
+                          <Pencil size={13} /> {t("customers.action.edit")}
                         </button>
                         <span className={cn("inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[11px] font-black", selectedTrust!.cls)}>
                           <Star size={12} /> {selectedTrust!.label}
@@ -1248,7 +1251,7 @@ export default function CustomersPage() {
                     </div>
                     <div className="border-t border-[#edf2f8] px-5 py-3 text-center">
                       <Link href={`/customers/${selectedCustomer.id}`} className="inline-flex items-center gap-2 text-[13px] font-black text-[var(--brand)] hover:underline">
-                        View Full Ledger <ChevronRight size={14} />
+                        {t("customers.action.viewFullLedger")} <ChevronRight size={14} />
                       </Link>
                     </div>
                   </>

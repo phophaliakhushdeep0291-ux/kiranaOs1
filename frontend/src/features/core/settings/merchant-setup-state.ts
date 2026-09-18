@@ -6,6 +6,30 @@ import type { Translate } from "@/features/core/settings/i18n";
 
 export const MERCHANT_SETUP_KEY = "onboarding:merchant-setup:v1";
 
+/**
+ * A local table is not a count of what the shop has.
+ *
+ * Two kinds of row live in it besides the real ones. A deleted row keeps a
+ * `deleted_at` tombstone so the deletion can still sync. And for the window
+ * between a push and the pull that confirms it, the server's echo sits beside the
+ * device's own row — same product, two rows, linked only by `clientProductId`.
+ *
+ * Counting raw rows therefore overstates the shop. After a one-click starter
+ * catalogue the readiness summary reported "625 products" for a 560-item
+ * catalogue, on the very screen that promises "actual local counts, not demo
+ * numbers", while the catalogue screen correctly showed 560 because it runs
+ * `mergeProducts` first.
+ */
+export function countLiveRows(rows: readonly unknown[]): number {
+  return rows.filter((row) => {
+    if (!row || typeof row !== "object") return false;
+    const record = row as Record<string, unknown>;
+    if (record.deleted_at != null || record.deletedAt != null) return false;
+    // A local twin already merged into its server echo is counted as that echo.
+    return record.merged_into_id == null && record.mergedIntoId == null;
+  }).length;
+}
+
 export type MerchantSetupStepId =
   | "store-profile"
   | "taxes"
