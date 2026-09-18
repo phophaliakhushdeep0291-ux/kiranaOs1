@@ -547,7 +547,11 @@ if (exists("src/modules/products/products.routes.js")) {
 
 if (exists("src/modules/sync/sync.service.js")) {
   const syncService = read("src/modules/sync/sync.service.js");
-  if (!/case SYNC_EVENT_TYPES\.RESTORE_PRODUCT:[\s\S]*assertOwnerPermission\(shopId, user, getEventOwnerPin\(event\)\)[\s\S]*return applyRestoreProduct/.test(syncService)) {
+  // The trailing argument is the push context, which carries the batch's
+  // owner-PIN proof so one approval is verified once rather than once per event.
+  // The gate itself is what this checks, and it is still here, still before the
+  // restore.
+  if (!/case SYNC_EVENT_TYPES\.RESTORE_PRODUCT:[\s\S]*assertOwnerPermission\(shopId, user, getEventOwnerPin\(event\)(?:, context)?\)[\s\S]*return applyRestoreProduct/.test(syncService)) {
     errors.push("Offline RESTORE_PRODUCT sync must assert owner permission before restore");
   }
 }
