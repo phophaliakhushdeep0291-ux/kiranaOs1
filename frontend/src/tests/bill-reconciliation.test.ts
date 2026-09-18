@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/core/sync/bill-reconciliation";
+import { dedupeBillsForDisplay, dedupePaymentsForDisplay, pairServerChildRows } from "@/features/core/sync/bill-reconciliation";
 
 describe("bill reconciliation display dedupe", () => {
   it("prefers the synced server bill over the local pending bill", () => {
@@ -149,4 +149,65 @@ describe("payment reconciliation display dedupe", () => {
     expect(rows.map((row) => row.id).sort()).toEqual(["server_payment_cash", "server_payment_upi"]);
   });
 
+});
+
+describe("pairing a bill's server rows back to the local rows they came from", () => {
+  // The real shape of a first sync: local ids are random uuids, so Dexie hands
+  // these back in an order unrelated to the cart, while the server echoes them
+  // in cart order. Nothing here carries a server id yet.
+  const butterLocal = { id: "bill_item_f1e2", bill_id: "bill_local_1", name: "Amul Butter 100g", productId: "prod_amul", quantity: 3, ratePerRateUnit: 62, line_total: 186, lineTotal: 186 };
+  const pasteLocal = { id: "bill_item_0a9b", bill_id: "bill_local_1", name: "Colgate Strong Teeth 100g", productId: "prod_colgate", quantity: 1, ratePerRateUnit: 60, line_total: 60, lineTotal: 60 };
+  const butterServer = { id: "srv_item_butter", billId: "server_bill_1", name: "Amul Butter 100g", productId: "prod_amul", quantity: 3, ratePerRateUnit: 62, lineTotal: 186 };
+  const pasteServer = { id: "srv_item_paste", billId: "server_bill_1", name: "Colgate Strong Teeth 100g", productId: "prod_colgate", quantity: 1, ratePerRateUnit: 60, lineTotal: 60 };
+
+  it("pairs each server line with its own local line whatever order the local rows arrive in", () => {
+    for (const locals of [[butterLocal, pasteLocal], [pasteLocal, butterLocal]]) {
+      const paired = pairServerChildRows([butterServer, pasteServer], locals);
+      expect(paired.map((row) => row?.id)).toEqual([butterLocal.id, pasteLocal.id]);
+    }
+  });
+
+  it("never hands the same local row to two server rows", () => {
+    const paired = pairServerChildRows([butterServer, pasteServer], [pasteLocal, butterLocal]);
+    const ids = paired.map((row) => row?.id).filter(Boolean);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("still prefers an explicit server id over the business key", () => {
+    const alreadySynced = { ...pasteLocal, id: "srv_item_paste", server_id: "srv_item_paste" };
+    const paired = pairServerChildRows([pasteServer, butterServer], [butterLocal, alreadySynced]);
+    expect(paired[0]?.id).toBe("srv_item_paste");
+    expect(paired[1]?.id).toBe(butterLocal.id);
+  });
+
+  it("leaves a genuinely new server line unpaired rather than stealing another line's row", () => {
+    const extra = { id: "srv_item_rice", billId: "server_bill_1", name: "Tata Salt 1kg", productId: "prod_salt", quantity: 2, ratePerRateUnit: 28, lineTotal: 56 };
+    const paired = pairServerChildRows([butterServer, extra], [butterLocal]);
+    expect(paired[0]?.id).toBe(butterLocal.id);
+    expect(paired[1]).toBeUndefined();
+  });
+
+  it("pairs on name when the local row still holds a local product id", () => {
+    const offlineProduct = { ...butterLocal, productId: "product_7c3d-local" };
+    const paired = pairServerChildRows([pasteServer, butterServer], [offlineProduct, pasteLocal]);
+    expect(paired.map((row) => row?.id)).toEqual([pasteLocal.id, offlineProduct.id]);
+  });
+
+  it("falls back to position for two identical lines, where either pairing is the same", () => {
+    const a = { id: "bill_item_aaa", bill_id: "bill_local_2", name: "Loose Sugar", quantity: 1, ratePerRateUnit: 45, lineTotal: 45 };
+    const b = { id: "bill_item_bbb", bill_id: "bill_local_2", name: "Loose Sugar", quantity: 1, ratePerRateUnit: 45, lineTotal: 45 };
+    const s1 = { id: "srv_sugar_1", billId: "server_bill_2", name: "Loose Sugar", quantity: 1, ratePerRateUnit: 45, lineTotal: 45 };
+    const s2 = { id: "srv_sugar_2", billId: "server_bill_2", name: "Loose Sugar", quantity: 1, ratePerRateUnit: 45, lineTotal: 45 };
+    const paired = pairServerChildRows([s1, s2], [a, b]);
+    expect(paired.map((row) => row?.id).sort()).toEqual([a.id, b.id]);
+  });
+
+  it("pairs payments by mode and amount, not position", () => {
+    const cashLocal = { id: "payment_zz", bill_id: "bill_local_1", mode: "cash", amount: 650 };
+    const upiLocal = { id: "payment_aa", bill_id: "bill_local_1", mode: "upi", amount: 150 };
+    const cashServer = { id: "srv_pay_cash", billId: "server_bill_1", mode: "cash", amount: 650 };
+    const upiServer = { id: "srv_pay_upi", billId: "server_bill_1", mode: "upi", amount: 150 };
+    const paired = pairServerChildRows([cashServer, upiServer], [upiLocal, cashLocal]);
+    expect(paired.map((row) => row?.id)).toEqual([cashLocal.id, upiLocal.id]);
+  });
 });
