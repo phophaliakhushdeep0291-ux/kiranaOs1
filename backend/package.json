@@ -5,7 +5,7 @@
   "main": "src/server.js",
   "type": "module",
   "scripts": {
-    "dev": "node --watch --import ./src/instrumentation.js src/server.js",
+    "dev": "node --watch-path=./src --import ./src/instrumentation.js src/server.js",
     "start": "node --import ./src/instrumentation.js src/server.js",
     "start:runtime": "node scripts/start-production-runtime.js",
     "db:migrate": "node scripts/update-local-sqlite-schema.js",
@@ -65,7 +65,7 @@
     "db:push:test": "node scripts/run-prisma-test-db.js db push --force-reset --accept-data-loss",
     "test:integration": "node scripts/run-with-env.js PRISMA_CLIENT_VARIANT=integration -- node scripts/run-integration-tests.js",
     "worker": "node --import ./src/instrumentation.js src/workers/index.js",
-    "worker:dev": "node --watch --import ./src/instrumentation.js src/workers/index.js",
+    "worker:dev": "node --watch-path=./src --import ./src/instrumentation.js src/workers/index.js",
     "daily-closing:run": "node scripts/run-daily-closing.js",
     "docker:build": "node scripts/docker-build.js",
     "worker:verify": "node scripts/verify-worker-runtime.js",
