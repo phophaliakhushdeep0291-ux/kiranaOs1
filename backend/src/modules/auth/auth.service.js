@@ -121,7 +121,11 @@ export async function registerShop({ shopName, ownerName, city, address, mobile,
         city,
         address,
         gstNumber,
-        phone,
+        // A kirana's counter number IS the owner's mobile. Registration only asks
+        // for one number, so a shop that does not state a separate landline starts
+        // with its owner's — otherwise every new shop prints bills with no contact
+        // on them and the setup checklist demands a field signup already collected.
+        phone: phone || mobile,
         settingsJson: JSON.stringify(settingsForBusinessType(businessType)),
       },
     });
