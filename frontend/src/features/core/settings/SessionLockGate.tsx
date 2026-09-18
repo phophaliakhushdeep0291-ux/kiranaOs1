@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { verifyCounterPin } from "./counter-unlock";
+import { canVerifyCounterPinOffline } from "@/lib/storage/counter-pin-offline";
 import { isBiometricEnrolled, verifyBiometric } from "./biometric-unlock";
 import { isSessionLocked, persistSessionLock } from "./session-lock-state";
 import { authSessionIdentity } from "@/lib/storage/auth-storage";
@@ -134,6 +135,8 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  // Read once per lock: whether this device can answer for the PIN on its own.
+  const [offlineReady] = useState(() => canVerifyCounterPinOffline());
 
   async function unlockWithBiometric() {
     if (checking) return;
@@ -165,7 +168,9 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
     setChecking(true);
     setError(null);
     try {
-      await verifyCounterPin(value);
+      // The lock screen is the one caller allowed to fall back to this device's
+      // own verifier: an outage must not be able to strand the counter.
+      await verifyCounterPin(value, { allowOffline: true });
       onUnlock();
     } catch (err) {
       const message = (err as { data?: { message?: string }; message?: string })?.data?.message
@@ -194,7 +199,11 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
           {userName ? `${userName}, enter` : "Enter"} the owner PIN to get back to the counter. This lock follows your
           Settings &rarr; Security session rules.
         </p>
-        <p className="session-lock-description">{t("settings.lock.connectionHelp")}</p>
+        {/* Only warn about the network when it would actually stop the unlock. A
+            device the server has already verified checks the PIN itself, and
+            telling that counter it needs a connection sends it looking for a
+            problem it does not have. */}
+        {offlineReady ? null : <p className="session-lock-description">{t("settings.lock.connectionHelp")}</p>}
         <form className="session-lock-form" onSubmit={(event) => void submit(event)}>
           <Input
             ref={inputRef}
