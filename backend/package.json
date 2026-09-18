@@ -139,7 +139,7 @@
     "test:shop-onboarding": "node scripts/run-db-example-tests.js tests/auth-email-recovery.examples.js tests/shop-phone-from-registration.examples.js tests/business-profiles.examples.js tests/business-profile-middleware.examples.js tests/gst-primary-location-inheritance.examples.js tests/plan-enforcement.examples.js tests/subscription-coupon.examples.js tests/bill-whatsapp.examples.js",
     "test:stock-traceability": "node scripts/run-db-example-tests.js tests/stock-ledger-traceability.examples.js tests/purchase-stock-source-link.examples.js tests/stock-purchase-sync-identity.examples.js tests/per-pack-sale-deduction.examples.js tests/product-tier-pricing.examples.js tests/price-above-mrp-refused.examples.js",
     "test:sync-rejection": "node scripts/run-db-example-tests.js tests/owner-pin-verified-once-per-push.examples.js tests/phase47-udhar-atomic-sync.examples.js tests/validation-message-names-the-field.examples.js",
-    "test:source-contracts": "node scripts/run-db-example-tests.js tests/layered-source-architecture.examples.js tests/health-deploy-commit.examples.js tests/test-database-guard-path.examples.js tests/restore-fidelity.examples.js tests/general-ledger.examples.js"
+    "test:source-contracts": "node scripts/run-db-example-tests.js tests/layered-source-architecture.examples.js tests/health-deploy-commit.examples.js tests/test-database-guard-path.examples.js tests/restore-fidelity.examples.js tests/general-ledger.examples.js tests/zoned-date-formatter-is-cached.examples.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",
