@@ -362,18 +362,31 @@ function billTotal(row: LocalBill): number {
  * bills (coupon + loyalty portions live inside it), so "manual" is derived by
  * subtracting those; line discounts are summed from the embedded items.
  */
-/** Sales bucketed by local hour of day — "when is the counter busy". */
+/**
+ * Sales bucketed by local hour of day — "when is the counter busy".
+ *
+ * Refunds net out, so these hours add up to the period's Total Sales. They land
+ * in the hour the refund was RECORDED, not the hour of the sale it reverses:
+ * Total Sales counts a return in the range the return itself falls in, so
+ * bucketing it by the original sale's hour would stop the two agreeing the
+ * moment somebody returns today what they bought last week.
+ *
+ * `bills` stays a count of sales. It answers "how many customers did I serve in
+ * this hour", which a refund arriving later does not change — so an hour can
+ * hold a negative amount against no bills, and that is the honest reading.
+ */
 export function calculateHourlySales(bills: LocalBill[], range: DateRange): ReportHourlySalesRow[] {
   const buckets = Array.from({ length: 24 }, (_, hour) => ({ hour, sales: 0, bills: 0 }));
   for (const bill of bills) {
     if (!isSaleBill(bill) || !isWithinRange(bill as RecordLike, range)) continue;
-    if (String(bill.billType ?? bill.bill_type ?? "").toLowerCase().includes("return")) continue;
     const raw = rowDate(bill as RecordLike);
     const time = new Date(raw).getTime();
     if (!Number.isFinite(time)) continue;
     const hour = new Date(time).getHours();
     buckets[hour].sales = roundMoney(buckets[hour].sales + billTotal(bill));
-    buckets[hour].bills += 1;
+    if (!String(bill.billType ?? bill.bill_type ?? "").toLowerCase().includes("return")) {
+      buckets[hour].bills += 1;
+    }
   }
   return buckets;
 }
