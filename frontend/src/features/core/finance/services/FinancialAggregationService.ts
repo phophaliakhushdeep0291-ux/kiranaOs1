@@ -375,10 +375,26 @@ function billPaid(bill: RecordLike): number {
   return roundMoney(readNumber(bill.paidAmount ?? bill.paid_amount ?? bill.buyerPaidAmount ?? bill.buyer_paid_amount, 0));
 }
 
+/**
+ * What this bill added to — or took off — what the customer owes.
+ *
+ * The clamp is right for a sale: a sale whose credit column has gone negative is
+ * corrupt, and letting it reduce the day's udhar would hide the corruption
+ * inside a smaller number. It is wrong for a refund, where the negative IS the
+ * fact. A return that reduced a customer's debt carries `creditAmount: -20` and
+ * no payment rows at all, so clamping it left the udhar slice showing the sale
+ * in full while TOTAL SALES beside it had already dropped by the refund.
+ */
+function isSalesReturnBill(bill: RecordLike): boolean {
+  return String(bill.billType ?? bill.bill_type ?? "").toLowerCase() === "sales_return";
+}
+
 function billCredit(bill: RecordLike): number {
+  const signed = isSalesReturnBill(bill);
+  const clamp = (value: number) => (signed ? value : Math.max(0, value));
   const explicit = readNumber(bill.creditAmount ?? bill.credit_amount ?? bill.dueAmount ?? bill.due_amount, NaN);
-  if (Number.isFinite(explicit)) return roundMoney(Math.max(0, explicit));
-  return roundMoney(Math.max(0, billTotal(bill) - billPaid(bill)));
+  if (Number.isFinite(explicit)) return roundMoney(clamp(explicit));
+  return roundMoney(clamp(billTotal(bill) - billPaid(bill)));
 }
 
 function billDiscount(bill: RecordLike): number {
@@ -481,7 +497,12 @@ function billLinkedTender(bill: RecordLike, payments: LocalPayment[]): TenderTot
 
 function tenderForBill(bill: RecordLike, payments: LocalPayment[]): TenderTotals {
   const embedded = billEmbeddedTender(bill);
-  if (embedded.cash > 0 || embedded.upi > 0 || embedded.bank > 0) return embedded;
+  // Non-zero, not positive. A refund's tender is negative, so a `> 0` test read
+  // "this bill states no tender" and fell through to the linked payment rows —
+  // which a return written offline, or by an older client, does not have. The
+  // refund then vanished from the tender split while still reducing the day's
+  // sales.
+  if (embedded.cash !== 0 || embedded.upi !== 0 || embedded.bank !== 0) return embedded;
   return billLinkedTender(bill, payments);
 }
 
