@@ -160,7 +160,7 @@ export async function getSnapshotStaleness(shopId, date, snapshot, locationId = 
   const { start, end } = dateRangeForDateOnly(date, env.DAILY_CLOSING_TIMEZONE);
   const generatedAt = new Date(snapshot.generatedAt);
 
-  const [billChange, udharChange, stockChange] = await Promise.all([
+  const [billChange, udharChange, stockChange, expenseChange] = await Promise.all([
     db.bill.findFirst({
       where: { shopId, ...(locationId && { locationId }), businessDate: { gte: start, lte: end }, updatedAt: { gt: generatedAt } },
       orderBy: { updatedAt: "desc" },
@@ -176,9 +176,16 @@ export async function getSnapshotStaleness(shopId, date, snapshot, locationId = 
       orderBy: { updatedAt: "desc" },
       select: { updatedAt: true },
     }),
+    // Include edits that move an expense out of this day or location, too.
+    // The old snapshot may still contain its former cash deduction.
+    db.expense.findFirst({
+      where: { shopId, updatedAt: { gt: generatedAt } },
+      orderBy: { updatedAt: "desc" },
+      select: { updatedAt: true },
+    }),
   ]);
 
-  const latest = [billChange?.updatedAt, udharChange?.updatedAt, stockChange?.updatedAt]
+  const latest = [billChange?.updatedAt, udharChange?.updatedAt, stockChange?.updatedAt, expenseChange?.updatedAt]
     .filter(Boolean)
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
 
@@ -305,13 +312,20 @@ export async function recordDailyClosingDrawerCount(shopId, date, input, actor =
       throw error;
     }
 
-    const drawerExpectedCashPaise = Number(current.expectedCashPaise ?? 0)
+    // Recompute inside the count transaction. A snapshot generated before a
+    // payment, refund or expense edit must not create a false drawer shortage.
+    const live = await getDailyClosing(shopId, { date: dateKey(day), locationId: location.id }, tx);
+    const refreshed = dailyClosingToSnapshotData(shopId, day, live, {
+      source: "manual", userId: actor.userId ?? null, storeId: location.id,
+    });
+    const drawerExpectedCashPaise = Number(refreshed.expectedCashPaise ?? 0)
       + openingCashPaise
       + manualCashInPaise
       - manualCashOutPaise;
     const updated = await tx.dailyClosingSnapshot.update({
       where: { id: current.id },
       data: {
+        ...refreshed,
         openingCashPaise,
         manualCashInPaise,
         manualCashOutPaise,

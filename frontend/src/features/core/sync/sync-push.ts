@@ -1,3 +1,4 @@
+import { acknowledgeCompletedPurchaseRows } from "@/features/core/sync/purchase-acknowledgement";
 import {
   filterRowsForCurrentScope,
   offlineDB,
@@ -419,6 +420,9 @@ async function handlePushResults(
         await markEntitySynced(item.event, serverEntity, serverId);
       }
       await updateOutboxStatus([item.event], "SYNCED");
+      if (["UPDATE_PURCHASE_BILL", "DELETE_PURCHASE_BILL", "RECORD_SUPPLIER_PAYMENT", "REVERSE_SUPPLIER_PAYMENT"].includes(item.event.operation_type)) {
+        await acknowledgeCompletedPurchaseRows();
+      }
       pushed += 1;
       continue;
     }

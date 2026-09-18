@@ -46,7 +46,7 @@ function IssueRow({ item, t }: { item: SyncFailureExplanation; t: Translate }) {
   );
 }
 
-export function SyncDiagnosticsSection() {
+export function SyncDiagnosticsSection({ refreshKey = "" }: { refreshKey?: string }) {
   const { t, language } = useAppLanguage();
   const [data, setData] = useState<SyncDiagnostics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,7 +72,7 @@ export function SyncDiagnosticsSection() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [refreshKey]);
 
   const issues = data ? [...data.recentFailures, ...data.recentConflicts] : [];
 

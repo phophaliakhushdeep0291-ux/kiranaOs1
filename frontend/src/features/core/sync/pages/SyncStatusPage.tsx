@@ -1456,7 +1456,7 @@ export default function SyncStatusPage() {
         <FleetHealthCard fleet={snapshot.fleet} currentDeviceId={snapshot.deviceId} />
       )}
 
-      <SyncDiagnosticsSection />
+      <SyncDiagnosticsSection refreshKey={`${pendingCount}:${failedCount}:${conflictCount}`} />
 
       <Card>
         <CardHeader>

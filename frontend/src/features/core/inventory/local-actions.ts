@@ -170,7 +170,9 @@ function buildUpdatedProduct(
     costPrice: nextAverageCost,
     updatedAt: now,
     updated_at: now,
-    sync_status: "pending_sync",
+    // The stock operation owns this projection; it does not enqueue a product edit.
+    // Preserve real profile edits without making the server's stock echo a conflict.
+    sync_status: (product as Product & { sync_status?: string }).sync_status ?? "synced",
     stockNeedsReview: nextStock < 0,
     negativeStockWarning: nextStock < 0 ? "Stock is negative. Add stock when inventory is updated." : undefined,
     isLowStock: nextStock <= readNumber(product.lowStockThreshold, 0),

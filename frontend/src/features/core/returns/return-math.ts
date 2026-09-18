@@ -117,6 +117,11 @@ export function remainingReturnQuantity(balance: ReturnLineBalance): number {
   return Math.max(0, roundMoney(balance.soldQuantity - balance.returnedQuantity));
 }
 
+/** A live preview can outlast its balance while a return commits or syncs. */
+export function returnPreviewQuantity(requested: number, balance: ReturnLineBalance): number {
+  return Math.min(Math.max(0, roundMoney(requested)), remainingReturnQuantity(balance));
+}
+
 /** Calculate one linked return and consume it from the in-memory balance. */
 export function consumeReturnLine(balance: ReturnLineBalance, quantity: number) {
   const requestedQuantity = Math.abs(roundMoney(quantity));

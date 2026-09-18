@@ -81,6 +81,10 @@ export function cancelRental(id: string, reason?: string) {
   return apiRequest<RentalBooking>(`/rentals/${id}/cancel`, { method: "POST", body: JSON.stringify({ reason }) });
 }
 
+export function settleRental(id: string, data: { amount: number; expectedAdvancePaid: number; paymentMode: string; reference?: string }) {
+  return apiRequest<RentalBooking>(`/rentals/${id}/settle`, { method: "POST", body: JSON.stringify(data) });
+}
+
 export function deleteRental(id: string) {
   return apiRequest<RentalBooking>(`/rentals/${id}`, { method: "DELETE" });
 }

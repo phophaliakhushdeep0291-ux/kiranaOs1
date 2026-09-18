@@ -4,7 +4,7 @@ import { requireDeviceActivated } from "../../../modules/devices/device.middlewa
 import { requireShop } from "../../../middleware/permissions.js";
 import { requireFeature } from "../../../modules/feature-gates/featureGate.middleware.js";
 import { validate } from "../../../middleware/validate.js";
-import { cancelRentalSchema, createRentalSchema, returnRentalSchema, updateRentalSchema } from "./rentals.schema.js";
+import { cancelRentalSchema, createRentalSchema, returnRentalSchema, settleRentalSchema, updateRentalSchema } from "./rentals.schema.js";
 import * as ctrl from "./rentals.controller.js";
 
 const router = Router();
@@ -20,6 +20,7 @@ router.post("/", validate(createRentalSchema), ctrl.create);
 router.patch("/:id", validate(updateRentalSchema), ctrl.update);
 router.post("/:id/pickup", ctrl.pickup);
 router.post("/:id/return", validate(returnRentalSchema), ctrl.markReturned);
+router.post("/:id/settle", validate(settleRentalSchema), ctrl.settle);
 router.post("/:id/cancel", validate(cancelRentalSchema), ctrl.cancel);
 router.delete("/:id", ctrl.remove);
 router.post("/:id/restore", ctrl.restore);

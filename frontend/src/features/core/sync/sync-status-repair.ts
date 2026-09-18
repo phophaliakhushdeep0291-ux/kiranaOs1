@@ -1,3 +1,4 @@
+import { acknowledgeCompletedPurchaseRows } from "@/features/core/sync/purchase-acknowledgement";
 import { roundMoney } from "@/lib/money";
 import { dexieDB, filterRowsForCurrentScope, MAX_AUTOMATIC_RETRY_ATTEMPTS, offlineDB, rowMatchesCurrentScope, type OfflineRow, type PendingSyncEvent } from "@/lib/offline/db";
 import { nowIso } from "@/lib/offline/context";
@@ -674,7 +675,8 @@ export async function repairResolvedSyncStatusNoise(options: {
   const financialRepaired = await hardenLocalFinancialData().then((result) => result.total).catch(() => 0);
   const billRepaired = await repairStaleSyncedBillOutboxFailures().catch(() => 0);
   const duplicateKeyRepaired = await repairResolvedDuplicateKeyOutboxFailures().catch(() => 0);
-  const repaired = staleSyncingRepaired + retryableValidationRepaired + retryablePurchaseAndLedgerRepaired + cancellationRepaired + financialRepaired + billRepaired + duplicateKeyRepaired;
+  const purchaseAcknowledged = await acknowledgeCompletedPurchaseRows().catch(() => 0);
+  const repaired = purchaseAcknowledged + staleSyncingRepaired + retryableValidationRepaired + retryablePurchaseAndLedgerRepaired + cancellationRepaired + financialRepaired + billRepaired + duplicateKeyRepaired;
   if (repaired > 0 && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
   }

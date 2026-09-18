@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { buildReturnLineBalances, consumeReturnLine } from "@/features/core/returns/return-math";
+import { buildReturnLineBalances, consumeReturnLine, returnPreviewQuantity } from "@/features/core/returns/return-math";
 
 describe("linked return remainder accounting", () => {
+  it("keeps a live preview valid as another return consumes its selected quantity", () => {
+    const balance = buildReturnLineBalances({
+      lines: [{ id: "line-1", quantity: 2, lineTotal: 40, lineDiscount: 0, lineCost: 20, gstRate: 0 }],
+      discount: 0, gst: 0, gstMode: "none",
+    }).get("line-1")!;
+    expect(returnPreviewQuantity(2, balance)).toBe(2);
+    consumeReturnLine(balance, 1);
+    expect(returnPreviewQuantity(2, balance)).toBe(1);
+    expect(consumeReturnLine({ ...balance }, returnPreviewQuantity(2, balance)).subtotal).toBe(20);
+    consumeReturnLine(balance, 1);
+    expect(returnPreviewQuantity(1, balance)).toBe(0);
+    // Preview tolerance must never weaken the write-side limit.
+    expect(() => consumeReturnLine(balance, 1)).toThrow(/exceeds what remains/i);
+  });
   it("gives the final partial return the paise remainder", () => {
     const balances = buildReturnLineBalances({
       lines: [{ id: "line-1", quantity: 3, lineTotal: 100, lineDiscount: 0, lineCost: 40, gstRate: 18 }],

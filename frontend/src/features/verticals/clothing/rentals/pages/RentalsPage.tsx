@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, CalendarDays, CalendarRange, Check, IndianRupee, Loader2, MapPin,
@@ -16,7 +17,7 @@ import { useOfflineStatus } from "@/features/core/sync";
 import { useListProducts } from "@/features/core/products/queries";
 import {
   cancelRental, createRental, deleteRental, getRentalSummary,
-  listRentals, markRentalPickedUp, markRentalReturned, updateRental,
+  listRentals, markRentalPickedUp, markRentalReturned, settleRental, updateRental,
 } from "@/features/verticals/clothing/rentals/api";
 import { RentalBookingPanel } from "@/features/verticals/clothing/rentals/components/RentalBookingPanel";
 import type { RentalBooking, RentalBookingInput, RentalStatus } from "@/types/api";
@@ -56,6 +57,7 @@ const FILTERS: Array<{ key: string; label: string }> = [
 ];
 
 export default function RentalsPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isOnline } = useOfflineStatus();
@@ -65,6 +67,9 @@ export default function RentalsPage() {
   const [editing, setEditing] = useState<RentalBooking | null>(null);
   const [returning, setReturning] = useState<RentalBooking | null>(null);
   const [deleting, setDeleting] = useState<RentalBooking | null>(null);
+  const [collecting, setCollecting] = useState<RentalBooking | null>(null);
+  const [collectionMode, setCollectionMode] = useState("cash");
+  const [collectionReference, setCollectionReference] = useState("");
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:rentals-panel-width", { defaultWidth: 480 });
 
   const bookingsQ = useQuery({ queryKey: ["rentals"], queryFn: () => listRentals() });
@@ -134,6 +139,15 @@ export default function RentalsPage() {
     mutationFn: (id: string) => cancelRental(id),
     onSuccess: () => { invalidate(); toast({ title: "Booking cancelled" }); },
     onError: failure("Could not cancel"),
+  });
+
+  const collectMut = useMutation({
+    mutationFn: (booking: RentalBooking) => settleRental(booking.id, {
+      amount: booking.balanceDue, expectedAdvancePaid: booking.advancePaid,
+      paymentMode: collectionMode, reference: collectionReference.trim() || undefined,
+    }),
+    onSuccess: () => { invalidate(); setCollecting(null); toast({ title: t("rental.collection.saved") }); },
+    onError: failure(t("rental.collection.failed")),
   });
 
   const deleteMut = useMutation({
@@ -296,6 +310,11 @@ export default function RentalsPage() {
                         </td>
                         <td data-label="Actions" className="px-5 py-3 align-top">
                           <div className="flex flex-wrap items-center justify-end gap-2 lg:mouse:gap-1.5">
+                            {booking.status === "returned" && booking.balanceDue > 0 && (
+                              <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" disabled={!isOnline} onClick={() => { setCollecting(booking); setCollectionMode("cash"); setCollectionReference(""); }}>
+                                <IndianRupee size={13} /> {t("rental.collection.action")}
+                              </Button>
+                            )}
                             {booking.status === "booked" && (
                               <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" disabled={pickupMut.isPending} onClick={() => pickupMut.mutate(booking.id)}>
                                 <Check size={13} /> Picked up
@@ -336,11 +355,31 @@ export default function RentalsPage() {
       />
 
       <ReturnDialog
+        key={returning?.id ?? "no-return"}
         booking={returning}
         saving={returnMut.isPending}
         onClose={() => setReturning(null)}
         onConfirm={(lateFee, damageCharge) => returning && returnMut.mutate({ id: returning.id, lateFee, damageCharge })}
       />
+
+      <Dialog open={collecting !== null} onOpenChange={(open) => !open && !collectMut.isPending && setCollecting(null)}>
+        <DialogContent className="max-w-[400px]">
+          <DialogHeader><DialogTitle>{t("rental.collection.title")}</DialogTitle></DialogHeader>
+          <p className="text-sm">{collecting?.bookingNumber} · {collecting?.customerName}</p>
+          <p className="text-xl font-bold">{t("rental.collection.balance")}: {inr(collecting?.balanceDue ?? 0)}</p>
+          <p className="text-sm text-muted-foreground">{t("rental.collection.help")}</p>
+          <Label htmlFor="rental-collection-mode">{t("rental.collection.mode")}</Label>
+          <select id="rental-collection-mode" className="h-11 rounded-md border bg-background px-3" value={collectionMode} onChange={(event) => setCollectionMode(event.target.value)} disabled={collectMut.isPending}>
+            <option value="cash">{t("rental.collection.cash")}</option><option value="upi">{t("rental.collection.upi")}</option><option value="bank">{t("rental.collection.bank")}</option><option value="card">{t("rental.collection.card")}</option><option value="other">{t("rental.collection.other")}</option>
+          </select>
+          <Label htmlFor="rental-collection-reference">{t("rental.collection.reference")}</Label>
+          <Input id="rental-collection-reference" maxLength={160} value={collectionReference} onChange={(event) => setCollectionReference(event.target.value)} disabled={collectMut.isPending} />
+          <div className="flex gap-2">
+            <Button variant="outline" disabled={collectMut.isPending} onClick={() => setCollecting(null)}>{t("rental.collection.cancel")}</Button>
+            <Button disabled={!isOnline || collectMut.isPending} onClick={() => collecting && collectMut.mutate(collecting)}>{collectMut.isPending ? t("rental.collection.saving") : t("rental.collection.confirm")}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <DialogContent className="max-w-[380px]">
