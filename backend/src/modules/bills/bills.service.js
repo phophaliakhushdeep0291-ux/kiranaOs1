@@ -1268,6 +1268,30 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
       ])];
       const dbProducts = await tx.product.findMany({ where: { id: { in: productIds }, shopId } });
       const productMap = Object.fromEntries(dbProducts.map((p) => [p.id, p]));
+      // A STANDALONE return quantity is counted in packs, exactly as the till counts
+      // a sale — "1" means one 750 ml bottle, not one millilitre. The sale path
+      // resolves that pack and multiplies by its conversionToBase; this path only
+      // had toBaseQty, which reads `enteredUnit` and rejects anything that is not a
+      // bare unit. Since a pack's own label ("bottle 750 ml") is what the catalogue
+      // shows and what the till sends, every standalone return of a packaged product
+      // was refused by the server AFTER the screen said "Return recorded" — the
+      // operation parked in sync_conflicts for a human. Resolved the same way here.
+      const returnSellingUnits = productIds.length > 0
+        ? await tx.productSellingUnit.findMany({ where: { shopId, productId: { in: productIds }, isActive: true } })
+        : [];
+      const returnSellingUnitById = new Map(returnSellingUnits.map((unit) => [unit.id, unit]));
+      const returnSellingUnitByCode = new Map(returnSellingUnits.map((unit) => [`${unit.productId}:${unit.unitCode}`, unit]));
+      const returnDefaultSellingUnit = new Map();
+      for (const unit of returnSellingUnits) {
+        const current = returnDefaultSellingUnit.get(unit.productId);
+        if (!current || unit.isDefault) returnDefaultSellingUnit.set(unit.productId, unit);
+      }
+      const resolveReturnPack = (item, product) => (product
+        ? (item.sellingUnitId ? returnSellingUnitById.get(item.sellingUnitId) : null)
+          ?? (item.sellingUnitCode ? returnSellingUnitByCode.get(`${product.id}:${item.sellingUnitCode}`) : null)
+          ?? returnDefaultSellingUnit.get(product.id)
+          ?? null
+        : null);
 
       let subtotal = 0;
       let totalGst = 0;
@@ -1389,9 +1413,16 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
         const costPerRateUnit = Number(originalItem?.costPerRateUnit ?? product?.costPerRateUnit ?? 0);
         const originalQuantity = Math.abs(Number(originalItem?.quantity ?? 0));
         const returnFraction = originalItem ? Number(item.quantity) / Math.max(originalQuantity, 0.000001) : 0;
+        // A linked return reverses the exact base quantity the original line moved.
+        // A standalone one is stated in packs, so it converts through the pack —
+        // and only falls back to a bare-unit conversion when the product sells
+        // loose and therefore has no packaging at all.
+        const returnPack = originalItem ? null : resolveReturnPack(item, product);
         const qtyInBase = originalItem
           ? round2(Math.abs(Number(originalItem.quantityInBaseUnit)) * returnFraction)
-          : product ? toBaseQty(item.quantity, enteredUnit, product.baseUnit) : item.quantity;
+          : returnPack
+            ? round2(Math.abs(Number(item.quantity)) * Number(returnPack.conversionToBase))
+            : product ? toBaseQty(item.quantity, enteredUnit, product.baseUnit) : item.quantity;
         const originalFinancial = originalItem ? originalFinancialByLine.get(originalItem.id) : null;
         const availableQuantity = originalFinancial
           ? Math.max(0, subtractMoney(originalFinancial.soldQuantity, originalFinancial.returnedQuantity))
@@ -1406,6 +1437,10 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
         );
         const qtyInRateUnit = originalItem
           ? round2((Math.abs(Number(originalItem.lineTotal)) + Math.abs(Number(originalItem.lineDiscount ?? 0))) * returnFraction / Math.max(Math.abs(Number(originalItem.ratePerRateUnit)), 0.000001))
+          // A pack IS the rate unit — the price is per bottle, and the request already
+          // counted bottles. Converting through `rateUnit` would ask the unit table for
+          // "bottle", which it does not carry and must not guess at.
+          : returnPack ? Math.abs(Number(item.quantity))
           : product ? baseQtyToRateQty(qtyInBase, rateUnit, baseUnit) : item.quantity;
 
         const authoritativeRate = Number(originalItem?.ratePerRateUnit ?? item.ratePerRateUnit);
@@ -1494,8 +1529,10 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
             // (2 of the 3 boxes sold). Taking it from the request rather than
             // re-deriving from qtyInBase avoids rounding a pack back into a
             // fraction of itself.
-            sellingUnitId: originalItem?.sellingUnitId ?? null,
-            sellingUnitQty: originalItem?.sellingUnitId ? Math.abs(Number(item.quantity)) : 0,
+            // A standalone return resolves its own pack (above), so a per_pack
+            // product's own count moves rather than only the base pool.
+            sellingUnitId: originalItem?.sellingUnitId ?? returnPack?.id ?? null,
+            sellingUnitQty: (originalItem?.sellingUnitId ?? returnPack?.id) ? Math.abs(Number(item.quantity)) : 0,
           });
         }
 

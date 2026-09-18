@@ -506,6 +506,7 @@ export const billingEn = {
   "billing.page.originalCustomerCopy": "Original customer copy",
   "billing.page.estimateCopy": "Estimate copy",
   "billing.page.negativeStockTitle": "Stock will go negative",
+  "billing.page.negativeStockDetail": "{product}: {available} {unit} available, {requested} {unit} selling. Stock will become {after} {unit}.",
 
   // Search strip
   "billing.search.searchedBefore": "Searched before",
@@ -519,10 +520,19 @@ export const billingEn = {
   // reading the component rather than by trusting the checker.
   // Bills list: sync chips, row identity and the pager.
   "billing.bills.pendingSync": "{count} pending sync",
+  "billing.bills.filters": "Filters",
+  "billing.bills.export": "Export",
+  "billing.bills.delete": "Delete",
   "billing.bills.estimatesSeparated": "{count} estimate bills separated",
   "billing.bills.inRecycleBin": "{count} in recycle bin",
   "billing.bills.waitingBackup": "{count} waiting for backup",
   "billing.bills.billNo": "Bill #{number}",
+  "billing.billNumber.pending": "#{reference} · number after backup",
+  "billing.bills.activity.estimateSaved": "Estimate saved for {customer}",
+  "billing.bills.activity.billCancelled": "Bill cancelled for {customer}",
+  "billing.bills.activity.udharCreated": "Udhar bill created for {customer}",
+  "billing.bills.activity.partialPayment": "Partial payment from {customer}",
+  "billing.bills.activity.paymentReceived": "Payment received from {customer}",
   "billing.bills.walkInCustomer": "Walk-in Customer",
   "billing.bills.moveEstimateToBin": "Move estimate to recycle bin",
   "billing.bills.moveToBin": "Move to recycle bin",

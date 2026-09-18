@@ -12,6 +12,7 @@
 // pluralise by adding "s", so `${n} change${n === 1 ? "" : "s"}` is untranslatable.
 export const syncEn = {
   "sync.local.setupNeeded": "Offline setup needed",
+  "sync.conflict.notFound": "Conflict not found",
   "sync.local.reviewNeeded": "Review needed",
   "sync.local.checking": "Checking local data",
   "sync.local.unavailable": "Cannot verify local data",
