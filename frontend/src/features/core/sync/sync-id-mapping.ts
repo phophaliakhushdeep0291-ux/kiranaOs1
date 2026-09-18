@@ -203,10 +203,13 @@ const NON_REFERENCE_IDENTITY_KEYS = new Set([
   "idempotencyKey",
 ]);
 
-function deepReplaceExact(value: unknown, from: string, to: string): unknown {
-  if (value === from) return to;
+function deepReplaceMany(
+  value: unknown,
+  pairs: ReadonlyMap<string, string>,
+): unknown {
+  if (typeof value === "string") return pairs.get(value) ?? value;
   if (Array.isArray(value))
-    return value.map((item) => deepReplaceExact(item, from, to));
+    return value.map((item) => deepReplaceMany(item, pairs));
   if (!isRecord(value)) return value;
   let changed = false;
   const next: Record<string, unknown> = {};
@@ -215,48 +218,76 @@ function deepReplaceExact(value: unknown, from: string, to: string): unknown {
       next[key] = item;
       continue;
     }
-    const replaced = deepReplaceExact(item, from, to);
+    const replaced = deepReplaceMany(item, pairs);
     if (replaced !== item) changed = true;
     next[key] = replaced;
   }
   return changed ? next : value;
 }
 
-export async function replaceReferences(
-  localId: string,
-  serverId: string,
+const REFERENCE_TABLE_NAMES = [
+  "products",
+  "customers",
+  "bills",
+  "bill_items",
+  "payments",
+  "customer_ledger",
+  "inventory_movements",
+  "suppliers",
+  "purchase_bills",
+  "expenses",
+  "settings",
+  "sync_outbox",
+] as const;
+
+/**
+ * Re-point every reference to a batch of local ids in ONE pass.
+ *
+ * Rewriting references means walking all twelve tables, because a local product
+ * id can be sitting in a queued bill's items, a stock movement, or an outbox
+ * payload. That walk costs the same whether it is looking for one id or two
+ * hundred — so doing it per id is the difference between a scan and a scan per
+ * row synced.
+ *
+ * It measured 4.3s for a single id on a shop holding the 560-item starter
+ * catalog. A push carries up to SYNC_BATCH_SIZE operations and merged each one
+ * separately, so applying one batch's verdicts took over ten minutes of local
+ * work: the queue looked frozen, `isSyncing` stayed true so Force sync returned
+ * immediately without doing anything, and rows that never got their merge were
+ * left behind as duplicates. Same scan, all the ids at once.
+ */
+export async function replaceReferencesMany(
+  pairs: ReadonlyMap<string, string>,
 ): Promise<void> {
-  const tableNames = [
-    "products",
-    "customers",
-    "bills",
-    "bill_items",
-    "payments",
-    "customer_ledger",
-    "inventory_movements",
-    "suppliers",
-    "purchase_bills",
-    "expenses",
-    "settings",
-    "sync_outbox",
-  ];
+  const effective = new Map<string, string>();
+  for (const [localId, serverId] of pairs) {
+    if (localId && serverId && localId !== serverId) effective.set(localId, serverId);
+  }
+  if (effective.size === 0) return;
   await dexieDB.transaction(
     "rw",
-    tableNames.map((name) => dexieDB.table(name)),
+    REFERENCE_TABLE_NAMES.map((name) => dexieDB.table(name)),
     async () => {
-      for (const name of tableNames) {
+      for (const name of REFERENCE_TABLE_NAMES) {
         const table = dexieDB.table(name) as Table<
           Record<string, unknown>,
           string
         >;
         if (!table || typeof table.filter !== "function") continue;
         await table.filter(rowMatchesCurrentScope).modify((row) => {
-          const replaced = deepReplaceExact(row, localId, serverId);
-          if (isRecord(replaced)) Object.assign(row, replaced);
+          const replaced = deepReplaceMany(row, effective);
+          if (isRecord(replaced) && replaced !== row) Object.assign(row, replaced);
         });
       }
     },
   );
+}
+
+export async function replaceReferences(
+  localId: string,
+  serverId: string,
+): Promise<void> {
+  await replaceReferencesMany(new Map([[localId, serverId]]));
 }
 
 
@@ -451,6 +482,16 @@ export async function replaceLocalEntityId(
   localId?: string,
   serverId?: string,
   serverEntity?: Record<string, unknown>,
+  /**
+   * Collect the id pair here instead of re-pointing references immediately.
+   *
+   * A caller merging many entities at once — a push batch, a pull page — hands
+   * the same map to every call and runs `replaceReferencesMany` once at the end.
+   * The rewrite is a full walk of twelve tables, so doing it per entity is what
+   * turned applying one 200-operation batch into ten minutes of local work.
+   * Whoever passes the map owns flushing it.
+   */
+  deferredReferences?: Map<string, string>,
 ): Promise<void> {
   if (!serverId) return;
   const tableName = tableNameForEntity(entityType);
@@ -471,7 +512,10 @@ export async function replaceLocalEntityId(
       ? serverCandidate
       : undefined;
   if (!localRow && !serverRow && !serverEntity) {
-    if (localId && localId !== serverId) await replaceReferences(localId, serverId);
+    if (localId && localId !== serverId) {
+      if (deferredReferences) deferredReferences.set(localId, serverId);
+      else await replaceReferences(localId, serverId);
+    }
     return;
   }
   const baseRow = serverRow ?? localRow ?? {};
@@ -514,8 +558,10 @@ export async function replaceLocalEntityId(
       await table.delete(localId);
     }
   }
-  if (localId && localId !== serverId)
-    await replaceReferences(localId, serverId);
+  if (localId && localId !== serverId) {
+    if (deferredReferences) deferredReferences.set(localId, serverId);
+    else await replaceReferences(localId, serverId);
+  }
 }
 
 export async function markEntitySynced(
