@@ -108,6 +108,8 @@
     "test:bill-return-migration": "node tests/bill-return-reference-migration.examples.js",
     "loadtest": "node loadtest/loadtest.js",
     "loadtest:smoke": "node loadtest/loadtest.js --smoke",
+    "loadtest:local": "node scripts/run-loadtest-stack.js",
+    "loadtest:postgres": "node scripts/run-loadtest-stack.js --postgres",
     "wac:backfill": "node scripts/wac-cost-backfill.js",
     "wac:backfill:write": "node scripts/run-with-env.js ALLOW_WAC_BACKFILL=true -- node scripts/wac-cost-backfill.js --write",
     "pricing:backfill-units": "node scripts/backfill-product-selling-units.js",
