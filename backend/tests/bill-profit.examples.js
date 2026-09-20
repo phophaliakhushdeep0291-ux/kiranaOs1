@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { round2 } from "../src/utils/money.js";
 
+// What a bill's profit is once the line profits are known. The other half of the
+// question — what those lines were COSTED at, which is where a stale cost basis
+// understated every reported margin — lives in bill-cost-basis.examples.js, against
+// the real database, because it is a fact about two writes rather than arithmetic.
+
 function calculateGrossProfit({ itemProfit, discount = 0, waivedAmount = 0 }) {
   return round2(itemProfit - discount - waivedAmount);
 }

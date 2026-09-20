@@ -25,20 +25,21 @@ const GST_BILL_FILTER = { status: "active", billType: { not: "estimate" }, delet
 // Cancelled bills are reported on their own line ("cancelled today"), so they need the same
 // exclusion: a bill that was cancelled and then deleted has left the books entirely.
 const CANCELLED_BILL_FILTER = { status: "cancelled", deletedAt: null };
-// What the aggregate reports actually read off a bill.
-//
-// `include: { payments: true }` hydrated all ~70 Bill columns and every Payment column
-// for rows whose only job is to have two or three numbers summed. On a year of trading
-// that is 845 KB per 400 bills where 40 KB says the same thing, and the cost is paid
-// twice — once decoding the row, once mapping it into a client object.
-//
-// The arithmetic is deliberately untouched: sumMoney still rounds each row to paise in
-// JS. Pushing these into SQL as SUM() would compute round(Σx) instead of Σround(x) and
-// quietly change till totals, which no type checker would catch.
-const BILL_PAYMENT_SELECT = { select: { mode: true, amount: true, status: true } };
-
 const DEFAULT_TOP_LIMIT = 20;
 const MAX_TOP_LIMIT = 100;
+const NO_PAYMENTS = [];
+
+// Payments come back in one query and are matched to their bills here, so a report
+// never has to hydrate whole bill rows just to reach the payments hanging off them.
+function groupPaymentsByBill(payments) {
+  const byBill = new Map();
+  for (const payment of payments) {
+    const existing = byBill.get(payment.billId);
+    if (existing) existing.push(payment);
+    else byBill.set(payment.billId, [payment]);
+  }
+  return byBill;
+}
 
 function toPaise(value) {
   return Math.round(Number(value || 0) * 100);
@@ -283,14 +284,26 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
   const end = endOfDay(day);
   const dateKey = date ?? formatDateInTimeZone(start, env.DAILY_CLOSING_TIMEZONE);
 
-  const [activeBills, cancelledBills, roughBillsCount, oldUdharRecovered, pendingSyncCount, lowStockProducts, topProducts, purchaseReceipts, quickPurchases, cashExpenses, cashPurchaseReturns, reportLocation, lowStockPackRows] = await Promise.all([
+  const [activeBills, activePayments, cancelledBillsCount, roughBillsCount, oldUdharRecovered, pendingSyncCount, lowStockProducts, topProducts, purchaseReceipts, quickPurchases, cashExpenses, cashPurchaseReturns, reportLocation, lowStockPackRows] = await Promise.all([
+    // Only the four numbers the closing actually reports. The whole row was being
+    // hydrated (76 columns, plus every payment) to produce two sums and a count.
     client.bill.findMany({
       where: activeSalesWhere(shopId, start, end, locationId),
-      select: { grandTotal: true, creditAmount: true, payments: BILL_PAYMENT_SELECT },
+      select: { grandTotal: true, creditAmount: true },
     }),
-    client.bill.findMany({
+    // Payments are filtered through the bill relation, not Payment.shopId, because
+    // that column is nullable — a payment with a null shopId still belongs to the day.
+    client.payment.findMany({
+      where: {
+        status: "confirmed",
+        mode: { in: ["cash", "upi", "bank"] },
+        bill: activeSalesWhere(shopId, start, end, locationId),
+      },
+      // status is selected because sumPaymentsByMode re-checks it in JS.
+      select: { amount: true, mode: true, status: true },
+    }),
+    client.bill.count({
       where: { shopId, ...(locationId && { locationId }), ...CANCELLED_BILL_FILTER, businessDate: { gte: start, lte: end } },
-      select: { id: true, grandTotal: true },
     }),
     client.bill.count({ where: { shopId, ...(locationId && { locationId }), billType: "estimate", deletedAt: null, businessDate: { gte: start, lte: end } } }),
     client.udharLedger.findMany({
@@ -321,8 +334,8 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
       where: { shopId, ...(locationId && { locationId }), status: "active", refundMode: "cash", createdAt: { gte: start, lte: end }, refundAmount: { gt: 0 } },
       select: { refundAmount: true },
     }),
-    // Neither of these depends on the eleven reads above, and both used to wait for all
-    // of them and then for each other — three round trips end to end where one does.
+    // Neither of these depends on the reads above, and both used to wait for all of
+    // them and then for each other — four sequential round trips where two will do.
     // Only the location-stock lookup genuinely needs an answer first, so only it is
     // still awaited below.
     allLocations ? null : resolveOperationalLocation(shopId, locationId, client),
@@ -379,7 +392,6 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
       reorderLevel: unit.reorderLevel == null ? null : Number(unit.reorderLevel),
     }));
 
-  const activePayments = activeBills.flatMap((b) => b.payments);
   const billCash = sumPaymentsByMode(activePayments, "cash");
   const billUpi = sumPaymentsByMode(activePayments, "upi");
   const billBank = sumPaymentsByMode(activePayments, "bank");
@@ -410,7 +422,7 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
     cashExpensesPaidPaise: toPaise(cashExpensesPaid),
     cashPurchaseRefundsPaise: toPaise(cashPurchaseRefunds),
     totalBills: activeBills.length,
-    cancelledBills: cancelledBills.length,
+    cancelledBills: cancelledBillsCount,
     roughBills: roughBillsCount,
     topProducts,
     location: reportLocation
@@ -440,20 +452,33 @@ export async function getSalesSummary(shopId, { range, from, to, locationId, inc
   await enforceReportRangeLimit(shopId, normalized, normalized.label);
   const { start, end } = normalized;
 
-  const [bills, cancelledBills] = await Promise.all([
+  const [bills, payments, cancelledBills] = await Promise.all([
+    // Only the columns this summary reads. The whole 76-column row was hydrated for
+    // every bill in the range, and the range is up to a month of trading.
     db.bill.findMany({
       where: activeSalesWhere(shopId, start, end, locationId),
       select: {
-        businessDate: true,
+        id: true,
         grandTotal: true,
         creditAmount: true,
         paidAmount: true,
         discount: true,
         waivedAmount: true,
         grossProfit: true,
-        payments: BILL_PAYMENT_SELECT,
+        businessDate: true,
       },
       orderBy: { businessDate: "asc" },
+    }),
+    // Through the bill relation, not Payment.shopId, because that column is
+    // nullable. billId comes back so the per-day breakdown can still group by bill.
+    db.payment.findMany({
+      where: {
+        status: "confirmed",
+        mode: { in: ["cash", "upi", "bank"] },
+        bill: activeSalesWhere(shopId, start, end, locationId),
+      },
+      // status is selected because sumPaymentsByMode re-checks it in JS.
+      select: { billId: true, amount: true, mode: true, status: true },
     }),
     db.bill.findMany({
       where: { shopId, ...(locationId && { locationId }), ...CANCELLED_BILL_FILTER, businessDate: { gte: start, lte: end } },
@@ -461,7 +486,7 @@ export async function getSalesSummary(shopId, { range, from, to, locationId, inc
     }),
   ]);
 
-  const payments = bills.flatMap((b) => b.payments);
+  const paymentsByBill = groupPaymentsByBill(payments);
   const totalSales = sumMoney(bills.map((b) => b.grandTotal));
   const daily = new Map();
   for (const b of bills) {
@@ -469,9 +494,10 @@ export async function getSalesSummary(shopId, { range, from, to, locationId, inc
     const row = daily.get(key) ?? { date: key, totalSalesPaise: 0, totalBills: 0, cashSalesPaise: 0, upiSalesPaise: 0, bankSalesPaise: 0, udharSalesPaise: 0 };
     row.totalSalesPaise += toPaise(b.grandTotal);
     row.totalBills += 1;
-    row.cashSalesPaise += toPaise(sumPaymentsByMode(b.payments, "cash"));
-    row.upiSalesPaise += toPaise(sumPaymentsByMode(b.payments, "upi"));
-    row.bankSalesPaise += toPaise(sumPaymentsByMode(b.payments, "bank"));
+    const billPayments = paymentsByBill.get(b.id) ?? NO_PAYMENTS;
+    row.cashSalesPaise += toPaise(sumPaymentsByMode(billPayments, "cash"));
+    row.upiSalesPaise += toPaise(sumPaymentsByMode(billPayments, "upi"));
+    row.bankSalesPaise += toPaise(sumPaymentsByMode(billPayments, "bank"));
     row.udharSalesPaise += toPaise(b.creditAmount);
     daily.set(key, row);
   }
@@ -505,11 +531,19 @@ export async function getPaymentModeReport(shopId, { from, to, locationId } = {}
   const { start, end } = normalizeDateRange({ from, to });
   await enforceReportRangeLimit(shopId, { start, end }, "custom");
 
-  const [bills, oldUdharRecovered] = await Promise.all([
+  const [bills, payments, oldUdharRecovered] = await Promise.all([
     db.bill.findMany({
       where: activeSalesWhere(shopId, start, end, locationId),
-      select: { id: true, billNo: true, grandTotal: true, creditAmount: true, payments: BILL_PAYMENT_SELECT },
+      select: { id: true, billNo: true, grandTotal: true, creditAmount: true },
       orderBy: { businessDate: "desc" },
+    }),
+    // Deliberately NOT filtered by mode or status, unlike the other reports in this
+    // file: the mixed-payment list counts the distinct modes on a bill, so a gift
+    // card or an unconfirmed payment still has to be visible or a genuinely mixed
+    // bill would look single-mode. "card" is also totalled below.
+    db.payment.findMany({
+      where: { bill: activeSalesWhere(shopId, start, end, locationId) },
+      select: { billId: true, amount: true, mode: true, status: true },
     }),
     db.udharLedger.findMany({
       where: { shopId, ...(locationId && { locationId }), type: "payment", mode: { in: ["cash", "upi", "bank"] }, businessDate: { gte: start, lte: end }, reversedAt: null },
@@ -517,10 +551,10 @@ export async function getPaymentModeReport(shopId, { from, to, locationId } = {}
     }),
   ]);
 
-  const payments = bills.flatMap((b) => b.payments);
+  const paymentsByBill = groupPaymentsByBill(payments);
   const mixedPayments = bills
     .filter((b) => {
-      const billPaymentModes = new Set(b.payments.map((p) => p.mode));
+      const billPaymentModes = new Set((paymentsByBill.get(b.id) ?? NO_PAYMENTS).map((p) => p.mode));
       if (Number(b.creditAmount || 0) > 0) {
         billPaymentModes.add("credit");
       }
@@ -531,7 +565,8 @@ export async function getPaymentModeReport(shopId, { from, to, locationId } = {}
       billId: b.id,
       billNo: b.billNo,
       totalPaise: toPaise(b.grandTotal),
-      modes: paymentModesForBill(b).map((p) => ({ mode: p.mode, amountPaise: toPaise(p.amount) })),
+      modes: paymentModesForBill({ ...b, payments: paymentsByBill.get(b.id) ?? NO_PAYMENTS })
+        .map((p) => ({ mode: p.mode, amountPaise: toPaise(p.amount) })),
     }));
 
   const billCash = sumPaymentsByMode(payments, "cash");
@@ -660,15 +695,21 @@ export async function getPnL(shopId, { range, from, to, locationId }) {
 
   // These six reads are independent, so run them in parallel (one batch of round-trips
   // instead of six sequential ones) — matching how the other report functions already work.
-  const [bills, cancelledBills, damageEntries, udharCreated, udharRecovered, operatingExpenseRows] = await Promise.all([
+  const [bills, billPayments, cancelledBills, damageEntries, udharCreated, udharRecovered, operatingExpenseRows] = await Promise.all([
+    // Two columns and a count. The whole 76-column row plus every payment was being
+    // hydrated for every bill in the range.
     db.bill.findMany({
+      where: activeSalesWhere(shopId, start, end, locationId),
+      select: { grandTotal: true, grossProfit: true },
+    }),
+    db.payment.findMany({
       where: {
-        shopId,
-        ...(locationId && { locationId }),
-        ...REAL_SALE_BILL_FILTER,
-        businessDate: { gte: start, lte: end },
+        status: "confirmed",
+        mode: { in: ["cash", "upi", "bank"] },
+        bill: activeSalesWhere(shopId, start, end, locationId),
       },
-      select: { grandTotal: true, grossProfit: true, payments: BILL_PAYMENT_SELECT },
+      // status is selected because sumPaymentsByMode re-checks it in JS.
+      select: { amount: true, mode: true, status: true },
     }),
     db.bill.findMany({
       where: {
@@ -677,7 +718,7 @@ export async function getPnL(shopId, { range, from, to, locationId }) {
         ...CANCELLED_BILL_FILTER,
         businessDate: { gte: start, lte: end },
       },
-      select: { grandTotal: true, creditAmount: true },
+      select: { grandTotal: true },
     }),
     db.stockLedger.findMany({
       where: {
@@ -726,9 +767,9 @@ export async function getPnL(shopId, { range, from, to, locationId }) {
   // Net profit = trading profit minus damage losses minus operating expenses (rent, salary…).
   const netProfit = subtractMoney(subtractMoney(grossProfit, inventoryLoss), operatingExpenses);
 
-  const cashCollected = sumPaymentsByMode(bills.flatMap((b) => b.payments), "cash");
-  const upiCollected = sumPaymentsByMode(bills.flatMap((b) => b.payments), "upi");
-  const bankCollected = sumPaymentsByMode(bills.flatMap((b) => b.payments), "bank");
+  const cashCollected = sumPaymentsByMode(billPayments, "cash");
+  const upiCollected = sumPaymentsByMode(billPayments, "upi");
+  const bankCollected = sumPaymentsByMode(billPayments, "bank");
   const udharGivenThisPeriod = sumMoney(udharCreated.map((u) => u.amount));
   const udharRecoveredThisPeriod = sumMoney(udharRecovered.map((u) => u.amount));
   const cancelledBillsValue = sumMoney(cancelledBills.map((b) => b.grandTotal));
@@ -1036,16 +1077,21 @@ export async function getStaffSales(shopId, { from, to, locationId } = {}) {
 
   // No status filter: this report buckets active and cancelled bills per staff member below,
   // so it needs both. Deleted bills are a different matter — they belong to neither bucket.
-  const bills = await db.bill.findMany({
-    where: { shopId, ...(locationId && { locationId }), deletedAt: null, businessDate: { gte: start, lte: end } },
-    select: {
-      status: true,
-      createdByUserId: true,
-      grandTotal: true,
-      creditAmount: true,
-      payments: BILL_PAYMENT_SELECT,
-    },
-  });
+  // Not activeSalesWhere: this report counts cancelled bills too, so it filters on
+  // deletedAt alone. The payment query reuses the identical clause.
+  const staffBillsWhere = { shopId, ...(locationId && { locationId }), deletedAt: null, businessDate: { gte: start, lte: end } };
+  const [bills, payments] = await Promise.all([
+    db.bill.findMany({
+      where: staffBillsWhere,
+      select: { id: true, status: true, grandTotal: true, creditAmount: true, createdByUserId: true },
+    }),
+    // Only cash and upi are totalled per staff member.
+    db.payment.findMany({
+      where: { status: "confirmed", mode: { in: ["cash", "upi"] }, bill: staffBillsWhere },
+      select: { billId: true, amount: true, mode: true, status: true },
+    }),
+  ]);
+  const paymentsByBill = groupPaymentsByBill(payments);
 
   const userIds = [...new Set(bills.map((b) => b.createdByUserId).filter(Boolean))];
   const users = userIds.length
@@ -1085,8 +1131,9 @@ export async function getStaffSales(shopId, { from, to, locationId } = {}) {
     if (bill.status !== "active") continue;
     group.billCount += 1;
     group.sales = addMoney(group.sales, bill.grandTotal);
-    group.cash = addMoney(group.cash, sumPaymentsByMode(bill.payments, "cash"));
-    group.upi = addMoney(group.upi, sumPaymentsByMode(bill.payments, "upi"));
+    const billPayments = paymentsByBill.get(bill.id) ?? NO_PAYMENTS;
+    group.cash = addMoney(group.cash, sumPaymentsByMode(billPayments, "cash"));
+    group.upi = addMoney(group.upi, sumPaymentsByMode(billPayments, "upi"));
     group.udhar = addMoney(group.udhar, bill.creditAmount);
   }
 
@@ -1200,10 +1247,20 @@ export async function getPaymentSummary(shopId, { from, to, locationId }) {
 // deliberately leaves udhar_debit standing — a delete does not forgive the debt — which is
 // why `outstanding` below can still read every customer's balance and net to zero.
 export async function getFinancialLedgerReconciliation(shopId) {
-  const [activeBills, recoveredUdhar, customers, ledgerRows] = await Promise.all([
+  const [activeBills, billPayments, recoveredUdhar, customers, ledgerRows] = await Promise.all([
+    // Whole-shop, all-time: the widest read in the file. One column is enough.
     db.bill.findMany({
       where: { shopId, ...REAL_SALE_BILL_FILTER },
-      select: { grandTotal: true, payments: BILL_PAYMENT_SELECT },
+      select: { grandTotal: true },
+    }),
+    db.payment.findMany({
+      where: {
+        status: "confirmed",
+        mode: { in: ["cash", "upi", "bank"] },
+        bill: { shopId, ...REAL_SALE_BILL_FILTER },
+      },
+      // status is selected because sumPaymentsByMode re-checks it in JS.
+      select: { amount: true, mode: true, status: true },
     }),
     db.udharLedger.findMany({
       where: {
@@ -1224,7 +1281,6 @@ export async function getFinancialLedgerReconciliation(shopId) {
     }),
   ]);
 
-  const billPayments = activeBills.flatMap((bill) => bill.payments);
   const operational = {
     sales: sumMoney(activeBills.map((bill) => bill.grandTotal)),
     cashCollected: addMoney(

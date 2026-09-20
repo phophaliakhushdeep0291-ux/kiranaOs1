@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { sellingUnitCostPrice } from "../src/modules/products/selling-unit-pricing.js";
+import { round2 } from "../src/utils/money.js";
 
 // The mirror of pack-mrp-ceiling, for the other end of the line: what a pack COST.
 //
@@ -22,12 +23,36 @@ assert.equal(sellingUnitCostPrice(defaultPack, product, defaultPack), 80);
 assert.equal(sellingUnitCostPrice(halfKilo, product, defaultPack), 40);
 assert.equal(sellingUnitCostPrice(bagPack, product, defaultPack), 400);
 
-// ── a pack that carries its own cost wins outright ──────────────────
+// ── an ALTERNATE pack that carries its own cost wins outright ───────
 // What the shopkeeper typed for THIS size is a fact about a real purchase, not
 // something to derive from another pack — including when it beats the multiple,
 // which is exactly why bulk packs are worth buying.
 assert.equal(sellingUnitCostPrice({ ...bagPack, costPrice: 370 }, product, defaultPack), 370);
 assert.equal(sellingUnitCostPrice({ ...halfKilo, costPrice: 44 }, product, defaultPack), 44);
+
+// ── but the DEFAULT pack's stored cost is only a copy, and loses ────
+// A purchase moves Product.costPerRateUnit (the weighted average) and nothing else.
+// The default pack's costPrice is a copy of that number — legacySellingUnit derives
+// it, applyDefaultSellingUnitToProduct copies it back, syncDefaultSellingUnitPricing
+// keeps them equal — so preferring the copy priced every sale against whatever
+// created the row. The reported case, exactly: Loose Toor Dal seeds from the starter
+// catalogue at 137.95, is restocked at 120/kg, and sells at 155.
+const seededDefault = { ...defaultPack, costPrice: 137.95 };
+assert.equal(sellingUnitCostPrice(seededDefault, { costPerRateUnit: 120 }, seededDefault), 120);
+assert.equal(round2(155 - sellingUnitCostPrice(seededDefault, { costPerRateUnit: 120 }, seededDefault)), 35);
+// It holds in the other direction too: a cost that has RISEN since the row was
+// written must not be flattered by the stale copy either.
+assert.equal(sellingUnitCostPrice({ ...defaultPack, costPrice: 120 }, { costPerRateUnit: 137.95 }, defaultPack), 137.95);
+// A default pack declared only by being the sole row behaves the same way.
+assert.equal(sellingUnitCostPrice({ conversionToBase: 1000, isDefault: true, costPrice: 90 }, product, defaultPack), 80);
+
+// ── the copy is still the fallback when the product has no cost ─────
+// Dropping to 0 here would report the whole sale as profit, which is worse than a
+// stale figure: a product may legitimately carry no product-level cost while its
+// default row does (an older backfill, a direct row write).
+assert.equal(sellingUnitCostPrice({ ...defaultPack, costPrice: 137.95 }, { costPerRateUnit: 0 }, defaultPack), 137.95);
+assert.equal(sellingUnitCostPrice({ ...defaultPack, costPrice: 137.95 }, {}, defaultPack), 137.95);
+assert.equal(sellingUnitCostPrice({ ...defaultPack, costPrice: null }, { costPerRateUnit: 0 }, defaultPack), 0);
 
 // ── no cost anywhere means no cost, not a fabricated one ────────────
 assert.equal(sellingUnitCostPrice(halfKilo, { costPerRateUnit: 0 }, defaultPack), 0);

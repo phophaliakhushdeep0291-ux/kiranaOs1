@@ -10,6 +10,15 @@ dist/
 build/
 coverage/
 
+# A Vite build dropped somewhere OTHER than frontend/dist. Six of them once sat in
+# output/ under invented names (ai-recovery-preview, factory-split-preview, …):
+# 1,504 files and 37 MB, a third of everything the repository tracked, cloned by
+# everyone forever. `dist/` above only catches a build that kept the expected name,
+# so these match the two things a Vite build always emits wherever it lands.
+# scripts/check-repository-hygiene.mjs fails CI on the same shapes.
+.vite/
+output/*/assets/
+
 *.db
 *.db.corrupt
 *.sqlite

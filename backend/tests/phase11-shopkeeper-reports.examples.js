@@ -101,7 +101,10 @@ assert(schema.includes('"today"') && schema.includes('"7d"') && schema.includes(
 for (const field of ["cashPaise", "upiPaise", "cardPaise", "creditUdharPaise", "mixedPayments", "oldUdharRecoveredPaise", "refundPaise", "reversalPaise"]) {
   assert(service.includes(field), `payment mode report must include ${field}`);
 }
-assert(service.includes("new Set(b.payments.map"), "payment mode report should detect mixed payments without double-counting");
+// Guards the property, not one spelling of it: a per-bill Set of modes is what stops
+// a two-mode bill being counted twice. The payments themselves now arrive in their own
+// query rather than hanging off a fully hydrated bill row.
+assert(service.includes("const billPaymentModes = new Set("), "payment mode report should detect mixed payments without double-counting");
 
 for (const bucket of ["0_7_days", "8_30_days", "31_60_days", "60_plus_days"]) {
   assert(service.includes(bucket), `udhar ageing must include bucket ${bucket}`);

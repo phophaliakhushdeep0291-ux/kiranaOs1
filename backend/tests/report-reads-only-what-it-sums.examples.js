@@ -57,24 +57,51 @@ const COLUMNS_NO_REPORT_SUMS = [
   "deletedReason",
 ];
 
+// Most reports now read payments in a query of their own rather than through the bill,
+// so the payment read needs watching too or it is the next thing to go wide. These are
+// Payment columns nothing in this file touches — note amountPaise in particular: the
+// paise mirror columns are not maintained on write, so reading one is never useful.
+const PAYMENT_COLUMNS_NO_REPORT_SUMS = [
+  "amountPaise",
+  "provider",
+  "providerReference",
+  "confirmationSource",
+  "idempotencyKey",
+  "clientPaymentId",
+  "sourceDeviceId",
+  "retailPaymentIntentId",
+];
+
 // ── Record what each report actually asks Prisma for ──────────────────────────
 const asked = [];
 db.$use(async (params, next) => {
-  if (params.model === "Bill" && String(params.action).startsWith("find")) {
-    asked.push({ select: params.args?.select ?? null, include: params.args?.include ?? null });
+  const model = params.model;
+  if ((model === "Bill" || model === "Payment") && String(params.action).startsWith("find")) {
+    asked.push({ model, select: params.args?.select ?? null, include: params.args?.include ?? null });
   }
   return next(params);
 });
 
 function billReadsDuring(label) {
-  assert.ok(asked.length > 0, `${label}: expected at least one Bill read`);
+  assert.ok(asked.length > 0, `${label}: expected at least one Bill or Payment read`);
   for (const read of asked) {
+    const banned = read.model === "Bill" ? COLUMNS_NO_REPORT_SUMS : PAYMENT_COLUMNS_NO_REPORT_SUMS;
+    const what = read.model === "Bill" ? "bills" : "payments";
     assert.equal(read.include, null,
-      `${label}: reads bills with include, which hydrates every Bill column to sum two of them`);
-    assert.ok(read.select, `${label}: reads bills with neither select nor include`);
-    for (const column of COLUMNS_NO_REPORT_SUMS) {
+      `${label}: reads ${what} with include, which hydrates every column to sum two of them`);
+    assert.ok(read.select, `${label}: reads ${what} with neither select nor include`);
+    for (const column of banned) {
       assert.ok(!(column in read.select),
-        `${label}: selects "${column}", which no report reads`);
+        `${label}: selects "${column}" off ${what}, which no report reads`);
+    }
+    // A bill read may still reach payments through the relation — the CSV export does.
+    // That nested select is held to the same standard.
+    const nested = read.model === "Bill" ? read.select.payments?.select : null;
+    if (nested) {
+      for (const column of PAYMENT_COLUMNS_NO_REPORT_SUMS) {
+        assert.ok(!(column in nested),
+          `${label}: selects "${column}" off the bill's payments, which no report reads`);
+      }
     }
   }
   asked.length = 0;

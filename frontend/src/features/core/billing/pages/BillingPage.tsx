@@ -36,7 +36,7 @@ import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { applyRoundOff, billNeedsCustomer, billingDiscountApprovalSummary, billingSensitiveApprovalFingerprint, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, cartItemUnitRate, clampAmount, LARGE_DISCOUNT_MIN_AMOUNT, LARGE_DISCOUNT_MIN_PERCENT, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
 import { parseQuantityQuery } from "./billing-quantity-input";
 import { resolveLinePrice } from "@/features/core/pricing/resolve-line-price";
-import { sellingUnitMaxPrice } from "@/features/core/products/pages/product-pricing";
+import { sellingUnitCostPrice, sellingUnitMaxPrice } from "@/features/core/products/pages/product-pricing";
 import { useShopPricingRules } from "@/features/core/pricing/pricing-rules-cache";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
 import { shareBillOnWhatsapp, derivePaymentModeLabel, type BillShareInput } from "@/features/core/bills/share";
@@ -352,14 +352,33 @@ export default function Billing() {
 
   const debouncedSearch = useDebounce(search.trim(), 90);
   const deferredSearch = useDeferredValue(debouncedSearch);
-  // NO `limit` here, deliberately. `useListProducts` treats one as a hard slice of
-  // the catalogue, and everything the counter can reach is derived from what this
-  // returns: the search index, the category chips, `productById` for the cart, and
-  // the scan resolver. A limit of 350 against the 560-item starter catalogue left
-  // the rest unsellable — search answered "No results" and a barcode scan found
-  // nothing, with no sign the list had been cut. Rendering is already bounded
-  // downstream (`filteredProducts` shows 30, `categories` 14), so the cap was never
-  // protecting the grid; it only decided which products existed.
+  /**
+   * The WHOLE catalogue, deliberately unpaged.
+   *
+   * This asked for `limit: 350`, and `filterCachedProducts` honours a limit by
+   * slicing — so on a 560-item shop the till could only ever find 350 of them, and
+   * which 350 was an accident of ordering: the server's order online, IndexedDB's
+   * key order offline. A product past the cut did not rank low, it did not exist.
+   * "Loose Toor Dal" sat at index 541 and returned "No results" at the counter
+   * while it was in stock, on the shelf, and billable from its own product page.
+   *
+   * Everything a cashier can reach is derived from this one call — the search
+   * index, the category chips, `productById` for the cart, and the scan resolver —
+   * so the cap decided which products existed, and a barcode scan found nothing
+   * with no sign the list had been cut.
+   *
+   * The starter catalogue is 560 items, so EVERY shop that takes the one-click
+   * catalogue was over the line before it sold anything.
+   *
+   * 350 was also the lowest cap in the app — inventory, returns, pricing and the
+   * stock dialogs all read 1000, and ProductsPage reads the catalogue unpaged. Any
+   * number here is a cliff a growing shop eventually walks off, so billing takes
+   * the whole catalogue like ProductsPage does. Nothing downstream wants a page:
+   * `filteredProducts` already caps the GRID at 30 and `categories` at 14, and the
+   * search index is a plain substring scan over strings that are already in memory
+   * and in IndexedDB — the offline fallback (`localProductRows`) never had a limit
+   * in the first place.
+   */
   const products = useListProducts(undefined, {
     query: { staleTime: 2 * 60_000, placeholderData: (previousData: Product[] | undefined) => previousData ?? [] },
   });
@@ -1119,7 +1138,9 @@ export default function Billing() {
       // The product MRP belongs to the default pack; a bigger pack gets it scaled
       // to its own size, or its price is clamped to another size's ceiling.
       maximumRetailPrice: sellingUnitMaxPrice(selectedUnit, product, defaultSellingUnit(product)),
-      productCost: selectedUnit?.costPrice ?? undefined,
+      // The default pack's stored cost is only a copy of the product's, and a purchase
+      // moves the product — so the margin floor has to read the same basis billing does.
+      productCost: sellingUnitCostPrice(selectedUnit, product, defaultSellingUnit(product)) || undefined,
       useLegacyProductRules: selectedUnit?.isDefault !== false,
       shopRules: shopPricingRules,
       customerId: resolvedCustomerId || undefined,

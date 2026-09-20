@@ -133,6 +133,44 @@ export function sellingUnitMaxPrice(
   return roundMoney((productMrp / defaultConversion) * unitConversion);
 }
 
+/**
+ * The buying price of ONE packaging — mirror of the server's sellingUnitCostPrice
+ * (backend/src/modules/products/selling-unit-pricing.js).
+ *
+ * An alternate pack's own `costPrice` wins: that is what the shopkeeper typed for
+ * THAT size. The DEFAULT pack's does not, because it is only a copy of the product's
+ * cost, while `costPerRateUnit` is the weighted average every stock-in recomputes —
+ * so the copy quietly kept the price the row was created with (for a starter-catalogue
+ * item, the catalogue's) however much the shop's real cost moved. Reading it fed a
+ * cost the shop had stopped paying to the margin-floor pricing rule, which is the
+ * same stale basis that was understating profit on every bill.
+ */
+export function sellingUnitCostPrice(
+  sellingUnit?: ProductSellingUnit | null,
+  product?: Product | null,
+  defaultUnit?: ProductSellingUnit | null,
+): number {
+  const own = roundMoney(Number(sellingUnit?.costPrice ?? 0));
+  const productCost = roundMoney(Number(product?.averageCostPrice ?? product?.costPrice ?? product?.costPerRateUnit ?? 0));
+
+  if (!sellingUnit || sellingUnit.isDefault) return productCost > 0 ? productCost : own;
+
+  if (own > 0) return own;
+  if (!(productCost > 0)) return 0;
+
+  // A restaurant portion's conversionToBase is how much recipe stock one portion
+  // consumes, so scaling a rupee cost through it invents a number. Same carve-out
+  // sellingUnitMaxPrice makes, and for the same reason.
+  if (String(sellingUnit?.unitType ?? "").trim().toLowerCase() === "portion") return productCost;
+
+  const defaultConversion = Number(defaultUnit?.conversionToBase ?? 0);
+  const unitConversion = Number(sellingUnit.conversionToBase ?? 0);
+  if (!(defaultConversion > 0) || !(unitConversion > 0)) return productCost;
+  if (defaultConversion === unitConversion) return productCost;
+
+  return roundMoney((productCost / defaultConversion) * unitConversion);
+}
+
 export function averageCost(product?: Product): number {
   return roundMoney(Number(product?.averageCostPrice ?? product?.costPrice ?? product?.costPerRateUnit ?? 0));
 }
