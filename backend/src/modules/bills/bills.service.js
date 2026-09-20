@@ -45,6 +45,41 @@ const BILL_ITEMS_WITH_OPTIONS = { include: { addons: true } };
 // Enumerated rather than omitted because Prisma 5.14 has no `omit`. A new column
 // therefore has to be added here deliberately, which is the safer failure: a
 // missing field shows up as undefined on screen, not as silently wrong money.
+/**
+ * What a Payment is for, on a bill the client has replicated.
+ *
+ * Audited column by column, by following the access path rather than grepping the
+ * name — which is how `amountPaise` was previously miscounted as having 49 readers
+ * when it has none here (all 49 are accounting rows, QR slips, assurance findings
+ * and checkouts).
+ *
+ *   id               paymentIdentityKeys(), rowId(), React keys
+ *   billId           paymentBillDisplaySignature / …EchoBaseSignature
+ *   clientPaymentId  paymentIdentityKeys()
+ *   idempotencyKey   paymentIdentityKeys()
+ *   mode, amount     billPaid, paymentModeOf, the money statement, receipts
+ *   createdAt        the dedupe sort, and the paid_at/paidAt/created_at chain
+ *   status           syncPriority() reads row.status when ordering the pair
+ *
+ * The eight left out have no reader that reaches them through a bill:
+ *   shopId               the offline scope guard matches tenant_id/store_id
+ *   amountPaise          nothing reads it off a payment
+ *   sourceDeviceId       read only off an OUTBOUND outbox payload, in
+ *                        sync-operation-normalizer, never off a listed bill
+ *   provider,            retail/card provenance. Read off RetailPaymentCheckout
+ *   providerReference,   and CardTerminalCharge objects, which come from the
+ *   confirmationSource,  payment-intent endpoints, not from a bill.
+ *   confirmedAt
+ *   retailPaymentIntentId  written when a bill is created; never read back
+ */
+const BILL_REPLICA_PAYMENT_SELECT = {
+  select: {
+    id: true, billId: true,
+    clientPaymentId: true, idempotencyKey: true,
+    mode: true, amount: true, status: true, createdAt: true,
+  },
+};
+
 const BILL_LIST_ITEM_SELECT = {
   select: {
     id: true, billId: true, productId: true,
@@ -89,7 +124,9 @@ const BILL_LIST_VIEW_SELECT = {
   clientBillId: true, idempotencyKey: true, sourceDeviceId: true,
   deletedAt: true, cancelledAt: true,
   businessDate: true, createdAt: true, updatedAt: true,
-  payments: { select: { mode: true, amount: true } },
+  // `id` so paymentIdentityKeys() has something durable to key on; without it
+  // two equal tenders on one bill fall through to a mode/amount signature.
+  payments: { select: { id: true, mode: true, amount: true } },
   _count: { select: { items: true } },
 };
 
@@ -156,15 +193,14 @@ export async function listBills(shopId, { from, to, status, customerId, location
   const [bills, total] = await Promise.all([
     db.bill.findMany({
       where,
-      // The full view is the shop's offline copy and stays whole, minus the three
-      // things nothing reads: `location` (the same 16-column row repeated once per
-      // bill), `giftCardTransactions`, and the seven BillItem *Paise mirrors.
-      // Payment keeps every column — not because a particular one is read, but
-      // because this is the replica and its columns have not been audited one by
-      // one. Narrowing it is available and would save about another 8%.
+      // The full view is the shop's offline copy: every column an offline screen
+      // reads, and nothing else. What is left out — `location` (the same 16-column
+      // row repeated once per bill), `giftCardTransactions`, the seven BillItem
+      // *Paise mirrors and eight Payment columns — was each checked for a reader
+      // by following the access path, not by grepping the field name.
       ...(listView
         ? { select: BILL_LIST_VIEW_SELECT }
-        : { include: { items: BILL_LIST_ITEM_SELECT, payments: true } }),
+        : { include: { items: BILL_LIST_ITEM_SELECT, payments: BILL_REPLICA_PAYMENT_SELECT } }),
       orderBy: { businessDate: "desc" },
       skip: (page - 1) * limit,
       take: limit,

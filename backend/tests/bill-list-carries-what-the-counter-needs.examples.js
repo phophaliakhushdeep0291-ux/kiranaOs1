@@ -12,9 +12,7 @@
  * location, giftCardTransactions }` sent all ~70 Bill columns, all 40 BillItem columns,
  * the same 16-column Location row once per bill, and gift-card rows. Three of those are
  * read nowhere in the app and are gone. Everything else stays, including the pricing
- * provenance the detail page shows, and Payment whole — not because a particular
- * column is read, but because this is the replica and Payment has not been audited
- * column by column.
+ * provenance the detail page shows, and the eight Payment columns that have one.
  *
  * Both halves matter:
  *   GONE — the unread stay unread, so the list does not silently go wide again.
@@ -70,9 +68,27 @@ for (const field of ["id", "billNo", "businessDate", "billType", "status", "cust
   assert.ok(field in bill, `the list must still carry bill.${field}`);
 }
 
-// Payment stays whole in the replica view.
+// Payment, audited column by column. Each of these has a reader that reaches it
+// through a bill; the eight left out do not.
 assert.equal(bill.payments.length, 1);
-assert.ok("amountPaise" in bill.payments[0], "the offline copy keeps Payment whole until its columns are audited");
+const [tender] = bill.payments;
+assert.deepEqual(
+  Object.keys(tender).sort(),
+  ["amount", "billId", "clientPaymentId", "createdAt", "id", "idempotencyKey", "mode", "status"],
+  "the replica's payment shape is the audit, written down",
+);
+assert.equal(Number(tender.amount), 30);
+assert.equal(tender.mode, "cash");
+// The identity columns are why a payment pushed offline and echoed back does not
+// show up twice. paymentIdentityKeys() has nothing else to key on.
+assert.ok("id" in tender && "clientPaymentId" in tender && "idempotencyKey" in tender);
+// createdAt feeds both the dedupe sort and the paid_at/paidAt/created_at chain;
+// status feeds syncPriority when ordering a local/server pair.
+assert.ok("createdAt" in tender && "status" in tender);
+for (const field of ["amountPaise", "shopId", "sourceDeviceId", "provider",
+  "providerReference", "confirmationSource", "confirmedAt", "retailPaymentIntentId"]) {
+  assert.ok(!(field in tender), `${field} has no reader that reaches it through a bill`);
+}
 assert.equal(Number(bill.payments[0].amount), 30);
 
 // Every line field an offline screen reads. Asserted by name, because these are the
@@ -154,7 +170,9 @@ assert.ok("updatedAt" in row, "the display dedupe sorts on updatedAt to pick the
 // Payments narrowed to what the row computes with: billPaid sums non-credit
 // amounts, paymentModeOf reads the modes.
 assert.equal(row.payments.length, 1);
-assert.deepEqual(Object.keys(row.payments[0]).sort(), ["amount", "mode"]);
+// The screen's row carries `id` too, so the display dedupe keys on identity
+// rather than falling through to a bill/mode/amount signature.
+assert.deepEqual(Object.keys(row.payments[0]).sort(), ["amount", "id", "mode"]);
 assert.equal(Number(row.payments[0].amount), 30);
 
 /* ------------------- and the default is still the offline copy ------------- */
