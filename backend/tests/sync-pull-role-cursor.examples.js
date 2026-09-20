@@ -15,8 +15,8 @@ import { pullSince } from "../src/modules/sync/sync.service.js";
  * machine moved the suppliers cursor past the shop's entire supplier history, and
  * when the owner signed in on that same machine the next pull started AFTER it.
  * Those rows were never delivered again: nothing re-requests them, because
- * clearSyncCursors() only runs inside forceCloudSnapshotImport(), which has no
- * callers. The device would show an empty supplier list and no expense history for
+ * the recovery sync had no way to reset a cursor either — the one function that
+ * did was never called from anywhere and has since been deleted. The device would show an empty supplier list and no expense history for
  * good, while sync reported it was up to date.
  *
  * Not querying at all fixes the waste and the loss together: no work done, and the
