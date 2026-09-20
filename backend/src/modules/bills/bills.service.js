@@ -32,6 +32,34 @@ const OFFLINE_BILL_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
 const OFFLINE_BILL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 const BILL_ITEMS_WITH_OPTIONS = { include: { addons: true } };
 
+// What the bills LIST sends for each line.
+//
+// Every BillItem column except the seven *Paise mirrors, which no screen reads —
+// the client does its money in the Float columns and its own paise helpers. The
+// list is not a summary: its rows are written into IndexedDB and become the
+// receipt the shop prints, the text it shares on WhatsApp, the lines the cancel
+// dialog offers and the fallback the detail page renders when sync has not put
+// bill_items there yet. So this drops the provably unread and keeps everything
+// else, including the pricing provenance the detail page shows.
+//
+// Enumerated rather than omitted because Prisma 5.14 has no `omit`. A new column
+// therefore has to be added here deliberately, which is the safer failure: a
+// missing field shows up as undefined on screen, not as silently wrong money.
+const BILL_LIST_ITEM_SELECT = {
+  select: {
+    id: true, billId: true, productId: true,
+    sellingUnitId: true, sellingUnitCode: true, sellingUnitLabel: true, conversionToBase: true,
+    name: true, quantity: true, enteredUnit: true, baseUnit: true, quantityInBaseUnit: true,
+    rateUnit: true, ratePerRateUnit: true, costPerRateUnit: true, gstRate: true, hsn: true,
+    originalBillItemId: true, note: true,
+    lineDiscount: true, lineTotal: true, lineCost: true, lineProfit: true, originalUnitPrice: true,
+    appliedPricingRuleId: true, appliedPricingRuleType: true, pricingExplanation: true,
+    pricingConfidence: true, pricingCalculationVersion: true,
+    wasPriceOverridden: true, priceOverrideReason: true, priceApprovedByUserId: true,
+    addons: true,
+  },
+};
+
 async function writeRequiredBillAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
   if (!audit) {
@@ -88,7 +116,10 @@ export async function listBills(shopId, { from, to, status, customerId, location
   const [bills, total] = await Promise.all([
     db.bill.findMany({
       where,
-      include: { items: BILL_ITEMS_WITH_OPTIONS, payments: true, location: true, giftCardTransactions: true },
+      // `payments` stays whole: amountPaise is read in dozens of places on the client.
+      // `location` was the same 16-column row repeated once per bill, and
+      // `giftCardTransactions` is read nowhere — neither has a reader in the app.
+      include: { items: BILL_LIST_ITEM_SELECT, payments: true },
       orderBy: { businessDate: "desc" },
       skip: (page - 1) * limit,
       take: limit,
