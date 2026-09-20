@@ -60,6 +60,45 @@ const BILL_LIST_ITEM_SELECT = {
   },
 };
 
+/**
+ * The bills SCREEN's shape, as opposed to the shop's offline copy.
+ *
+ * One endpoint was serving two jobs. The list screen renders a row per bill —
+ * number, date, customer, total, how it was paid, how many lines — and got the
+ * full offline replica to do it: every Bill column, every line with its pricing
+ * provenance, ~232KB for fifty bills. `view=list` sends the twenty columns that
+ * row actually reads, and a COUNT of the lines instead of the lines.
+ *
+ * Three of these look droppable and are not:
+ *   clientBillId / idempotencyKey — billIdentityKeys() collapses a pending local
+ *     bill against its synced twin on these. Without them the client falls back to
+ *     a content signature computed FROM THE ITEMS, which this shape does not send,
+ *     so the fallback silently does nothing and the shop sees the same sale twice.
+ *   refundMode — resolveReturnRefundMode reads it before looking at payments.
+ *   updatedAt — the display dedupe sorts on it to pick the newest of a pair.
+ *
+ * `payments` stays, narrowed to what the row computes with — billPaid sums the
+ * non-credit amounts, paymentModeOf reads the modes.
+ */
+const BILL_LIST_VIEW_SELECT = {
+  id: true, billNo: true, billType: true, status: true,
+  customerId: true, customerName: true,
+  grandTotal: true, paidAmount: true, buyerPaidAmount: true, creditAmount: true,
+  returnOfBillId: true, refundMode: true,
+  createdByUserId: true, locationId: true,
+  clientBillId: true, idempotencyKey: true, sourceDeviceId: true,
+  deletedAt: true, cancelledAt: true,
+  businessDate: true, createdAt: true, updatedAt: true,
+  payments: { select: { mode: true, amount: true } },
+  _count: { select: { items: true } },
+};
+
+// The screen reads `items.length` with an itemCount fallback; this makes the
+// fallback the answer rather than a guess, and keeps `_count` off the wire.
+function toListViewBill({ _count, ...bill }) {
+  return { ...bill, itemCount: _count?.items ?? 0 };
+}
+
 async function writeRequiredBillAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
   if (!audit) {
@@ -101,7 +140,7 @@ function resolveBillBusinessDate(actor = {}) {
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
 // ─────────────────────────────────────────────────────────────
-export async function listBills(shopId, { from, to, status, customerId, locationId, page, limit }) {
+export async function listBills(shopId, { from, to, status, customerId, locationId, page, limit, view = "full" }) {
   const where = {
     shopId,
     deletedAt: null,
@@ -113,13 +152,19 @@ export async function listBills(shopId, { from, to, status, customerId, location
     }),
   };
 
+  const listView = view === "list";
   const [bills, total] = await Promise.all([
     db.bill.findMany({
       where,
-      // `payments` stays whole: amountPaise is read in dozens of places on the client.
-      // `location` was the same 16-column row repeated once per bill, and
-      // `giftCardTransactions` is read nowhere — neither has a reader in the app.
-      include: { items: BILL_LIST_ITEM_SELECT, payments: true },
+      // The full view is the shop's offline copy and stays whole, minus the three
+      // things nothing reads: `location` (the same 16-column row repeated once per
+      // bill), `giftCardTransactions`, and the seven BillItem *Paise mirrors.
+      // Payment keeps every column — not because a particular one is read, but
+      // because this is the replica and its columns have not been audited one by
+      // one. Narrowing it is available and would save about another 8%.
+      ...(listView
+        ? { select: BILL_LIST_VIEW_SELECT }
+        : { include: { items: BILL_LIST_ITEM_SELECT, payments: true } }),
       orderBy: { businessDate: "desc" },
       skip: (page - 1) * limit,
       take: limit,
@@ -127,7 +172,7 @@ export async function listBills(shopId, { from, to, status, customerId, location
     db.bill.count({ where }),
   ]);
 
-  return { bills, total, page, limit };
+  return { bills: listView ? bills.map(toListViewBill) : bills, total, page, limit, view };
 }
 
 // ─────────────────────────────────────────────────────────────

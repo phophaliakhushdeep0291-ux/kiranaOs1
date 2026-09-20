@@ -12,8 +12,9 @@
  * location, giftCardTransactions }` sent all ~70 Bill columns, all 40 BillItem columns,
  * the same 16-column Location row once per bill, and gift-card rows. Three of those are
  * read nowhere in the app and are gone. Everything else stays, including the pricing
- * provenance the detail page shows and Payment.amountPaise, which the client reads in
- * dozens of places.
+ * provenance the detail page shows, and Payment whole — not because a particular
+ * column is read, but because this is the replica and Payment has not been audited
+ * column by column.
  *
  * Both halves matter:
  *   GONE — the unread stay unread, so the list does not silently go wide again.
@@ -69,9 +70,9 @@ for (const field of ["id", "billNo", "businessDate", "billType", "status", "cust
   assert.ok(field in bill, `the list must still carry bill.${field}`);
 }
 
-// Payments whole, amountPaise included: the client reads it in dozens of places.
+// Payment stays whole in the replica view.
 assert.equal(bill.payments.length, 1);
-assert.ok("amountPaise" in bill.payments[0], "Payment.amountPaise is read by the client and must stay");
+assert.ok("amountPaise" in bill.payments[0], "the offline copy keeps Payment whole until its columns are audited");
 assert.equal(Number(bill.payments[0].amount), 30);
 
 // Every line field an offline screen reads. Asserted by name, because these are the
@@ -112,5 +113,57 @@ assert.equal(billQuerySchema.parse({ limit: "2000" }).limit, 2000, "the app's ow
 assert.throws(() => billQuerySchema.parse({ limit: "100000" }), /Too big|less than or equal/i, "but an unbounded one must not be");
 assert.throws(() => billQuerySchema.parse({ limit: "0" }), /Too small|greater than or equal/i);
 assert.equal(billQuerySchema.parse({}).limit, 50, "and the default is unchanged");
+
+/* ================== the SCREEN's view, which is a different job ============= */
+
+// view=list renders a row: number, date, customer, total, how it was paid, how
+// many lines. It is not the offline copy, so it does not carry the lines — and
+// because it is not, it must never be what gets replicated. The client guards
+// that end (frontend: src/tests/lean-bill-list-keeps-the-offline-copy.test.ts).
+
+const listView = await listBills(shop.id, { status: "active", page: 1, limit: 50, view: "list" });
+assert.equal(listView.view, "list", "the response says which shape it is, so the client can decide how to cache it");
+const [row] = listView.bills;
+
+// The count replaces the lines. The screen reads items.length with an itemCount
+// fallback; this makes the fallback the answer.
+assert.ok(!("items" in row), "the screen's row must not carry the lines");
+assert.equal(row.itemCount, 1, "it carries how many there were");
+assert.ok(!("_count" in row), "and Prisma's own shape does not reach the wire");
+
+// Everything a row renders.
+for (const field of ["id", "billNo", "billType", "status", "customerId", "customerName",
+  "grandTotal", "paidAmount", "buyerPaidAmount", "creditAmount",
+  "businessDate", "createdAt", "deletedAt", "cancelledAt", "createdByUserId", "locationId"]) {
+  assert.ok(field in row, `the bills screen renders ${field}`);
+}
+assert.equal(Number(row.grandTotal), Number(bill.grandTotal), "and the money must match the full view exactly");
+
+// The three that look droppable and are not.
+//
+// billIdentityKeys() collapses a pending local bill against its synced twin on
+// clientBillId/idempotencyKey. Without them the client falls back to a content
+// signature computed FROM THE ITEMS — which this shape does not send — so the
+// fallback silently does nothing and the shop sees the same sale listed twice.
+assert.ok("clientBillId" in row, "dedupe matches the pending twin on clientBillId");
+assert.ok("idempotencyKey" in row, "or on idempotencyKey");
+assert.ok("refundMode" in row, "resolveReturnRefundMode reads refundMode before it looks at payments");
+assert.ok("returnOfBillId" in row, "and a sales return has to be recognisable as one");
+assert.ok("updatedAt" in row, "the display dedupe sorts on updatedAt to pick the newer of a pair");
+
+// Payments narrowed to what the row computes with: billPaid sums non-credit
+// amounts, paymentModeOf reads the modes.
+assert.equal(row.payments.length, 1);
+assert.deepEqual(Object.keys(row.payments[0]).sort(), ["amount", "mode"]);
+assert.equal(Number(row.payments[0].amount), 30);
+
+/* ------------------- and the default is still the offline copy ------------- */
+
+const defaulted = await listBills(shop.id, { status: "active", page: 1, limit: 50 });
+assert.equal(defaulted.view, "full", "an unasked view stays the full one");
+assert.ok(Array.isArray(defaulted.bills[0].items), "so every existing caller keeps its lines");
+assert.equal(billQuerySchema.parse({}).view, "full", "including anyone reading the schema's default");
+assert.equal(billQuerySchema.parse({ view: "list" }).view, "list");
+assert.throws(() => billQuerySchema.parse({ view: "lean" }), /Invalid/i, "and a typo is refused, not silently treated as full");
 
 console.log("Bill list shape examples passed");

@@ -194,4 +194,10 @@ export const billQuerySchema = z.object({
   // serialise it. 2000 is what the app actually requests, so nothing in the
   // product changes; it only stops the number no caller has a reason to send.
   limit: z.coerce.number().min(1).max(2000).default(50),
+  // "full" is the shop's offline copy — every bill with its lines, which is what
+  // cacheBills() replicates into IndexedDB and what the reprinted receipt, the
+  // WhatsApp share and the cancel dialog read when there is no internet.
+  // "list" is the bills SCREEN: the columns a row renders, and a count of the
+  // lines instead of the lines. Default stays "full" so no existing caller moves.
+  view: z.enum(["full", "list"]).default("full"),
 });

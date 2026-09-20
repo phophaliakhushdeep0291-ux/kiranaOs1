@@ -4,7 +4,7 @@ import { RECENT_CACHE_DAYS, pruneRecentRows, instantCacheUpdatedAt, readInstantC
 import { offlineDB } from "@/lib/offline/db";
 import { getQueryOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import * as billingApi from "@/features/core/billing/api";
-import { dedupeBillsForDisplay, dedupePaymentsForDisplay, withBillSyncFlag } from "@/features/core/sync/bill-reconciliation";
+import { billIdentityKeys, dedupeBillsForDisplay, dedupePaymentsForDisplay, withBillSyncFlag } from "@/features/core/sync/bill-reconciliation";
 import type { Bill, BillListResult, QueryParams } from "@/types/api";
 
 const BILLS_CACHE_KEY = "bills";
@@ -62,8 +62,51 @@ export function withBillAliases(bill: Bill): Bill {
   }));
 }
 
-export async function cacheBills(bills: Bill[]) {
-  const recentBills = pruneRecentRows(dedupeBillsForDisplay(bills.map(withBillAliases)) as unknown as Bill[], RECENT_CACHE_DAYS);
+/**
+ * A lean row must never take data away from a rich one.
+ *
+ * The bills SCREEN asks the server for `view=list`: the twenty columns a row
+ * renders and a count of the lines instead of the lines. Those rows land here
+ * like any other, and this cache is not just paint — it is the offline copy the
+ * reprinted receipt, the WhatsApp share and the cancel dialog read. Writing a
+ * lean row straight over a cached rich one would empty a bill of its lines, and
+ * nobody would find out until a customer asked for a duplicate receipt with no
+ * internet.
+ *
+ * So a lean row updates the scalars it carries and keeps whatever relations were
+ * already there. Object spread does that for `items` on its own — the lean row
+ * has no such key, so the prior value survives — but `payments` it does carry, in
+ * a narrower form, and that one has to be held back explicitly.
+ */
+async function keepRicherRelations(incoming: Bill[]): Promise<Bill[]> {
+  let stored: Bill[] = [];
+  try {
+    stored = await offlineDB.getAll<Bill>("bills");
+  } catch {
+    stored = [];
+  }
+  const priorByKey = new Map<string, Record<string, unknown>>();
+  for (const row of [...readInstantCache<Bill[]>(BILLS_CACHE_KEY, []), ...stored]) {
+    const record = row as unknown as Record<string, unknown>;
+    if (!Array.isArray(record.items) && !Array.isArray(record.payments)) continue;
+    for (const key of billIdentityKeys(record)) if (!priorByKey.has(key)) priorByKey.set(key, record);
+  }
+  if (priorByKey.size === 0) return incoming;
+
+  return incoming.map((bill) => {
+    const record = bill as unknown as Record<string, unknown>;
+    const prior = billIdentityKeys(record).map((key) => priorByKey.get(key)).find(Boolean);
+    if (!prior) return bill;
+    const merged: Record<string, unknown> = { ...prior, ...record };
+    if (Array.isArray(prior.items)) merged.items = prior.items;
+    if (Array.isArray(prior.payments)) merged.payments = prior.payments;
+    return merged as unknown as Bill;
+  });
+}
+
+export async function cacheBills(bills: Bill[], options: { lean?: boolean } = {}) {
+  const incoming = options.lean ? await keepRicherRelations(bills) : bills;
+  const recentBills = pruneRecentRows(dedupeBillsForDisplay(incoming.map(withBillAliases)) as unknown as Bill[], RECENT_CACHE_DAYS);
   writeInstantCache(BILLS_CACHE_KEY, recentBills, RECENT_CACHE_DAYS);
   try {
     await offlineDB.putMany("bills", recentBills);
@@ -115,7 +158,7 @@ export function useListBills(
       const liveCachedBills = readCachedBills();
       if (!isBrowserOnline()) return { bills: liveCachedBills, total: liveCachedBills.length };
       try {
-        const data = await billingApi.listBills(params);
+        const data = await billingApi.listBills({ ...params, view: "list" });
         const bills = (data.bills ?? []).map(withBillAliases);
         const visibleBills = dedupeBillsForDisplay([
           ...liveCachedBills.filter((bill) => {
@@ -124,7 +167,7 @@ export function useListBills(
           }),
           ...bills,
         ]) as unknown as Bill[];
-        void cacheBills(visibleBills);
+        void cacheBills(visibleBills, { lean: true });
         return { ...data, bills: visibleBills, total: visibleBills.length };
       } catch (error) {
         if (liveCachedBills.length > 0) return { bills: liveCachedBills, total: liveCachedBills.length };
