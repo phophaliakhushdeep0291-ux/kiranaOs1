@@ -809,6 +809,11 @@ if (exists("prisma-postgres/schema.prisma") && migrationFiles.length) {
     ["Bill_shopId_updatedAt_id_idx",          "Bill sync pull keyset index (shopId, updatedAt, id)"],
     ["StockLedger_shopId_updatedAt_id_idx",   "StockLedger sync pull keyset index (shopId, updatedAt, id)"],
     ["UdharLedger_shopId_updatedAt_id_idx",   "UdharLedger sync pull keyset index (shopId, updatedAt, id)"],
+    // Shop-wide udhar reads by date. Daily closing, payment modes, P&L and the payment
+    // summary ask for a businessDate window with neither a customer nor a location, and
+    // the customerId/locationId composites cannot serve that — their second column is
+    // unconstrained. Without this one the read degrades with the shop's whole history.
+    ["UdharLedger_shopId_businessDate_idx",   "Udhar ledger shop-wide date-range report index"],
   ];
   for (const [indexName, description] of criticalIndexes) {
     if (!allMigrationSql.includes(indexName)) {

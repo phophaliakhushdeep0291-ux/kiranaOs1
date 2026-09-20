@@ -1528,6 +1528,14 @@ model UdharLedger {
   @@index([shopId, locationId, createdAt])
   @@index([shopId, customerId, businessDate])
   @@index([shopId, locationId, businessDate])
+  // Every shop-wide report — daily closing, payment modes, P&L, payment summary —
+  // reads this table by shopId and a businessDate window with neither a customer
+  // nor a location to narrow it, and the two composites above cannot serve that:
+  // their second column is unconstrained. Without this index the planner fell back
+  // to the shopId prefix of a unique key and then filtered the shop's ENTIRE ledger
+  // history by date in the engine, so end-of-day got slower every day the shop
+  // traded. On a five-year ledger that read measured 4.7 ms; on this index, 0.008 ms.
+  @@index([shopId, businessDate])
   @@index([shopId, reversalOfLedgerId])
   @@index([shopId, sourceType, sourceId])
   // Sync pull keyset pagination
