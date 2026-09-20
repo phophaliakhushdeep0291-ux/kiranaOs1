@@ -256,6 +256,14 @@ async function findDuplicateLocalLedgerForServerLedger(
 
 export async function mergeServerChange(
   change: SyncPullChange,
+  /**
+   * Collects the id pairs this change merged so the caller can re-point every
+   * reference in one pass. A pull page carries up to SYNC_PULL_LIMIT changes and
+   * the rewrite walks all twelve offline tables, so doing it per change is what
+   * made a first hydration of the starter catalog take minutes. The caller must
+   * flush the map with `replaceReferencesMany` before the page is acknowledged.
+   */
+  deferredReferences?: Map<string, string>,
 ): Promise<MergeServerChangeStatus> {
   const entityType = String(change.entity_type ?? change.entityType ?? "");
   const tableName = tableNameForEntity(entityType);
@@ -435,7 +443,7 @@ export async function mergeServerChange(
     resolvedLocalId,
     serverId,
   );
-  await replaceLocalEntityId(entityType, resolvedLocalId ?? serverId, serverId, entity);
+  await replaceLocalEntityId(entityType, resolvedLocalId ?? serverId, serverId, entity, deferredReferences);
   return "merged";
 }
 

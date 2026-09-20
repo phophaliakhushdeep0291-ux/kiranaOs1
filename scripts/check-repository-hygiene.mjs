@@ -9,8 +9,21 @@ const tracked = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8", maxB
   .filter(Boolean);
 const trackedAndPresent = tracked.filter((file) => existsSync(resolve(repositoryRoot, file)));
 
+// These names cover a build left where a build is expected. They did NOT cover a
+// build dumped somewhere else under its own name: six Vite builds of the frontend
+// sat in output/ as ai-recovery-preview, factory-split-preview and friends —
+// 1,504 files and 37 MB, 36% of everything this repository tracked, and every
+// clone paid for them. Matching on directory names could only ever catch the
+// names someone thought of, so the two rules below match what a Vite build IS
+// rather than where it was put: its `.vite/` manifest directory, and the
+// content-hashed bundle filenames Rollup emits. Neither shape can be produced by
+// hand-authored source, and `frontend/public/` keeps the genuine hand-written
+// `sw.js` and `manifest.webmanifest` — which is why those two, tempting as they
+// look, are NOT fingerprints and must not be added here.
 const forbidden = [
   { pattern: /(^|\/)(node_modules|dist|build|coverage|qa-artifacts|test-results|playwright-report)(\/|$)/i, reason: "generated build or test output" },
+  { pattern: /(^|\/)\.vite\//i, reason: "Vite build manifest" },
+  { pattern: /(^|\/)assets\/[^/]+-[A-Za-z0-9_-]{8}\.(js|css|map)$/, reason: "content-hashed build bundle" },
   { pattern: /(^|\/)(hotel-demo|hotel-pitch)(\/|$)/i, reason: "unrelated prototype" },
   { pattern: /^archive\//i, reason: "local archive" },
   { pattern: /^backend\/storage\/(exports|backups)\//i, reason: "runtime shop data" },

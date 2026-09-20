@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import {
   billFromImportedCart,
@@ -91,5 +92,37 @@ describe("billFromImportedCart", () => {
     expect(matched).toBe(0);
     expect(skipped).toEqual(["other-shop-p9"]);
     expect(bill.cart).toHaveLength(0);
+  });
+
+  /**
+   * "Skipped" is supposed to mean the shop does not sell the item. It also caught
+   * items the shop DOES sell, whenever the catalogue handed in here was a page of
+   * itself: ImportOrderPage read `limit: 350` against a 560-item starter catalogue,
+   * so a real order line was dropped and the owner was told it "didn't match your
+   * products" — which reads as "you don't stock this". Nobody is standing there to
+   * retype it, unlike a search the user can rephrase.
+   */
+  it("matches an order line for a product beyond any one page of the catalogue", () => {
+    const catalogue = Array.from({ length: 560 }, (_, i) => ({
+      id: `p_${i}`, name: `Item ${i}`, defaultPricePerRateUnit: 10, rateUnit: "packet",
+    })) as unknown as Product[];
+    const order = [{ productId: "p_10", qty: 2 }, { productId: "p_541", qty: 3 }];
+
+    const whole = billFromImportedCart(catalogue, order);
+    expect(whole.matched).toBe(2);
+    expect(whole.skipped).toEqual([]);
+
+    // The same order against the first page only — the bug, stated. Which line is
+    // lost depends purely on where the cut falls, so this is not about one product.
+    const paged = billFromImportedCart(catalogue.slice(0, 350), order);
+    expect(paged.matched).toBe(1);
+    expect(paged.skipped).toEqual(["p_541"]);
+  });
+
+  it("does not ask for a page of the catalogue on the import screen", () => {
+    const source = readFileSync(new URL("../features/core/customer-order/ImportOrderPage.tsx", import.meta.url), "utf8");
+    const call = source.slice(source.indexOf("const productsQuery = useListProducts("), source.indexOf("const products = useMemo("));
+    expect(call).toContain("useListProducts(undefined");
+    expect(call).not.toMatch(/useListProducts\(\s*\{[^}]*limit/);
   });
 });

@@ -36,7 +36,12 @@ describe("offline expense contract", () => {
       syncService.indexOf("case SYNC_EVENT_TYPES.UPDATE_EXPENSE:"),
       syncService.indexOf("case SYNC_EVENT_TYPES.DELETE_EXPENSE:"),
     );
-    expect(updateCase).toContain("assertOwnerPermission(shopId, user, getEventOwnerPin(event))");
+    // The trailing argument is the push context, which carries the batch's
+    // owner-PIN proof so one approval is verified once rather than once per
+    // event. The gate itself is what this asserts, and it is still here.
+    expect(updateCase).toMatch(
+      /assertOwnerPermission\(shopId, user, getEventOwnerPin\(event\)(?:, context)?\)/,
+    );
     expect(actions).toContain("updateExpenseLocalFirst(id: string, data: ExpenseInput, ownerPin: string)");
   });
 });

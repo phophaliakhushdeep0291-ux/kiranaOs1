@@ -1,6 +1,6 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
-import { round2 } from "../../utils/money.js";
+import { moneyShadows, round2 } from "../../utils/money.js";
 import { ensurePrimaryLocation } from "./stores.service.js";
 
 import { readLocationProductStockBatches } from "./location-stock-read.js";
@@ -285,6 +285,46 @@ export async function decrementLocationInventory(client, { shopId, location, pro
   };
 }
 
+/**
+ * A receipt that moves the product's cost has to move the default pack's copy of it.
+ *
+ * `Product.costPerRateUnit` is the weighted average a purchase recomputes;
+ * `ProductSellingUnit.costPrice` on the DEFAULT row is a COPY of that number, which
+ * the product-edit path keeps in step through syncDefaultSellingUnitPricing. Every
+ * purchase path — Stock In, its offline replay, and receiving a purchase order — wrote
+ * only the product, so the copy kept whatever created it (for a starter-catalogue item,
+ * the catalogue's price) however much the shop's real cost moved afterwards. Billing
+ * read the copy, so gross profit on every bill was computed against a price the shop
+ * had stopped paying: seeded at Rs 137.95, restocked at Rs 120, sold at Rs 155, booked
+ * at Rs 17.05 of profit rather than Rs 35. sellingUnitCostPrice no longer trusts the
+ * copy for the default pack, and this keeps it honest for everything that still reads
+ * the row directly — the per-pack inventory rows, the pricing preview, the product form.
+ *
+ * ALTERNATE packs are deliberately untouched. Their `costPrice` is what the shopkeeper
+ * typed for THAT size, a fact about a real purchase of it and often better than the
+ * multiple, which is the whole reason bulk packs are worth buying; sellingUnitCostPrice
+ * already scales the product cost onto the ones left blank.
+ */
+async function mirrorProductCostOntoDefaultPack(client, { shopId, product, productData }) {
+  if (!Object.hasOwn(productData ?? {}, "costPerRateUnit")) return;
+  const cost = round2(Number(productData.costPerRateUnit));
+  if (!Number.isFinite(cost)) return;
+  // The column is nullable and "no cost" is stored as NULL everywhere else
+  // (legacySellingUnit, syncDefaultSellingUnitPricing), not as a zero price.
+  const costPrice = cost > 0 ? cost : null;
+  await client.productSellingUnit.updateMany({
+    where: { shopId, productId: product.id, isDefault: true },
+    data: {
+      costPrice,
+      // moneyShadows drops a null rather than writing one, which is right for a
+      // field being left alone and wrong here: clearing the rupee column while the
+      // paise column kept the old figure would leave the row stating two costs, and
+      // the money-integrity rules compare exactly these pairs.
+      ...(costPrice == null ? { costPricePaise: null } : moneyShadows({ costPrice })),
+    },
+  });
+}
+
 export async function incrementLocationInventory(client, { shopId, location, product, quantityBase, expectedGlobalStockBaseQty, productData = {}, packs = null }) {
   const quantity = round2(quantityBase);
   const oldLocationStock = await getLocationQuantity(client, shopId, location, product);
@@ -296,6 +336,9 @@ export async function incrementLocationInventory(client, { shopId, location, pro
     if (expectedGlobalStockBaseQty !== undefined) throw new AppError("Stock changed while recording purchase. Please retry.", 409, "CONCURRENT_STOCK_MODIFICATION_RETRY");
     throw new AppError(`Product "${product.name}" is no longer available`, 409, "PRODUCT_NOT_AVAILABLE");
   }
+  // Only once the product write is known to have landed, so a rejected receipt
+  // never leaves the pack quoting a cost the product never took.
+  await mirrorProductCostOntoDefaultPack(client, { shopId, product, productData });
   // Mirror of the decrement path: a cancelled or returned sale must put back the
   // same packs it took, or the counts drift a little further from reality on every
   // reversal until they are worthless.

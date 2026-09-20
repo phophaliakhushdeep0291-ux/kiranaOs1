@@ -80,6 +80,14 @@ export function isPostgresTestDatabaseUrl(url = getTestDatabaseUrl()) {
   return typeof url === "string" && /^postgres(?:ql)?:\/\//i.test(url);
 }
 
+export function sqliteDatabaseFileName(url) {
+  if (typeof url !== "string") return "";
+  const withoutScheme = url.replace(/^file:(\/\/)?/i, "");
+  const withoutQuery = withoutScheme.split("?")[0];
+  const segments = withoutQuery.split(/[\\/]/);
+  return (segments[segments.length - 1] || "").toLowerCase();
+}
+
 export function assertSafeTestDatabaseUrl(url = getTestDatabaseUrl()) {
   if (process.env.REQUIRE_POSTGRES_TEST_DB === "true") {
     const configuredUrl = process.env.POSTGRES_TEST_DATABASE_URL || process.env.TEST_DATABASE_URL;
@@ -96,8 +104,15 @@ export function assertSafeTestDatabaseUrl(url = getTestDatabaseUrl()) {
   }
 
   if (isSqliteTestDatabaseUrl(url)) {
-    const normalized = url.toLowerCase();
-    if (normalized.includes("dev.db") || normalized.includes("prod") || normalized.includes("production")) {
+    // Judge the database FILE, not the path that leads to it. Matching "prod"
+    // anywhere in the resolved path also matches the directory the repo happens
+    // to sit in — a worktree named `prodready`, a folder called `products`, a
+    // user whose home is `/Users/prodeep` — and then the whole DB-backed suite
+    // refuses to run with a message about a production database that is not
+    // there. What these tests must never be pointed at is a database named like
+    // the dev or production one, which is what the file name says.
+    const fileName = sqliteDatabaseFileName(url);
+    if (fileName === "dev.db" || /(^|[^a-z])prod(uction)?([^a-z]|$)/.test(fileName)) {
       throw new Error(
         `Refusing to run integration tests against a dev/production-looking database URL: ${maskDatabaseUrl(url)}`
       );

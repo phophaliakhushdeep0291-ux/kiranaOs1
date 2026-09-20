@@ -21,7 +21,7 @@ import { toast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { useListBills } from "@/features/core/bills/queries";
 import type { Bill, Product, ProductSellingUnit } from "@/lib/api/client";
-import { applyBindSheetPick, normalizeSearchText, productSearchText, productSellingPrice, resolveScanOutcome } from "../billing-calculations";
+import { applyBindSheetPick, normalizeSearchText, productSearchText, productSellingPrice, productTilePrice, resolveScanOutcome } from "../billing-calculations";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { translateCategory } from "@/features/core/settings/business-types";
 import { ACTIVITY_EVENTS, trackEvent, useSearchTracking } from "@/lib/activity";
@@ -591,7 +591,7 @@ export function BillingSearch({
                   {recentProducts.slice(0, 3).map((p) => {
                     const sellingUnit = (p.sellingUnits ?? []).filter((unit) => unit.isActive !== false).find((unit) => unit.isDefault)
                       ?? (p.sellingUnits ?? []).find((unit) => unit.isActive !== false);
-                    const price = sellingUnit?.defaultPrice ?? productSellingPrice(p, 1);
+                    const price = productTilePrice(p, sellingUnit);
                     const color = productPlaceholderColor(p.name);
                     return (
                       <button
@@ -1056,7 +1056,7 @@ export function BillingSearch({
 function ProductCard({ product, onAdd, trending = false, t }: { product: Product; onAdd: () => void; trending?: boolean; t: Translate }) {
   const sellingUnits = (product.sellingUnits ?? []).filter((unit) => unit.isActive !== false);
   const defaultUnit = sellingUnits.find((unit) => unit.isDefault) ?? sellingUnits[0];
-  const price = defaultUnit?.defaultPrice ?? productSellingPrice(product, 1);
+  const price = productTilePrice(product, defaultUnit, defaultUnit);
   const unit = defaultUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "pc";
   const stock = product.stockBaseQty ?? 0;
   const emoji = getProductEmoji(product.name, product.category);

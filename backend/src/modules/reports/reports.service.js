@@ -82,6 +82,38 @@ function zonedDayStartDaysAgo(now, daysBack, timeZone = env.DAILY_CLOSING_TIMEZO
   return dateRangeForDateOnly(key, timeZone).start;
 }
 
+// The twelve month-start instants of a year, on the shop's calendar.
+//
+// Placing a row in a month by converting its timestamp — monthInShopTz — costs a
+// formatToParts per row, and on a year of bills that was about as expensive as the
+// database read it followed. The boundaries, though, are the same for every row: work
+// them out once and each row's month is a comparison.
+//
+// This is not an approximation of the zone. Each boundary is itself the shop-tz
+// midnight of the 1st, resolved by the same dateRangeForDateOnly that bounds the query,
+// so whatever offset the zone applies is already inside the number being compared
+// against. A row belongs to month m exactly when it falls on or after that month's
+// start and before the next one's — which is what converting each timestamp decided,
+// one expensive call at a time.
+function monthStartsInShopTz(year, timeZone = env.DAILY_CLOSING_TIMEZONE) {
+  const starts = [];
+  for (let month = 1; month <= 12; month++) {
+    starts.push(dateRangeForDateOnly(`${year}-${String(month).padStart(2, "0")}-01`, timeZone).start.getTime());
+  }
+  return starts;
+}
+
+// Month names depend on the month and nothing else, so the twelve of them are built
+// once for the process rather than twelve Intl formatters per request.
+let monthNamesCache = null;
+function monthNames() {
+  if (!monthNamesCache) {
+    monthNamesCache = Array.from({ length: 12 }, (_, index) =>
+      new Date(2000, index).toLocaleString("en-IN", { month: "long" }));
+  }
+  return monthNamesCache;
+}
+
 function normalizeDateRange({ range, from, to } = {}) {
   const now = new Date();
   if (range === "today" || range === "daily") {
@@ -252,7 +284,7 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
   const end = endOfDay(day);
   const dateKey = date ?? formatDateInTimeZone(start, env.DAILY_CLOSING_TIMEZONE);
 
-  const [activeBills, activePayments, cancelledBillsCount, roughBillsCount, oldUdharRecovered, pendingSyncCount, lowStockProducts, topProducts, purchaseReceipts, quickPurchases, cashExpenses, cashPurchaseReturns] = await Promise.all([
+  const [activeBills, activePayments, cancelledBillsCount, roughBillsCount, oldUdharRecovered, pendingSyncCount, lowStockProducts, topProducts, purchaseReceipts, quickPurchases, cashExpenses, cashPurchaseReturns, reportLocation, lowStockPackRows] = await Promise.all([
     // Only the four numbers the closing actually reports. The whole row was being
     // hydrated (76 columns, plus every payment) to produce two sums and a count.
     client.bill.findMany({
@@ -302,9 +334,30 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
       where: { shopId, ...(locationId && { locationId }), status: "active", refundMode: "cash", createdAt: { gte: start, lte: end }, refundAmount: { gt: 0 } },
       select: { refundAmount: true },
     }),
+    // Neither of these depends on the reads above, and both used to wait for all of
+    // them and then for each other — four sequential round trips where two will do.
+    // Only the location-stock lookup genuinely needs an answer first, so only it is
+    // still awaited below.
+    allLocations ? null : resolveOperationalLocation(shopId, locationId, client),
+    client.productSellingUnit.findMany({
+      where: {
+        shopId,
+        isActive: true,
+        lowStockThreshold: { gt: 0 },
+        product: { deletedAt: null, packagingMode: "per_pack" },
+      },
+      select: {
+        id: true,
+        name: true,
+        onHandQty: true,
+        lowStockThreshold: true,
+        reorderLevel: true,
+        product: { select: { id: true, name: true } },
+      },
+      orderBy: [{ product: { name: "asc" } }, { name: "asc" }],
+    }),
   ]);
 
-  const reportLocation = allLocations ? null : await resolveOperationalLocation(shopId, locationId, client);
   // One lookup for the whole list, not one per product. Bounded at 20 by the take
   // above, so this is smaller than the /inventory case it mirrors — but it is the
   // same shape, and the closing report runs at every till at end of day.
@@ -323,27 +376,10 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
   // and one box left is not "Maggi is fine", and the pooled total cannot say so
   // because it has already added them together.
   //
-  // The comparison is done here rather than in the query because it is between two
-  // columns of the same row, which Prisma cannot express in a where clause.
-  const lowStockPacks = (
-    await client.productSellingUnit.findMany({
-      where: {
-        shopId,
-        isActive: true,
-        lowStockThreshold: { gt: 0 },
-        product: { deletedAt: null, packagingMode: "per_pack" },
-      },
-      select: {
-        id: true,
-        name: true,
-        onHandQty: true,
-        lowStockThreshold: true,
-        reorderLevel: true,
-        product: { select: { id: true, name: true } },
-      },
-      orderBy: [{ product: { name: "asc" } }, { name: "asc" }],
-    })
-  )
+  // The comparison is done here rather than in the query it came from (up in the batch
+  // above) because it is between two columns of the same row, which Prisma cannot
+  // express in a where clause.
+  const lowStockPacks = lowStockPackRows
     .filter((unit) => Number(unit.onHandQty ?? 0) <= Number(unit.lowStockThreshold))
     .map((unit) => ({
       productId: unit.product.id,
@@ -578,8 +614,27 @@ export async function getUdharAgeing(shopId) {
         { udharLedger: { some: {} } },
       ],
     },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      mobile: true,
+      deletedAt: true,
+      udharAmount: true,
+      createdAt: true,
+      reminderOverrideUntil: true,
+      // allocateUdharAgeing needs the seven columns it ages by. A customer with a long
+      // history was otherwise carrying every note, bill number and idempotency key on
+      // every row of it into a report that shows four bucket totals.
       udharLedger: {
+        select: {
+          id: true,
+          type: true,
+          mode: true,
+          amount: true,
+          businessDate: true,
+          createdAt: true,
+          reversalOfLedgerId: true,
+        },
         orderBy: [{ businessDate: "asc" }, { id: "asc" }],
       },
     },
@@ -815,16 +870,37 @@ export async function getMonthlyBreakdown(shopId, { year, untilMonth, locationId
     }),
   ]);
 
+  // Bucket once, then read the buckets. These two passes used to be filters INSIDE the
+  // month loop, so a 12-month report placed every bill twelve times to keep one answer.
+  //
+  // Every row here is inside [start, end] by construction, so it is on or after January's
+  // boundary and the scan below always lands on a real month.
+  const monthStarts = monthStartsInShopTz(year, tz);
+  const byMonth = (rows, field) => {
+    const buckets = new Map();
+    for (const row of rows) {
+      const at = new Date(row[field]).getTime();
+      let month = 1;
+      while (month < 12 && at >= monthStarts[month]) month += 1;
+      const bucket = buckets.get(month);
+      if (bucket) bucket.push(row);
+      else buckets.set(month, [row]);
+    }
+    return buckets;
+  };
+  const billsByMonth = byMonth(bills, "businessDate");
+  const damageByMonth = byMonth(damageRows, "createdAt");
+
   const months = [];
   for (let m = 1; m <= untilMonth; m++) {
-    const monthBills = bills.filter((b) => monthInShopTz(b.businessDate, tz) === m);
-    const monthDamage = damageRows.filter((d) => monthInShopTz(d.createdAt, tz) === m);
+    const monthBills = billsByMonth.get(m) ?? [];
+    const monthDamage = damageByMonth.get(m) ?? [];
     const grossSales = sumMoney(monthBills.map((b) => b.grandTotal));
     const grossProfit = sumMoney(monthBills.map((b) => b.grossProfit));
     const inventoryLoss = sumMoney(monthDamage.map((d) => d.damageLossValue));
     months.push({
       month: m,
-      monthName: new Date(year, m - 1).toLocaleString("en-IN", { month: "long" }),
+      monthName: monthNames()[m - 1],
       year,
       totalBills: monthBills.length,
       grossSales,
@@ -885,7 +961,25 @@ export async function getTopProducts(shopId, { from, to, locationId, limit = DEF
 export async function getInventoryHealth(shopId, { includeCost = false, windowDays = 30, locationId } = {}) {
   const since = zonedDayStartDaysAgo(new Date(), Number(windowDays || 30));
   const [products, soldItems] = await Promise.all([
-    db.product.findMany({ where: { shopId }, orderBy: { name: "asc" } }),
+    db.product.findMany({
+      where: { shopId },
+      // Ten columns of the fifty a Product carries. The rest — imageUrl (a data URL on
+      // catalogues that use one), description, the JSON attribute blobs, every *Paise
+      // mirror — were read for every product in the shop and then dropped.
+      select: {
+        id: true,
+        name: true,
+        deletedAt: true,
+        baseUnit: true,
+        rateUnit: true,
+        stockBaseQty: true,
+        lowStockThreshold: true,
+        category: true,
+        costPerRateUnit: true,
+        defaultPricePerRateUnit: true,
+      },
+      orderBy: { name: "asc" },
+    }),
     db.billItem.findMany({
       where: { bill: { shopId, ...(locationId && { locationId }), ...REAL_SALE_BILL_FILTER, businessDate: { gte: since } } },
       select: { productId: true, name: true, quantityInBaseUnit: true, lineTotal: true },
@@ -1276,7 +1370,35 @@ export async function exportBillsData(shopId, { from, to, status, locationId, li
 
   const fetched = await db.bill.findMany({
     where,
-    include: { items: true, payments: true },
+    // The CSV below names every column it writes, and this is the list. A BillItem
+    // carries about forty columns — pricing-rule provenance, cost mirrors, the whole
+    // *Paise set — and the export was reading all of them for each of ~48k line rows
+    // to write seven.
+    select: {
+      id: true,
+      billNo: true,
+      businessDate: true,
+      billType: true,
+      status: true,
+      customerName: true,
+      discount: true,
+      grandTotal: true,
+      paidAmount: true,
+      creditAmount: true,
+      grossProfit: true,
+      items: {
+        select: {
+          name: true,
+          quantity: true,
+          enteredUnit: true,
+          ratePerRateUnit: true,
+          lineTotal: true,
+          lineProfit: true,
+          gstRate: true,
+        },
+      },
+      payments: { select: { mode: true, amount: true } },
+    },
     orderBy: [{ businessDate: "desc" }, { id: "desc" }],
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     take: take + 1,
@@ -1415,4 +1537,8 @@ export async function exportUdharData(shopId) {
   }));
 }
 
-export const __reportInternals = { toPaise, fromPaise, normalizeDateRange, enforceReportRangeLimit, monthInShopTz, zonedDayStartDaysAgo };
+// monthInShopTz is no longer on the monthly-breakdown path — monthStartsInShopTz is —
+// but it stays exported as that path's SPECIFICATION. report-month-timezone.examples.js
+// asserts the two agree on every quarter-hour of a year, in several zones, which is a
+// stronger guard than either could give alone.
+export const __reportInternals = { toPaise, fromPaise, normalizeDateRange, enforceReportRangeLimit, monthInShopTz, monthStartsInShopTz, zonedDayStartDaysAgo };

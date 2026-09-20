@@ -7,6 +7,7 @@ import { getOfflineScope, nowIso } from "@/lib/offline/context";
 import { emitLocalDataChanged } from "@/lib/offline/instant-cache";
 import { acknowledgeSyncSequence, syncPull } from "@/features/core/sync/api";
 import { mergeServerChange, refreshBusinessCaches } from "@/features/core/sync/sync-reconcile";
+import { replaceReferencesMany } from "@/features/core/sync/sync-id-mapping";
 import {
   DEFAULT_CURSOR_ID,
   isRecord,
@@ -300,11 +301,17 @@ export async function pullServerChanges(): Promise<{
       const changes = normalizePullChanges(response);
       let pulled = 0;
       let conflicts = 0;
+      // One reference pass per page rather than per change: the rewrite walks
+      // every offline table, so a 500-change page was 500 full walks.
+      const mergedIds = new Map<string, string>();
       for (const change of changes) {
-        const status = await mergeServerChange(change);
+        const status = await mergeServerChange(change, mergedIds);
         if (status === "merged") pulled += 1;
         if (status === "conflict") conflicts += 1;
       }
+      // Before the cursor is saved and acknowledged: a reference still pointing
+      // at a replaced local id must not outlive the page that replaced it.
+      await replaceReferencesMany(mergedIds);
       totalPulled += pulled;
       totalConflicts += conflicts;
 

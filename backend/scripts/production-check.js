@@ -547,7 +547,11 @@ if (exists("src/modules/products/products.routes.js")) {
 
 if (exists("src/modules/sync/sync.service.js")) {
   const syncService = read("src/modules/sync/sync.service.js");
-  if (!/case SYNC_EVENT_TYPES\.RESTORE_PRODUCT:[\s\S]*assertOwnerPermission\(shopId, user, getEventOwnerPin\(event\)\)[\s\S]*return applyRestoreProduct/.test(syncService)) {
+  // The trailing argument is the push context, which carries the batch's
+  // owner-PIN proof so one approval is verified once rather than once per event.
+  // The gate itself is what this checks, and it is still here, still before the
+  // restore.
+  if (!/case SYNC_EVENT_TYPES\.RESTORE_PRODUCT:[\s\S]*assertOwnerPermission\(shopId, user, getEventOwnerPin\(event\)(?:, context)?\)[\s\S]*return applyRestoreProduct/.test(syncService)) {
     errors.push("Offline RESTORE_PRODUCT sync must assert owner permission before restore");
   }
 }
@@ -805,6 +809,11 @@ if (exists("prisma-postgres/schema.prisma") && migrationFiles.length) {
     ["Bill_shopId_updatedAt_id_idx",          "Bill sync pull keyset index (shopId, updatedAt, id)"],
     ["StockLedger_shopId_updatedAt_id_idx",   "StockLedger sync pull keyset index (shopId, updatedAt, id)"],
     ["UdharLedger_shopId_updatedAt_id_idx",   "UdharLedger sync pull keyset index (shopId, updatedAt, id)"],
+    // Shop-wide udhar reads by date. Daily closing, payment modes, P&L and the payment
+    // summary ask for a businessDate window with neither a customer nor a location, and
+    // the customerId/locationId composites cannot serve that — their second column is
+    // unconstrained. Without this one the read degrades with the shop's whole history.
+    ["UdharLedger_shopId_businessDate_idx",   "Udhar ledger shop-wide date-range report index"],
   ];
   for (const [indexName, description] of criticalIndexes) {
     if (!allMigrationSql.includes(indexName)) {
@@ -2292,6 +2301,38 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   }
   for (const snippet of ["permissionAllowed === false", "requiresManualFallback === true", "confidence < 0.65"]) {
     if (!frontendAdapter.includes(snippet)) errors.push("Frontend AI fail-closed adapter missing " + snippet);
+  }
+}
+
+/*
+ * Every test file has to be run by something.
+ *
+ * The suite is a hand-written chain of npm scripts, so a new tests/*.examples.js
+ * only ever runs if somebody remembers to name it. Twenty-seven did not get
+ * named — including live guards on udhar sync atomicity, plan entitlements and
+ * purchase stock traceability. Three of those had gone red against code that had
+ * moved on, and nobody found out, because a test nothing runs is not a test.
+ *
+ * tests/integration/ is exempt: run-integration-tests.js discovers that
+ * directory itself, so files there are wired by existing.
+ */
+{
+  const testsDir = path.join(root, "tests");
+  if (fs.existsSync(testsDir)) {
+    const scriptText = Object.values(readJson("package.json").scripts ?? {}).join("\n");
+    const runnerText = fs.readdirSync(path.join(root, "scripts"))
+      .filter((name) => name.endsWith(".js"))
+      .map((name) => read(`scripts/${name}`))
+      .join("\n");
+    const named = `${scriptText}\n${runnerText}`;
+    const unrun = fs.readdirSync(testsDir)
+      .filter((name) => /\.(examples|test)\.js$/.test(name))
+      // Match on a path boundary: "foo.examples.js" must not count as named
+      // because some script mentions "other-foo.examples.js".
+      .filter((name) => !new RegExp(`(^|[\\s/"'])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(named));
+    for (const name of unrun) {
+      errors.push(`tests/${name} is not run by any npm script or scripts/ runner — wire it into test:isolated-suite or delete it`);
+    }
   }
 }
 

@@ -375,6 +375,68 @@ export interface CloudHydrationResult {
   errors: Array<{ label: string; error: string }>;
 }
 
+/**
+ * Cursors that claim data this device does not have.
+ *
+ * A cursor means "I have everything up to here". Two things could leave one
+ * ahead of the truth. Until fe1981de the server advanced the suppliers, expenses
+ * and purchase-history cursors on a CASHIER pull while sending [] for them, and
+ * cursors are keyed per device rather than per user — so an owner signing in on a
+ * counter machine a cashier had synced resumed after rows they never received.
+ * Nothing re-requested them. The supplier list and the expense history were empty
+ * offline, for good, while sync reported it was up to date.
+ *
+ * The server no longer does that. This is for the devices where it already
+ * happened, and for whatever else leaves the same mark, because the mark is what
+ * this checks rather than the cause: a cursor is set, and the table it speaks for
+ * is empty. Clearing it makes the next pull start from the beginning and fill the
+ * table, after which the condition is false and this does nothing again.
+ *
+ * It cannot misfire on a shop that genuinely has no suppliers: with no rows to
+ * return, the server hands back the prior cursor, which is null, so there is
+ * nothing set to clear.
+ *
+ * Only the two entities whose absence is visible are checked. Both are read all
+ * over the app offline — the supplier picker, the expense screens — and both have
+ * a Dexie table of their own to look at.
+ */
+const CURSOR_BACKED_TABLES = [
+  { entity: "suppliers", table: "suppliers" },
+  { entity: "expenses", table: "expenses" },
+] as const;
+
+async function repairCursorsAheadOfLocalData(): Promise<string[]> {
+  const repaired: string[] = [];
+  try {
+    await dexieDB.open();
+    const scope = getOfflineScope();
+    // Reached through table(name) rather than the typed dexieDB.sync_cursor
+    // accessor, and deliberately. This is a best-effort repair inside the
+    // recovery path: the imports above are what the user asked for, and a
+    // hydration that never settles is worse than one that does not repair. The
+    // typed accessor on a partially-stubbed database waits on an IndexedDB open
+    // that never completes, which no catch can rescue; table(name) raises
+    // instead, and raising is something this can handle.
+    const cursors = dexieDB.table("sync_cursor") as unknown as {
+      get(id: string): Promise<{ cursor?: unknown; tenant_id?: unknown; store_id?: unknown } | undefined>;
+      delete(id: string): Promise<void>;
+    };
+    for (const { entity, table } of CURSOR_BACKED_TABLES) {
+      const row = await cursors.get(`entity:${entity}`);
+      if (!row || row.tenant_id !== scope.tenant_id || row.store_id !== scope.store_id) continue;
+      if (!row.cursor) continue;
+      const held = await dexieDB.table(table).count();
+      if (held > 0) continue;
+      await cursors.delete(`entity:${entity}`);
+      repaired.push(entity);
+    }
+  } catch {
+    // A repair that cannot run must not take the recovery sync down with it.
+    return repaired;
+  }
+  return repaired;
+}
+
 export async function hydrateFromBackendSnapshot(): Promise<CloudHydrationResult> {
   const scope = getOfflineScope();
   await offlineDB.init();
@@ -408,6 +470,17 @@ export async function hydrateFromBackendSnapshot(): Promise<CloudHydrationResult
   };
 
   assertCurrentOfflineScope(scope);
+  // The imports above re-fetch products, customers, bills, the udhar ledger and
+  // purchase history over REST, so those repair themselves. Suppliers and expenses
+  // arrive only through the sync pull, which means a cursor sitting ahead of an
+  // empty table is the one thing this recovery could not otherwise fix — and
+  // repairing that is exactly what runManualSyncCycle promises in its own words:
+  // "incremental sync alone cannot repair a device whose cursor is current but
+  // whose local IndexedDB snapshot is incomplete".
+  const repairedCursors = await repairCursorsAheadOfLocalData();
+  if (repairedCursors.length > 0) {
+    console.warn(`[Artha] Reset sync cursors that were ahead of local data: ${repairedCursors.join(", ")}`);
+  }
   await refreshBusinessCaches().catch(() => undefined);
   assertCurrentOfflineScope(scope);
   emitLocalDataChanged(snapshotImport({ action: "direct-import", result }));

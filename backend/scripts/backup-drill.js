@@ -388,7 +388,27 @@ async function main() {
 
   const started = Date.now();
   try {
-    await resetDatabase(ctx.db);
+    try {
+      await resetDatabase(ctx.db);
+    } catch (error) {
+      // A drill database one schema behind fails here, on whichever model was
+      // added last, with a raw Prisma "table does not exist". That names a table
+      // the reader has never heard of and says nothing about what to do, so the
+      // drill looks broken when it is one command away from running — and this
+      // drill is the evidence behind SYNC-005 and the release gate, so whoever
+      // hits it is usually trying to produce that evidence under time pressure.
+      if (/does not exist in the current database/i.test(String(error?.message))) {
+        fail(
+          "the drill database is behind the current schema, so it proved nothing. "
+          + "Run `npm run setup:test-db` and try again.",
+          // The table, not the invocation: Prisma backticks the failing call
+          // first, so a plain first-match prints `prisma.x.deleteMany()` and
+          // tells the reader nothing they could not already see.
+          { missingTable: String(error.message).match(/`([^`]+)`\s+does not exist/i)?.[1] ?? null },
+        );
+      }
+      throw error;
+    }
     env.BACKUP_ENCRYPTION_KEY = env.BACKUP_ENCRYPTION_KEY || Buffer.alloc(32, 7).toString("base64");
 
     log("▶ seeding a year of trade");

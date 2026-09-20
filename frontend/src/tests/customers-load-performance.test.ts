@@ -45,13 +45,10 @@ describe("Customers/Udhar first-load performance contracts", () => {
     expect(hook.indexOf("const localQuery = useQuery")).toBeLessThan(hook.indexOf("const serverCustomersQuery = useQuery"));
   });
 
-  it("keeps the legacy Udhar loader local-first and refreshes server truth separately", () => {
-    const content = source("../features/core/udhar/pages/UdharPage.tsx");
-    const loader = content.slice(content.indexOf("async function loadUdharHome"), content.indexOf("function readInstantUdharHome"));
-
-    expect(loader).toContain("getLocalUdharSummaryAsync()");
-    expect(loader).not.toContain("resolveAuthoritativeUdharSummary");
-    expect(content).toContain('queryKey: ["customers-authoritative-summary-refresh"]');
-    expect(content).toContain("placeholderData: readInstantUdharHome");
-  });
+  // A fifth contract here held the LEGACY UdharPage to the same local-first shape.
+  // That page is gone: "/udhar" is a <Redirect to="/customers?filter=udhar" /> in
+  // app/routes.tsx, nothing imported the module, and the route-preload table already
+  // maps "/udhar" to the customers chunk. The contract it enforced did not go with
+  // it — the three tests above hold the customer screens that actually serve udhar
+  // to the same rule: paint from local, refresh server truth on its own query.
 });
