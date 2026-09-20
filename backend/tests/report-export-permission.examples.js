@@ -10,16 +10,27 @@ assert.match(
   "reports routes should import requireOwnerPin"
 );
 
+// Asserted by shape, not as an exact line: these routes legitimately gained an
+// entitlement gate (requireContinuityAction) and would otherwise have to be edited
+// here for every middleware added, which is how a guard gets quietly dropped to make
+// a test pass. What must hold is that requireOwnerPin still runs BEFORE the
+// controller on each one.
 const protectedExportRoutes = [
-  'router.get("/export/bills", requireOwnerPin, ctrl.exportBills);',
-  'router.get("/export/stock", requireOwnerPin, ctrl.exportStock);',
-  'router.get("/export/udhar", requireOwnerPin, ctrl.exportUdhar);',
+  ["/export/bills", "ctrl.exportBills"],
+  ["/export/stock", "ctrl.exportStock"],
+  ["/export/udhar", "ctrl.exportUdhar"],
 ];
 
-for (const expectedLine of protectedExportRoutes) {
+for (const [path, handler] of protectedExportRoutes) {
+  const line = routes.split("\n").find((l) => l.trim().startsWith(`router.get("${path}"`));
+  assert.ok(line, `expected a route for ${path}`);
   assert.ok(
-    routes.includes(expectedLine),
-    `${expectedLine} should require owner role or owner PIN before export controller`
+    line.includes("requireOwnerPin"),
+    `${path} should require owner role or owner PIN before export controller: ${line.trim()}`
+  );
+  assert.ok(
+    line.indexOf("requireOwnerPin") < line.indexOf(handler),
+    `${path} must run requireOwnerPin BEFORE ${handler}: ${line.trim()}`
   );
 }
 
