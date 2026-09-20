@@ -1,7 +1,55 @@
 # Bug Backlog
 
 Status: Active  
-Last triage: 2026-08-24
+Last triage: 2026-09-20
+
+## Triage of 2026-09-20
+
+The previous header read 2026-08-24, but BUG-047 through BUG-056 were written on
+2026-09-18 — the date understated the document by three and a half weeks. This
+pass re-ran the automated evidence every entry names, and read the 461 commits
+since the last triage for work that fixed something and was never written down.
+
+**The count is 61 items, not 46.** A row-counting grep anchored on `^| BUG-`
+misses ten rows, which is how the smaller figure gets quoted.
+
+**Ten items are `Fixed`, not `Verified`** — BUG-047 through BUG-056. The workflow
+above is `Fixed -> Verified -> Closed`, so none of them has been through
+verification, and `BUG-047 is a P0`. `PRODUCTION_CHECKLIST.md` requires "no open
+P0 and no release-blocking P1" before release; a P0 that has not been verified
+does not satisfy that line as written. **This is a release-gate question, not a
+bookkeeping one**, and it needs the gate owner rather than a state edit here.
+
+What this pass did establish is that the automated half of their evidence still
+holds. Six of the ten name a regression file; all six were run today at `713a7c00`
+and all six pass. The other four (BUG-047, 051, 054, 055) cite a measurement taken
+by driving a shop — 4.3s to 282ms, 46 dev restarts to 0 — or lean on the existing
+`sync-contract` projection test, and a measurement is not something a re-triage can
+re-run from a document. Treat those four as claims to reproduce at verification.
+
+| Suite | Result |
+|---|---|
+| `owner-pin-verified-once-per-push.examples.js` | passed |
+| `shop-phone-from-registration.examples.js` | passed |
+| `test-database-guard-path.examples.js` | passed |
+| `sync-push-timeout.test.ts`, `sync-superseded-local-echo.test.ts`, `return-tender-reconciles-to-sales.test.ts` | 3 files, 15 tests passed |
+
+The fix symbols those entries describe are all still in the source
+(`replaceReferencesMany`, `collapseSupersededLocalEchoes`, `syncPushTimeoutMs`,
+`acknowledgeCompletedPurchaseRows`). Promotion to `Verified` still needs a named
+verifier and, for the UI-visible ones, the live QA artifact the other entries carry.
+
+**Five defects were fixed without a backlog entry** and are recorded below as
+BUG-057 through BUG-061. All five were found by driving a real shop rather than by
+a test, all five carry a regression, and every one of those regressions passes at
+`713a7c00`. BUG-057 is a P0: it reported the wrong profit on every product a shop
+had ever bought stock for.
+
+One grading call is left visible rather than made quietly. BUG-060 duplicates
+durable local rows, and the P0 definition names duplication — but the duplication
+is local-only, the server stayed correct, and the display deduped throughout, so
+it is filed P1 alongside the other sync-integrity items. Re-grade it if the rule
+is meant to read literally.
 
 ## Severity and workflow
 
@@ -73,6 +121,11 @@ States: `New -> Reproduced -> In progress -> Fixed -> Verified -> Closed`; use `
 | BUG-054 | P1 | Fixed | SYNC-002, PERF-001 | Re-pointing references walked twelve offline tables with `Collection.modify`, which writes back every row the cursor visits whether or not the callback changed it. A shop holding the starter catalog has ~1,200 rows there and almost none mention the id being re-pointed, so each pass was ~1,200 IndexedDB writes to change nothing — 12.7s measured, on a path that runs after every push and every pull page. | Reads, decides, writes back only rows that actually moved. Same pass: 282ms. |
 | BUG-055 | P2 | Fixed | SYNC-001, PERF-001 | Outbox rows were marked SYNCED one at a time; each write emits `kirana:sync-queue-updated` and every listener re-reads the whole queue to recount, so a 200-operation batch meant 200 recounts of a 575-row queue on top of 200 transactions. | One settle for the batch, after its merges and reference pass. `acknowledgeCompletedPurchaseRows` moved with it — it releases a purchase row only once its operation reads SYNCED, so it must run after that write, not inside the loop. Covered by the existing `sync-contract` purchase/stock projection test. |
 | BUG-056 | P1 | Fixed | RPT-002, RPT-003 | Reports' Payment Mode Breakdown did not net returns, so one screen showed two different figures both labelled Total Sales (₹40 headline vs ₹60 donut) and the udhar slice disagreed with the Udhar Due card above it. Daily Closing's "Udhar given today" reported gross credit extended while the customer owed the net — the number a shopkeeper closes the day against. Cause: `billCredit` clamped a refund's negative `creditAmount` to zero (right for a sale, wrong for a return), and the embedded-tender reader was gated on a positive amount so a return carrying its refund on the bill rather than in a separate payment row vanished from the split. | The clamp applies to sales only, and the tender reader tests for non-zero. Sales by Hour now nets refunds too, into the hour the refund was recorded — Total Sales counts a return in the range the return falls in, so bucketing it by the original sale's hour would stop the two agreeing whenever somebody returns today what they bought last week. Its bill count stays a count of sales. Regression: `frontend/src/tests/return-tender-reconciles-to-sales.test.ts` (5 cases incl. the corrupt-sale guard). |
+| BUG-057 | P0 | Fixed | RPT-002, RPT-003, INV-002 | Every bill booked its cost from the starter catalogue's seeded figure instead of what the shop actually paid, so reported margin was wrong on every product a shop had ever bought stock for. Toor dal seeded at ₹137.95, taken in at ₹120/kg, sold at ₹155: a ₹35/kg margin reported as ₹17.05, and an owner dashboard reading ₹54 of profit where the shop had earned ₹107.88. Revenue, cash, stock counts and the stock ledger were all correct — only the cost side was wrong, which is why nothing refused a bill and why it survived. Cause: billing reads `ProductSellingUnit.costPrice` on the DEFAULT pack, which is only a copy of `Product.costPerRateUnit`. `syncDefaultSellingUnitPricing` keeps the copy fresh but was wired into the product EDIT path only; receiving stock recomputes the weighted average straight onto the product, so the mirror kept its creation-day number for the life of the shop. | Fixed at the choke point both receiving paths share (`incrementLocationInventory`), so stock-in and purchase-order receipt are covered by one change rather than two that can drift. `sellingUnitCostPrice` now takes the product's cost for the DEFAULT pack and keeps the row's own figure only as the fallback for a product carrying no cost at all. Alternate packs are untouched — their `costPrice` is what the shopkeeper typed for that size. The code fix only corrects a product on its next receipt, so `scripts/selling-unit-cost-backfill.js` repairs shops that are not about to buy again. Commits `83b8c825`, `02cb4dd6`. Regressions `backend/tests/bill-cost-basis.examples.js` and `backend/tests/pack-cost-price.examples.js` both pass at `713a7c00`; the first fails on the old code with `actual: 137.95, expected: 120`. **Needs verification, and needs the backfill run against any shop that has already bought stock — the fix alone does not repair historical cost.** |
+| BUG-058 | P1 | Fixed | BILL-001, INV-001 | `BillingPage` asked for `limit: 350` and `filterCachedProducts` honours a limit by SLICING, so on a 560-item shop 210 products were not reachable from the counter at all — not ranked low, absent. Which 210 was an accident of ordering: the server's order online, IndexedDB's key order offline, so the two paths lost different products. The starter catalogue ships 560 items, so every shop taking the one-click catalogue was over the line before it sold anything. Found by selling: "Loose Toor Dal (per kg)" answered "No results" at the counter while in stock, on the shelf, and already sold twice that session. | Billing now takes the whole catalogue the way `ProductsPage` does. Nothing downstream wanted a page — the grid already caps at 30, the search index is a substring scan over strings already in memory, and the offline fallback never had a limit, which is why the product sat in IndexedDB the whole time the till said it did not exist. 350 was the lowest cap in the app and carried no comment; inventory, returns, pricing and the stock dialogs all read 1000. Commits `a0ea824d`, `5001918b`. Regression `frontend/src/tests/billing-catalogue-completeness.test.ts` passes at `713a7c00`. |
+| BUG-059 | P1 | Fixed | BILL-006, SYNC-002 | Standalone returns were unusable for a new shop, in two layers. "New Return" was a dead end — the dialog read "1 item · Refund ₹0" with Process return disabled, because `soldQty: 0` means "unlimited/standalone" and the pricing read it as "sold nothing" and multiplied the rate by zero. With that fixed, the server then refused the return AFTER the till had said "Return recorded. Stock and reports updated", parking it in `sync_conflicts` with `Unsupported unit "bottle 750 ml"`: the standalone-return branch was the only path feeding a pack label to the unit table. The starter catalogue is almost entirely pack-labelled, so this was very nearly every standalone return a new shop could attempt. | `unlinkedReturnLineAmount` extracted for the standalone case; a linked return still apportions its original line exactly as before. `createSaleReturn` now resolves the pack the same way the sale path does — one bottle back is 750 ml back, not 1 ml — and a loose product still converts through its bare unit. Commit `b2e7dd00`. Regressions `frontend/src/tests/standalone-return-refund.test.ts` and `backend/tests/standalone-return-packaged-product.examples.js` both pass at `713a7c00`. |
+| BUG-060 | P1 | Fixed | SYNC-002 | A device-created product exists twice for a moment — under the device-minted id and the server's — tied by `clientProductId`. `mergeProducts` collapsed the pair last-write-wins on every field, the local twin is added second, and `id` went the same way, so the merged row carried the DEVICE id, `cacheProducts` wrote it under that id, and the row sync had just deleted came back while the server row sat under its own. A 560-item catalogue import left IndexedDB holding 894 rows for 560 products, and nothing would ever clear them: their outbox rows are SYNCED, so no retry revisits them. Display deduping is why it stayed hidden — the grid and search showed one product throughout; the only tells were an Inventory SKU tile reading 565 and a local store growing 60% past what the shop sells, on a device meant to run for months. | `id` now comes from `canonicalProductId`, which prefers the row whose `clientProductId` names the other — that link only. An earlier attempt preferring a server-LOOKING id by shape broke a case `product-offline-repository` already pins: a pending local edit is linked by `server_id`, keeps its own local id on purpose, and its outbox row references that id. Commit `21ce9886`. Regression `frontend/src/tests/product-merge-canonical-id.test.ts` passes at `713a7c00`. **No server-side or money effect; see the grading note in the 2026-09-20 triage.** |
+| BUG-061 | P1 | Fixed | INV-001, BILL-003 | Billing caps every line at the selling unit's ceiling and throws `PRICE_ABOVE_CONFIGURED_MAXIMUM`, but nothing stopped an edit from SETTING a price above that ceiling in the first place, through either write path. Found on a running shop: a ₹10 biscuit raised to ₹25 without touching its ₹10 MRP. The REST route and offline sync both returned success, then the catalogue and billing grid advertised ₹25 while the counter quietly rang ₹10 from the retail tier. Nobody is overcharged — the shop silently loses the margin it believes it has just taken, on every sale, and the cashier quotes a number the bill contradicts. | `syncDefaultSellingUnitPricing` is where both numbers meet and was the one place writing `defaultPrice > maximumPrice`; it now refuses, naming both numbers. Raising price and MRP together is accepted, and a product with no MRP stays unconstrained — loose goods and services have none, and a missing ceiling must not read as a ceiling of zero. The tile now shows what the counter will charge rather than the raw listed price, which matters for alternate packs carrying their own ceiling and for rows saved before this guard. Commit `0e741314`. Regressions `backend/tests/price-above-mrp-refused.examples.js` and `frontend/src/tests/product-tile-price.test.ts` both pass at `713a7c00`. |
 
 ## Fixed findings awaiting historical closure
 
