@@ -1,0 +1,35 @@
+# Disposable PostgreSQL for load testing. Deliberately separate from the
+# docker-compose.yml at the backend root: that one is the production-shaped stack
+# with a named volume and real credentials, and a load test must never point at it.
+#
+# Port 55432, not 5432, so this cannot collide with a real local PostgreSQL.
+# The volume is anonymous and removed by `down -v`, so every run starts clean.
+#
+# Durability is left at PostgreSQL's defaults on purpose. Turning off fsync would
+# make the numbers look better and mean nothing: the point of running against
+# PostgreSQL is to find the ceiling you will actually ship on. Note that Docker
+# Desktop's disk layer is still not your production disk — treat results as
+# directional, and as a comparison against the SQLite run, not as a forecast.
+name: kiranaos-loadtest
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kiranaos-loadtest-postgres
+    environment:
+      POSTGRES_DB: kiranaos_loadtest
+      POSTGRES_USER: kiranaos
+      # Throwaway database, throwaway credential. Never reuse this anywhere.
+      POSTGRES_PASSWORD: loadtest
+    ports:
+      - "55432:5432"
+    command:
+      - postgres
+      # The load test opens 25 connections; leave room for the pool and for psql.
+      - -c
+      - max_connections=200
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kiranaos -d kiranaos_loadtest"]
+      interval: 2s
+      timeout: 3s
+      retries: 40

@@ -1,17 +1,28 @@
 const DEFAULT_TIME_ZONE = "Asia/Kolkata";
 const DAY_MS = 86_400_000;
 
+const partsFormatters = new Map();
+
+function partsFormatter(timeZone) {
+  let formatter = partsFormatters.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    partsFormatters.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
 function datePartsInTimeZone(date, timeZone = DEFAULT_TIME_ZONE) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(date);
+  const parts = partsFormatter(timeZone).formatToParts(date);
   const map = Object.fromEntries(parts.filter((p) => p.type !== "literal").map((p) => [p.type, p.value]));
   return {
     year: Number(map.year),
