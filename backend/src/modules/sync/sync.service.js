@@ -991,6 +991,25 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role, a
 
   const orderBy = [{ updatedAt: "asc" }, { id: "asc" }];
 
+  // A cashier device receives no suppliers, purchase history or expenses. That was
+  // already true of the RESPONSE — the rows were fetched and then replaced with []
+  // on the way out — but it was not true of the work, and it was not true of the
+  // cursor.
+  //
+  // The cursor is the part that mattered. It advanced off rows the device never
+  // got, and it is keyed `entity:<name>` against tenant/store/device — not against
+  // the user. So a cashier syncing on the counter machine moved the suppliers
+  // cursor past the shop's whole supplier history, and when the owner signed in on
+  // that same machine the next pull started AFTER it. Those rows were never
+  // delivered and nothing re-requests them: clearSyncCursors() only runs inside
+  // forceCloudSnapshotImport(), which has no callers. The device would show an
+  // empty supplier list and no expense history for good, while sync reported it
+  // was up to date.
+  //
+  // Not querying at all fixes both: no work, and the cursor stays where it is, so
+  // whoever signs in next with the role to see those rows gets them from there.
+  const privileged = role === "owner" || role === "admin";
+
   const [products, customers, rawBills, stockLedger, udharLedger, suppliers, purchaseHistory, expenses] = await Promise.all([
     db.product.findMany({
       where: buildWhere("products"),
@@ -1002,9 +1021,9 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role, a
     db.bill.findMany({ where: buildWhere("bills"), include: { items: true, payments: true }, orderBy, take: limit }),
     db.stockLedger.findMany({ where: buildWhere("stockLedger"), orderBy, take: limit }),
     db.udharLedger.findMany({ where: buildWhere("udharLedger"), orderBy, take: limit }),
-    db.supplier.findMany({ where: buildWhere("suppliers"), orderBy, take: limit }),
-    db.purchaseHistory.findMany({ where: buildWhere("purchaseHistory"), orderBy, take: limit }),
-    db.expense.findMany({ where: buildWhere("expenses"), orderBy, take: limit }),
+    privileged ? db.supplier.findMany({ where: buildWhere("suppliers"), orderBy, take: limit }) : [],
+    privileged ? db.purchaseHistory.findMany({ where: buildWhere("purchaseHistory"), orderBy, take: limit }) : [],
+    privileged ? db.expense.findMany({ where: buildWhere("expenses"), orderBy, take: limit }) : [],
   ]);
   const bills = await backfillLegacyBillIdentity(shopId, rawBills);
 
@@ -1028,12 +1047,11 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role, a
   const nextCursor = lastRecord ? encodeCursor(lastRecord.updatedAt, lastRecord.id) : null;
   const returnedCount = Object.values(entitySets).reduce((sum, rows) => sum + rows.length, 0);
 
-  // Role-aware redaction: a cashier/staff device must not receive cost or profit data (it
-  // lives in inspectable IndexedDB even when the UI hides it). Cursors already advanced off
-  // the real rows above, so the device keeps syncing; it just never accumulates margins,
-  // supplier records, or purchase-cost history. The server stays authoritative on profit.
-  const privileged = role === "owner" || role === "admin";
-
+  // Role-aware redaction: a cashier/staff device must not receive cost or profit data
+  // (it lives in inspectable IndexedDB even when the UI hides it). Products and bills
+  // are still fetched whole and redacted here, because the device does need the rest
+  // of those rows; the three entity types it needs nothing from were not fetched at
+  // all, and their cursors stayed put with them.
   return {
     syncedAt: new Date().toISOString(),
     products: privileged ? products : products.map(redactProductCostForCashier),
@@ -1041,9 +1059,10 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role, a
     bills: privileged ? bills : bills.map(redactBillProfitForCashier),
     stockLedger,
     udharLedger,
-    suppliers: privileged ? suppliers : [],
+    // Already [] for an unprivileged role — it was never queried.
+    suppliers,
     purchaseHistory: privileged ? await attachSupplierPayments(shopId, purchaseHistory) : [],
-    expenses: privileged ? expenses : [],
+    expenses,
     sync: {
       hasMore,
       hasMoreByEntity,
