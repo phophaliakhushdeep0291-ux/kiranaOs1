@@ -32,6 +32,110 @@ const OFFLINE_BILL_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
 const OFFLINE_BILL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 const BILL_ITEMS_WITH_OPTIONS = { include: { addons: true } };
 
+// What the bills LIST sends for each line.
+//
+// Every BillItem column except the seven *Paise mirrors, which no screen reads —
+// the client does its money in the Float columns and its own paise helpers. The
+// list is not a summary: its rows are written into IndexedDB and become the
+// receipt the shop prints, the text it shares on WhatsApp, the lines the cancel
+// dialog offers and the fallback the detail page renders when sync has not put
+// bill_items there yet. So this drops the provably unread and keeps everything
+// else, including the pricing provenance the detail page shows.
+//
+// Enumerated rather than omitted because Prisma 5.14 has no `omit`. A new column
+// therefore has to be added here deliberately, which is the safer failure: a
+// missing field shows up as undefined on screen, not as silently wrong money.
+/**
+ * What a Payment is for, on a bill the client has replicated.
+ *
+ * Audited column by column, by following the access path rather than grepping the
+ * name — which is how `amountPaise` was previously miscounted as having 49 readers
+ * when it has none here (all 49 are accounting rows, QR slips, assurance findings
+ * and checkouts).
+ *
+ *   id               paymentIdentityKeys(), rowId(), React keys
+ *   billId           paymentBillDisplaySignature / …EchoBaseSignature
+ *   clientPaymentId  paymentIdentityKeys()
+ *   idempotencyKey   paymentIdentityKeys()
+ *   mode, amount     billPaid, paymentModeOf, the money statement, receipts
+ *   createdAt        the dedupe sort, and the paid_at/paidAt/created_at chain
+ *   status           syncPriority() reads row.status when ordering the pair
+ *
+ * The eight left out have no reader that reaches them through a bill:
+ *   shopId               the offline scope guard matches tenant_id/store_id
+ *   amountPaise          nothing reads it off a payment
+ *   sourceDeviceId       read only off an OUTBOUND outbox payload, in
+ *                        sync-operation-normalizer, never off a listed bill
+ *   provider,            retail/card provenance. Read off RetailPaymentCheckout
+ *   providerReference,   and CardTerminalCharge objects, which come from the
+ *   confirmationSource,  payment-intent endpoints, not from a bill.
+ *   confirmedAt
+ *   retailPaymentIntentId  written when a bill is created; never read back
+ */
+const BILL_REPLICA_PAYMENT_SELECT = {
+  select: {
+    id: true, billId: true,
+    clientPaymentId: true, idempotencyKey: true,
+    mode: true, amount: true, status: true, createdAt: true,
+  },
+};
+
+const BILL_LIST_ITEM_SELECT = {
+  select: {
+    id: true, billId: true, productId: true,
+    sellingUnitId: true, sellingUnitCode: true, sellingUnitLabel: true, conversionToBase: true,
+    name: true, quantity: true, enteredUnit: true, baseUnit: true, quantityInBaseUnit: true,
+    rateUnit: true, ratePerRateUnit: true, costPerRateUnit: true, gstRate: true, hsn: true,
+    originalBillItemId: true, note: true,
+    lineDiscount: true, lineTotal: true, lineCost: true, lineProfit: true, originalUnitPrice: true,
+    appliedPricingRuleId: true, appliedPricingRuleType: true, pricingExplanation: true,
+    pricingConfidence: true, pricingCalculationVersion: true,
+    wasPriceOverridden: true, priceOverrideReason: true, priceApprovedByUserId: true,
+    addons: true,
+  },
+};
+
+/**
+ * The bills SCREEN's shape, as opposed to the shop's offline copy.
+ *
+ * One endpoint was serving two jobs. The list screen renders a row per bill —
+ * number, date, customer, total, how it was paid, how many lines — and got the
+ * full offline replica to do it: every Bill column, every line with its pricing
+ * provenance, ~232KB for fifty bills. `view=list` sends the twenty columns that
+ * row actually reads, and a COUNT of the lines instead of the lines.
+ *
+ * Three of these look droppable and are not:
+ *   clientBillId / idempotencyKey — billIdentityKeys() collapses a pending local
+ *     bill against its synced twin on these. Without them the client falls back to
+ *     a content signature computed FROM THE ITEMS, which this shape does not send,
+ *     so the fallback silently does nothing and the shop sees the same sale twice.
+ *   refundMode — resolveReturnRefundMode reads it before looking at payments.
+ *   updatedAt — the display dedupe sorts on it to pick the newest of a pair.
+ *
+ * `payments` stays, narrowed to what the row computes with — billPaid sums the
+ * non-credit amounts, paymentModeOf reads the modes.
+ */
+const BILL_LIST_VIEW_SELECT = {
+  id: true, billNo: true, billType: true, status: true,
+  customerId: true, customerName: true,
+  grandTotal: true, paidAmount: true, buyerPaidAmount: true, creditAmount: true,
+  returnOfBillId: true, refundMode: true,
+  createdByUserId: true, locationId: true,
+  clientBillId: true, idempotencyKey: true, sourceDeviceId: true,
+  deletedAt: true, cancelledAt: true,
+  businessDate: true, createdAt: true, updatedAt: true,
+  // `id` so paymentIdentityKeys() has something durable to key on; without it
+  // two equal tenders on one bill fall through to a mode/amount signature.
+  payments: { select: { id: true, mode: true, amount: true } },
+  _count: { select: { items: true } },
+};
+
+// The screen reads `items.length` with an itemCount fallback; this makes the
+// fallback the answer rather than a guess, and keeps `_count` off the wire.
+function toListViewBill({ _count, ...bill }) {
+  return { ...bill, itemCount: _count?.items ?? 0 };
+}
+
 async function writeRequiredBillAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
   if (!audit) {
@@ -73,7 +177,7 @@ function resolveBillBusinessDate(actor = {}) {
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
 // ─────────────────────────────────────────────────────────────
-export async function listBills(shopId, { from, to, status, customerId, locationId, page, limit }) {
+export async function listBills(shopId, { from, to, status, customerId, locationId, page, limit, view = "full" }) {
   const where = {
     shopId,
     deletedAt: null,
@@ -85,10 +189,18 @@ export async function listBills(shopId, { from, to, status, customerId, location
     }),
   };
 
+  const listView = view === "list";
   const [bills, total] = await Promise.all([
     db.bill.findMany({
       where,
-      include: { items: BILL_ITEMS_WITH_OPTIONS, payments: true, location: true, giftCardTransactions: true },
+      // The full view is the shop's offline copy: every column an offline screen
+      // reads, and nothing else. What is left out — `location` (the same 16-column
+      // row repeated once per bill), `giftCardTransactions`, the seven BillItem
+      // *Paise mirrors and eight Payment columns — was each checked for a reader
+      // by following the access path, not by grepping the field name.
+      ...(listView
+        ? { select: BILL_LIST_VIEW_SELECT }
+        : { include: { items: BILL_LIST_ITEM_SELECT, payments: BILL_REPLICA_PAYMENT_SELECT } }),
       orderBy: { businessDate: "desc" },
       skip: (page - 1) * limit,
       take: limit,
@@ -96,7 +208,7 @@ export async function listBills(shopId, { from, to, status, customerId, location
     db.bill.count({ where }),
   ]);
 
-  return { bills, total, page, limit };
+  return { bills: listView ? bills.map(toListViewBill) : bills, total, page, limit, view };
 }
 
 // ─────────────────────────────────────────────────────────────
