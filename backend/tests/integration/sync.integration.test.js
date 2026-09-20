@@ -1855,18 +1855,30 @@ if (ctx.skip) {
 
       await ctx.db.product.update({ where: { id: product.id }, data: { name: "Sequence update one" } });
       await ctx.db.product.update({ where: { id: product.id }, data: { name: "Sequence update two" } });
+
+      // Two writes, two feed rows, one record — so one change, even at limit=1.
+      // The limit bounds distinct entities, not raw feed rows: both rows resolve
+      // to the same current product, so sending the first and reporting hasMore
+      // only bought a round trip that carried nothing new.
       const first = assertSuccess(await ctx.get(`/api/sync/pull?since=${since}&afterSeq=${baselineSeq}&limit=1`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
-      assert.equal(first.sync.hasMore, true);
-      assert.equal(first.changes.length, 1);
+      assert.equal(first.changes.length, 1, "repeat writes to one record collapse into a single change");
       assert.equal(first.changes[0].entity.name, "Sequence update two", "change feed resolves to the committed current snapshot");
+      assert.equal(first.sync.hasMore, false, "a page that consumed the whole feed must not ask for another");
+      assert.equal(first.sync.compactedCount, 1, "the page must report the row it folded away");
+
       const firstSeq = BigInt(first.sync.nextServerSeq);
       assert.ok(firstSeq > baselineSeq);
+      const feedTip = await ctx.db.changeLog.aggregate({ where: { shopId: tenant.shop.id }, _max: { seq: true } });
+      assert.equal(
+        firstSeq,
+        BigInt(feedTip._max.seq),
+        "the cursor must advance past EVERY row the page folded in, not stop at the first",
+      );
 
-      const second = assertSuccess(await ctx.get(`/api/sync/pull?since=${since}&afterSeq=${firstSeq}&limit=1`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
-      assert.equal(second.changes.length, 1);
-      assert.ok(BigInt(second.sync.nextServerSeq) > firstSeq, "each mutation receives a strictly increasing cursor");
+      const drained = assertSuccess(await ctx.get(`/api/sync/pull?since=${since}&afterSeq=${firstSeq}&limit=1`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(drained.changes.length, 0, "nothing is left behind the compacted cursor");
 
-      const beforeDelete = second.sync.nextServerSeq;
+      const beforeDelete = first.sync.nextServerSeq;
       await ctx.db.product.delete({ where: { id: product.id } });
       const deleted = assertSuccess(await ctx.get(`/api/sync/pull?since=${since}&afterSeq=${beforeDelete}&limit=100`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       const tombstone = deleted.changes.find((change) => change.entity_id === product.id && change.operation_type === "delete");

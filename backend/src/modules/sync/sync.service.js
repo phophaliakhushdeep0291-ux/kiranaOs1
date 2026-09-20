@@ -33,6 +33,7 @@ import {
 } from "../../utils/syncRules.js";
 import { describeZodError } from "../../utils/validationMessage.js";
 import { decodeCursor, encodeCursor, PULL_DEFAULT_LIMIT, PULL_MAX_LIMIT } from "./sync.schema.js";
+import { compactFeedRows, PULL_COMPACTION_MAX_SCAN, PULL_COMPACTION_SCAN_FACTOR } from "./sync-feed-compaction.js";
 import { explainSyncFailure } from "./sync-explain.js";
 import { EVENT_TOPICS, publishEvent } from "../../lib/eventBus.js";
 import { moneyAmount, quantityAmount } from "../../utils/validationSchemas.js";
@@ -1240,17 +1241,24 @@ export async function getDeviceSyncFleet(shopId) {
 async function pullBySequence(shopId, afterSeq, { limit, role } = {}) {
   const cursor = env.DATABASE_URL.startsWith("file:") ? Number(afterSeq || 0) : BigInt(afterSeq || "0");
   const pageLimit = Math.min(typeof limit === "number" ? limit : PULL_DEFAULT_LIMIT, PULL_MAX_LIMIT);
+  const scanLimit = Math.min(pageLimit * PULL_COMPACTION_SCAN_FACTOR, PULL_COMPACTION_MAX_SCAN);
   const logs = await db.changeLog.findMany({
     where: { shopId, seq: { gt: cursor } },
     orderBy: { seq: "asc" },
-    take: pageLimit + 1,
+    take: scanLimit + 1,
   });
-  const page = logs.slice(0, pageLimit);
-  const hasMore = logs.length > pageLimit;
+  const scanned = logs.slice(0, scanLimit);
+  const feedContinuesBeyondScan = logs.length > scanLimit;
+  const { winners, consumed, stoppedAtLimit } = compactFeedRows(scanned, pageLimit);
+  // Only rows the compaction actually consumed may be stepped over: the cursor
+  // this page returns is what the device acknowledges, and anything past it that
+  // was read but not sent would be skipped for good.
+  const page = scanned.slice(0, consumed);
+  const hasMore = stoppedAtLimit || feedContinuesBeyondScan;
   const privileged = role === "owner" || role === "admin";
-  const rowsByIdentity = await loadSequenceEntities(shopId, page);
+  const rowsByIdentity = await loadSequenceEntities(shopId, winners);
   const changes = [];
-  for (const log of page) {
+  for (const log of winners) {
     if (!privileged && (log.entityType === "supplier" || log.entityType === "purchase_history" || log.entityType === "expense")) continue;
     let entity = rowsByIdentity.get(`${log.entityType}:${log.entityId}`) ?? null;
     if (entity && !privileged && log.entityType === "product") entity = redactProductCostForCashier(entity);
@@ -1281,6 +1289,7 @@ async function pullBySequence(shopId, afterSeq, { limit, role } = {}) {
       limit: pageLimit,
       returnedCount: changes.length,
       scannedCount: page.length,
+      compactedCount: page.length - winners.length,
     },
   };
 }
