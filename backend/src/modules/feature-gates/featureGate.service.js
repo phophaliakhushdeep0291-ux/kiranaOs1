@@ -5,14 +5,14 @@ import {
   hasLegacyShopTypeFeatureAccess,
   planAtLeast,
 } from "../subscription/planConfig.js";
-import { getEffectivePlan, getSubscriptionStatus, isSubscriptionActive } from "../subscription/subscription.service.js";
+import { getEffectivePlan, getSubscriptionStatus, hasSubscriptionAccess } from "../subscription/subscription.service.js";
 import { FEATURE_REGISTRY, OLD_DATA_VIEW_FEATURE } from "./featureRegistry.js";
 
 export async function hasFeature(shopId, featureName, client = db) {
   if (featureName === OLD_DATA_VIEW_FEATURE) return true; // view_old_data is always allowed so shops are not trapped after expiry.
   const effective = await getEffectivePlan(shopId, client);
   const subscription = effective.subscription;
-  if (!isSubscriptionActive(subscription)) return false;
+  if (!hasSubscriptionAccess(subscription)) return false;
   return effective.features.includes(featureName) || hasLegacyShopTypeFeatureAccess(effective.features, featureName);
 }
 
@@ -28,7 +28,7 @@ export function isOldDataViewFeature(featureName) {
 export async function requireFeatureAccess(shopId, featureName, client) {
   if (isOldDataViewFeature(featureName)) return { allowed: true };
   const effective = await getEffectivePlan(shopId, client);
-  if (!isSubscriptionActive(effective.subscription)) {
+  if (!hasSubscriptionAccess(effective.subscription)) {
     const err = new AppError("Active subscription required", 402);
     err.code = "SUBSCRIPTION_INACTIVE";
     err.meta = { status: effective.subscription.status, planCode: effective.planCode };
@@ -47,7 +47,7 @@ export async function requireFeatureAccess(shopId, featureName, client) {
 // at the counter and take its data away. This does not reopen any other mutation.
 export async function requireContinuityAccess(shopId, featureName) {
   const effective = await getEffectivePlan(shopId);
-  if (!isSubscriptionActive(effective.subscription)) {
+  if (!hasSubscriptionAccess(effective.subscription)) {
     if (["complete_sale", "export_data"].includes(featureName)) return { allowed: true, continuityMode: true };
     throw new AppError("Action is unavailable after subscription expiry", 402, "SUBSCRIPTION_INACTIVE");
   }
@@ -69,7 +69,7 @@ export async function requireActiveSubscriptionAccess(shopId) {
 
 export async function requirePlanAtLeastAccess(shopId, planCode) {
   const effective = await getEffectivePlan(shopId);
-  if (!isSubscriptionActive(effective.subscription)) {
+  if (!hasSubscriptionAccess(effective.subscription)) {
     const err = new AppError("Active subscription required", 402);
     err.code = "SUBSCRIPTION_INACTIVE";
     throw err;

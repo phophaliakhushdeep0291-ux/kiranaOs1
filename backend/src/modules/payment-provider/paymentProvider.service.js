@@ -24,6 +24,7 @@ import {
   getBillablePlan,
 } from "../subscription/subscription.service.js";
 import { confirmRetailIntentFromWebhook, confirmRetailQrIntentFromWebhook } from "./retailPayment.service.js";
+import { isFreeAccessActive, freeAccessUntilIso } from "../subscription/freeAccess.js";
 
 const SENSITIVE_KEYS = new Set([
   "card",
@@ -55,6 +56,19 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
   if (provider !== "razorpay") {
     const err = new AppError("Unsupported payment provider", 400);
     err.code = "UNSUPPORTED_PAYMENT_PROVIDER";
+    throw err;
+  }
+  // Nothing is charged while the launch promotion runs. Refused here, at the point
+  // the order is created, rather than at verify-payment: money has not moved yet, so
+  // the shop is turned away instead of being charged for something it already has.
+  // getEffectivePlan already hands every shop the full plan for the window.
+  if (isFreeAccessActive()) {
+    const err = new AppError(
+      `KiranaOS is free until ${freeAccessUntilIso()}. Every feature is already unlocked, so there is nothing to pay for yet.`,
+      409,
+    );
+    err.code = "FREE_ACCESS_ACTIVE";
+    err.meta = { freeAccessUntil: freeAccessUntilIso() };
     throw err;
   }
   assertRazorpayConfigured();
