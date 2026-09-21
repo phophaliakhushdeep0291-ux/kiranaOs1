@@ -7,7 +7,8 @@
 import crypto from "node:crypto";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
-import { baseQtyToRateQty } from "../../utils/units.js";
+import { rateUnitToBase } from "../../utils/units.js";
+import { convertibleRateUnitFactorsFor } from "../inventory/rate-unit-factor.js";
 import {
   ACTIVE_FINDING_STATUSES,
   ENGINE_VERSION,
@@ -191,7 +192,7 @@ const DISCREPANCY_BY_RULE = {
   // Stock a cancellation should have put back and didn't, valued at cost.
   STOCK_CANCELLED_SALE_NOT_RESTORED: (d) => ({ baseQty: sumBaseQty(d.unrestoredBills, "netBaseQty") }),
   // Same gap seen from the bill side, where each line is a different product.
-  CANCELLED_BILL_STOCK_NOT_RESTORED: (d, ctx) => ({ paise: valueByProduct(d.unrestoredProducts, ctx, "netBaseQty") }),
+  CANCELLED_BILL_STOCK_NOT_RESTORED: (d, ctx, rateUnitFactors) => ({ paise: valueByProduct(d.unrestoredProducts, ctx, "netBaseQty", rateUnitFactors) }),
   // Credit that never reached the khata: the part that went missing.
   UDHAR_BILL_MISSING_LEDGER_DEBIT: (d) => ({ rupees: Math.abs(Number(d.billCreditAmount ?? 0) - Number(d.ledgerDebitSum ?? 0)) }),
   // A duplicate is money charged or paid twice — the duplicate itself is at risk.
@@ -223,26 +224,39 @@ function sumRupees(rows, key) {
   return rows.reduce((total, row) => total + Math.abs(Number(row?.[key]) || 0), 0);
 }
 
-function valueAtProductCost(baseQty, product) {
+/**
+ * `rateUnitFactors` is resolved by the caller, which can reach the database: a
+ * packaged product's rate unit is its pack's word ("bottle"), and only its
+ * packaging says how many base units that is. Without it the unit table decides,
+ * which is all a caller that has not resolved factors gets.
+ */
+function valueAtProductCost(baseQty, product, rateUnitFactors) {
   const qty = Math.abs(Number(baseQty) || 0);
   const cost = Number(product?.costPerRateUnit ?? 0);
   if (!qty || cost <= 0) return 0;
   try {
-    const rateQty = baseQtyToRateQty(qty, product.rateUnit, product.baseUnit);
+    const factor = rateUnitFactors ? rateUnitFactors.get(product.id) : rateUnitToBase(product.rateUnit, product.baseUnit);
+    if (!(factor > 0)) return 0; // unconvertible unit: no figure beats a wrong figure
+    const rateQty = qty / factor;
     return Math.round(Math.abs(rateQty * cost) * 100);
   } catch {
     return 0; // unsupported unit pair: no figure beats a wrong figure
   }
 }
 
-function valueStockAtCost(baseQty, ctx) {
-  return valueAtProductCost(baseQty, ctx.product);
+function valueStockAtCost(baseQty, ctx, rateUnitFactors) {
+  return valueAtProductCost(baseQty, ctx.product, rateUnitFactors);
 }
 
 /** Bill contexts carry a products map: value every line at its own product's cost. */
-function valueByProduct(rows, ctx, key) {
+function valueByProduct(rows, ctx, key, rateUnitFactors) {
   if (!Array.isArray(rows)) return 0;
-  return rows.reduce((paise, row) => paise + valueAtProductCost(row?.[key], ctx.products?.get(row?.productId)), 0);
+  return rows.reduce((paise, row) => paise + valueAtProductCost(row?.[key], ctx.products?.get(row?.productId), rateUnitFactors), 0);
+}
+
+/** Every product a context can value stock against: its own, or a bill's lines'. */
+function contextProducts(ctx) {
+  return [ctx.product, ...(ctx.products?.values() ?? [])].filter(Boolean);
 }
 
 /**
@@ -279,21 +293,21 @@ function valueAtPurchaseCost(rows, ctx) {
   }, 0);
 }
 
-function ruleDiscrepancyPaise(rule, details, ctx) {
+function ruleDiscrepancyPaise(rule, details, ctx, rateUnitFactors) {
   if (!details || typeof details !== "object") return 0;
 
   const explicit = DISCREPANCY_BY_RULE[rule.ruleCode];
   if (explicit) {
-    const { baseQty, rupees, paise } = explicit(details, ctx) ?? {};
+    const { baseQty, rupees, paise } = explicit(details, ctx, rateUnitFactors) ?? {};
     if (paise !== undefined) return Math.abs(Math.round(Number(paise) || 0));
-    if (baseQty !== undefined) return valueStockAtCost(baseQty, ctx);
+    if (baseQty !== undefined) return valueStockAtCost(baseQty, ctx, rateUnitFactors);
     if (rupees !== undefined) return Math.abs(Math.round((Number(rupees) || 0) * 100));
     return 0;
   }
 
   // Stock gaps are measured in base units; value them at the product's own cost.
   if (details.differenceBaseQty !== undefined && ctx.product) {
-    return valueStockAtCost(details.differenceBaseQty, ctx);
+    return valueStockAtCost(details.differenceBaseQty, ctx, rateUnitFactors);
   }
 
   for (const key of DISCREPANCY_PAISE_KEYS) {
@@ -316,12 +330,16 @@ function ruleDiscrepancyPaise(rule, details, ctx) {
   return 0;
 }
 
-/** Largest quantified gap across the triggered rules, or null if none measured one. */
-export function extractDiscrepancyPaise(triggeredRules, ctx) {
+/**
+ * Largest quantified gap across the triggered rules, or null if none measured one.
+ * `rateUnitFactors` (from convertibleRateUnitFactorsFor) values packaged stock
+ * through its pack; without it only the unit table can convert.
+ */
+export function extractDiscrepancyPaise(triggeredRules, ctx, rateUnitFactors) {
   let largest = 0;
   let measured = false;
   for (const { rule, details } of triggeredRules) {
-    const value = ruleDiscrepancyPaise(rule, details, ctx);
+    const value = ruleDiscrepancyPaise(rule, details, ctx, rateUnitFactors);
     if (value > 0) {
       measured = true;
       largest = Math.max(largest, value);
@@ -505,7 +523,10 @@ async function persistEvaluation({ shopId, runId, ctx, result, triggeredRules, a
   }
 
   const meta = entityMetadata(ctx);
-  const discrepancyPaise = extractDiscrepancyPaise(triggeredRules, ctx);
+  // Resolved only here, for an evaluation that raised something: a clean one never
+  // needs a stock figure, and a whole-shop run evaluates thousands of those.
+  const rateUnitFactors = await convertibleRateUnitFactorsFor(client, shopId, contextProducts(ctx));
+  const discrepancyPaise = extractDiscrepancyPaise(triggeredRules, ctx, rateUnitFactors);
   const findingData = {
     sourceEntityType: result.sourceEntityType,
     sourceEntityId: result.sourceEntityId,

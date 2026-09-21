@@ -76,11 +76,43 @@ export function isKnownUnit(unit) {
  * @returns {Promise<Map<string, number>>}
  */
 export async function rateUnitFactorsFor(tx, shopId, products) {
+  const factors = await resolveRateUnitFactors(tx, shopId, products);
+  for (const factor of factors.values()) {
+    if (factor instanceof Error) throw factor;
+  }
+  return factors;
+}
+
+/**
+ * `rateUnitFactorsFor` for a caller that values many products at once and must
+ * keep going past one it cannot convert: an audit finding, an export, a recipe
+ * card. Each of those used to catch the unit table's error around its own
+ * conversion — which is how a pack word came to be priced at a factor of 1, or
+ * at nothing — and each still decides for itself what an unconvertible product
+ * is worth. Such a product is simply absent from the map: a word the table does
+ * not know, with no packaging to fall back on.
+ *
+ * @param {object} tx
+ * @param {string} shopId
+ * @param {Array<{ id: string, rateUnit: string, baseUnit: string }>} products
+ * @returns {Promise<Map<string, number>>}
+ */
+export async function convertibleRateUnitFactorsFor(tx, shopId, products) {
+  const factors = await resolveRateUnitFactors(tx, shopId, products);
+  for (const [productId, factor] of factors) {
+    if (factor instanceof Error) factors.delete(productId);
+  }
+  return factors;
+}
+
+// Each product's factor, or the unit table's own error for one that has none —
+// so the strict and the forgiving caller share one set of rules.
+async function resolveRateUnitFactors(tx, shopId, products) {
   const factors = new Map();
   const packWorded = [];
   for (const product of products) {
     if (!product?.id || factors.has(product.id)) continue;
-    if (isKnownUnit(product.rateUnit)) factors.set(product.id, rateUnitToBase(product.rateUnit, product.baseUnit));
+    if (isKnownUnit(product.rateUnit)) factors.set(product.id, unitTableFactor(product));
     else packWorded.push(product);
   }
   if (packWorded.length === 0) return factors;
@@ -96,7 +128,15 @@ export async function rateUnitFactorsFor(tx, shopId, products) {
   for (const product of packWorded) {
     const conversion = Number(defaultPackByProduct.get(product.id)?.conversionToBase ?? 0);
     // No pack either: let the unit table say so in its own words, as before.
-    factors.set(product.id, conversion > 0 ? conversion : rateUnitToBase(product.rateUnit, product.baseUnit));
+    factors.set(product.id, conversion > 0 ? conversion : unitTableFactor(product));
   }
   return factors;
+}
+
+function unitTableFactor(product) {
+  try {
+    return rateUnitToBase(product.rateUnit, product.baseUnit);
+  } catch (error) {
+    return error;
+  }
 }
