@@ -27,6 +27,16 @@ const KNOWN_METRICS = [
   "ai_command_effective_confidence",
   "ai_grounding_rejections_total",
   "ai_feedback_total",
+  "ai_provider_requests_total",
+  "ai_provider_latency_ms",
+  "ai_provider_attempts",
+  "ai_provider_tokens_total",
+  "ai_provider_failovers_total",
+  "ai_provider_circuit_trips_total",
+  "ai_provider_circuit_open",
+  "ai_agent_turns_total",
+  "ai_agent_turn_duration_ms",
+  "ai_agent_tool_calls_total",
   "webhook_deliveries_total",
   "webhook_delivery_duration_ms",
   "webhook_queue_dispatch_total",
@@ -162,6 +172,35 @@ export function recordAiCommand({
   observeMetric("ai_command_effective_confidence", { provider, model, policyVersion, status }, confidence);
   for (const reason of new Set(Array.isArray(reasonCodes) ? reasonCodes : [])) {
     incrementMetric("ai_grounding_rejections_total", { provider, model, policyVersion, reason });
+  }
+}
+
+/**
+ * One agent turn, as operations sees it.
+ *
+ * `stoppedBecause` is the field that earns its place: a rise in `tool_budget`
+ * means the loop is thrashing, a rise in `widened_after_empty_route` means the
+ * keyword router is mis-routing, and a rise in `turn_timeout` means a provider
+ * is degrading. Those are three different repairs, and before this they were
+ * one undifferentiated "the assistant feels slow".
+ */
+export function recordAgentTurn({
+  provider = "unknown",
+  model = "unknown",
+  policyVersion = "unknown",
+  stoppedBecause = "completed",
+  grounding = "unknown",
+  durationMs = 0,
+  toolCalls = [],
+  failedOver = false,
+}) {
+  const labels = { provider, model, policyVersion, stoppedBecause, grounding, failedOver: String(failedOver) };
+  incrementMetric("ai_agent_turns_total", labels);
+  observeMetric("ai_agent_turn_duration_ms", { provider, model, policyVersion, stoppedBecause }, durationMs);
+  for (const call of Array.isArray(toolCalls) ? toolCalls : []) {
+    incrementMetric("ai_agent_tool_calls_total", {
+      tool: call?.tool ?? "unknown", kind: call?.kind ?? "unknown", status: call?.status ?? "unknown",
+    });
   }
 }
 
