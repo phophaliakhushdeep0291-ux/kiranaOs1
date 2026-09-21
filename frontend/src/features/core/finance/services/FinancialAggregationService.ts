@@ -900,8 +900,27 @@ function purchaseIdentityKeys(row: RecordLike): string[] {
     readString(row, ["purchaseBillId", "purchase_bill_id"]),
     readString(row, ["localPurchaseHistoryId", "local_purchase_history_id"]),
     readString(row, ["localPurchaseBillId", "local_purchase_bill_id"]),
+    // One purchase writes TWO local rows — the bill, and the stock movement that
+    // received the goods — and the movement names its bill through `sourceId`,
+    // not through any of the ids above. Without it neither the identity keys nor
+    // the business keys can pair them: the bill carries `supplierId` and no
+    // `productId`, the movement the exact reverse, so every fallback key differs
+    // too. Both rows survived the dedupe and the owner's day-close screen read
+    // "Supplier due (unpaid) ₹960" for a single ₹480 bill.
+    purchaseSourceBillId(row),
   ].filter(Boolean);
   return purchaseIds.map((id) => `purchase-id:${id}`);
+}
+
+/**
+ * The purchase bill a stock movement was received against, when that is what
+ * `sourceId` points at. Guarded on `sourceType` so a movement of some other kind
+ * can never contribute a purchase identity it does not have.
+ */
+function purchaseSourceBillId(row: RecordLike): string {
+  const sourceType = readString(row, ["sourceType", "source_type"]).toLowerCase();
+  if (!sourceType.includes("purchase")) return "";
+  return readString(row, ["sourceId", "source_id"]);
 }
 
 function purchaseRowPriority(row: RecordLike, source: SupplierDueRow["source"]): number {
