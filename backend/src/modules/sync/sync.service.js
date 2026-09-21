@@ -3993,29 +3993,66 @@ async function rememberMappingsFromResult(shopId, event, result, context) {
 
   for (const mapping of mappings) {
     rememberMappingInContext(context, mapping.entityType, mapping.localId, mapping.serverId);
-    await db.syncIdMapping.upsert({
-      where: {
-        shopId_entityType_localId: {
-          shopId,
-          entityType: mapping.entityType,
-          localId: String(mapping.localId),
-        },
-      },
-      create: {
+  }
+  if (mappings.length === 0) return;
+
+  /*
+   * One round-trip for the event's mappings, not one per mapping.
+   *
+   * A single bill on credit produces a mapping for the bill, one for the
+   * customer, and one for each distinct local id the till used for the ledger
+   * entry — the payload is read under a dozen different spellings, because
+   * different app versions named that field differently. Each of those was its
+   * own awaited upsert, inside a push loop that is already one event at a time,
+   * so a two-hundred-event batch from a till that had been offline all morning
+   * spent several hundred sequential round-trips just writing down which local
+   * id became which server id.
+   *
+   * The array form of `$transaction` sends them together and commits them
+   * together. Sequential awaits gave no atomicity anyway: a crash halfway
+   * through left an event's mappings partly written, and a resolver that found
+   * the bill but not its ledger entry is exactly the "cursor ahead of data"
+   * shape this module has been repairing elsewhere. So this is one fewer way to
+   * end up inconsistent as well as one fewer stall.
+   *
+   * Keys are unique within an event — each entity contributes at most one
+   * mapping, and the ledger's aliases are de-duplicated above — so no two
+   * statements here touch the same row.
+   */
+  const sourceEventId = getClientEventId(event) || null;
+  const deviceId = context?.user?.deviceId ?? null;
+  const write = (mapping) => db.syncIdMapping.upsert({
+    where: {
+      shopId_entityType_localId: {
         shopId,
         entityType: mapping.entityType,
         localId: String(mapping.localId),
-        serverId: String(mapping.serverId),
-        sourceEventId: getClientEventId(event) || null,
-        deviceId: context?.user?.deviceId ?? null,
       },
-      update: {
-        serverId: String(mapping.serverId),
-        sourceEventId: getClientEventId(event) || null,
-        deviceId: context?.user?.deviceId ?? null,
-      },
-    });
+    },
+    create: {
+      shopId,
+      entityType: mapping.entityType,
+      localId: String(mapping.localId),
+      serverId: String(mapping.serverId),
+      sourceEventId,
+      deviceId,
+    },
+    update: {
+      serverId: String(mapping.serverId),
+      sourceEventId,
+      deviceId,
+    },
+  });
+
+  // A single mapping goes on its own. Wrapping one statement in a transaction
+  // buys no atomicity it did not already have and costs a begin and a commit,
+  // which measured as a real regression on the commonest event of all — a cash
+  // sale, which maps only its bill.
+  if (mappings.length === 1) {
+    await write(mappings[0]);
+    return;
   }
+  await db.$transaction(mappings.map(write));
 }
 
 async function resolveBillBodyReferences(shopId, billBody, context) {
