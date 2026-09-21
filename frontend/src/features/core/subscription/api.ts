@@ -35,6 +35,8 @@ export interface SubscriptionStatusDto {
   features?: string[] | Record<string, boolean>;
   plan?: SubscriptionPlanDto;
   warning?: string | null;
+  /** End of the launch promotion while it runs, null once it has shut. */
+  freeAccessUntil?: string | null;
 }
 
 export interface UpgradeRequestDto {

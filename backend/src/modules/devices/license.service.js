@@ -4,6 +4,7 @@ import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { getEffectivePlan } from "../subscription/subscription.service.js";
 import { DEFAULT_GRACE_DAYS } from "../subscription/planConfig.js";
+import { FREE_ACCESS_UNTIL, isFreeAccessActive } from "../subscription/freeAccess.js";
 
 export const LICENSE_VERSION = 1;
 export const LICENSE_ALGORITHM = "HMAC-SHA256";
@@ -16,9 +17,13 @@ export async function buildLicensePayload(shopId, deviceId, client = db) {
   const subscriptionStatus = subscription.status || "trial";
   const currentPeriodEnd = asDate(subscription.currentPeriodEnd || subscription.trialEndsAt);
   const graceEndsAt = asDate(subscription.graceEndsAt);
-  const validUntil = calculateValidUntil(subscriptionStatus, currentPeriodEnd, issuedAt);
-  const offlineGraceUntil = calculateOfflineGraceUntil(subscriptionStatus, currentPeriodEnd, graceEndsAt, issuedAt);
-  const warnings = licenseWarnings(subscriptionStatus, validUntil, offlineGraceUntil, effective.limits.maxDevices);
+  const { validUntil, offlineGraceUntil, warnings } = licenseValidity({
+    status: subscriptionStatus,
+    currentPeriodEnd,
+    graceEndsAt,
+    issuedAt,
+    maxDevices: effective.limits.maxDevices,
+  });
 
   return {
     shopId,
@@ -147,6 +152,30 @@ async function getActiveLicenseDevice(shopId, deviceId, client = db) {
   return device;
 }
 
+/**
+ * How long a device may trust the licence it is issued, and what to warn it about.
+ *
+ * While the launch promotion runs, the licence covers the whole window whatever
+ * the shop's own row says. An offline counter trusts its licence before anything
+ * else, so a lapsed shop handed a licence dated by its lapsed row would be locked
+ * out on the device while the server was letting it in. The window also keeps the
+ * usual offline grace past its end, so a till that does not sync over new year
+ * lands in grace rather than straight into a lockout. The row's status is still
+ * reported as it stands; only its dates, and the warnings that it is restricted,
+ * give way for the window. A shop paid beyond the window keeps its own later dates.
+ */
+export function licenseValidity({ status, currentPeriodEnd, graceEndsAt, issuedAt, maxDevices }) {
+  let validUntil = calculateValidUntil(status, currentPeriodEnd, issuedAt);
+  let offlineGraceUntil = calculateOfflineGraceUntil(status, currentPeriodEnd, graceEndsAt, issuedAt);
+  const promotion = isFreeAccessActive(issuedAt);
+  if (promotion) {
+    validUntil = later(validUntil, FREE_ACCESS_UNTIL);
+    offlineGraceUntil = later(offlineGraceUntil, addDays(FREE_ACCESS_UNTIL, DEFAULT_GRACE_DAYS));
+  }
+  const warnings = licenseWarnings(promotion ? "active" : status, validUntil, offlineGraceUntil, maxDevices, issuedAt);
+  return { validUntil, offlineGraceUntil, warnings };
+}
+
 function calculateValidUntil(status, currentPeriodEnd, now) {
   if (status === "expired" || status === "cancelled" || status === "payment_failed") return currentPeriodEnd || now;
   if (status === "grace") return currentPeriodEnd && currentPeriodEnd > now ? currentPeriodEnd : now;
@@ -160,12 +189,12 @@ function calculateOfflineGraceUntil(status, currentPeriodEnd, graceEndsAt, now) 
   return addDays(now, DEFAULT_GRACE_DAYS);
 }
 
-function licenseWarnings(status, validUntil, offlineGraceUntil, maxDevices) {
+function licenseWarnings(status, validUntil, offlineGraceUntil, maxDevices, now = new Date()) {
   const warnings = [];
   if (status === "grace") warnings.push("SUBSCRIPTION_IN_GRACE");
   if (["expired", "cancelled", "payment_failed"].includes(status)) warnings.push("SUBSCRIPTION_RESTRICTED");
-  if (offlineGraceUntil <= new Date()) warnings.push("OFFLINE_GRACE_EXPIRED");
-  if (validUntil <= new Date()) warnings.push("LICENSE_VALIDITY_EXPIRED");
+  if (offlineGraceUntil <= now) warnings.push("OFFLINE_GRACE_EXPIRED");
+  if (validUntil <= now) warnings.push("LICENSE_VALIDITY_EXPIRED");
   if (maxDevices <= 0) warnings.push("NO_ACTIVE_DEVICE_SLOTS");
   return warnings;
 }
@@ -178,6 +207,10 @@ function asDate(value) {
   if (!value) return null;
   const d = value instanceof Date ? value : new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function later(a, b) {
+  return a.getTime() >= b.getTime() ? a : b;
 }
 
 function addDays(date, days) {

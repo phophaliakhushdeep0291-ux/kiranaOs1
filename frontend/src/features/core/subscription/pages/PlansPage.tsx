@@ -1,10 +1,11 @@
-import { CheckCircle2, Crown, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Crown, Gift, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getPlanForBusinessType, offeredPlanCodes, type BillingCycle, type PlanCode } from "@/features/core/subscription/plans";
 import { BUSINESS_TYPE_DEFS, useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
+import { formatFreeAccessDate } from "@/features/core/subscription/free-access";
 import { PlanBadge, UpgradeModal } from "@/features/core/subscription/components";
 import { useState } from "react";
 import { PageHeader, PageShell } from "@/components/shared";
@@ -21,7 +22,10 @@ export default function PlansPage() {
   const offeredPlans = offeredPlanCodes(businessType);
   // The trade name and the self-serve copy are translated; the rest of this page
   // is still English and carries its remaining count in the i18n allowlist.
-  const { t } = useAppLanguage();
+  const { language, t } = useAppLanguage();
+  // While the launch promotion runs every plan is already unlocked and checkout is
+  // refused, so the prices below are what applies afterwards, not an offer to buy.
+  const freeDate = snapshot?.freeAccessUntil ? formatFreeAccessDate(snapshot.freeAccessUntil, language) : null;
 
   return (
     <PageShell className="space-y-5">
@@ -30,8 +34,20 @@ export default function PlansPage() {
         description={businessType === "kirana"
           ? `${t(BUSINESS_TYPE_DEFS[businessType].labelKey)} pricing: self-serve software with no setup fee.`
           : `${t(BUSINESS_TYPE_DEFS[businessType].labelKey)} pricing: in-person setup, supported hardware configuration, training, support and software.`}
-        actions={snapshot ? <PlanBadge planCode={snapshot.planCode} status={snapshot.status} plan={snapshot.plan} /> : null}
+        actions={snapshot ? <PlanBadge planCode={snapshot.planCode} status={snapshot.status} plan={snapshot.plan} freeAccessUntil={snapshot.freeAccessUntil} /> : null}
       />
+
+      {freeDate && (
+        <Card className="border-emerald-300 bg-emerald-50">
+          <CardContent className="flex gap-3 p-5 text-emerald-950">
+            <Gift className="h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
+            <div>
+              <p className="font-bold">{t("plans.free.title", { date: freeDate })}</p>
+              <p className="mt-1 text-sm">{t("plans.free.body")}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {businessType === "kirana" ? (
         <Card className="border-primary/30 bg-primary/5">
@@ -89,7 +105,9 @@ export default function PlansPage() {
                 {plan.bullets.length > 4 && (
                   <p className="text-xs text-muted-foreground">+{plan.bullets.length - 4} more included</p>
                 )}
-                <Button className="w-full" variant={isCurrent ? "outline" : "default"} onClick={() => isCurrent ? navigate("/subscription") : setTargetPlan(plan.code)}>{isCurrent ? "Manage current plan" : `Upgrade to ${plan.name}`}</Button>
+                {freeDate && !isCurrent
+                  ? <Button className="w-full" variant="outline" disabled>{t("plans.free.title", { date: freeDate })}</Button>
+                  : <Button className="w-full" variant={isCurrent ? "outline" : "default"} onClick={() => isCurrent ? navigate("/subscription") : setTargetPlan(plan.code)}>{isCurrent ? "Manage current plan" : `Upgrade to ${plan.name}`}</Button>}
               </CardContent>
             </Card>
           );

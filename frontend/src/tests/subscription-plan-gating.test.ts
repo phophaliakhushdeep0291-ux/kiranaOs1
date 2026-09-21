@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SubscriptionCacheRow } from "@/lib/offline/db";
 import type { PlanCode, SubscriptionState } from "@/features/core/subscription/plans";
 
@@ -66,6 +66,7 @@ function snapshot(planCode: PlanCode, overrides: Partial<SubscriptionSnapshot> =
     foundingEndsAt: null,
     intendedPaidPlanCode: plan.code,
     source: "local-cache",
+    freeAccessUntil: null,
     ...overrides,
   };
 }
@@ -110,7 +111,17 @@ describe("subscription and plan gating", () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-06T10:00:00.000Z"));
+    // These describe the plan enforcement that resumes when the launch promotion
+    // ends, and the clock above sits inside it, where every shop holds the full
+    // plan. Shut the window, as the backend suite does, so they still test the
+    // rules the product runs under for the rest of its life. free-access-window.test.ts
+    // covers the promotion itself.
+    vi.stubEnv("VITE_FREE_ACCESS_UNTIL", "2020-01-01T00:00:00+05:30");
     mockState.subscriptionRows = [];
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("publishes three annual-first plans while retaining Legacy Standard internally", () => {

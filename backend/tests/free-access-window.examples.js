@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { hasSubscriptionAccess, isSubscriptionActive } from "../src/modules/subscription/subscription.service.js";
 import { FREE_ACCESS_UNTIL, isFreeAccessActive, freeAccessUntilIso } from "../src/modules/subscription/freeAccess.js";
+import { licenseValidity } from "../src/modules/devices/license.service.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const during = new Date(FREE_ACCESS_UNTIL.getTime() - DAY);
@@ -54,6 +55,30 @@ for (const [label, row] of Object.entries(rows)) {
 const paid = { status: "active", currentPeriodEnd: new Date(Date.now() + 400 * DAY) };
 assert.equal(hasSubscriptionAccess(paid, after), true, "a paid shop keeps access after the window");
 assert.equal(hasSubscriptionAccess(paid, during), true, "and during it");
+
+// The device licence has to agree with the gates. An offline counter trusts its
+// licence before anything else, so a lapsed shop issued a licence dated by its
+// lapsed row was locked out on the till while the server was letting it in.
+// Dated against the window, not the clock, so it holds wherever the window is pinned.
+const lapsedLicence = {
+  status: "expired",
+  currentPeriodEnd: new Date(FREE_ACCESS_UNTIL.getTime() - 30 * DAY),
+  graceEndsAt: new Date(FREE_ACCESS_UNTIL.getTime() - 27 * DAY),
+  maxDevices: 2,
+};
+const issuedDuring = licenseValidity({ ...lapsedLicence, issuedAt: during });
+assert.equal(issuedDuring.validUntil.getTime(), FREE_ACCESS_UNTIL.getTime(), "a licence issued in the window is valid to its end");
+assert.ok(issuedDuring.offlineGraceUntil > FREE_ACCESS_UNTIL, "and keeps offline grace past it, so new year lands in grace, not a lockout");
+assert.deepEqual(issuedDuring.warnings, [], "and does not warn a shop using a free product that it is restricted");
+
+const issuedAfter = licenseValidity({ ...lapsedLicence, issuedAt: after });
+assert.equal(issuedAfter.validUntil.getTime(), lapsedLicence.currentPeriodEnd.getTime(), "once the window closes the row dates the licence again");
+assert.ok(issuedAfter.warnings.includes("SUBSCRIPTION_RESTRICTED"), "and the restriction is reported again");
+
+// A shop paid past the window keeps its own, later, dates.
+const paidPast = new Date(FREE_ACCESS_UNTIL.getTime() + 200 * DAY);
+const paidLicence = licenseValidity({ status: "active", currentPeriodEnd: paidPast, graceEndsAt: null, issuedAt: during, maxDevices: 2 });
+assert.equal(paidLicence.validUntil.getTime(), paidPast.getTime(), "the window never shortens a paid licence");
 
 // The gates must ask hasSubscriptionAccess, not isSubscriptionActive. This is the bug
 // this file exists for: the promotion was written and every gate still read the row

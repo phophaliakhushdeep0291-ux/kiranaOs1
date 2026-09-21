@@ -15,9 +15,12 @@ import { getPlanForBusinessType, type BillingCycle, type PlanCode } from "@/feat
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { subscriptionRefreshLocalFirst } from "@/features/core/subscription/local-actions";
 import {
+  useSubscriptionSnapshot,
   writeSubscriptionRequest,
   writeSubscriptionSnapshot,
 } from "@/features/core/subscription/access";
+import { formatFreeAccessDate } from "@/features/core/subscription/free-access";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import {
   requestSubscriptionUpgrade,
   validateSubscriptionCoupon,
@@ -150,6 +153,9 @@ export function UpgradeModal({
   const checkoutAttemptKeyRef = useRef<string | null>(null);
   const businessType = useBusinessTypeKey();
   const target = getPlanForBusinessType(targetPlanCode ?? "growth", businessType);
+  const { language, t } = useAppLanguage();
+  const { snapshot } = useSubscriptionSnapshot();
+  const freeUntil = snapshot?.freeAccessUntil ?? null;
 
   useEffect(() => {
     setSelectedCycle(billingCycle);
@@ -225,6 +231,15 @@ export function UpgradeModal({
       });
       onOpenChange(false);
     } catch (error) {
+      // The server refuses checkout while the launch promotion runs. Nothing was
+      // charged and there is nothing to retry later, so no offline upgrade request
+      // is queued; refreshing lets this device learn the window it had not heard of.
+      if (error instanceof ApiClientError && error.data.code === "FREE_ACCESS_ACTIVE") {
+        toast({ title: t("plans.free.nothingToPay"), description: t("plans.free.refusedBody") });
+        onOpenChange(false);
+        void subscriptionRefreshLocalFirst(target.code).catch(() => undefined);
+        return;
+      }
       if (error instanceof ApiClientError && error.data.code?.startsWith("COUPON_")) {
         toast({ title: "Coupon not applied", description: error.message });
         return;
@@ -246,6 +261,24 @@ export function UpgradeModal({
     } finally {
       setSaving(false);
     }
+  }
+
+  if (freeUntil) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("plans.free.nothingToPay")}</DialogTitle>
+            <DialogDescription>
+              {t("plans.free.modalBody", { date: formatFreeAccessDate(freeUntil, language), plan: target.name })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => onOpenChange(false)}>{t("plans.free.close")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
   }
 
   return (
