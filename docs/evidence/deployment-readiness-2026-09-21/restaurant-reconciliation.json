@@ -1,0 +1,9 @@
+{
+  "checks": "passed",
+  "bills": 2,
+  "total": 40,
+  "payments": 40,
+  "finishedStock": 28,
+  "tickets": 1,
+  "ticketStatus": "served"
+}

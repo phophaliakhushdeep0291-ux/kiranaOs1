@@ -1,0 +1,25 @@
+{
+  "date": "2026-09-21",
+  "baseCommit": "54912196",
+  "scope": "Local QA only; frontend delta identified by file hashes",
+  "evidenceSha256": {
+    "README.md": "640e4b56bcc599e452a6c3893b881e1746f419114f296019ca4f51d15b96af68",
+    "closing-final.txt": "8c36d89b585b18af9ff29adb79cb96145bc354355ca9af36f6e3fe92eae365d5",
+    "credit-purchase-reconciliation.json": "d73f52d11b3a2b15b6866a97f611f5c6d177e7824cf19fffae939dcb34b3468a",
+    "kirana-offline-reconciliation.json": "e89bbdba3634f3820a92c012bdf2b1ab353ad914ab1b8d09e5f5f4c0ce21b32c",
+    "manufacturing-reconciliation.json": "c6c0302a41da10938f08d59dd160657a8bdfd49b5f5901b28e29436e55d9abd4",
+    "purchase-final.txt": "69dc3b6ae508a9303910ed7ad1c8052474bdc4fabf7f8142ff18fc6c2749aadf",
+    "purchase-reconciliation.json": "8f608d9ed763dac07d807d506b2d11af0617c78fd945edd11d7a790df1f75887",
+    "restaurant-reconciliation.json": "3dec5a19f75943338ae66d95ed8af6da964e2bde0100f6a4b87786a1cb541517",
+    "sync-final.txt": "f8c8c8afbc18e07ac0ffbbe9a8db222c442ba8969da37c7f2a42e6f4ce5e8bb3",
+    "verification-summary.txt": "b1a0f121e009d7391eb35740c0166fc7dacd1864e115a31b4ceca2d8eeda0ad4"
+  },
+  "sourceSha256": {
+    "frontend/src/features/core/finance/services/FinancialAggregationService.ts": "44041ff42d0543fecb427add9240387fb702c61d2c43bb549ad0d341b59c1931",
+    "frontend/src/features/core/purchases/pages/PurchaseBillsPage.tsx": "13399f2e935df7f4bd679cb7fb5bcc68509c0349df9598c073b36786513d4fdf",
+    "frontend/src/tests/financial-aggregation-service.test.ts": "390b4ffb7390061bb107e46933cb18989aa6d8a19fdf23f8bf59da41ba324970",
+    "frontend/src/tests/i18n-hardcoded-allowlist.ts": "c144de31c42d5c6a699920655cd79e3de888939a5ed410f024362634c8aed1e9",
+    "backend/src/modules/reports/supplier-cash.js": "976a9b95ad30e3f0a8e51f35a4e25b8f8535623895e572f026097ab538a1faa2",
+    "backend/tests/integration/reports.integration.test.js": "78a5ed621d2bb0590ef89070f7b98463116e37e99fc201fccd58bbfc5a7d0e71"
+  }
+}

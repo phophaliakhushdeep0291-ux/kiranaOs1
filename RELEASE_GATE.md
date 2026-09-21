@@ -2,9 +2,17 @@
 
 Current decision: **NO-GO — candidate/external/manual evidence incomplete**
 Gate owner: Release owner  
-Last evaluated: 2026-09-17
+Last evaluated: 2026-09-21 (local software and browser evidence; external gates remain open)
 
 No new feature should enter a release branch while the P0 production gate is red. This document records the decision; `PRODUCTION_CHECKLIST.md` contains the full operational checklist.
+
+## Local update — 21 September 2026
+
+Current local candidate: `work/free-access-launch` at `54912196` plus the reviewed supplier payment UI/display delta. The final frontend production gate passes **2,927 tests, 1 skip**; backend production and full backend checks pass; all 44 integration files complete with **402 passed, 0 failed, 3 PostgreSQL-only skips**. The new supplier cash-closing regression failed before the correction and now passes, including original payment date, UPI exclusion, reversal date, branch isolation and stale snapshots.
+
+Fresh browser testing created and settled a ₹30 purchase with ₹10 cash and ₹20 UPI, verified audited reversal and reload, and reconciled stock 36 → 39 and cash out ₹10. The manufacturing production/partial-dispatch/invoice/whole-order-return session and the other vertical sessions from 17–18 September are now retained with explicit limits. Rental accounting/deposits are now fixed in code on `work/rental-finance-closing` (BUG-064: browser re-verification pending, and bookings made before the change still need a reconciliation path); the furniture invoice/stock handoff is still a release gap. The two historical QA stock conflicts remain visible; this is not an all-flows or zero-conflicts sign-off.
+
+See [the current readiness report](docs/DEPLOYMENT_READINESS_2026-09-21.md) and [reviewed evidence](docs/evidence/deployment-readiness-2026-09-21/README.md). The table below preserves earlier dated proofs where they were not rerun. Candidate CI, PostgreSQL/Redis/image, deployed backup/restore/worker proofs and physical-device certification remain required; the decision stays **NO-GO**.
 
 ## Candidate
 
@@ -22,13 +30,13 @@ Run against a clean checkout with supported Node versions and frozen installs.
 
 | Gate | Command/evidence | Status |
 |---|---|---|
-| Frontend typecheck | `cd frontend && npm run typecheck` | Passed 2026-09-17 at commit `64850f99`, inside the full `prod:check` run recorded below. |
-| Frontend tests | `cd frontend && npm run test` | Passed 2026-09-17 at commit `64850f99`: 2,784 passed, 1 skipped across 373 passed files and 1 skipped file. The figure this row carried until now (1,597 across 251 files, 2026-08-20) predated 508 commits. |
+| Frontend typecheck | `cd frontend && npm run typecheck` | Passed 2026-09-21 in the final frontend production gate; see current readiness report. |
+| Frontend tests | `cd frontend && npm run test` | Passed 2026-09-21: 2,927 passed, 1 skipped; 391 passed files and 1 skipped file. |
 | Hardware bridge software/installer contract | `cd hardware-bridge && npm test` plus PowerShell parser | Passed 2026-09-17 in a clean worktree at commit `e8a23d9a`: 32/32 software tests. Native .NET setup compilation, signed workflow artifact, clean-Windows install and physical printer runs remain external evidence. |
-| Frontend production build/security | `cd frontend && npm run prod:check` | Passed 2026-09-17 at commit `64850f99`: 6,105 translation keys across 18 modules; startup 858.8 kB raw / 259.2 kB gzip across 5 files against the fixed 300 kB gzip ceiling; product-wide JavaScript 5,304.5 kB raw / 1,472.6 kB gzip (reported, not budgeted); largest shop offline payload restaurant 4,447.3 kB raw / 1,251.7 kB gzip across 184 files against the 4.5 MB / 1.25 MB ceilings. Offline boot coverage verified 32 entries and 177 installed assets. **The offline payload now sits at 96.5% of its raw ceiling and 97.8% of its gzip ceiling, leaving 28.3 kB of gzip headroom.** The rise from the 2026-08-20 figure (1,011.6 kB gzip) is the 2026-09-16 measurement correction that folded in the lazy boot dependencies an offline restart needs, not feature growth; see the note in `frontend/scripts/check-bundle-size.mjs`. Startup gzip is flat (261.2 -> 259.2 kB) and its limit has not moved. |
-| Backend tests | `cd backend && npm test` | Passed 2026-09-17 in a clean `npm ci` worktree at commit `e8a23d9a`: 41 suite groups, 0 failures, including the guarded isolated-database pretest/posttest, billing, money, sync/source contracts, tenant, compliance, provider-contract, vertical, restaurant, packaging and reports groups. This is a cleaner run than the 2026-08-20 entry, which was a dirty working tree. |
-| Backend production check | `cd backend && npm run prod:check` | Passed 2026-09-17 in a clean `npm ci` worktree at commit `e8a23d9a`: application module graph OK, production readiness checks passed, dependency security regressions passed. |
-| Integration tests | Isolated DB run, including billing/sync/tenant paths | Passed 2026-09-17 at commit `52b2c04b` on Node 22.23.2: 42 files, 382 passed, 0 failed, 3 PostgreSQL-only skips. Evidence: `docs/evidence/deployment-readiness-2026-09-17/integration-summary.txt`. Supersedes the 28/28 run of 2026-08-10 this row previously cited. |
+| Frontend production build/security | `cd frontend && npm run prod:check` | Passed 2026-09-21: 6,185 translation keys, startup 261.3 kB gzip; largest offline payload 4,475.3 kB raw / 1,260.3 kB gzip across 185 files. Budgets unchanged and passing; offline boot 32 entries / 178 installed assets. |
+| Backend tests | `cd backend && npm test` | Passed 2026-09-21 at `54912196`, Node 22, isolated databases; all suite groups and pre/post checks, exit 0. Working checkout, not a fresh install. |
+| Backend production check | `cd backend && npm run prod:check` | Passed 2026-09-21 at `54912196`: module graph, readiness and dependency security. |
+| Integration tests | Isolated DB run, including billing/sync/tenant paths | Passed 2026-09-21 at `54912196`, Node 22: 44 files, 402 passed, 0 failed, 3 PostgreSQL-only skips. See `docs/evidence/deployment-readiness-2026-09-21/verification-summary.txt`. |
 | Migration safety | `cd backend && npm run migration:safety` | Passed 2026-09-17 in a clean `npm ci` worktree at commit `e8a23d9a` with 0 warnings. |
 | Existing release gate | `cd backend && npm run release:gate` | Passed 2026-09-17 in a clean `npm ci` worktree at commit `e8a23d9a`, version 1.0.0, 1 warning: `RELEASE_APPROVED` is not true, so this stays documentation/proof-only and is not a human approval record. |
 | CI certification | `.github/workflows/release-certification.yml` run URL | **Still the one automated gate with no evidence at all.** Candidate run URL not recorded. Run #316 (2026-08-09) was refused by GitHub before it started - "recent account payments have failed or your spending limit needs to be increased" - and no certification run has been recorded for any commit since; main has advanced 508 commits past the last evaluation. The workflow itself is correctly wired: it runs on every pull request into `main` as a required check and again after each merge, so nothing merges uncertified once the account can run it. Pull-request and merge runs defer the Docker image proof to the weekly and manual runs (`RELEASE_CERT_SKIP_IMAGE`), recorded as a skip with its reason; strict certification still requires the image. Clearing the billing block is the cheapest remaining unlock on this table. |
