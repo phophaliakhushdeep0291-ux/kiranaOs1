@@ -36,6 +36,14 @@ function sendProviderError(error, res) {
     res.status(429).json({ success: false, error: "The assistant is busy. Try again in a moment.", code: "AI_RATE_LIMITED" });
     return true;
   }
+  // Every configured provider is failing or circuit-broken. Deliberately the
+  // same sentence the shopkeeper gets for a rate limit: from behind the counter
+  // the two are the same event — wait, then try again — and the distinction
+  // belongs in the metrics, not in a message someone reads mid-sale.
+  if (error?.code === "AI_PROVIDERS_UNAVAILABLE") {
+    res.status(503).json({ success: false, error: "The assistant is busy. Try again in a moment.", code: "AI_RATE_LIMITED" });
+    return true;
+  }
   return false;
 }
 
