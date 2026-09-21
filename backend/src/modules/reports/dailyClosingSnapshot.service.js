@@ -160,7 +160,7 @@ export async function getSnapshotStaleness(shopId, date, snapshot, locationId = 
   const { start, end } = dateRangeForDateOnly(date, env.DAILY_CLOSING_TIMEZONE);
   const generatedAt = new Date(snapshot.generatedAt);
 
-  const [billChange, udharChange, stockChange, expenseChange] = await Promise.all([
+  const [billChange, udharChange, stockChange, expenseChange, supplierPaymentChange] = await Promise.all([
     db.bill.findFirst({
       where: { shopId, ...(locationId && { locationId }), businessDate: { gte: start, lte: end }, updatedAt: { gt: generatedAt } },
       orderBy: { updatedAt: "desc" },
@@ -183,9 +183,14 @@ export async function getSnapshotStaleness(shopId, date, snapshot, locationId = 
       orderBy: { updatedAt: "desc" },
       select: { updatedAt: true },
     }),
+    db.financialLedger.findFirst({
+      where: { shopId, sourceType: { in: ["supplier_payment", "supplier_payment_reversal"] }, createdAt: { gt: generatedAt } },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    }),
   ]);
 
-  const latest = [billChange?.updatedAt, udharChange?.updatedAt, stockChange?.updatedAt, expenseChange?.updatedAt]
+  const latest = [billChange?.updatedAt, udharChange?.updatedAt, stockChange?.updatedAt, expenseChange?.updatedAt, supplierPaymentChange?.createdAt]
     .filter(Boolean)
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
 
