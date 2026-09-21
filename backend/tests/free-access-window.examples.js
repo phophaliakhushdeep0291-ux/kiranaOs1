@@ -7,9 +7,25 @@ const DAY = 24 * 60 * 60 * 1000;
 const during = new Date(FREE_ACCESS_UNTIL.getTime() - DAY);
 const after = new Date(FREE_ACCESS_UNTIL.getTime() + DAY);
 
-// The boundary is IST, not UTC. 2027-01-01T00:00+05:30 is 2026-12-31T18:30Z, and a
-// shop in Indore closing its counter on new year's eve is still inside the window.
-assert.equal(FREE_ACCESS_UNTIL.toISOString(), "2026-12-31T18:30:00.000Z", "window must close at midnight IST");
+// The SHIPPED boundary is read from env.js rather than from the running process,
+// because buildTestEnv deliberately pins FREE_ACCESS_UNTIL to a past instant so the
+// rest of the suite can test plan enforcement. Asserting the runtime value here
+// would only re-read that override and prove nothing about what ships.
+//
+// It must be IST, not UTC: 2027-01-01T00:00+05:30 is 2026-12-31T18:30Z, and a shop
+// in Indore closing its counter on new year's eve is still inside the window. Read
+// as +00:00 it would shut five and a half hours early, mid-evening, still trading.
+const envSource = readFileSync(new URL("../src/config/env.js", import.meta.url), "utf8");
+const shipped = envSource.match(/FREE_ACCESS_UNTIL:[\s\S]{0,200}?\.default\("([^"]+)"\)/);
+assert.ok(shipped, "env.js must give FREE_ACCESS_UNTIL a default");
+assert.equal(shipped[1], "2027-01-01T00:00:00+05:30", "the shipped window must close at midnight IST");
+assert.equal(
+  new Date(shipped[1]).toISOString(),
+  "2026-12-31T18:30:00.000Z",
+  "and that must resolve to 18:30Z -- if this reads 00:00Z the offset has been dropped",
+);
+
+// Whatever the window is set to, the two readings of it must agree.
 assert.equal(freeAccessUntilIso(), FREE_ACCESS_UNTIL.toISOString());
 
 assert.equal(isFreeAccessActive(during), true, "inside the window");
@@ -30,9 +46,14 @@ for (const [label, row] of Object.entries(rows)) {
   assert.equal(hasSubscriptionAccess(row, after), false, `${label} must be enforced again once the window closes`);
 }
 
-// A paying shop is unaffected either way.
-const paid = { status: "active", currentPeriodEnd: new Date(FREE_ACCESS_UNTIL.getTime() + 400 * DAY) };
+// A paying shop is unaffected either way. Its period end is anchored to the REAL
+// clock, not to the window: isSubscriptionActive deliberately reads new Date()
+// rather than the `now` it is handed, because it answers about the row as it
+// stands today. Anchoring this to FREE_ACCESS_UNTIL would expire the shop the
+// moment a test run pins the window to the past.
+const paid = { status: "active", currentPeriodEnd: new Date(Date.now() + 400 * DAY) };
 assert.equal(hasSubscriptionAccess(paid, after), true, "a paid shop keeps access after the window");
+assert.equal(hasSubscriptionAccess(paid, during), true, "and during it");
 
 // The gates must ask hasSubscriptionAccess, not isSubscriptionActive. This is the bug
 // this file exists for: the promotion was written and every gate still read the row
