@@ -17,6 +17,7 @@ import {
   offeredPlanCodesForBusinessType,
 } from "./planConfig.js";
 import { businessTypeFromSettings, parseShopSettings } from "../shops/businessProfiles.js";
+import { isPlanCatalogueVerified, markPlanCatalogueVerified } from "./plan-catalogue-memo.js";
 import { createAuditLog } from "../audit/audit.service.js";
 
 export async function seedPlans(tx = db) {
@@ -69,6 +70,9 @@ export async function listPlans(businessType = "kirana") {
 }
 
 export async function ensurePlansSeeded(client = db) {
+  // One clean comparison per process is enough; plan-catalogue-memo.js says why,
+  // and owns the flag so the test reset can clear it without importing this file.
+  if (isPlanCatalogueVerified()) return;
   const existing = await client.plan.findMany({
     select: { code: true, name: true, priceMonthlyPaise: true, priceYearlyPaise: true, maxDevices: true, maxStores: true, maxStaff: true, featuresJson: true, isActive: true },
   });
@@ -86,10 +90,30 @@ export async function ensurePlansSeeded(client = db) {
       || stored.featuresJson !== JSON.stringify(expected.features)
       || stored.isActive !== (code !== "standard");
   });
-  if (catalogChanged) await seedPlans(client);
+  if (catalogChanged) {
+    await seedPlans(client);
+    // Deliberately not marked verified. `client` may be a transaction that later
+    // rolls back, which would undo the seed while leaving the memo claiming the
+    // catalogue is good. Only a clean comparison — a pure read that owes nothing
+    // to a transaction's outcome — is allowed to end the checking.
+    return;
+  }
+  markPlanCatalogueVerified();
 }
 
-export async function getCurrentSubscription(shopId, client = db) {
+/**
+ * The shop's subscription, and the catalogue row it was resolved against.
+ *
+ * Both public readers below want those same two things, and between them used to
+ * read the Plan row twice for one answer: getCurrentSubscription looks it up to
+ * build the entitled snapshot it returns, and getEffectivePlan looked it up again
+ * — same code, same row — to build its own. That second findUnique was paid on
+ * every gated request, which includes every sync pull from every device.
+ *
+ * `catalogPlan` is null only on the no-subscription path, where no row was read
+ * to begin with: a trial's shape comes from PLAN_CONFIGS, not from the table.
+ */
+async function resolveSubscriptionContext(shopId, client) {
   await ensurePlansSeeded(client);
   const subscription = await client.subscription.findUnique({ where: { shopId } });
   if (!subscription) {
@@ -99,32 +123,50 @@ export async function getCurrentSubscription(shopId, client = db) {
     });
     if (!shop) throw new AppError("Shop not found", 404);
     const businessType = businessTypeFromSettings(parseShopSettings(shop.settingsJson));
-    return fallbackSubscription(
-      shopId,
-      getPlanConfigForBusinessType(DEFAULT_TRIAL_PLAN_CODE, businessType),
-      shop.createdAt,
-    );
+    return {
+      subscription: fallbackSubscription(
+        shopId,
+        getPlanConfigForBusinessType(DEFAULT_TRIAL_PLAN_CODE, businessType),
+        shop.createdAt,
+      ),
+      catalogPlan: null,
+    };
   }
   const normalized = normalizeSubscriptionDates(subscription);
-  const plan = await getPlanByCode(normalized.planCode, client);
-  const entitledPlan = subscriptionPlanSnapshot(plan, normalized);
+  const catalogPlan = await getPlanByCode(normalized.planCode, client);
+  const entitledPlan = subscriptionPlanSnapshot(catalogPlan, normalized);
   return {
-    ...normalized,
-    active: isSubscriptionActive(normalized),
-    source: "subscription",
-    plan: serializePlan(entitledPlan),
-    foundingCustomer: normalized.provider === "founding",
-    foundingEndsAt: normalized.provider === "founding" ? normalized.trialEndsAt : null,
-    intendedPaidPlanCode: normalized.intendedPaidPlanCode ?? normalized.planCode,
-    warning: warningForSubscription(normalized),
+    subscription: {
+      ...normalized,
+      active: isSubscriptionActive(normalized),
+      source: "subscription",
+      plan: serializePlan(entitledPlan),
+      foundingCustomer: normalized.provider === "founding",
+      foundingEndsAt: normalized.provider === "founding" ? normalized.trialEndsAt : null,
+      intendedPaidPlanCode: normalized.intendedPaidPlanCode ?? normalized.planCode,
+      warning: warningForSubscription(normalized),
+    },
+    catalogPlan,
   };
 }
 
+export async function getCurrentSubscription(shopId, client = db) {
+  // Returns the subscription alone: this shape is served straight to the client
+  // by GET /api/subscription, so the raw catalogue row stays internal.
+  return (await resolveSubscriptionContext(shopId, client)).subscription;
+}
+
 export async function getEffectivePlan(shopId, client = db) {
-  const subscription = await getCurrentSubscription(shopId, client);
+  const { subscription, catalogPlan } = await resolveSubscriptionContext(shopId, client);
   const planCode = subscription.planCode || "starter";
-  const catalogPlan = await getPlanByCode(planCode, client);
-  const plan = subscriptionPlanSnapshot(catalogPlan, subscription);
+  // Already in hand whenever the shop has a subscription row. The code check is
+  // what keeps the reuse exact: the trial path carries no row, and a subscription
+  // whose planCode is empty falls back to "starter", which is a different plan
+  // from the one any row here was read for.
+  const resolvedPlan = catalogPlan?.code === planCode
+    ? catalogPlan
+    : await getPlanByCode(planCode, client);
+  const plan = subscriptionPlanSnapshot(resolvedPlan, subscription);
   return {
     planCode,
     plan: serializePlan(plan),

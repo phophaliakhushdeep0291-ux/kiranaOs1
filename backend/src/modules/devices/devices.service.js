@@ -670,21 +670,48 @@ function inferDeviceName(userAgent) {
   return "Browser device";
 }
 
-export async function assertDeviceHasActiveLoginSession(shopId, user, deviceId, client = db) {
+/**
+ * Is `validated` the row the query below was about to fetch?
+ *
+ * requireAuth loads the session for every authenticated request and checks the
+ * same five things this function's query does — same id, same user, same shop,
+ * not revoked, not expired — a few middlewares earlier in the same request, and
+ * hands the row on as `req.authSession`. So on the API path the read below is the
+ * second read of a row already in memory, and it is paid on every device-scoped
+ * endpoint in the product.
+ *
+ * Reuse demands an exact identity match. Anything else — a service asserting
+ * some other user's session, or a transaction client that must see its own
+ * uncommitted writes — falls through to the query, which is still the default.
+ */
+function isSameValidatedSession(validated, { sessionId, shopId, userId }) {
+  return Boolean(
+    validated
+    && validated.id === sessionId
+    && validated.shopId === shopId
+    && validated.userId === userId
+    && userId,
+  );
+}
+
+export async function assertDeviceHasActiveLoginSession(shopId, user, deviceId, client = db, { validatedSession = null } = {}) {
   if (!shopId || !deviceId) return;
 
   const sessionId = user?.sessionId ?? user?.sid ?? null;
+  const userId = user?.userId ?? user?.id;
   if (sessionId) {
-    const session = await client.session.findFirst({
-      where: {
-        id: sessionId,
-        shopId,
-        userId: user?.userId ?? user?.id,
-        revokedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-      select: { deviceId: true },
-    });
+    const session = isSameValidatedSession(validatedSession, { sessionId, shopId, userId })
+      ? validatedSession
+      : await client.session.findFirst({
+        where: {
+          id: sessionId,
+          shopId,
+          userId,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        select: { deviceId: true },
+      });
 
     if (!session) {
       const err = new AppError("Login session is no longer active", 401);

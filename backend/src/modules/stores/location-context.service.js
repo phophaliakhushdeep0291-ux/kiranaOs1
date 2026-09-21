@@ -30,6 +30,35 @@ export async function resolveOperationalLocation(shopId, requestedLocationId = n
 }
 
 /**
+ * The location this request has already resolved, when it is the one being asked for.
+ *
+ * `requireLocationAccess` resolves the operational location for every request that
+ * declares a capability, checks the caller may use it, and leaves the row on
+ * `req.operationalLocation`. Services then resolved the same id again from the
+ * same arguments — confirmBill did it a third time inside its transaction, so one
+ * sale read StoreLocation three times.
+ *
+ * Returns the middleware's row only when it provably answers the same question,
+ * and null otherwise, so every caller keeps the query as its fallback. Two things
+ * make it strict rather than convenient:
+ *
+ *   - A null `requestedLocationId` means "the shop's primary", which
+ *     ensurePrimaryLocation may CREATE. Answering that from a cached row is only
+ *     safe when the cached row is itself the primary.
+ *   - `req.operationalLocation` is null on the all-locations scope, and this must
+ *     not turn that into a silent pick of one branch.
+ *
+ * Only safe against a middleware-resolved row, which was read with allowInactive
+ * false; a caller that needs an inactive location must go to the database.
+ */
+export function locationAlreadyResolvedForRequest(req, shopId, requestedLocationId = null) {
+  const resolved = req?.operationalLocation;
+  if (!resolved || !shopId || resolved.shopId !== shopId || resolved.active !== true) return null;
+  if (requestedLocationId) return resolved.id === requestedLocationId ? resolved : null;
+  return resolved.isPrimary === true ? resolved : null;
+}
+
+/**
  * Read one LocationStock row.
  *
  * Not findUnique on locationId_productId_sellingUnitId, because Prisma refuses a

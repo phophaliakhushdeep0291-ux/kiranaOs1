@@ -9,6 +9,9 @@ import {
   shouldGracefullySkipPrismaRuntime,
 } from "../../scripts/test-db-utils.js";
 import { formatDateInTimeZone } from "../../src/utils/dates.js";
+// Imports nothing itself, so this cannot pull src/db.js in ahead of the
+// buildTestEnv() call below. See plan-catalogue-memo.js.
+import { forgetVerifiedPlanCatalogue } from "../../src/modules/subscription/plan-catalogue-memo.js";
 
 Object.assign(process.env, buildTestEnv());
 
@@ -345,6 +348,12 @@ export async function resetDatabase(db) {
     db.changeLog.deleteMany(),
     db.shop.deleteMany(),
   ]);
+
+  // Plan rows have just been deleted, and subscription.service.js only checks the
+  // catalogue until it has seen it once per process — otherwise every gated read
+  // re-reads the whole table. Tell it to look again; without this the next test
+  // runs against a catalogue the memo still believes in.
+  forgetVerifiedPlanCatalogue();
 }
 
 export function assertSuccess(response, expectedStatus = 200) {

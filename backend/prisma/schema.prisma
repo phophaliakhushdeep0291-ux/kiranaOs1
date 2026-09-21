@@ -1483,6 +1483,11 @@ model StockLedger {
   @@index([shopId, sellingUnitId])
   @@index([shopId, locationId, createdAt])
   @@index([shopId, sourceType, sourceId])
+  // Every read of "what stock did this bill move" — the cancel and restore guards,
+  // the sync echo's sale rows, the assurance context. `billId` was on no index at
+  // all, so each of those scanned the shop's whole movement history to find the
+  // handful of rows for one sale.
+  @@index([shopId, billId, action])
   @@index([shopId, actorUserId, createdAt])
   @@index([productId])
   // Sync pull keyset pagination (updatedAt == createdAt for append-only ledger)

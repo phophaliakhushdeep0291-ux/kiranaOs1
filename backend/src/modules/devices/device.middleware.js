@@ -102,7 +102,7 @@ export async function assertRequestDevice(req) {
   if (req.user?.sessionVersion !== null && req.user?.sessionVersion !== undefined && req.user.sessionVersion !== device.sessionVersion) {
     throw new AppError("This device session was revoked.", 401, "DEVICE_SESSION_REVOKED");
   }
-  await assertDeviceHasActiveLoginSession(req.shopId, req.user, deviceId);
+  await assertDeviceHasActiveLoginSession(req.shopId, req.user, deviceId, db, { validatedSession: req.authSession });
   return device;
 }
 

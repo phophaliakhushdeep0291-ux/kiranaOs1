@@ -196,6 +196,24 @@ async function main() {
 
   const rows = [];
   for (const scenario of scenarios) {
+    // Time nothing until one real request has come back 2xx.
+    //
+    // The run holds ONE access token for its whole life, and seeding a large shop
+    // can outlast it — a 15-minute token and a 1500-bill seed is enough. Every
+    // scenario after that point measures how fast the API can reject an expired
+    // token, which reads as a triumph rather than a failure: 6424 req/s at a p50 of
+    // 2ms, next to a number in the last column that says 100. The error budget does
+    // catch it, but only after a table that looks like the best result yet has been
+    // printed, and believed. This names the request that failed and stops.
+    const probe = await fetch(scenario.opts.url, { headers: scenario.opts.headers ?? {} });
+    if (!probe.ok) {
+      const body = await probe.text().catch(() => "");
+      console.error(
+        `"${scenario.name}" answers ${probe.status} before the run starts, so timing it would measure rejections, not work — aborting.\n`
+        + `  ${scenario.opts.url}\n  ${body.slice(0, 300)}`,
+      );
+      process.exit(2);
+    }
     const outcome = await run(scenario.name, scenario.opts);
     rows.push(summarize(outcome));
   }
