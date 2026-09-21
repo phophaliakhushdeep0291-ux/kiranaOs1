@@ -18,6 +18,11 @@ import {
   type SubscriptionState,
 } from "@/features/core/subscription/plans";
 import { getLicenseEvaluation } from "@/features/core/devices/license";
+import {
+  formatFreeAccessDate,
+  freeAccessPlan,
+  freeAccessUntil,
+} from "@/features/core/subscription/free-access";
 import { getStoredBusinessType, subscribeToBusinessType } from "@/features/core/settings/business-type-store";
 
 const DEFAULT_TRIAL_KEY = "kirana-os:subscription-default-trial:v1";
@@ -44,6 +49,8 @@ export interface SubscriptionSnapshot {
   foundingEndsAt: string | null;
   intendedPaidPlanCode: PlanCode;
   source: "license-cache" | "local-cache" | "default-trial";
+  /** End of the launch promotion while it runs, else null. See free-access.ts. */
+  freeAccessUntil: string | null;
 }
 
 // Subscription state is consumed by the layout, banner, pages and feature gates.
@@ -233,12 +240,52 @@ export async function writeSubscriptionSnapshot(
   emitLocalDataChanged(announcement);
 }
 
+/**
+ * Lay the launch promotion over whatever this device knows about the shop's own
+ * subscription, as hasSubscriptionAccess does on the server. Everything that would
+ * lock the counter is opened, but the snapshot underneath is kept rather than
+ * replaced: its source and intended plan still describe the shop, and the dates
+ * keep whichever is later, so a shop paid beyond the window is never told its
+ * access ends sooner than it does.
+ */
+function withFreeAccess(subscription: SubscriptionSnapshot, until: string): SubscriptionSnapshot {
+  const plan = freeAccessPlan(getStoredBusinessType());
+  const later = (value: string | null) =>
+    value && new Date(value).getTime() > new Date(until).getTime() ? value : until;
+  return {
+    ...subscription,
+    plan,
+    planCode: plan.code,
+    status: "active",
+    isTrial: false,
+    isExpired: false,
+    isPaymentFailed: false,
+    currentPeriodEnd: later(subscription.currentPeriodEnd),
+    offlineGraceEndsAt: later(subscription.offlineGraceEndsAt),
+    graceActive: false,
+    localOnlyAfterExpiry: false,
+    cloudSyncAllowed: true,
+    canCreateNewBills: true,
+    message: `Free until ${formatFreeAccessDate(until)}. Every feature is unlocked and there is nothing to pay.`,
+    freeAccessUntil: until,
+  };
+}
+
 export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnapshot> {
   const rows = await offlineDB
     .getAll<SubscriptionCacheRow>("subscription_cache")
     .catch(() => [] as SubscriptionCacheRow[]);
   const latest = latestSubscriptionRow(rows);
   const payload = payloadFromRow(latest);
+  const subscription = await subscriptionSnapshotFromCache(latest, payload);
+  const until = freeAccessUntil(payload);
+  return until ? withFreeAccess(subscription, until) : subscription;
+}
+
+async function subscriptionSnapshotFromCache(
+  latest: SubscriptionCacheRow | undefined,
+  payload: Record<string, unknown> | null,
+): Promise<SubscriptionSnapshot> {
   const now = Date.now();
   const license = await getLicenseEvaluation().catch(() => null);
   if (license?.token && license.state !== "missing") {
@@ -267,6 +314,7 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
       foundingEndsAt: null,
       intendedPaidPlanCode: plan.code,
       source: "license-cache",
+      freeAccessUntil: null,
     };
   }
 
@@ -301,6 +349,7 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
       foundingCustomer: false,
       foundingEndsAt: null,
       intendedPaidPlanCode: "starter",
+      freeAccessUntil: null,
     };
   }
 
@@ -394,6 +443,7 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
     foundingCustomer,
     foundingEndsAt: foundingCustomer ? trialEndsAt : null,
     intendedPaidPlanCode,
+    freeAccessUntil: null,
   };
 }
 
@@ -546,7 +596,7 @@ export function useSubscriptionSnapshot() {
 export function useFeature(featureName: FeatureName): FeatureDecision {
   const { snapshot, loading, refresh } = useSubscriptionSnapshot();
   return useMemo(() => {
-    const safeSnapshot = snapshot ?? {
+    const placeholder: SubscriptionSnapshot = {
       plan: getPlanForBusinessType("starter", getStoredBusinessType()),
       planCode: "starter" as PlanCode,
       status: "trial" as SubscriptionState,
@@ -565,7 +615,11 @@ export function useFeature(featureName: FeatureName): FeatureDecision {
       foundingEndsAt: null,
       intendedPaidPlanCode: "starter" as PlanCode,
       source: "default-trial" as const,
+      freeAccessUntil: null,
     };
+    // Nothing is cached yet, so only the shipped date can answer here.
+    const until = freeAccessUntil(null);
+    const safeSnapshot = snapshot ?? (until ? withFreeAccess(placeholder, until) : placeholder);
     return { ...decideFeature(safeSnapshot, featureName), loading, refresh };
   }, [featureName, loading, refresh, snapshot]);
 }

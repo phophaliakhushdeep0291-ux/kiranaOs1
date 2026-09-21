@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getPlanForBusinessType, offeredPlanCodes, type PlanCode } from "@/features/core/subscription/plans";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
+import { formatFreeAccessDate } from "@/features/core/subscription/free-access";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { CancelSubscriptionDialog, PlanBadge, UpgradeModal } from "@/features/core/subscription/components";
 import { subscriptionRefreshLocalFirst } from "@/features/core/subscription/local-actions";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +26,7 @@ export default function SubscriptionPage() {
   // What this trade is sold — a restaurant is offered two plans, not three.
   const offeredPlans = offeredPlanCodes(businessType);
   const { snapshot, loading, refresh } = useSubscriptionSnapshot();
+  const { language, t } = useAppLanguage();
   const { toast } = useToast();
   const [targetPlan, setTargetPlan] = useState<PlanCode | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -56,15 +59,21 @@ export default function SubscriptionPage() {
   const stateIcon = snapshot.isPaymentFailed ? CreditCard : snapshot.isExpired ? CloudOff : snapshot.isTrial || snapshot.graceActive ? AlertTriangle : CheckCircle2;
   const StateIcon = stateIcon;
 
+  // While the launch promotion runs there is nothing to buy or cancel: checkout is
+  // refused, and a shop's own paid period carries on underneath untouched.
+  const freeDate = snapshot.freeAccessUntil ? formatFreeAccessDate(snapshot.freeAccessUntil, language) : null;
+
   // Only a paid, active plan can be cancelled (trials/expired/grace have nothing to cancel).
-  const canCancel = snapshot.status === "active";
+  const canCancel = !freeDate && snapshot.status === "active";
   const publicCurrentIndex = offeredPlans.indexOf(snapshot.planCode as (typeof offeredPlans)[number]);
   const currentIndex = snapshot.planCode === "standard" ? 0 : Math.max(0, publicCurrentIndex);
   const nextPlan = snapshot.planCode === "standard"
     ? "growth"
     : currentIndex < offeredPlans.length - 1 ? offeredPlans[currentIndex + 1] : null;
   const periodEndLabel = snapshot.currentPeriodEnd ? new Date(snapshot.currentPeriodEnd).toLocaleDateString("en-IN") : null;
-  const planMessage = snapshot.status === "active" && snapshot.cloudSyncAllowed
+  const planMessage = freeDate
+    ? t("plans.free.modalBody", { date: freeDate, plan: snapshot.plan.name })
+    : snapshot.status === "active" && snapshot.cloudSyncAllowed
     ? `Your ${snapshot.plan.name} features are ready and this device is protected.`
     : snapshot.message;
 
@@ -74,7 +83,7 @@ export default function SubscriptionPage() {
         headingLevel={2}
         title="Subscription"
         description="Your plan, billing cycle, and store protection in one place."
-        actions={<PlanBadge planCode={snapshot.planCode} status={snapshot.status} plan={snapshot.plan} />}
+        actions={<PlanBadge planCode={snapshot.planCode} status={snapshot.status} plan={snapshot.plan} freeAccessUntil={snapshot.freeAccessUntil} />}
       />
 
       <Card className={`overflow-hidden rounded-[18px] shadow-[0_16px_42px_rgba(16,35,71,0.08)] ${snapshot.localOnlyAfterExpiry ? "border-amber-300" : "border-[#d7e3f3]"}`}>
@@ -85,12 +94,14 @@ export default function SubscriptionPage() {
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-white text-[var(--brand)] shadow-sm ring-1 ring-[#d8e5fa]"><StateIcon className="h-5 w-5" /></span>
               {snapshot.plan.name}
             </CardTitle>
-            <p className="font-display text-2xl font-black tracking-tight text-[var(--brand-ink)]">₹{snapshot.plan.price}<span className="text-sm font-semibold text-[#66758d]">/month</span></p>
+            {freeDate
+              ? <p className="font-display text-2xl font-black tracking-tight text-emerald-700">{t("plans.free.label")}</p>
+              : <p className="font-display text-2xl font-black tracking-tight text-[var(--brand-ink)]">₹{snapshot.plan.price}<span className="text-sm font-semibold text-[#66758d]">/month</span></p>}
           </div>
           <CardDescription className="max-w-2xl text-sm leading-6 text-[#536383]">{planMessage}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 p-4 sm:p-5 md:grid-cols-4">
-          <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Plan status</p><p className="mt-1 font-bold capitalize text-[var(--brand-ink)]">{snapshot.status.replace(/_/g, " ")}</p></div>
+          <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Plan status</p><p className="mt-1 font-bold capitalize text-[var(--brand-ink)]">{freeDate ? t("plans.free.label") : snapshot.status.replace(/_/g, " ")}</p></div>
           <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Access until</p><p className="mt-1 text-sm font-bold text-[var(--brand-ink)]">{formatDate(snapshot.currentPeriodEnd)}</p></div>
           <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Offline protection</p><p className="mt-1 text-sm font-bold text-[var(--brand-ink)]">{formatDate(snapshot.offlineGraceEndsAt)}</p></div>
           <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Automatic backup</p><Badge className="mt-1" variant={snapshot.cloudSyncAllowed ? "default" : "destructive"}>{snapshot.cloudSyncAllowed ? "Protected" : "Paused"}</Badge></div>
@@ -110,7 +121,7 @@ export default function SubscriptionPage() {
       )}
 
       <div className="grid gap-2 sm:flex sm:flex-wrap">
-        {nextPlan && <Button className="h-11 rounded-xl px-5 font-bold shadow-[0_10px_24px_rgba(7,95,255,0.2)]" onClick={() => setTargetPlan(nextPlan)}>Compare and upgrade</Button>}
+        {nextPlan && !freeDate && <Button className="h-11 rounded-xl px-5 font-bold shadow-[0_10px_24px_rgba(7,95,255,0.2)]" onClick={() => setTargetPlan(nextPlan)}>Compare and upgrade</Button>}
         {canCancel && (
           <Button variant="outline" className="h-11 rounded-xl text-destructive hover:text-destructive" onClick={() => setCancelOpen(true)}>
             Cancel plan
@@ -122,7 +133,9 @@ export default function SubscriptionPage() {
       <Card className="rounded-[18px] border-[#dce5f2]">
         <CardHeader>
           <CardTitle className="font-display text-xl font-black tracking-tight">Compare plans</CardTitle>
-          <CardDescription>Choose the capacity that matches how your store works.</CardDescription>
+          {freeDate
+            ? <CardDescription>{t("plans.free.compareBody", { date: freeDate })}</CardDescription>
+            : <CardDescription>Choose the capacity that matches how your store works.</CardDescription>}
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-3">
           {offeredPlans.map((code, index) => {
@@ -132,11 +145,13 @@ export default function SubscriptionPage() {
             // Clicking the plan you already have shouldn't try to sell it back to you:
             // if it's active, offer to cancel; otherwise start checkout to renew/switch.
             const handleClick = () => (isCurrent && canCancel ? setCancelOpen(true) : setTargetPlan(plan.code));
-            const hint = isCurrent
-              ? canCancel ? "Active - tap to cancel" : "Current plan - tap to renew"
-              : isHigher ? "Tap to upgrade" : "Tap to switch";
+            const hint = freeDate
+              ? t("plans.free.title", { date: freeDate })
+              : isCurrent
+                ? canCancel ? "Active - tap to cancel" : "Current plan - tap to renew"
+                : isHigher ? "Tap to upgrade" : "Tap to switch";
             return (
-              <button key={plan.code} onClick={handleClick} className={`rounded-[14px] border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${isCurrent ? "border-primary bg-[#f3f7ff] ring-1 ring-primary/15" : "border-[#e0e8f3] hover:bg-muted"}`}>
+              <button key={plan.code} onClick={handleClick} disabled={Boolean(freeDate)} className={`rounded-[14px] border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md disabled:pointer-events-none ${isCurrent ? "border-primary bg-[#f3f7ff] ring-1 ring-primary/15" : "border-[#e0e8f3] hover:bg-muted"}`}>
                 <div className="flex items-center justify-between"><p className="font-semibold">{plan.name}</p>{isCurrent && <Badge>Current</Badge>}</div>
                 <p className="mt-1 text-sm font-bold text-[var(--brand-ink)]">₹{plan.price}<span className="font-medium text-muted-foreground">/month</span></p>
                 <p className="mt-2 text-xs text-muted-foreground">{plan.maxStores} store · {plan.maxDevices} devices · {plan.maxStaff || "no"} staff</p>

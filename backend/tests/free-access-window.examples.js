@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { hasSubscriptionAccess, isSubscriptionActive } from "../src/modules/subscription/subscription.service.js";
-import { FREE_ACCESS_UNTIL, isFreeAccessActive, freeAccessUntilIso } from "../src/modules/subscription/freeAccess.js";
+import { FREE_ACCESS_UNTIL, freeAccessPlan, isFreeAccessActive, freeAccessUntilIso } from "../src/modules/subscription/freeAccess.js";
+import { BUSINESS_TYPE_PLAN_PRICING, PLAN_CODES, getPlanConfigForBusinessType } from "../src/modules/subscription/planConfig.js";
+import { FEATURE_REGISTRY } from "../src/modules/feature-gates/featureRegistry.js";
+import { licenseValidity } from "../src/modules/devices/license.service.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const during = new Date(FREE_ACCESS_UNTIL.getTime() - DAY);
@@ -55,6 +58,30 @@ const paid = { status: "active", currentPeriodEnd: new Date(Date.now() + 400 * D
 assert.equal(hasSubscriptionAccess(paid, after), true, "a paid shop keeps access after the window");
 assert.equal(hasSubscriptionAccess(paid, during), true, "and during it");
 
+// The device licence has to agree with the gates. An offline counter trusts its
+// licence before anything else, so a lapsed shop issued a licence dated by its
+// lapsed row was locked out on the till while the server was letting it in.
+// Dated against the window, not the clock, so it holds wherever the window is pinned.
+const lapsedLicence = {
+  status: "expired",
+  currentPeriodEnd: new Date(FREE_ACCESS_UNTIL.getTime() - 30 * DAY),
+  graceEndsAt: new Date(FREE_ACCESS_UNTIL.getTime() - 27 * DAY),
+  maxDevices: 2,
+};
+const issuedDuring = licenseValidity({ ...lapsedLicence, issuedAt: during });
+assert.equal(issuedDuring.validUntil.getTime(), FREE_ACCESS_UNTIL.getTime(), "a licence issued in the window is valid to its end");
+assert.ok(issuedDuring.offlineGraceUntil > FREE_ACCESS_UNTIL, "and keeps offline grace past it, so new year lands in grace, not a lockout");
+assert.deepEqual(issuedDuring.warnings, [], "and does not warn a shop using a free product that it is restricted");
+
+const issuedAfter = licenseValidity({ ...lapsedLicence, issuedAt: after });
+assert.equal(issuedAfter.validUntil.getTime(), lapsedLicence.currentPeriodEnd.getTime(), "once the window closes the row dates the licence again");
+assert.ok(issuedAfter.warnings.includes("SUBSCRIPTION_RESTRICTED"), "and the restriction is reported again");
+
+// A shop paid past the window keeps its own, later, dates.
+const paidPast = new Date(FREE_ACCESS_UNTIL.getTime() + 200 * DAY);
+const paidLicence = licenseValidity({ status: "active", currentPeriodEnd: paidPast, graceEndsAt: null, issuedAt: during, maxDevices: 2 });
+assert.equal(paidLicence.validUntil.getTime(), paidPast.getTime(), "the window never shortens a paid licence");
+
 // The gates must ask hasSubscriptionAccess, not isSubscriptionActive. This is the bug
 // this file exists for: the promotion was written and every gate still read the row
 // directly, so a lapsed shop was told it had free access and then refused at the door.
@@ -85,6 +112,38 @@ const service = readFileSync(new URL("../src/modules/subscription/subscription.s
 assert.ok(
   /const currentActive = isSubscriptionActive\(current\);/.test(service),
   "activateSubscriptionAfterPayment must price renewals from the real subscription row",
+);
+
+// "Fully accessible" means the whole product, not the trade's own top plan. That
+// plan left every other trade's features locked, though any shop can switch those
+// modules on, and held a grocer to 3 stores and 10 staff. So in the window every
+// trade holds every feature any plan grants anywhere, and the highest limits.
+const trades = Object.keys(BUSINESS_TYPE_PLAN_PRICING);
+const everyPlan = PLAN_CODES.flatMap((code) => trades.map((trade) => getPlanConfigForBusinessType(code, trade)));
+for (const trade of trades) {
+  const free = freeAccessPlan(trade);
+  for (const plan of everyPlan) {
+    for (const feature of plan.features) {
+      assert.ok(free.features.includes(feature), `${trade} must hold ${feature} (from ${plan.code}) in the window`);
+    }
+    for (const limit of ["maxDevices", "maxStaff", "maxStores"]) {
+      assert.ok(free[limit] >= plan[limit], `${trade} ${limit} must be at least ${plan.code}'s ${plan[limit]}`);
+    }
+  }
+  for (const feature of Object.keys(FEATURE_REGISTRY)) {
+    assert.ok(free.features.includes(feature), `${trade} must hold registered feature ${feature} in the window`);
+  }
+  // The licence the server signs carries this code, and the counter checks it on refresh.
+  assert.equal(free.code, "pro", `${trade} holds the top plan code, which the licence refresh expects`);
+}
+const grocer = freeAccessPlan("kirana");
+assert.ok(grocer.features.includes("clothing_rentals"), "a grocer who switches rentals on can use it");
+assert.ok(grocer.features.includes("serial_imei_tracking"), "and the serial register");
+assert.ok(grocer.maxStores > getPlanConfigForBusinessType("pro", "kirana").maxStores, "and is not held to the grocery store cap");
+assert.equal(freeAccessPlan("restaurant").name, "Dine-in", "the plan keeps the trade's own name");
+assert.ok(
+  service.includes("freeAccessPlan(await getShopBusinessType(shopId, client))"),
+  "getEffectivePlan must hand out the whole product in the window, not the trade's top plan",
 );
 
 console.log("Free access window examples passed");

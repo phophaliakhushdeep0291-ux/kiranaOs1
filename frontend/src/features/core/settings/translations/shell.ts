@@ -247,6 +247,16 @@ export const shellEn = {
   "plans.softwareBundled": "Software inside the serviced bundle",
   "plans.viewAll": "View all plans",
   "chrome.subscription.activeShort": "Subscription active",
+  "plans.free.label": "Free",
+  "plans.free.badge": "Free · {plan}",
+  "plans.free.badgeTitle": "Free until {date} · {plan}",
+  "plans.free.title": "Free until {date}",
+  "plans.free.body": "Every feature on every plan is already unlocked for your shop. There is nothing to pay until then; the prices below apply after that.",
+  "plans.free.compareBody": "Every plan is free until {date}. These prices apply after that.",
+  "plans.free.nothingToPay": "Nothing to pay yet",
+  "plans.free.modalBody": "Everything is free until {date}. {plan} and every other feature are already unlocked for your shop.",
+  "plans.free.close": "Close",
+  "plans.free.refusedBody": "Every feature is already unlocked for your shop, so nothing was charged.",
 
   // Dashboard prose passed as props rather than written between tags.
   "dashboard.step.addProducts": "Add products",

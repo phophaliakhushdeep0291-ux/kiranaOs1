@@ -858,7 +858,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
             {isOnline && !isSyncing && !hasPendingSync && !hasSyncProblems && <span className="opacity-60">{t("chrome.justNow")}</span>}
           </div>}
 
-          {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} plan={snapshot.plan} />}
+          {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} plan={snapshot.plan} freeAccessUntil={snapshot.freeAccessUntil} />}
 
           <Link href="/sync-status" aria-label={t("chrome.openSyncAlerts")} className="app-topbar-icon-button app-topbar-alerts">
             <Bell size={18} aria-hidden="true" />

@@ -1,6 +1,7 @@
 import { getSubscriptionStatus } from "@/features/core/subscription/api";
 import { writeSubscriptionSnapshot } from "@/features/core/subscription/access";
 import type { PlanCode } from "@/features/core/subscription/plans";
+import { FREE_ACCESS_PLAN_CODE } from "@/features/core/subscription/free-access";
 import { getOfflineLicense } from "@/features/core/devices/api";
 import {
   parseOfflineLicenseToken,
@@ -21,7 +22,13 @@ export async function subscriptionRefreshLocalFirst(_planCode: PlanCode | string
   if (!license) {
     throw new Error("The server did not return a valid signed device licence. Reconnect this device and try again.");
   }
-  const subscriptionPlanCode = String(subscription.planCode ?? "starter");
+  // While the launch promotion runs the server signs every licence for the full
+  // plan, but still reports the shop's own plan on the subscription, which is what
+  // it returns to afterwards. Comparing the two directly then refused every shop
+  // not already on the top plan and never stored the licence the promotion issued.
+  const subscriptionPlanCode = subscription.freeAccessUntil
+    ? FREE_ACCESS_PLAN_CODE
+    : String(subscription.planCode ?? "starter");
   if (license.plan !== subscriptionPlanCode) {
     throw new Error("The server returned inconsistent subscription and device licence plans. Try again after reconnecting this device.");
   }
