@@ -23,7 +23,7 @@
     "db:generate": "node node_modules/prisma/build/index.js generate --generator client",
     "pretest": "node --test tests/test-script-execution.test.js tests/local-setup-smoke.test.js && node tests/db-example-isolation.examples.js && node tests/local-sqlite-schema-workflow.examples.js",
     "test": "node scripts/run-isolated-full-suite.js",
-    "posttest": "npm run test:packaging-db && npm run test:reports-db && npm run test:general-ledger-db && npm run test:accounting-documents && node tests/shared-test-database-guard.examples.js",
+    "posttest": "npm run test:packaging-db && npm run test:reports-db && npm run test:general-ledger-db && npm run test:accounting-documents && npm run test:entitlements-db && node tests/shared-test-database-guard.examples.js",
     "test:barcode": "node tests/barcode-binding.examples.js && node tests/product-knowledge.examples.js",
     "test:trade-attributes": "node --test tests/product-trade-attributes.examples.js",
     "test:sync-conflicts": "node scripts/run-db-example-tests.js tests/sync-conflict-entity-matrix.examples.js tests/sync-id-format.examples.js",
@@ -146,6 +146,7 @@
     "test:sync-feed": "node tests/sync-feed-compaction.examples.js && node scripts/run-db-example-tests.js tests/change-feed-retention.examples.js",
     "index-audit:local": "node scripts/run-index-audit-stack.js",
     "index-audit:postgres": "node scripts/run-index-audit-stack.js --postgres",
+    "test:entitlements-db": "node scripts/run-db-example-tests.js tests/free-access-window.examples.js",
     "eval:agent": "node scripts/agent-eval.js",
     "eval:agent:live": "node scripts/agent-eval.js --live"
   },

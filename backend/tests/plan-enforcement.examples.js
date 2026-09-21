@@ -21,13 +21,29 @@ for (const feature of ["payment_mode_reports", "advanced_udhar_reports", "advanc
 // `requireFeature("csv_import_export")` on this route and had been failing ever
 // since the narrower gate replaced it — unnoticed, because no npm script ran it.
 assert.ok(
-  reports.match(/router\.post\("\/exports"[^\n]*requireContinuityAction\("export_data"\)/),
-  "creating a report export must go through the export_data continuity gate",
-);
-assert.ok(
   featureGates.includes('featureName === "complete_sale" ? "basic_billing" : "csv_import_export"'),
   "and that gate must still resolve to the csv_import_export entitlement",
 );
+
+// EVERY route that produces data, not just the export job. /export/bills, /export/stock
+// and /export/udhar carried requireOwnerPin and no entitlement gate at all, so the paid
+// feature came down to which endpoint a caller used: ask for the job and be charged for
+// it, ask for the CSV directly and be handed the same data on any plan. Job management
+// — listing, polling, cancelling, downloading a job already created — is deliberately
+// not listed: it is not a second entitlement check.
+for (const route of [
+  'router.post("/exports"',
+  'router.get("/export/bills"',
+  'router.get("/export/stock"',
+  'router.get("/export/udhar"',
+]) {
+  const line = reports.split("\n").find((l) => l.trim().startsWith(route));
+  assert.ok(line, `expected to find the route ${route}`);
+  assert.ok(
+    line.includes('requireContinuityAction("export_data")'),
+    `${route} must enforce csv_import_export via requireContinuityAction: ${line.trim()}`,
+  );
+}
 assert.ok(pricing.match(/router\.post\("\/rules"[^\n]*requireFeature\("dynamic_customer_pricing"\)/), "pricing rule creation must enforce Growth access");
 assert.ok(offers.includes('requireFeature("dynamic_customer_pricing")'), "offer mutations must enforce Growth access");
 assert.ok(auth.includes('requireFeature("staff_login")'), "staff APIs must enforce Growth access");

@@ -106,6 +106,16 @@ const envSchema = z.object({
   // {"LAUNCH25":{"percentOff":25,"plans":["growth","pro"],"billingCycles":["yearly"],"expiresAt":"2026-12-31T23:59:59.999Z"}}
   SUBSCRIPTION_COUPONS_JSON: z.string().default("{}"),
   ALLOW_MANUAL_SUBSCRIPTION_ACTIVATION: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  // Launch promotion: until this instant every shop runs on the full plan and no
+  // subscription checkout is accepted. Normal plan enforcement resumes by itself
+  // once it passes — nothing has to be redeployed. Default: 1 January 2027, IST,
+  // the hours the shops this serves actually keep.
+  FREE_ACCESS_UNTIL: z
+    .string()
+    .default("2027-01-01T00:00:00+05:30")
+    .refine((value) => Number.isFinite(Date.parse(value)), {
+      message: "FREE_ACCESS_UNTIL must be a parseable date",
+    }),
   REDIS_URL: z.string().optional(),
   QUEUES_ENABLED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   // auto keeps one-service deployments affordable: API + worker when queues

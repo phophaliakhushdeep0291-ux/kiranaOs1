@@ -16,6 +16,11 @@ import {
   getPlanConfigForBusinessType,
   offeredPlanCodesForBusinessType,
 } from "./planConfig.js";
+import {
+  FREE_ACCESS_PLAN_CODE,
+  freeAccessUntilIso,
+  isFreeAccessActive,
+} from "./freeAccess.js";
 import { businessTypeFromSettings, parseShopSettings } from "../shops/businessProfiles.js";
 import { isPlanCatalogueVerified, markPlanCatalogueVerified } from "./plan-catalogue-memo.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -138,7 +143,8 @@ async function resolveSubscriptionContext(shopId, client) {
   return {
     subscription: {
       ...normalized,
-      active: isSubscriptionActive(normalized),
+      active: hasSubscriptionAccess(normalized),
+      freeAccessUntil: isFreeAccessActive() ? freeAccessUntilIso() : null,
       source: "subscription",
       plan: serializePlan(entitledPlan),
       foundingCustomer: normalized.provider === "founding",
@@ -158,6 +164,29 @@ export async function getCurrentSubscription(shopId, client = db) {
 
 export async function getEffectivePlan(shopId, client = db) {
   const { subscription, catalogPlan } = await resolveSubscriptionContext(shopId, client);
+  // Launch promotion: until the window closes every shop is entitled to the full
+  // plan for its trade, whatever its own row says. The row itself is untouched, so
+  // entitlement falls back to it by itself once the promotion ends.
+  //
+  // This costs one extra read of the shop, which resolveSubscriptionContext does not
+  // already hold on the path a real subscription takes — and getEffectivePlan is on
+  // the sync pull path, which is the cost the commit above this one just removed. It
+  // is paid only while the promotion runs, and it cannot be skipped: the plan is
+  // tailored per trade, so handing a restaurant the kirana feature set would take
+  // away screens it is entitled to. It disappears on its own when the window shuts.
+  if (isFreeAccessActive()) {
+    const freePlan = getPlanConfigForBusinessType(
+      FREE_ACCESS_PLAN_CODE,
+      await getShopBusinessType(shopId, client),
+    );
+    return {
+      planCode: freePlan.code,
+      plan: serializePlan(freePlan),
+      features: freePlan.features,
+      limits: planLimits(freePlan),
+      subscription,
+    };
+  }
   const planCode = subscription.planCode || "starter";
   // Already in hand whenever the shop has a subscription row. The code check is
   // what keeps the reuse exact: the trial path carries no row, and a subscription
@@ -558,6 +587,17 @@ export async function extendGrace(shopId, days, actor = {}) {
   });
 }
 
+/**
+ * Whether the shop may use the product right now — the question every gate asks.
+ *
+ * `isSubscriptionActive` below stays a truthful statement about the subscription
+ * row alone; the launch promotion is a separate answer laid over it, so that
+ * when the promotion ends the row underneath is already the right one to read.
+ */
+export function hasSubscriptionAccess(subscription, now = new Date()) {
+  return isFreeAccessActive(now) || isSubscriptionActive(subscription);
+}
+
 export function isSubscriptionActive(subscription) {
   if (!subscription) return true;
   const now = new Date();
@@ -640,9 +680,15 @@ function fallbackSubscription(shopId, trialPlan = getPlanConfig(DEFAULT_TRIAL_PL
     source: "fallback/trial",
     plan: serializePlan(trialPlan),
     intendedPaidPlanCode: "starter",
-    warning: "No persisted subscription found; the 30-day Business trial is anchored to the shop creation date.",
+    warning: isFreeAccessActive()
+      ? freeAccessNotice()
+      : "No persisted subscription found; the 30-day Business trial is anchored to the shop creation date.",
   };
-  return { ...fallback, active: isSubscriptionActive(fallback) };
+  return {
+    ...fallback,
+    active: hasSubscriptionAccess(fallback),
+    freeAccessUntil: isFreeAccessActive() ? freeAccessUntilIso() : null,
+  };
 }
 
 function serializePlan(plan) {
@@ -698,7 +744,13 @@ async function getShopBusinessType(shopId, client = db) {
   return businessTypeFromSettings(parseShopSettings(shop?.settingsJson));
 }
 
+function freeAccessNotice() {
+  return `Free until ${freeAccessUntilIso()}: every plan feature is unlocked and no payment is required.`;
+}
+
 function warningForSubscription(subscription) {
+  // While the product is free, "renew to keep working" is simply untrue.
+  if (isFreeAccessActive()) return freeAccessNotice();
   if (subscription.status === "grace") return "Subscription is in grace period.";
   if (subscription.status === "cancelled" && subscription.currentPeriodEnd > new Date()) {
     return `Subscription is cancelled; paid access continues until ${subscription.currentPeriodEnd.toISOString()}.`;

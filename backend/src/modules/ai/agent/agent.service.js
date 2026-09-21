@@ -31,7 +31,7 @@ import { formatDateInTimeZone } from "../../../utils/dates.js";
 import { env } from "../../../config/env.js";
 import db from "../../../db.js";
 import { AppError } from "../../../shared/errors/index.js";
-import { getEffectivePlan, isSubscriptionActive } from "../../subscription/subscription.service.js";
+import { getEffectivePlan, hasSubscriptionAccess } from "../../subscription/subscription.service.js";
 import { hasLegacyShopTypeFeatureAccess } from "../../subscription/planConfig.js";
 import { getTool, routeTools, toolsFor } from "./tool-registry.js";
 import { assertToolAllowed, toProviderTool, TOOL_RISK } from "./tool-contract.js";
@@ -102,7 +102,7 @@ async function resolveFeatures(shopId) {
   const none = { has: () => false, raw: new Set() };
   try {
     const effective = await getEffectivePlan(shopId);
-    if (!isSubscriptionActive(effective.subscription)) return none;
+    if (!hasSubscriptionAccess(effective.subscription)) return none;
     const granted = new Set(effective.features ?? []);
     return {
       has: (name) => granted.has(name) || hasLegacyShopTypeFeatureAccess(effective.features ?? [], name),
