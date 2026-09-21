@@ -275,9 +275,9 @@ export default function PurchaseBillsPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((row) => {
-      const matchesSearch = !q || [row.supplierName, row.invoiceNumber, row.status, row.paymentMode].join(" ").toLowerCase().includes(q);
+      const matchesSearch = !q || [row.supplierName, row.invoiceNumber, row.status, row.settledPaymentMode ?? row.paymentMode].join(" ").toLowerCase().includes(q);
       const matchesStatus = statusFilter === "all" || effectiveStatus(row) === statusFilter;
-      const matchesMode = modeFilter === "all" || row.paymentMode === modeFilter;
+      const matchesMode = modeFilter === "all" || (row.settledPaymentMode ?? row.paymentMode) === modeFilter;
       return matchesSearch && matchesStatus && matchesMode;
     });
   }, [rows, search, statusFilter, modeFilter]);
@@ -583,7 +583,7 @@ export default function PurchaseBillsPage() {
     const header = ["Purchase No", "Supplier", "Date", "Items", "Total", "Paid", "Due", "Mode", "Status"];
     const lines = filtered.map((row) => [
       row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber, row.supplierName, safeDate(row.date),
-      rowItems(row) ?? "", row.amount, row.paid, row.due, row.paymentMode, STATUS_LABEL[effectiveStatus(row)] ?? row.status,
+      rowItems(row) ?? "", row.amount, row.paid, row.due, row.settledPaymentMode ?? row.paymentMode, STATUS_LABEL[effectiveStatus(row)] ?? row.status,
     ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
     const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -682,7 +682,8 @@ export default function PurchaseBillsPage() {
                   <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="upi">UPI</SelectItem>
                   <SelectItem value="bank">Bank Transfer</SelectItem>
-                  <SelectItem value="credit">Credit</SelectItem>
+                  <SelectItem value="unpaid">Unpaid</SelectItem>
+                  <SelectItem value="mixed">Mixed</SelectItem>
                 </SelectContent>
               </Select>
               <button onClick={() => { setStatusFilter("all"); setModeFilter("all"); }} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Reset</button>
@@ -717,7 +718,7 @@ export default function PurchaseBillsPage() {
                       <div className="mt-3 grid grid-cols-3 gap-2 rounded-[12px] bg-[#f8fafc] p-2 text-center">
                         <div><p className="text-[10px] font-bold uppercase text-[#8290a8]">Paid</p><p className="mt-1 text-xs font-black text-[#119447]">{fmt(row.paid)}</p></div>
                         <div><p className="text-[10px] font-bold uppercase text-[#8290a8]">Due</p><p className={cn("mt-1 text-xs font-black", row.due > 0 ? "text-[#ef4444]" : "text-[#344668]")}>{fmt(row.due)}</p></div>
-                        <div><p className="text-[10px] font-bold uppercase text-[#8290a8]">Mode</p><p className="mt-1 text-xs font-black text-[#344668]">{modeLabel(row.paymentMode)}</p></div>
+                        <div><p className="text-[10px] font-bold uppercase text-[#8290a8]">Mode</p><p className="mt-1 text-xs font-black text-[#344668]">{modeLabel(row.settledPaymentMode ?? row.paymentMode)}</p></div>
                       </div>
                       <div className="mt-3 grid grid-cols-3 gap-2">
                         <Button variant="outline" className="h-11 rounded-[10px] text-[11px] font-bold" disabled={saving} onClick={() => openPay(row)}>{row.due > 0 ? "Pay" : "Payments"}</Button>
@@ -769,7 +770,7 @@ export default function PurchaseBillsPage() {
                           <td className="whitespace-nowrap px-4 py-3 text-right font-black text-[var(--brand-ink)]">{fmt(row.amount)}</td>
                           {cols.paid && <td className="whitespace-nowrap px-4 py-3 text-right text-[#344668]">{fmt(row.paid)}</td>}
                           <td className={cn("whitespace-nowrap px-4 py-3 text-right font-bold", row.due > 0 ? "text-[#ef4444]" : "text-[#344668]")}>{fmt(row.due)}</td>
-                          {cols.mode && <td className="px-4 py-3"><span className={cn("whitespace-nowrap rounded-[7px] px-2 py-[3px] text-[11px] font-bold", MODE_CLS[row.paymentMode] ?? "bg-[#eef2f8] text-[#64748b]")}>{modeLabel(row.paymentMode)}</span></td>}
+                          {cols.mode && <td className="px-4 py-3"><span className={cn("whitespace-nowrap rounded-[7px] px-2 py-[3px] text-[11px] font-bold", MODE_CLS[row.settledPaymentMode ?? row.paymentMode] ?? "bg-[#eef2f8] text-[#64748b]")}>{modeLabel(row.settledPaymentMode ?? row.paymentMode)}</span></td>}
                           <td className="px-4 py-3"><span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", STATUS_CLS[status] ?? STATUS_CLS.due)}>{STATUS_LABEL[status] ?? status}</span></td>
                           <td className="px-4 py-3 text-right">
                             <DropdownMenu>
@@ -995,17 +996,18 @@ export default function PurchaseBillsPage() {
                 )}
               </div>
             </div>
-            <div>
-              <Label htmlFor="purchase-pay-mode">Payment mode</Label>
-              <Select value={payMode} onValueChange={setPayMode}>
-                <SelectTrigger id="purchase-pay-mode" className="mt-1 h-11"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="upi">UPI / bank</SelectItem>
-                </SelectContent>
-              </Select>
+            <fieldset>
+              <legend className="text-sm font-medium">Payment mode</legend>
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                {[{ value: "cash", label: "Cash" }, { value: "upi", label: "UPI / bank" }].map((mode) => (
+                  <label key={mode.value} className={cn("flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold focus-within:ring-2 focus-within:ring-ring", payMode === mode.value ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-slate-200 text-slate-600")}>
+                    <input type="radio" name="purchase-pay-mode" value={mode.value} checked={payMode === mode.value} onChange={() => setPayMode(mode.value)} className="h-4 w-4 accent-[var(--brand)]" />
+                    {mode.label}
+                  </label>
+                ))}
+              </div>
               <p className="mt-1.5 text-[11px] text-[#8290a8]">Paying part cash, part UPI? Record two payments — one in each mode.</p>
-            </div>
+            </fieldset>
             <div>
               <Label htmlFor="purchase-pay-reference">Reference (optional)</Label>
               <Input id="purchase-pay-reference" className="mt-1 h-11" value={payReference} onChange={(event) => setPayReference(event.target.value)} placeholder="UPI reference, cheque or note" maxLength={120} />

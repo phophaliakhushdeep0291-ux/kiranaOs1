@@ -98,6 +98,8 @@ export interface SupplierDueRow {
   paid: number;
   due: number;
   paymentMode: string;
+  /** Net settlement methods for display; paymentMode retains the original tender. */
+  settledPaymentMode?: string;
   status: string;
   source: "purchase_bill" | "inventory_movement";
 }
@@ -1016,6 +1018,22 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
   const todaySupplierRows = supplierDueRows.filter((row) => row.date && isWithinDateRange({ created_at: row.date }, range));
   const supplierPayments = payments.filter((row) => row.kind === "supplier_payment"
     && !["reversed", "cancelled", "voided"].includes(String(row.status ?? "").toLowerCase()));
+  for (const purchase of supplierDueRows) {
+    const keys = new Set([purchase.id, ...(purchase.purchaseKeys ?? [])]);
+    const totals = new Map<string, number>();
+    let settled = 0;
+    for (const payment of supplierPayments) {
+      if (!supplierPurchaseKeys(payment).some((key) => keys.has(key))) continue;
+      const amount = readNumber(payment.amount, 0);
+      const mode = paymentMode(payment);
+      settled += amount;
+      totals.set(mode, (totals.get(mode) ?? 0) + amount);
+    }
+    const initialPaid = Math.max(0, roundMoney(purchase.paid - settled));
+    totals.set(purchase.paymentMode, (totals.get(purchase.paymentMode) ?? 0) + initialPaid);
+    const modes = [...totals].filter(([, total]) => roundMoney(total) > 0).map(([mode]) => mode);
+    purchase.settledPaymentMode = modes.length > 1 ? "mixed" : modes[0] ?? "unpaid";
+  }
   const supplierPaidToday = { cash: 0, upi: 0, bank: 0 };
   for (const row of supplierPayments) {
     const occurredAt = readString(row, ["paid_at", "paidAt", "created_at", "createdAt"]);

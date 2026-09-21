@@ -10,6 +10,23 @@ describe("supplier settlement dates", () => {
     { id: "cash-payment", kind: "supplier_payment", purchase_history_id: "purchase-server", amount: 200, mode: "cash", paid_at: "2026-06-06T11:00:00.000" },
     { id: "upi-payment", kind: "supplier_payment", purchase_history_id: "purchase-server", amount: 300, mode: "upi", paid_at: "2026-06-07T11:00:00.000" },
   ];
+  it("shows net settlement methods without changing the original tender or its reporting date", () => {
+    const creditPurchase = { ...purchase, purchasePaidAmount: 500, purchaseDueAmount: 500 };
+    const mixed = aggregateFinancialRows({ date, purchaseBills: [creditPurchase], payments: settlements });
+    expect(mixed.supplierDueRows[0]).toMatchObject({ paymentMode: "cash", settledPaymentMode: "mixed" });
+    expect(mixed.supplierCashPaidToday).toBe(200);
+    const reversedCash = { ...settlements[0], status: "reversed", reversed_at: "2026-06-08T10:00:00.000" };
+    const afterReversal = { ...creditPurchase, purchasePaidAmount: 300, purchaseDueAmount: 700 };
+    const local = aggregateFinancialRows({ date, purchaseBills: [afterReversal], payments: [reversedCash, settlements[1]] });
+    expect(local.supplierDueRows[0].settledPaymentMode).toBe("upi");
+    expect(local.supplierCashPaidToday).toBe(200);
+    const restored = aggregateFinancialRows({ date, purchaseBills: [{ ...afterReversal, supplierPayments: [
+      ...settlements, { id: "reverse-cash", kind: "supplier_payment", purchase_history_id: "purchase-server", amount: -200, mode: "cash", paid_at: "2026-06-08T10:00:00.000", reverses_payment_id: "cash-payment" },
+    ] }] });
+    expect(restored.supplierDueRows[0].settledPaymentMode).toBe("upi");
+    expect(restored.supplierCashPaidToday).toBe(200);
+    expect(aggregateFinancialRows({ date, purchaseBills: [{ ...purchase, purchasePaidAmount: 0 }] }).supplierDueRows[0].settledPaymentMode).toBe("unpaid");
+  });
   it("keeps the initial payment on purchase day and later mixed payments on their own dates", () => {
     const input = { purchaseBills: [purchase], payments: settlements };
     const initial = aggregateFinancialRows({ ...input, date: "2026-06-05" });

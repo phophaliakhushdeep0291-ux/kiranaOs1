@@ -105,7 +105,7 @@ export const I18N_HARDCODED_ALLOWLIST: Record<string, number> = {
   "features/core/products/pages/components/VariantGridEditor.tsx": 18,
   "features/core/purchases/components/PurchaseOrdersPanel.tsx": 172,
   "features/core/purchases/components/PurchaseWorkflow.tsx": 1,
-  "features/core/purchases/pages/PurchaseBillsPage.tsx": 212,
+  "features/core/purchases/pages/PurchaseBillsPage.tsx": 211,
   "features/core/recovery/pages/RecoveryModePage.tsx": 40,
   "features/core/recycle-bin/pages/RecycleBinPage.tsx": 34,
   "features/core/remote-support/RemoteHelpCard.tsx": 15,
