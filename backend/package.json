@@ -34,7 +34,7 @@
     "test:manufacturing": "node scripts/run-db-example-tests.js tests/manufacturing-vertical.examples.js tests/trade-auto-allocation.examples.js",
     "test:loyalty": "node tests/loyalty-maturity.examples.js && node scripts/run-db-example-tests.js tests/loyalty-expiry-sweep.examples.js",
     "test:atomic-offers": "node tests/offer-bill-atomicity.examples.js",
-    "test:ai-safety": "node tests/integration-today-range.examples.js && node scripts/run-db-example-tests.js tests/ai-agent-bill-items.examples.js tests/ai-agent-pack-sizes.examples.js tests/ai-agent-plan-concurrency.examples.js tests/ai-agent-tools.examples.js tests/ai-agent-tool-concurrency.examples.js tests/ai-agent-response-grounding.examples.js tests/ai-hallucination-guard.examples.js tests/ai-red-team-corpus.examples.js tests/ai-feedback.examples.js tests/diagnostic-ai-grounding.examples.js tests/assurance-ai-grounding.examples.js tests/competitive-evidence.examples.js tests/invoice-ocr.examples.js tests/shop-maintenance-lock.examples.js tests/backup-model-policy.examples.js tests/database-backup-offsite.examples.js && node scripts/run-db-example-tests.js tests/ai-agent-arguments.unit.test.js tests/ai-agent-bill-units.unit.test.js",
+    "test:ai-safety": "node tests/integration-today-range.examples.js && node scripts/run-db-example-tests.js tests/ai-agent-bill-items.examples.js tests/ai-agent-pack-sizes.examples.js tests/ai-agent-plan-concurrency.examples.js tests/ai-agent-tools.examples.js tests/ai-agent-tool-concurrency.examples.js tests/ai-agent-eval.examples.js tests/ai-agent-response-grounding.examples.js tests/ai-hallucination-guard.examples.js tests/ai-red-team-corpus.examples.js tests/ai-feedback.examples.js tests/diagnostic-ai-grounding.examples.js tests/assurance-ai-grounding.examples.js tests/competitive-evidence.examples.js tests/invoice-ocr.examples.js tests/shop-maintenance-lock.examples.js tests/backup-model-policy.examples.js tests/database-backup-offsite.examples.js && node scripts/run-db-example-tests.js tests/ai-agent-arguments.unit.test.js tests/ai-agent-bill-units.unit.test.js",
     "competitive:evidence": "node scripts/check-competitive-evidence.js",
     "test:retail-payment": "node tests/payment-credentials.examples.js && node tests/retail-payment-integrity.examples.js && node tests/dynamic-upi-qr.examples.js && node scripts/run-db-example-tests.js tests/payment-provider-connections.examples.js tests/retail-qr-image.examples.js tests/gift-card-reversal.examples.js",
     "test:card-terminal": "node tests/card-terminal.examples.js",
@@ -145,7 +145,9 @@
     "test:source-contracts": "node scripts/run-db-example-tests.js tests/layered-source-architecture.examples.js tests/health-deploy-commit.examples.js tests/test-database-guard-path.examples.js tests/restore-fidelity.examples.js tests/general-ledger.examples.js tests/zoned-date-formatter-is-cached.examples.js",
     "test:sync-feed": "node tests/sync-feed-compaction.examples.js && node scripts/run-db-example-tests.js tests/change-feed-retention.examples.js",
     "index-audit:local": "node scripts/run-index-audit-stack.js",
-    "index-audit:postgres": "node scripts/run-index-audit-stack.js --postgres"
+    "index-audit:postgres": "node scripts/run-index-audit-stack.js --postgres",
+    "eval:agent": "node scripts/agent-eval.js",
+    "eval:agent:live": "node scripts/agent-eval.js --live"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",
