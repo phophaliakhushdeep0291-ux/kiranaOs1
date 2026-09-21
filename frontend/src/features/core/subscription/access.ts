@@ -19,8 +19,8 @@ import {
 } from "@/features/core/subscription/plans";
 import { getLicenseEvaluation } from "@/features/core/devices/license";
 import {
-  FREE_ACCESS_PLAN_CODE,
   formatFreeAccessDate,
+  freeAccessPlan,
   freeAccessUntil,
 } from "@/features/core/subscription/free-access";
 import { getStoredBusinessType, subscribeToBusinessType } from "@/features/core/settings/business-type-store";
@@ -249,7 +249,7 @@ export async function writeSubscriptionSnapshot(
  * access ends sooner than it does.
  */
 function withFreeAccess(subscription: SubscriptionSnapshot, until: string): SubscriptionSnapshot {
-  const plan = getPlanForBusinessType(FREE_ACCESS_PLAN_CODE, getStoredBusinessType());
+  const plan = freeAccessPlan(getStoredBusinessType());
   const later = (value: string | null) =>
     value && new Date(value).getTime() > new Date(until).getTime() ? value : until;
   return {

@@ -39,6 +39,8 @@ vi.mock("@/lib/offline/instant-cache", () => ({ emitLocalDataChanged: vi.fn() })
 
 import { decideFeature, getCurrentSubscriptionSnapshot } from "@/features/core/subscription/access";
 import { formatFreeAccessDate, freeAccessUntil } from "@/features/core/subscription/free-access";
+import { FEATURE_LABELS, PLAN_ORDER, getPlanForBusinessType, type FeatureName } from "@/features/core/subscription/plans";
+import { BUSINESS_TYPE_IDS } from "@/features/core/settings/business-type-store";
 
 // The shipped window shuts at midnight IST on 1 January 2027, which is 18:30Z the day before.
 const WINDOW_END = "2026-12-31T18:30:00.000Z";
@@ -133,6 +135,22 @@ describe("launch promotion window", () => {
       });
       for (const feature of ["whatsapp_reminders", "staff_login", "stock_adjustment", "cloud_backup", "automatic_two_way_sync", "new_billing"] as const) {
         expect(decideFeature(current, feature).allowed, feature).toBe(true);
+      }
+    });
+
+    it("opens the whole product, not just the trade's top plan", async () => {
+      // Any shop can switch on another trade's module — a grocer turning on rentals —
+      // and the trade's own top plan left those behind an upgrade nobody could buy.
+      mockState.subscriptionRows = [lapsedStarter];
+
+      const current = await getCurrentSubscriptionSnapshot();
+
+      for (const feature of Object.keys(FEATURE_LABELS) as FeatureName[]) {
+        expect(decideFeature(current, feature).allowed, feature).toBe(true);
+      }
+      const everyPlan = PLAN_ORDER.flatMap((code) => BUSINESS_TYPE_IDS.map((type) => getPlanForBusinessType(code, type)));
+      for (const limit of ["maxDevices", "maxStaff", "maxStores"] as const) {
+        expect(current.plan[limit], limit).toBe(Math.max(...everyPlan.map((plan) => plan[limit])));
       }
     });
 

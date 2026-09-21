@@ -1,4 +1,12 @@
-import type { PlanCode } from "@/features/core/subscription/plans";
+import { BUSINESS_TYPE_IDS, type BusinessType } from "@/features/core/settings/business-type-store";
+import {
+  FEATURE_LABELS,
+  PLAN_ORDER,
+  getPlanForBusinessType,
+  type FeatureName,
+  type PlanCode,
+  type PlanDefinition,
+} from "@/features/core/subscription/plans";
 
 /**
  * Launch promotion: KiranaOS is free until 1 January 2027.
@@ -17,8 +25,30 @@ import type { PlanCode } from "@/features/core/subscription/plans";
  */
 const SHIPPED_FREE_ACCESS_UNTIL = "2027-01-01T00:00:00+05:30";
 
-/** The plan every shop is entitled to while the promotion runs, as on the server. */
+/** The plan code every shop holds while the promotion runs, as on the server. */
 export const FREE_ACCESS_PLAN_CODE: PlanCode = "pro";
+
+// Every plan the product sells, in every trade, and every feature the app knows.
+const EVERY_PLAN = PLAN_ORDER.flatMap((code) => BUSINESS_TYPE_IDS.map((type) => getPlanForBusinessType(code, type)));
+const EVERY_FEATURE = Object.keys(FEATURE_LABELS) as FeatureName[];
+const highest = (limit: "maxDevices" | "maxStaff" | "maxStores") => Math.max(...EVERY_PLAN.map((plan) => plan[limit]));
+
+/**
+ * What a shop is entitled to while the promotion runs: the whole product, as
+ * freeAccessPlan grants it on the server. The trade's own top plan was not enough:
+ * it left other trades' modules locked behind an upgrade nobody could buy, though
+ * any shop can switch them on, and it held a grocer to 3 stores and 10 staff. The
+ * name and price stay the trade's own top plan's, because that is what it is called.
+ */
+export function freeAccessPlan(businessType: BusinessType): PlanDefinition {
+  return {
+    ...getPlanForBusinessType(FREE_ACCESS_PLAN_CODE, businessType),
+    features: [...EVERY_FEATURE],
+    maxDevices: highest("maxDevices"),
+    maxStaff: highest("maxStaff"),
+    maxStores: highest("maxStores"),
+  };
+}
 
 function builtInFreeAccessUntil(): string {
   // VITE_FREE_ACCESS_UNTIL moves the shipped date at build time. Tests pin it to a

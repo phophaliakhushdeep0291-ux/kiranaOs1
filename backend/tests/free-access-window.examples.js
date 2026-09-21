@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { hasSubscriptionAccess, isSubscriptionActive } from "../src/modules/subscription/subscription.service.js";
-import { FREE_ACCESS_UNTIL, isFreeAccessActive, freeAccessUntilIso } from "../src/modules/subscription/freeAccess.js";
+import { FREE_ACCESS_UNTIL, freeAccessPlan, isFreeAccessActive, freeAccessUntilIso } from "../src/modules/subscription/freeAccess.js";
+import { BUSINESS_TYPE_PLAN_PRICING, PLAN_CODES, getPlanConfigForBusinessType } from "../src/modules/subscription/planConfig.js";
+import { FEATURE_REGISTRY } from "../src/modules/feature-gates/featureRegistry.js";
 import { licenseValidity } from "../src/modules/devices/license.service.js";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -110,6 +112,38 @@ const service = readFileSync(new URL("../src/modules/subscription/subscription.s
 assert.ok(
   /const currentActive = isSubscriptionActive\(current\);/.test(service),
   "activateSubscriptionAfterPayment must price renewals from the real subscription row",
+);
+
+// "Fully accessible" means the whole product, not the trade's own top plan. That
+// plan left every other trade's features locked, though any shop can switch those
+// modules on, and held a grocer to 3 stores and 10 staff. So in the window every
+// trade holds every feature any plan grants anywhere, and the highest limits.
+const trades = Object.keys(BUSINESS_TYPE_PLAN_PRICING);
+const everyPlan = PLAN_CODES.flatMap((code) => trades.map((trade) => getPlanConfigForBusinessType(code, trade)));
+for (const trade of trades) {
+  const free = freeAccessPlan(trade);
+  for (const plan of everyPlan) {
+    for (const feature of plan.features) {
+      assert.ok(free.features.includes(feature), `${trade} must hold ${feature} (from ${plan.code}) in the window`);
+    }
+    for (const limit of ["maxDevices", "maxStaff", "maxStores"]) {
+      assert.ok(free[limit] >= plan[limit], `${trade} ${limit} must be at least ${plan.code}'s ${plan[limit]}`);
+    }
+  }
+  for (const feature of Object.keys(FEATURE_REGISTRY)) {
+    assert.ok(free.features.includes(feature), `${trade} must hold registered feature ${feature} in the window`);
+  }
+  // The licence the server signs carries this code, and the counter checks it on refresh.
+  assert.equal(free.code, "pro", `${trade} holds the top plan code, which the licence refresh expects`);
+}
+const grocer = freeAccessPlan("kirana");
+assert.ok(grocer.features.includes("clothing_rentals"), "a grocer who switches rentals on can use it");
+assert.ok(grocer.features.includes("serial_imei_tracking"), "and the serial register");
+assert.ok(grocer.maxStores > getPlanConfigForBusinessType("pro", "kirana").maxStores, "and is not held to the grocery store cap");
+assert.equal(freeAccessPlan("restaurant").name, "Dine-in", "the plan keeps the trade's own name");
+assert.ok(
+  service.includes("freeAccessPlan(await getShopBusinessType(shopId, client))"),
+  "getEffectivePlan must hand out the whole product in the window, not the trade's top plan",
 );
 
 console.log("Free access window examples passed");

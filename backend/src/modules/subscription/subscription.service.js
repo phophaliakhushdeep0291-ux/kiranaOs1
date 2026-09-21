@@ -17,7 +17,7 @@ import {
   offeredPlanCodesForBusinessType,
 } from "./planConfig.js";
 import {
-  FREE_ACCESS_PLAN_CODE,
+  freeAccessPlan,
   freeAccessUntilIso,
   isFreeAccessActive,
 } from "./freeAccess.js";
@@ -164,21 +164,19 @@ export async function getCurrentSubscription(shopId, client = db) {
 
 export async function getEffectivePlan(shopId, client = db) {
   const { subscription, catalogPlan } = await resolveSubscriptionContext(shopId, client);
-  // Launch promotion: until the window closes every shop is entitled to the full
-  // plan for its trade, whatever its own row says. The row itself is untouched, so
-  // entitlement falls back to it by itself once the promotion ends.
+  // Launch promotion: until the window closes every shop is entitled to the whole
+  // product (see freeAccessPlan), whatever its own row says. The row itself is
+  // untouched, so entitlement falls back to it by itself once the promotion ends.
   //
   // This costs one extra read of the shop, which resolveSubscriptionContext does not
   // already hold on the path a real subscription takes — and getEffectivePlan is on
   // the sync pull path, which is the cost the commit above this one just removed. It
-  // is paid only while the promotion runs, and it cannot be skipped: the plan is
-  // tailored per trade, so handing a restaurant the kirana feature set would take
-  // away screens it is entitled to. It disappears on its own when the window shuts.
+  // is paid only while the promotion runs. The features and limits no longer need
+  // it — the window grants the whole product to every trade alike — but the plan's
+  // name does: a restaurant calls it Dine-in, and the device endpoints report that
+  // name. It disappears on its own when the window shuts.
   if (isFreeAccessActive()) {
-    const freePlan = getPlanConfigForBusinessType(
-      FREE_ACCESS_PLAN_CODE,
-      await getShopBusinessType(shopId, client),
-    );
+    const freePlan = freeAccessPlan(await getShopBusinessType(shopId, client));
     return {
       planCode: freePlan.code,
       plan: serializePlan(freePlan),
