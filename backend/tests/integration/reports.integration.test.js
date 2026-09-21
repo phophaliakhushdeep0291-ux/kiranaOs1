@@ -1,7 +1,7 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
-import { createCustomer, createPaidBillViaApi, createProduct, createStaff, createTenant, login } from "./factories.js";
+import { activateDeviceViaApi, createCustomer, createPaidBillViaApi, createProduct, createStaff, createTenant, login } from "./factories.js";
 
 const ctx = await createIntegrationContext();
 
@@ -12,6 +12,67 @@ if (ctx.skip) {
   beforeEach(async () => resetDatabase(ctx.db));
 
   describe("report integration", () => {
+    test("closing dates supplier cash settlements and reversals without restating the original purchase tender", async () => {
+      const tenant = await createTenant(ctx.db);
+      const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+      const product = await createProduct(ctx.db, tenant.shop.id);
+      const location = await ctx.db.storeLocation.create({ data: { shopId: tenant.shop.id, code: "MAIN", name: "Main shop", isPrimary: true } });
+      const otherLocation = await ctx.db.storeLocation.create({ data: { shopId: tenant.shop.id, code: "BRANCH", name: "Other branch" } });
+      const purchase = await ctx.db.purchaseHistory.create({ data: {
+        shopId: tenant.shop.id, locationId: location.id, productId: product.id, supplierName: "Closing Supplier",
+        qtyBase: 1, pricePerRateUnit: 100, totalCost: 100, billAmount: 100,
+        purchasePaidAmount: 20, purchaseDueAmount: 80, purchasePaymentStatus: "partial", purchasePaymentMode: "cash",
+        createdAt: new Date("2026-08-29T04:00:00Z"),
+      } });
+      const device = await activateDeviceViaApi(ctx, auth.accessToken, { deviceId: "closing-supplier-device" });
+      const options = { token: auth.accessToken, headers: { "x-device-id": device.deviceId } };
+      const closing = async (date) => assertSuccess(await ctx.get(`/api/reports/daily-closing?date=${date}&source=live`, options));
+      const push = async (event) => {
+        const result = assertSuccess(await ctx.post("/api/sync/push", { events: [event] }, options));
+        assert.equal(result.results[0].success, true, JSON.stringify(result.results));
+      };
+      assert.equal((await closing("2026-08-29")).supplierCashPaidPaise, 2000);
+      assertSuccess(await ctx.post("/api/reports/daily-closing/snapshot", { date: "2026-08-30" }, options), 201);
+      // Midnight in India, still the preceding UTC date.
+      const payment = { eventId: "closing-cash-payment", type: "RECORD_SUPPLIER_PAYMENT", payload: {
+        purchaseHistoryId: purchase.id, paymentId: "closing-payment-1", amount: 30, mode: "cash", paidAt: "2026-08-29T18:30:00Z",
+      } };
+      await push(payment);
+      await push(payment);
+      await push({ eventId: "closing-upi-payment", type: "RECORD_SUPPLIER_PAYMENT", payload: {
+        purchaseHistoryId: purchase.id, paymentId: "closing-payment-2", amount: 40, mode: "upi", paidAt: "2026-08-30T04:00:00Z",
+      } });
+      assert.equal((await closing("2026-08-29")).supplierCashPaidPaise, 2000, "later payments cannot inflate the initial cash purchase");
+      const paid = await closing("2026-08-30");
+      assert.equal(paid.supplierCashPaidPaise, 3000, "only the actual cash settlement belongs to this day");
+      assert.equal(paid.expectedCashPaise, -3000);
+      const stale = assertSuccess(await ctx.get("/api/reports/daily-closing?date=2026-08-30&source=snapshot", options));
+      assert.equal(stale.snapshot.staleness.stale, true, "a later supplier settlement invalidates the old drawer snapshot");
+
+      // An unrelated branch's payment must not enter this drawer.
+      const branchPurchase = await ctx.db.purchaseHistory.create({ data: {
+        shopId: tenant.shop.id, locationId: otherLocation.id, productId: product.id, supplierName: "Branch Supplier",
+        qtyBase: 1, pricePerRateUnit: 50, totalCost: 50, billAmount: 50, purchasePaidAmount: 50, purchaseDueAmount: 0,
+      } });
+      await ctx.db.financialLedger.create({ data: {
+        shopId: tenant.shop.id, purchaseBillId: branchPurchase.id, sourceType: "supplier_payment", sourceId: "branch-payment",
+        entryType: "supplier_payment", direction: "debit", amountPaise: 5000n, paymentMode: "cash",
+        businessDate: new Date("2026-08-30T04:00:00Z"), idempotencyKey: "branch-payment",
+      } });
+      assert.equal((await closing("2026-08-30")).supplierCashPaidPaise, 3000);
+
+      await push({ eventId: "closing-payment-reversal", type: "REVERSE_SUPPLIER_PAYMENT", ownerPin: tenant.ownerPin,
+        payload: { paymentId: "closing-payment-1", reason: "Wrong payment entry" } });
+      // Place the reversal on a separate fixture date, without changing its money or identity.
+      await ctx.db.financialLedger.updateMany({ where: { shopId: tenant.shop.id, sourceType: "supplier_payment_reversal" },
+        data: { businessDate: new Date("2026-08-31T04:00:00Z") } });
+      assert.equal((await closing("2026-08-29")).supplierCashPaidPaise, 2000);
+      assert.equal((await closing("2026-08-30")).supplierCashPaidPaise, 3000);
+      const reversed = await closing("2026-08-31");
+      assert.equal(reversed.supplierCashPaidPaise, -3000);
+      assert.equal(reversed.expectedCashPaise, 3000);
+    });
+
     test("daily/sales summary via payment-summary endpoint works", async () => {
       const tenant = await createTenant(ctx.db);
       const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);

@@ -102,7 +102,6 @@ try {
 
   /* ------------------------------------------- independent reads overlap */
   calls = []; inFlight = 0; peakInFlight = 0;
-  const startedAt = Date.now();
   const parallel = await runAgentTurn(ctx, { message: "Sales?", language: "en" }, {
     provider: providerAsking([
       call("a", { range: "today" }),
@@ -110,7 +109,6 @@ try {
       call("c", { range: "month" }),
     ]),
   });
-  const elapsed = Date.now() - startedAt;
 
   assert.equal(calls.length, 3, "three distinct lookups must all run");
   // Peak concurrency, not wall time. Three reads under a ceiling of four must
@@ -120,7 +118,6 @@ try {
   // the concurrency it was standing in for was perfect.
   assert.equal(peakInFlight, Math.min(3, MAX_PARALLEL_READS),
     `independent reads must all be in flight together; peak concurrency was ${peakInFlight}`);
-  assert.ok(elapsed < 3 * 60 * 3, `reads were serialised; took ${elapsed}ms for three 60ms lookups`);
   ok("independent reads in one step run together");
 
   assert.deepEqual(
