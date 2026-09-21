@@ -23,9 +23,9 @@
  * is a denial of service.
  */
 import { createHash } from "node:crypto";
-import OpenAI from "openai";
 import { validateArgs } from "./argument-validation.js";
-import { providerCompletion } from "./provider-completion.js";
+import { runChatCompletion } from "../provider-gateway.js";
+import { recordAgentTurn } from "../../../lib/metrics.js";
 import { renderToolEvidence } from "./evidence-reply.js";
 import { formatDateInTimeZone } from "../../../utils/dates.js";
 import { env } from "../../../config/env.js";
@@ -42,31 +42,17 @@ const MAX_PROPOSALS = 6;
 const TOOL_TIMEOUT_MS = 8_000;
 const TURN_TIMEOUT_MS = 45_000;
 const MAX_HISTORY_MESSAGES = 12;
+/**
+ * How many of one step's reads run at the same time.
+ *
+ * Not MAX_TOOL_CALLS. The point is to stop a three-product question costing
+ * three round-trips in series, and four covers essentially every real step; the
+ * ceiling is there so a pathological turn cannot take a slice of the connection
+ * pool that billing needs more than the assistant does.
+ */
+const MAX_PARALLEL_READS = 4;
 
 const RISK_ORDER = { [TOOL_RISK.SAFE]: 0, [TOOL_RISK.CONFIRM]: 1, [TOOL_RISK.OWNER_PIN]: 2 };
-
-let cachedProvider = null;
-
-function getProvider() {
-  if (cachedProvider) return cachedProvider;
-  if (env.GROQ_API_KEY) {
-    cachedProvider = {
-      client: new OpenAI({ apiKey: env.GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1" }),
-      model: env.GROQ_MODEL || "openai/gpt-oss-20b",
-      provider: "groq",
-    };
-    return cachedProvider;
-  }
-  if (env.OPENAI_API_KEY) {
-    cachedProvider = {
-      client: new OpenAI({ apiKey: env.OPENAI_API_KEY }),
-      model: env.OPENAI_MODEL || "gpt-4o-mini",
-      provider: "openai",
-    };
-    return cachedProvider;
-  }
-  throw new AppError("No AI API key configured. Add GROQ_API_KEY or OPENAI_API_KEY.", 503, "AI_KEY_MISSING");
-}
 
 const SYSTEM_PROMPT = [
   "You are the assistant inside KiranaOS, the app an Indian shopkeeper runs their shop on.",
@@ -130,6 +116,49 @@ async function resolveFeatures(shopId) {
 export async function availableAgentTools(ctx) {
   const features = await resolveFeatures(ctx.shopId);
   return toolsFor({ ...ctx, features: { has: features.has } });
+}
+
+/**
+ * Run `worker` over `items`, at most `limit` at once, in place.
+ *
+ * Promise.all with no ceiling is the usual shape here and the wrong one: the
+ * number of concurrent database queries would then be set by whatever the model
+ * decided to ask for, which is not a quantity this process controls.
+ */
+async function mapWithConcurrency(items, limit, worker) {
+  if (items.length === 0) return;
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      await worker(items[index], index);
+    }
+  });
+  await Promise.all(runners);
+}
+
+/**
+ * Arguments as a stable string, so `{a:1,b:2}` and `{b:2,a:1}` are one lookup.
+ *
+ * Key order in a model's JSON is not stable between calls, and without this the
+ * dedup cache would miss exactly the repeats it exists to catch.
+ */
+function stableArgs(args) {
+  const normalise = (value) => {
+    if (Array.isArray(value)) return value.map(normalise);
+    if (value && typeof value === "object") {
+      return Object.keys(value).sort().reduce((acc, key) => { acc[key] = normalise(value[key]); return acc; }, {});
+    }
+    return value;
+  };
+  try {
+    return JSON.stringify(normalise(args ?? {}));
+  } catch {
+    // Unserialisable arguments are never equal to anything, which is the safe
+    // answer for a cache: it degrades to no caching rather than to a wrong hit.
+    return Math.random().toString(36);
+  }
 }
 
 function withTimeout(promise, ms, label) {
@@ -258,7 +287,11 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   }
 
   const billOnCounter = sanitizeCart(cart);
-  const selected = provider ?? getProvider();
+  // An injected provider is a caller override (tests, and the scripted harness).
+  // Production passes nothing and the gateway resolves the configured list, so
+  // this one turn transparently gains failover without the callers knowing.
+  const candidates = provider ? [provider] : null;
+  const turnStartedAt = Date.now();
   const features = await resolveFeatures(ctx.shopId);
   const agentCtx = { ...ctx, features: { has: features.has }, labelFor: null };
 
@@ -306,24 +339,52 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   const trace = [];
   const evidence = [];
   const plan = [];
-  const deadline = Date.now() + TURN_TIMEOUT_MS;
+  const deadline = turnStartedAt + TURN_TIMEOUT_MS;
   let toolCallCount = 0;
   let reply = "";
   let stoppedBecause = "completed";
   let reinforcedNames = false;
+  // Who actually answered. The gateway may fail over mid-turn, and a trace that
+  // names the provider we *intended* to use is a trace nobody can debug from.
+  let servedBy = provider ?? { provider: "unresolved", model: "unresolved" };
+  let failedOver = false;
+
+  /**
+   * Results already gathered this turn, keyed by tool name and arguments.
+   *
+   * The system prompt asks the model not to repeat a lookup, and a smaller model
+   * does it anyway — most often re-resolving the same product on every step. The
+   * prompt cannot enforce it; this can. A repeat now costs a map lookup instead
+   * of a database round-trip and eight seconds of a shopkeeper's patience, and
+   * the model still sees a normal tool result, so nothing about its reasoning
+   * has to change.
+   *
+   * Scoped to one turn on purpose: across turns the shop's data may have moved,
+   * and a cached stock figure is exactly the kind of stale number this whole
+   * module exists to avoid reporting.
+   */
+  const readCache = new Map();
+  const cacheKey = (name, args) => `${name}\u0000${stableArgs(args)}`;
 
   for (let step = 0; step < MAX_STEPS; step += 1) {
     if (Date.now() > deadline) { stoppedBecause = "turn_timeout"; break; }
 
     let completion;
     try {
-      completion = await providerCompletion(selected, {
-        model: selected.model,
-        messages,
-        tools: providerTools.length ? providerTools : undefined,
-        tool_choice: providerTools.length ? "auto" : undefined,
-        temperature: 0,
-      }, deadline);
+      const answered = await runChatCompletion({
+        purpose: "agent_turn",
+        candidates,
+        deadline,
+        body: {
+          messages,
+          tools: providerTools.length ? providerTools : undefined,
+          tool_choice: providerTools.length ? "auto" : undefined,
+          temperature: 0,
+        },
+      });
+      completion = answered.completion;
+      servedBy = { provider: answered.provider, model: answered.model };
+      failedOver = failedOver || answered.failedOver;
     } catch (error) {
       if (!evidence.length && !plan.length) throw error;
       stoppedBecause = error?.code === "AI_TURN_TIMEOUT" ? "turn_timeout" : "provider_failed_after_results";
@@ -343,7 +404,15 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
       // full set goes back on the table once, and the model gets another look.
       // This is the whole reason `available` is kept: a bad route costs a turn,
       // never a capability.
-      if (routed.length < available.length && !widened) {
+      //
+      // Only when nothing was read, though. A model that looked something up
+      // and then stopped calling tools has finished, not been blocked — and
+      // this branch used to fire for it anyway, spending a whole extra provider
+      // request, on every turn where routing had narrowed, to re-offer tools it
+      // had already demonstrated it did not need. The accuracy eval found it:
+      // every scripted case reported `widened_after_empty_route`, including the
+      // ones that had answered perfectly on the first step.
+      if (evidence.length === 0 && plan.length === 0 && routed.length < available.length && !widened) {
         widened = true;
         providerTools = available.map(toProviderTool);
         stoppedBecause = "widened_after_empty_route";
@@ -357,10 +426,25 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
       break;
     }
 
+    /*
+     * Two phases, because they have different constraints.
+     *
+     * Deciding what a call *is* has to happen in call order: a proposal's `ref`
+     * is its position in the plan, and the shopkeeper confirms a numbered list,
+     * so the same sentence must always produce the same numbering.
+     *
+     * Running the reads does not. A model that asks for the stock of three
+     * products in one step was previously served one product at a time, each
+     * waiting on the last, for no reason other than that the loop was written
+     * with `await` inside it. Those lookups are independent, so they go together
+     * — and the results are still appended in call order, so the conversation
+     * the model sees is byte-identical to the sequential version.
+     */
+    const pending = [];
     for (const call of calls) {
       if (toolCallCount >= MAX_TOOL_CALLS) {
         stoppedBecause = "tool_budget";
-        messages.push(toolResultMessage(call.id, call.function?.name ?? "unknown", { error: "Tool budget for this turn is exhausted. Answer with what you already have." }));
+        pending.push({ call, message: toolResultMessage(call.id, call.function?.name ?? "unknown", { error: "Tool budget for this turn is exhausted. Answer with what you already have." }) });
         continue;
       }
       toolCallCount += 1;
@@ -368,7 +452,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
       const name = call.function?.name ?? "";
       const tool = getTool(name);
       if (!tool || !available.includes(tool)) {
-        messages.push(toolResultMessage(call.id, name, { error: `No tool named "${name}" is available to you.` }));
+        pending.push({ call, message: toolResultMessage(call.id, name, { error: `No tool named "${name}" is available to you.` }) });
         continue;
       }
 
@@ -376,20 +460,20 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
       try {
         args = call.function?.arguments ? JSON.parse(call.function.arguments) : {};
       } catch {
-        messages.push(toolResultMessage(call.id, name, { error: "Arguments were not valid JSON." }));
+        pending.push({ call, message: toolResultMessage(call.id, name, { error: "Arguments were not valid JSON." }) });
         continue;
       }
 
       const argErrors = validateArgs(tool, args);
       if (argErrors.length) {
-        messages.push(toolResultMessage(call.id, name, { error: `Invalid arguments: ${argErrors.join("; ")}` }));
+        pending.push({ call, message: toolResultMessage(call.id, name, { error: `Invalid arguments: ${argErrors.join("; ")}` }) });
         continue;
       }
 
       try {
         assertToolAllowed(tool, { ...agentCtx, features: { has: features.has } });
       } catch (error) {
-        messages.push(toolResultMessage(call.id, name, { error: error.message }));
+        pending.push({ call, message: toolResultMessage(call.id, name, { error: error.message }) });
         continue;
       }
 
@@ -397,7 +481,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
       // so it does not report the change as done.
       if (tool.kind === "write") {
         if (plan.length >= MAX_PROPOSALS) {
-          messages.push(toolResultMessage(call.id, name, { error: "Too many pending changes in one turn. Ask the shopkeeper to confirm these first." }));
+          pending.push({ call, message: toolResultMessage(call.id, name, { error: "Too many pending changes in one turn. Ask the shopkeeper to confirm these first." }) });
           continue;
         }
         const proposal = {
@@ -408,34 +492,83 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
           summary: safeSummary(tool, args, agentCtx),
         };
         plan.push(proposal);
-        trace.push({ tool: name, kind: "write", status: "proposed" });
-        messages.push(toolResultMessage(call.id, name, {
+        // Traced in the ordering pass below, not here. The plan's numbering has
+        // to follow call order, but so does the trace the shopkeeper reads as
+        // provenance — and tracing writes during planning would list every
+        // proposal ahead of every lookup, whatever the model actually did.
+        pending.push({ call, trace: { tool: name, kind: "write", status: "proposed" }, message: toolResultMessage(call.id, name, {
           status: "PROPOSED_NOT_EXECUTED",
           awaitingConfirmation: true,
           summary: proposal.summary,
           note: "Queued for the shopkeeper to confirm. Do not say it is done.",
-        }));
+        }) });
         continue;
       }
 
+      pending.push({ call, name, tool, args, read: true });
+    }
+
+    // The reads, concurrently but not unboundedly. Twelve simultaneous queries
+    // from one turn would be fine; twelve from every till in a busy hour is how
+    // a connection pool runs out, and a pool that is out takes down billing, not
+    // just the assistant.
+    const runRead = async (entry) => {
       try {
-        const result = await withTimeout(tool.handler(args, agentCtx), TOOL_TIMEOUT_MS, name);
+        const result = await withTimeout(entry.tool.handler(entry.args, agentCtx), TOOL_TIMEOUT_MS, entry.name);
         // Encoded before the step is recorded: a result that cannot be encoded
         // is not a successful lookup, and recording "ok" first left the trace
         // claiming both ok and error for the same call.
-        const summary = renderToolEvidence({ tool: name, result }, language, env.DAILY_CLOSING_TIMEZONE);
-        const message = toolResultMessage(call.id, name, result, summary);
-        const encoded = JSON.parse(message.content);
+        const summary = renderToolEvidence({ tool: entry.name, result }, language, env.DAILY_CLOSING_TIMEZONE);
+        const encoded = JSON.parse(toolResultMessage("probe", entry.name, result, summary).content);
         if (encoded.error || result?.error || result?.ok === false || result?.success === false) {
           throw new AppError("The lookup did not return a usable result", 502, "AI_TOOL_RESULT_INVALID");
         }
-        rememberLabels(labels, names, result);
-        evidence.push({ tool: name, kind: "read", status: "ok", result });
-        trace.push({ tool: name, kind: "read", status: "ok" });
-        messages.push(message);
+        return { ok: true, result, summary };
       } catch (error) {
-        trace.push({ tool: name, kind: "read", status: "error" });
-        messages.push(toolResultMessage(call.id, name, { error: error?.message ?? "The lookup failed." }));
+        // Failures are remembered too. A tool that just timed out will time out
+        // again, and paying that eight seconds twice inside one 45-second turn
+        // is how a turn runs out of clock with nothing to show for it.
+        return { ok: false, error: error?.message ?? "The lookup failed." };
+      }
+    };
+
+    const reads = pending.filter((entry) => entry.read);
+    await mapWithConcurrency(reads, MAX_PARALLEL_READS, async (entry) => {
+      const key = cacheKey(entry.name, entry.args);
+      const existing = readCache.get(key);
+      if (existing) {
+        entry.outcome = { ...(await existing), fromCache: true };
+        return;
+      }
+      // The promise goes in the cache, not the result. Caching the result would
+      // deduplicate a repeat on a *later* step and miss the one that actually
+      // costs: three identical calls in the SAME step start together, so all
+      // three would look, all three would miss, and all three would run. Storing
+      // the in-flight promise means the second and third join the first instead.
+      // This assignment must stay synchronous with the `get` above — an `await`
+      // between them reopens exactly the window it closes.
+      const running = runRead(entry);
+      readCache.set(key, running);
+      entry.outcome = await running;
+    });
+
+    // Back into call order, so trace, evidence and the message list all read the
+    // way the model asked for them regardless of which lookup finished first.
+    for (const entry of pending) {
+      if (!entry.read) {
+        if (entry.trace) trace.push(entry.trace);
+        messages.push(entry.message);
+        continue;
+      }
+      const { outcome } = entry;
+      if (outcome.ok) {
+        rememberLabels(labels, names, outcome.result);
+        evidence.push({ tool: entry.name, kind: "read", status: "ok", result: outcome.result });
+        trace.push({ tool: entry.name, kind: "read", status: "ok", ...(outcome.fromCache ? { cached: true } : {}) });
+        messages.push(toolResultMessage(entry.call.id, entry.name, outcome.result, outcome.summary));
+      } else {
+        trace.push({ tool: entry.name, kind: "read", status: "error", ...(outcome.fromCache ? { cached: true } : {}) });
+        messages.push(toolResultMessage(entry.call.id, entry.name, { error: outcome.error }));
       }
     }
 
@@ -472,6 +605,19 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     TOOL_RISK.SAFE,
   );
 
+  // Emitted before the audit write so a database hiccup does not also cost the
+  // fleet-wide view of how the assistant is behaving.
+  recordAgentTurn({
+    provider: servedBy.provider,
+    model: servedBy.model,
+    policyVersion: AI_AGENT_POLICY_VERSION,
+    stoppedBecause,
+    grounding: replySafety.grounding,
+    durationMs: Date.now() - turnStartedAt,
+    toolCalls: trace,
+    failedOver,
+  });
+
   const record = await db.aiActionLog.create({
     data: {
       shopId: ctx.shopId,
@@ -484,8 +630,9 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
         trace,
         stoppedBecause,
         evaluation: {
-          provider: selected.provider,
-          model: selected.model,
+          provider: servedBy.provider,
+          model: servedBy.model,
+          failedOver,
           policyVersion: AI_AGENT_POLICY_VERSION,
           promptFingerprint: AI_AGENT_PROMPT_FINGERPRINT,
           providerReplyAccepted: replySafety.providerReplyAccepted,
@@ -508,8 +655,9 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     stoppedBecause,
     safety: replySafety,
     provider: {
-      name: selected.provider,
-      model: selected.model,
+      name: servedBy.provider,
+      model: servedBy.model,
+      failedOver,
       toolsOffered: providerTools.length,
       toolsAvailable: available.length,
       widened,
