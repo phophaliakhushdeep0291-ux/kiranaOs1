@@ -5,7 +5,7 @@ import { AppError } from "../../middleware/error.js";
 import { verifyOwnerPinProof } from "../../middleware/permissions.js";
 import { confirmBillSchema } from "../bills/bills.schema.js";
 import { assertSensitiveBillReason, deriveSensitiveBillActions } from "../bills/bill-sensitive-approval.js";
-import { cancelBill, confirmBill, createSaleReturn, restoreCancelledBill, restoreDeletedBill, softDeleteBill } from "../bills/bills.service.js";
+import { BILL_REPLICA_ITEM_COLUMNS, BILL_REPLICA_PAYMENT_SELECT, cancelBill, confirmBill, createSaleReturn, restoreCancelledBill, restoreDeletedBill, softDeleteBill } from "../bills/bills.service.js";
 import { createCustomerSchema, updateCustomerSchema, udharPaymentSchema } from "../customers/customers.schema.js";
 import { createCustomer, getCustomer, recordUdharPayment, restoreCustomer, reverseUdharPayment, softDeleteCustomer, updateCustomer } from "../customers/customers.service.js";
 import { damageSchema, correctionSchema, purchaseSchema } from "../inventory/inventory.schema.js";
@@ -868,6 +868,28 @@ const SYNC_ENTITY_TYPES = Object.freeze({
 const SYNC_PROCESSING_STALE_MS = 2 * 60 * 1000;
 
 /**
+ * The lines and tenders a pulled bill carries.
+ *
+ * A pull is the same offline replica /api/bills serves, delivered far more often:
+ * every device, on a cadence that starts at 2.5s. So it sends the same columns —
+ * the ones a column-by-column audit found a reader for — rather than whole rows.
+ *
+ * What that leaves out, measured over 397 one-line bills (1136KB of payload,
+ * 99.9% of it bills): the seven BillItem *Paise mirrors, which no screen reads
+ * because the client does its money in the Float columns, and the eight Payment
+ * columns with no reader reachable through a bill. 156KB of that response, and
+ * the same share of every incremental pull after it.
+ *
+ * `items: true` is NOT the same thing as this, and going back to it would quietly
+ * put all fifteen columns back on every device's sync. Both pull protocols use
+ * this, and tests/sync-pull-carries-the-same-replica.examples.js holds them to it.
+ */
+const PULL_BILL_CHILDREN = {
+  items: { select: BILL_REPLICA_ITEM_COLUMNS },
+  payments: BILL_REPLICA_PAYMENT_SELECT,
+};
+
+/**
  * Pull all data changed on or after `since`, with optional cursor-keyset pagination.
  *
  * Pagination design:
@@ -1019,7 +1041,7 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role, a
       take: limit,
     }),
     db.customer.findMany({ where: buildWhere("customers"), orderBy, take: limit }),
-    db.bill.findMany({ where: buildWhere("bills"), include: { items: true, payments: true }, orderBy, take: limit }),
+    db.bill.findMany({ where: buildWhere("bills"), include: PULL_BILL_CHILDREN, orderBy, take: limit }),
     db.stockLedger.findMany({ where: buildWhere("stockLedger"), orderBy, take: limit }),
     db.udharLedger.findMany({ where: buildWhere("udharLedger"), orderBy, take: limit }),
     privileged ? db.supplier.findMany({ where: buildWhere("suppliers"), orderBy, take: limit }) : [],
@@ -1299,7 +1321,7 @@ async function loadSequenceEntities(shopId, logs) {
   const [products, customers, rawBills, stockLedger, udharLedger, suppliers, purchaseHistory, expenses] = await Promise.all([
     db.product.findMany({ where: { shopId, id: { in: ids("product") } }, include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } } }),
     db.customer.findMany({ where: { shopId, id: { in: ids("customer") } } }),
-    db.bill.findMany({ where: { shopId, id: { in: ids("bill") } }, include: { items: true, payments: true } }),
+    db.bill.findMany({ where: { shopId, id: { in: ids("bill") } }, include: PULL_BILL_CHILDREN }),
     db.stockLedger.findMany({ where: { shopId, id: { in: ids("stock_ledger") } } }),
     db.udharLedger.findMany({ where: { shopId, id: { in: ids("udhar_ledger") } } }),
     db.supplier.findMany({ where: { shopId, id: { in: ids("supplier") } } }),
@@ -4224,6 +4246,18 @@ function getCreateBillIdentity(event, payload, billBody) {
 
 async function findExistingBillByCreateIdentity(shopId, identity) {
   if (!identity?.idempotencyKey && !(identity?.sourceDeviceId && identity?.clientBillId)) return null;
+  // Deliberately NOT PULL_BILL_CHILDREN, though this row is fed to the same
+  // buildCreateBillSyncPayload and reaches the same client.
+  //
+  // This is the answer to a REPLAYED create — a device pushing a sale the server
+  // already has. The first attempt was answered from confirmBill's own return,
+  // which includes whole BillItem and Payment rows, so narrowing only this one
+  // would make a retry reply in a different shape from the original. An idempotent
+  // operation answering two different ways is a worse bug than the bytes are a
+  // win: this path fires only on a duplicate, so there is no traffic in it.
+  //
+  // (The two already disagree about `addons`, which confirmBill includes and this
+  // does not. That is a latent inconsistency, not something to widen the gap on.)
   const include = { items: true, payments: true };
   if (identity.idempotencyKey) {
     const byKey = await db.bill.findFirst({

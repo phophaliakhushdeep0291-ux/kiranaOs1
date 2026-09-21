@@ -109,6 +109,14 @@ export async function requireAuth(req, _res, next) {
       }
     }
 
+    // The session row this request was authenticated against, or null when the
+    // token carries no session id. Every check a later middleware would repeat —
+    // right id, right user, right shop, not revoked, not expired — has just been
+    // made above, so a middleware that needs a column off this row should read it
+    // here rather than query for the row again. Only ever set after those checks
+    // have passed; nothing downstream has to re-validate it.
+    req.authSession = session;
+
     // Never trust stale role claims from an old JWT. Role changes must apply
     // immediately for all protected APIs. Session/device data is loaded fresh
     // from the database when the token contains a session id.
