@@ -25,6 +25,8 @@ const rentalItemSchema = z.object({
 
 export const createRentalSchema = z
   .object({
+    clientRequestId: z.string().trim().min(8).max(100).optional(),
+    paymentMode: z.enum(["cash", "upi", "bank", "card", "other"]).optional(),
     customerId: z.string().trim().min(1).nullish(),
     customerName: z.string().trim().min(1, "Renter name is required").max(160),
     customerPhone: phone,
@@ -39,6 +41,7 @@ export const createRentalSchema = z
     advancePaid: z.coerce.number().finite().nonnegative().default(0),
     notes: z.string().trim().max(1000).nullish(),
   })
+  .refine((v) => v.advancePaid + v.depositAmount === 0 || Boolean(v.paymentMode && v.clientRequestId), { message: "Payment mode and a stable booking request are required when receiving money", path: ["paymentMode"] })
   .refine((v) => v.toDate >= v.fromDate, {
     message: "Return date cannot be before the booking date",
     path: ["toDate"],
@@ -77,4 +80,10 @@ export const settleRentalSchema = z.object({
   amount: z.number().finite().positive().multipleOf(0.01),
   paymentMode: z.enum(["cash", "upi", "bank", "card", "other"]),
   reference: z.string().trim().max(160).optional(),
+});
+
+export const refundRentalSchema = z.object({
+  amount: z.number().finite().positive().multipleOf(0.01),
+  paymentMode: z.enum(["cash", "upi", "bank", "card", "other"]),
+  reason: z.string().trim().min(3).max(160),
 });

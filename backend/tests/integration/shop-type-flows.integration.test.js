@@ -33,7 +33,7 @@ else {
         const rental = await post("/api/rentals", {
           customerName: "QA Renter", customerPhone: "9999999991", customerAddress: "QA counter",
           fromDate: day(), toDate: day(2), items: [{ productId: product.id, name: product.name, qty: 1, amount: 100 }],
-          rentAmount: 100, depositAmount: 200, advancePaid: 100,
+          rentAmount: 100, depositAmount: 200, advancePaid: 100, paymentMode: "cash", clientRequestId: "shop-type-rental-request",
         }, 201);
         assert.equal((await post(`/api/rentals/${rental.id}/pickup`)).status, "picked_up");
         assert.equal((await post(`/api/rentals/${rental.id}/return`, { damageCharge: 10 })).status, "returned");

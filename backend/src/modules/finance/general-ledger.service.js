@@ -16,6 +16,10 @@ export const SYSTEM_ACCOUNTS = [
   ["2200", "GST output payable", "liability", "credit", "gst_output"],
   ["2210", "Input GST recoverable", "asset", "debit", "gst_input"],
   ["2300", "Accrued expense payables", "liability", "credit", "expense_payables"],
+  ["2400", "Rental advances", "liability", "credit", "rental_advances"],
+  ["2410", "Refundable rental deposits", "liability", "credit", "rental_deposits"],
+  ["1110", "Rental receivables", "asset", "debit", "rental_receivables"],
+  ["4100", "Rental income", "income", "credit", "rental_income"],
   ["2900", "Recycle-bin suspense", "liability", "credit", "recycle_bin_suspense"],
   ["3000", "Owner capital", "equity", "credit", "owner_capital"],
   ["3100", "Owner drawings", "equity", "debit", "owner_drawings"],
@@ -26,6 +30,8 @@ export const SYSTEM_ACCOUNTS = [
 ].map(([code, name, category, normalSide, systemKey]) => ({ code, name, category, normalSide, systemKey }));
 
 const ENTRY_MAPPING = {
+  rental_cash: ["1000", "debit"], rental_upi: ["1010", "debit"], rental_bank: ["1020", "debit"], rental_other: ["1030", "debit"],
+  rental_advance: ["2400", "credit"], rental_deposit: ["2410", "credit"], rental_receivable: ["1110", "debit"], rental_income: ["4100", "credit"],
   sale: ["4000", "credit"], cash_in: ["1000", "debit"], upi_in: ["1010", "debit"], bank_in: ["1020", "debit"],
   udhar_debit: ["1100", "debit"], udhar_credit: ["1100", "credit"], udhar_return_credit: ["1100", "credit"],
   gift_card_issued: ["2100", "credit"], gift_card_redeemed: ["2100", "debit"], waiver_expense: ["6100", "debit"],
@@ -111,7 +117,7 @@ export async function postFinancialLedgerRows(client, rows) {
   if (!client.chartOfAccount || !client.journalEntry) return createdRows;
   const groups = Map.groupBy(createdRows, (row) => `${row.sourceType}\u0000${row.sourceId}`);
   let accounts = await client.chartOfAccount.findMany({ where: { shopId, active: true } });
-  if (accounts.length < SYSTEM_ACCOUNTS.length) accounts = await ensureSystemAccounts(shopId, client);
+  if (SYSTEM_ACCOUNTS.some(required => !accounts.some(account => account.code === required.code))) accounts = await ensureSystemAccounts(shopId, client);
   const accountByCode = new Map(accounts.map((account) => [account.code, account]));
   for (const sourceRows of groups.values()) {
     const source = sourceRows[0];

@@ -10,6 +10,19 @@
 import type { shopTypesEn } from "./shop-types";
 
 export const shopTypesHi: Record<keyof typeof shopTypesEn, string> = {
+  "rental.finance.unavailable": "किराये का हिसाब उपलब्ध नहीं है। गल्ला गिनने से पहले सर्वर से जुड़ें।",
+  "rental.finance.receivedHelp": "अभी मिला पैसा ही दर्ज करें। जमा वापसी योग्य है; किराया और शुल्क अलग लें।",
+  "rental.finance.editHelp": "दर्ज भुगतान बदल नहीं सकते। पैसे के लेनदेन के लिए भुगतान या वापसी दर्ज करें।",
+  "rental.finance.legacy": "पुरानी बुकिंग में भुगतान का तरीका दर्ज नहीं था। आगे भुगतान, वापसी या रद्द करने से पहले उनका मिलान करें।",
+  "rental.refund.action": "जमा / अग्रिम लौटाएँ",
+  "rental.refund.help": "ग्राहक को पैसा लौटाने के बाद ही दर्ज करें। किराया अलग रहता है और मूल रसीद सुरक्षित रहती है।",
+  "rental.refund.returnHelp": "पहले सामान वापस लें, बाकी किराया और शुल्क दर्ज करें, फिर जमा / अग्रिम लौटाएँ से लौटाया पैसा दर्ज करें।",
+  "rental.refund.reason": "वापसी का कारण",
+  "rental.refund.pin": "मालिक पिन",
+  "rental.refund.confirm": "पैसा लौटाने की पुष्टि करें",
+  "rental.refund.saved": "वापसी दर्ज हुई",
+  "rental.refund.failed": "वापसी दर्ज नहीं हो सकी",
+  "rental.finance.closing": "किराये का पैसा, जमा और वापसी सहित",
   "rental.collection.saved": "भुगतान दर्ज हुआ — किराये का बकाया चुक गया",
   "rental.collection.failed": "भुगतान दर्ज नहीं हो सका",
   "rental.collection.action": "भुगतान दर्ज करें",

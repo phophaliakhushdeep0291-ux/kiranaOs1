@@ -1015,6 +1015,10 @@ export interface RentalBookingItem {
 export interface RentalBooking {
   id: string;
   bookingNumber: string;
+  financialVersion?: number;
+  depositHeld?: number | null;
+  depositRefunded?: number;
+
   customerId?: string | null;
   customerName: string;
   customerPhone: string;
@@ -1045,6 +1049,9 @@ export interface RentalBooking {
 }
 
 export interface RentalBookingInput {
+  clientRequestId?: string;
+  paymentMode?: string;
+
   customerId?: string | null;
   customerName: string;
   customerPhone: string;

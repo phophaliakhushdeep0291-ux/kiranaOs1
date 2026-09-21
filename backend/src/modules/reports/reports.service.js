@@ -1,3 +1,4 @@
+import { rentalTendersForDay } from "./rental-tenders.js";
 import { supplierCashPaidForDay } from "./supplier-cash.js";
 import db from "../../db.js";
 import { dateRangeForDateOnly, daysBetweenInclusive, endOfZonedDay, formatDateInTimeZone, getDateRange, startOfZonedDay } from "../../utils/dates.js";
@@ -285,7 +286,7 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
   const end = endOfDay(day);
   const dateKey = date ?? formatDateInTimeZone(start, env.DAILY_CLOSING_TIMEZONE);
 
-  const [activeBills, activePayments, cancelledBillsCount, roughBillsCount, oldUdharRecovered, pendingSyncCount, lowStockProducts, topProducts, supplierCashPaid, cashExpenses, cashPurchaseReturns, reportLocation, lowStockPackRows] = await Promise.all([
+  const [activeBills, activePayments, cancelledBillsCount, roughBillsCount, oldUdharRecovered, pendingSyncCount, lowStockProducts, topProducts, supplierCashPaid, cashExpenses, cashPurchaseReturns, reportLocation, lowStockPackRows, rentalTenders] = await Promise.all([
     // Only the four numbers the closing actually reports. The whole row was being
     // hydrated (76 columns, plus every payment) to produce two sums and a count.
     client.bill.findMany({
@@ -350,6 +351,7 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
       },
       orderBy: [{ product: { name: "asc" } }, { name: "asc" }],
     }),
+    rentalTendersForDay(client, shopId, { start, end, locationId }),
   ]);
 
   // One lookup for the whole list, not one per product. Bounded at 20 by the take
@@ -392,9 +394,9 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
   const oldUdharCash = sumMoney(oldUdharRecovered.filter((u) => u.mode === "cash").map((u) => u.amount));
   const oldUdharUpi = sumMoney(oldUdharRecovered.filter((u) => u.mode === "upi").map((u) => u.amount));
   const oldUdharBank = sumMoney(oldUdharRecovered.filter((u) => u.mode === "bank").map((u) => u.amount));
-  const cashReceived = addMoney(billCash, oldUdharCash);
-  const upiReceived = addMoney(billUpi, oldUdharUpi);
-  const bankReceived = addMoney(billBank, oldUdharBank);
+  const cashReceived = addMoney(billCash, oldUdharCash, rentalTenders.cash);
+  const upiReceived = addMoney(billUpi, oldUdharUpi, rentalTenders.upi);
+  const bankReceived = addMoney(billBank, oldUdharBank, rentalTenders.bank);
   const cashExpensesPaid = sumMoney(cashExpenses.map((row) => row.amount));
   const cashPurchaseRefunds = sumMoney(cashPurchaseReturns.map((row) => row.refundAmount));
   const expectedCash = subtractMoney(addMoney(cashReceived, cashPurchaseRefunds), supplierCashPaid, cashExpensesPaid);
@@ -408,6 +410,7 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
     udharGivenPaise: toPaise(sumMoney(activeBills.map((b) => b.creditAmount))),
     oldUdharRecoveredPaise: toPaise(sumMoney(oldUdharRecovered.map((u) => u.amount))),
     expectedCashPaise: toPaise(expectedCash),
+    rentalTenders,
     supplierCashPaidPaise: toPaise(supplierCashPaid),
     cashExpensesPaidPaise: toPaise(cashExpensesPaid),
     cashPurchaseRefundsPaise: toPaise(cashPurchaseRefunds),

@@ -13,6 +13,19 @@
 // read back by `businessTypeFromLabel`, so it stays English on both sides of the
 // network. `shopType.<key>.label` below is what a shopkeeper actually reads.
 export const shopTypesEn = {
+  "rental.finance.unavailable": "Rental totals are unavailable. Connect to the server before counting the drawer.",
+  "rental.finance.receivedHelp": "Enter only money received now. The deposit is refundable; rent and fees are collected separately.",
+  "rental.finance.editHelp": "Recorded payments cannot be edited. Use collection or refund to record money moving.",
+  "rental.finance.legacy": "Older bookings need payment reconciliation before further collection, return or cancellation. Their original payment methods were not recorded.",
+  "rental.refund.action": "Refund deposit / advance",
+  "rental.refund.help": "Record only after returning this money to the customer. Rental fees remain separate. The original receipt stays in the audit trail.",
+  "rental.refund.returnHelp": "Return the items first, record remaining rent and fees, then use Refund deposit / advance to record the money paid back.",
+  "rental.refund.reason": "Refund reason",
+  "rental.refund.pin": "Owner PIN",
+  "rental.refund.confirm": "Confirm money refunded",
+  "rental.refund.saved": "Refund recorded",
+  "rental.refund.failed": "Could not record refund",
+  "rental.finance.closing": "Rental money, including deposits and refunds",
   "rental.collection.saved": "Collection recorded — rental balance cleared",
   "rental.collection.failed": "Could not record collection",
   "rental.collection.action": "Record collection",

@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarRange, Check, Loader2, Minus, Plus, Search, Shirt, X } from "lucide-react";
@@ -51,6 +52,9 @@ export function RentalBookingPanel({ open, editing, saving, width, onResizeStart
   onClose: () => void;
   onSubmit: (data: RentalBookingInput) => void;
 }) {
+  const { t } = useAppLanguage();
+  const [paymentMode, setPaymentMode] = useState("cash");
+  const [clientRequestId, setClientRequestId] = useState(() => crypto.randomUUID());
   const today = dayKey(new Date());
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -71,6 +75,8 @@ export function RentalBookingPanel({ open, editing, saving, width, onResizeStart
   useEffect(() => {
     if (!open) return;
     setError(null);
+    setPaymentMode("cash");
+    setClientRequestId(crypto.randomUUID());
     setItemSearch("");
     if (editing) {
       setCustomerName(editing.customerName);
@@ -178,6 +184,7 @@ export function RentalBookingPanel({ open, editing, saving, width, onResizeStart
     setError(null);
 
     onSubmit({
+      clientRequestId, paymentMode,
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim(),
       customerAddress: customerAddress.trim(),
@@ -376,12 +383,20 @@ export function RentalBookingPanel({ open, editing, saving, width, onResizeStart
             <SectionTitle>Payment</SectionTitle>
             <div className="grid grid-cols-2 gap-3">
               <Fld label="Security deposit (₹)" hint="Refundable at return">
-                <Input className="h-10" type="number" min="0" step="0.01" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} />
+                <Input className="h-10" type="number" min="0" step="0.01" disabled={Boolean(editing)} value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} />
               </Fld>
               <Fld label="Advance paid (₹)">
-                <Input className="h-10" type="number" min="0" step="0.01" value={advancePaid} onChange={(e) => setAdvancePaid(e.target.value)} />
+                <Input className="h-10" type="number" min="0" step="0.01" disabled={Boolean(editing)} value={advancePaid} onChange={(e) => setAdvancePaid(e.target.value)} />
               </Fld>
             </div>
+            {!editing && <div className="space-y-2">
+              <Label htmlFor="rental-initial-mode">{t("rental.collection.mode")}</Label>
+              <select id="rental-initial-mode" className="h-11 w-full rounded-md border bg-background px-3" value={paymentMode} onChange={event => setPaymentMode(event.target.value)}>
+                {(["cash", "upi", "bank", "card", "other"] as const).map(mode => <option key={mode} value={mode}>{t(`rental.collection.${mode}`)}</option>)}
+              </select>
+              <p className="text-xs text-muted-foreground">{t("rental.finance.receivedHelp")}</p>
+            </div>}
+            {editing && <p className="text-xs text-muted-foreground">{t("rental.finance.editHelp")}</p>}
             <div className="flex items-center justify-between rounded-[10px] bg-[#f7f9fd] px-3.5 py-2.5">
               <span className="text-[12px] font-semibold text-[#52627e]">Balance to collect</span>
               <span className="font-display text-[16px] font-black text-[var(--brand-ink)]">

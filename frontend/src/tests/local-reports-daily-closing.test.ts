@@ -1274,3 +1274,17 @@ describe("local reports and daily closing", () => {
     expect(snapshot.pendingSyncCount).toBe(1);
   });
 });
+
+
+describe("rental closing tenders", () => {
+  it("includes deposits and refunds in the drawer without turning them into counter sales", async () => {
+    const base = await buildDailyClosingReport("2026-06-06");
+    const report = await buildDailyClosingReport("2026-06-06", { rentalTenders: { cash: -200, upi: 110, bank: 30, other: 0 } });
+    expect(report.totalSales).toBe(base.totalSales);
+    expect(report.profitEstimate).toBe(base.profitEstimate);
+    expect(report.expectedCashInDrawer).toBe(base.expectedCashInDrawer - 200);
+    expect(report.cashReceived).toBe(base.cashReceived - 200);
+    expect(report.upiReceived).toBe(base.upiReceived + 110);
+    expect(report.expectedBankInBank).toBe(base.expectedBankInBank + 30);
+  });
+});

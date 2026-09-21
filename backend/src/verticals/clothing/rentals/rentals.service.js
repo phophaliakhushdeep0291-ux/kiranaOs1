@@ -1,3 +1,5 @@
+import { requireRentalAccounting, rentalTender, postRentalEvent } from "./rental-finance.js";
+import { resolveOperationalLocation } from "../../../modules/stores/location-context.service.js";
 import db from "../../../db.js";
 import { AppError } from "../../../middleware/error.js";
 import { round2 } from "../../../utils/money.js";
@@ -178,7 +180,8 @@ function serialize(booking) {
     toDateKey: dueKey,
     // Overdue means the shop should be chasing it: still out, past its due day.
     isOverdue: ACTIVE_STATUSES.includes(booking.status) && !booking.returnedAt && dueKey < today,
-    balanceDue: round2(
+    depositHeld: booking.financialVersion === 1 ? round2(booking.depositAmount - booking.depositRefunded) : null,
+    balanceDue: booking.status === "cancelled" ? 0 : round2(
       (Number(booking.rentAmount) || 0) +
         (Number(booking.lateFee) || 0) +
         (Number(booking.damageCharge) || 0) -
@@ -260,10 +263,11 @@ async function assertItemsAvailable(client, shopId, { items, start, end, exclude
   }
 }
 
-export async function listRentals(shopId, { status, from, to, search, includeDeleted = false } = {}) {
+export async function listRentals(shopId, { status, from, to, search, includeDeleted = false, locationId = null, includeLegacy = true } = {}) {
   const where = {
     shopId,
     ...(includeDeleted ? {} : { deletedAt: null }),
+    ...(locationId ? { AND: [{ OR: [{ locationId }, ...(includeLegacy ? [{ locationId: null }] : [])] }] } : {}),
     ...(status && status !== "all" ? { status } : {}),
     ...(search
       ? {
@@ -301,18 +305,37 @@ export async function getRental(shopId, id) {
   return serialize(booking);
 }
 
-export async function createRental(shopId, data, { userId = null } = {}) {
+export async function createRental(shopId, data, { userId = null, req = null, locationId = null } = {}) {
   const { start, end } = resolveWindow(data.fromDate, data.toDate);
   const items = normalizeItems(data.items);
 
+  if (Number(data.advancePaid) > Number(data.rentAmount)) throw new AppError("Advance cannot exceed the rent", 400, "RENTAL_ADVANCE_TOO_HIGH");
+  const moneyTaken = Number(data.advancePaid || 0) + Number(data.depositAmount || 0);
+  if (moneyTaken > 0) {
+    rentalTender(data.paymentMode);
+    if (!data.clientRequestId) throw new AppError("A stable booking request is required when receiving money", 400, "RENTAL_REQUEST_REQUIRED");
+  }
   const create = () =>
-    db.$transaction(async (tx) => {
+    serializableTransaction(async (tx) => {
+      const location = await resolveOperationalLocation(shopId, locationId, tx);
+      if (data.clientRequestId) {
+        const prior = await tx.rentalBooking.findUnique({ where: { shopId_clientRequestId: { shopId, clientRequestId: data.clientRequestId } }, include: { items: true } });
+        if (prior) {
+          const receipt = await tx.financialLedger.findFirst({ where: { shopId, sourceType: "rental", sourceId: prior.id, entryType: { in: ["rental_cash", "rental_upi", "rental_bank", "rental_other"] } }, orderBy: { createdAt: "asc" } });
+          if (receipt && receipt.paymentMode !== data.paymentMode) throw new AppError("This booking request already used a different payment method", 409, "RENTAL_REQUEST_CHANGED");
+          if (prior.locationId !== location.id || prior.customerName !== String(data.customerName).trim() || prior.customerPhone !== normalizePhone(data.customerPhone) || prior.rentAmount !== round2(data.rentAmount) || prior.depositAmount !== round2(data.depositAmount) || prior.advancePaid !== round2(data.advancePaid) || +prior.fromDate !== +start || +prior.toDate !== +end || JSON.stringify(normalizeItems(prior.items).sort((a,b) => a.name.localeCompare(b.name))) !== JSON.stringify(items.map(item => ({ ...item })).sort((a,b) => a.name.localeCompare(b.name)))) {
+            throw new AppError("This booking request was already used. Refresh the booking before trying again.", 409, "RENTAL_REQUEST_CHANGED");
+          }
+          return prior;
+        }
+      }
       await assertItemsAvailable(tx, shopId, { items, start, end });
 
       const booking = await tx.rentalBooking.create({
         data: {
           shopId,
           bookingNumber: await nextBookingNumber(tx, shopId),
+          financialVersion: 1, locationId: location.id, clientRequestId: data.clientRequestId || null,
           customerId: data.customerId || null,
           customerName: String(data.customerName).trim(),
           customerPhone: normalizePhone(data.customerPhone),
@@ -335,6 +358,10 @@ export async function createRental(shopId, data, { userId = null } = {}) {
       // first check and this write turns into a rejection instead of a garment
       // promised to two customers.
       await assertItemsAvailable(tx, shopId, { items, start, end, excludeBookingId: booking.id });
+      await postRentalEvent(tx, booking, "booked", [
+        ...(moneyTaken > 0 ? [[rentalTender(data.paymentMode), moneyTaken]] : []),
+        ["rental_advance", booking.advancePaid], ["rental_deposit", booking.depositAmount],
+      ], { paymentMode: data.paymentMode, userId, req });
       return booking;
     });
 
@@ -349,13 +376,17 @@ export async function createRental(shopId, data, { userId = null } = {}) {
 }
 
 export async function updateRental(shopId, id, data) {
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const existing = await tx.rentalBooking.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true } });
     if (!existing) throw new AppError("Booking not found", 404);
     if (existing.status === "returned" || existing.status === "cancelled") {
       throw new AppError(`A ${existing.status} booking can no longer be edited`, 409, "RENTAL_CLOSED");
     }
 
+    for (const field of ["advancePaid", "depositAmount"]) {
+      if (data[field] !== undefined && round2(data[field]) !== round2(existing[field])) throw new AppError("Recorded payments cannot be edited. Use collection or refund instead.", 409, "RENTAL_MONEY_IMMUTABLE");
+    }
+    if (data.rentAmount !== undefined && round2(data.rentAmount) < round2(existing.advancePaid)) throw new AppError("Rent cannot be less than the recorded advance", 409, "RENTAL_ADVANCE_TOO_HIGH");
     const fromKey = data.fromDate ?? formatDateInTimeZone(existing.fromDate);
     const toKey = data.toDate ?? formatDateInTimeZone(existing.toDate);
     const { start, end } = resolveWindow(fromKey, toKey);
@@ -386,50 +417,69 @@ export async function updateRental(shopId, id, data) {
 }
 
 export async function markPickedUp(shopId, id) {
-  const booking = await db.rentalBooking.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!booking) throw new AppError("Booking not found", 404);
-  if (booking.status !== "booked") throw new AppError(`This booking is already ${booking.status}`, 409, "RENTAL_BAD_STATUS");
-  const updated = await db.rentalBooking.update({
-    where: { id: booking.id },
-    data: { status: "picked_up" },
-    include: { items: true },
+  return serializableTransaction(async (tx) => {
+    const booking = await tx.rentalBooking.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!booking) throw new AppError("Booking not found", 404);
+    if (booking.status === "picked_up") return getRental(shopId, id);
+    requireRentalAccounting(booking);
+    if (booking.status !== "booked") throw new AppError(`This booking is already ${booking.status}`, 409, "RENTAL_BAD_STATUS");
+    return serialize(await tx.rentalBooking.update({ where: { id }, data: { status: "picked_up" }, include: { items: true } }));
   });
-  return serialize(updated);
 }
 
-export async function markReturned(shopId, id, { lateFee = 0, damageCharge = 0, notes } = {}) {
-  const booking = await db.rentalBooking.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!booking) throw new AppError("Booking not found", 404);
-  if (!ACTIVE_STATUSES.includes(booking.status)) {
-    throw new AppError(`This booking is already ${booking.status}`, 409, "RENTAL_BAD_STATUS");
-  }
-  const updated = await db.rentalBooking.update({
-    where: { id: booking.id },
-    data: {
-      status: "returned",
-      returnedAt: new Date(),
-      lateFee: round2(Number(lateFee) || 0),
-      damageCharge: round2(Number(damageCharge) || 0),
-      ...(notes !== undefined && notes !== null ? { notes: String(notes).trim() } : {}),
-    },
-    include: { items: true },
+export async function markReturned(shopId, id, { lateFee = 0, damageCharge = 0, notes } = {}, context = {}) {
+  return serializableTransaction(async (tx) => {
+    const booking = await tx.rentalBooking.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true } });
+    if (!booking) throw new AppError("Booking not found", 404);
+    if (booking.status === "returned" && booking.lateFee === round2(lateFee) && booking.damageCharge === round2(damageCharge)) return serialize(booking);
+    if (!ACTIVE_STATUSES.includes(booking.status)) throw new AppError(`This booking is already ${booking.status}`, 409, "RENTAL_BAD_STATUS");
+    requireRentalAccounting(booking);
+    const updated = await tx.rentalBooking.update({ where: { id }, data: {
+      status: "returned", returnedAt: new Date(), lateFee: round2(lateFee), damageCharge: round2(damageCharge),
+      ...(notes != null ? { notes: String(notes).trim() } : {}),
+    }, include: { items: true } });
+    const charge = round2(updated.rentAmount + updated.lateFee + updated.damageCharge);
+    await postRentalEvent(tx, updated, "returned", [
+      ["rental_income", charge], ["rental_receivable", round2(charge - updated.advancePaid)], ["rental_advance", -updated.advancePaid],
+    ], context);
+    return serialize(updated);
   });
-  return serialize(updated);
 }
 
-export async function cancelRental(shopId, id, { reason } = {}) {
-  const booking = await db.rentalBooking.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!booking) throw new AppError("Booking not found", 404);
-  if (booking.status === "returned") throw new AppError("A returned booking cannot be cancelled", 409, "RENTAL_BAD_STATUS");
-  const updated = await db.rentalBooking.update({
-    where: { id: booking.id },
-    data: {
-      status: "cancelled",
+export async function cancelRental(shopId, id, { reason } = {}, context = {}) {
+  return serializableTransaction(async (tx) => {
+    const booking = await tx.rentalBooking.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true } });
+    if (!booking) throw new AppError("Booking not found", 404);
+    if (booking.status === "cancelled") return serialize(booking);
+    if (booking.status !== "booked") throw new AppError("Return items already with the customer before closing this booking", 409, "RENTAL_BAD_STATUS");
+    requireRentalAccounting(booking);
+    const updated = await tx.rentalBooking.update({ where: { id }, data: { status: "cancelled",
       ...(reason ? { notes: [booking.notes, `Cancelled: ${String(reason).trim()}`].filter(Boolean).join("\n") } : {}),
-    },
-    include: { items: true },
+    }, include: { items: true } });
+    await postRentalEvent(tx, updated, "cancelled", [], context);
+    return serialize(updated);
   });
-  return serialize(updated);
+}
+
+export async function refundRental(shopId, id, data, context = {}) {
+  return serializableTransaction(async (tx) => {
+    const booking = await tx.rentalBooking.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true } });
+    if (!booking) throw new AppError("Booking not found", 404);
+    requireRentalAccounting(booking);
+    if (!["returned", "cancelled"].includes(booking.status)) throw new AppError("Return or cancel the booking before refunding", 409, "RENTAL_BAD_STATUS");
+    const prior = await tx.financialLedger.findUnique({ where: { shopId_idempotencyKey: { shopId, idempotencyKey: `rental:${id}:refund:${rentalTender(data.paymentMode)}` } } });
+    if (prior) {
+      if (prior.amountPaise !== -BigInt(Math.round(data.amount * 100))) throw new AppError("The recorded refund differs from this request", 409, "RENTAL_REFUND_CHANGED");
+      return serialize(booking);
+    }
+    const deposit = round2(booking.depositAmount - booking.depositRefunded);
+    const advance = booking.status === "cancelled" ? booking.advancePaid : 0;
+    const amount = round2(deposit + advance);
+    if (amount <= 0 || amount !== round2(data.amount)) throw new AppError("The refundable balance changed. Refresh before paying out.", 409, "RENTAL_REFUND_CHANGED");
+    const updated = await tx.rentalBooking.update({ where: { id }, data: { depositRefunded: booking.depositAmount, ...(booking.status === "cancelled" ? { advancePaid: 0 } : {}) }, include: { items: true } });
+    await postRentalEvent(tx, booking, "refund", [[rentalTender(data.paymentMode), -amount], ["rental_deposit", -deposit], ["rental_advance", -advance]], { ...context, paymentMode: data.paymentMode, reference: data.reason });
+    return serialize(updated);
+  });
 }
 
 /** Close a returned booking's remaining rent/fees without reopening its stock hold. */
@@ -438,17 +488,23 @@ export async function settleRental(shopId, id, data, { userId = null, req = null
     const booking = await tx.rentalBooking.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true } });
     if (!booking) throw new AppError("Booking not found", 404);
     if (booking.status !== "returned") throw new AppError("Return the items before recording final collection", 409, "RENTAL_BAD_STATUS");
+    requireRentalAccounting(booking);
     const due = serialize(booking).balanceDue;
     const amount = round2(data.amount);
     const targetPaid = round2(data.expectedAdvancePaid + amount);
     // An absolute target makes a retry after a lost response harmless. Returned
     // bookings cannot be edited, so neither their charges nor their advance can
     // change underneath a completed settlement.
-    if (due === 0 && round2(booking.advancePaid) === targetPaid) return serialize(booking);
+    if (due === 0 && round2(booking.advancePaid) === targetPaid) {
+      const prior = await tx.financialLedger.findFirst({ where: { shopId, sourceType: "rental", sourceId: id, idempotencyKey: `rental:${id}:settled:${rentalTender(data.paymentMode)}` } });
+      if (prior && prior.amountPaise === BigInt(Math.round(amount * 100))) return serialize(booking);
+      throw new AppError("This collection was already recorded with different details", 409, "RENTAL_BALANCE_CHANGED");
+    }
     if (round2(booking.advancePaid) !== round2(data.expectedAdvancePaid) || due !== amount) {
       throw new AppError("The balance changed. Refresh the booking before recording collection.", 409, "RENTAL_BALANCE_CHANGED");
     }
     const updated = await tx.rentalBooking.update({ where: { id: booking.id }, data: { advancePaid: targetPaid }, include: { items: true } });
+    await postRentalEvent(tx, booking, "settled", [[rentalTender(data.paymentMode), amount], ["rental_receivable", -amount]], { paymentMode: data.paymentMode, reference: data.reference, userId, req });
     const audit = await createAuditLog({
       shopId, userId, req, client: tx, module: "payments", action: "RENTAL_BALANCE_COLLECTED",
       entityType: "RentalBooking", entityId: booking.id,
@@ -462,14 +518,13 @@ export async function settleRental(shopId, id, data, { userId = null, req = null
 }
 
 export async function softDeleteRental(shopId, id) {
-  const booking = await db.rentalBooking.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!booking) throw new AppError("Booking not found", 404);
-  const deleted = await db.rentalBooking.update({
-    where: { id: booking.id },
-    data: { deletedAt: new Date() },
-    include: { items: true },
+  return serializableTransaction(async tx => {
+    const booking = await tx.rentalBooking.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!booking) throw new AppError("Booking not found", 404);
+    const hasHistory = await tx.financialLedger.count({ where: { shopId, sourceType: "rental", sourceId: id } });
+    if (hasHistory || booking.advancePaid > 0 || booking.depositAmount > booking.depositRefunded || booking.status !== "cancelled") throw new AppError("Only cancelled bookings without payment history can be deleted", 409, "RENTAL_HAS_FINANCIAL_HISTORY");
+    return serialize(await tx.rentalBooking.update({ where: { id }, data: { deletedAt: new Date() }, include: { items: true } }));
   });
-  return serialize(deleted);
 }
 
 export async function restoreRental(shopId, id) {
@@ -484,11 +539,11 @@ export async function restoreRental(shopId, id) {
 }
 
 /** Counter-side headline numbers: what is out, what is due back, what is late. */
-export async function getRentalSummary(shopId) {
+export async function getRentalSummary(shopId, { locationId = null, includeLegacy = true } = {}) {
   const key = todayKey();
   const { start, end } = resolveWindow(key, key);
   const collectible = await db.rentalBooking.findMany({
-    where: { shopId, deletedAt: null, status: { not: "cancelled" } },
+    where: { shopId, deletedAt: null, ...(locationId ? { OR: [{ locationId }, ...(includeLegacy ? [{ locationId: null }] : [])] } : {}) },
     include: { items: true },
   });
   const open = collectible.filter((booking) => ACTIVE_STATUSES.includes(booking.status));
@@ -497,12 +552,12 @@ export async function getRentalSummary(shopId) {
   let dueToday = 0;
   let overdue = 0;
   let upcoming = 0;
-  let depositHeld = 0;
+  let depositHeld = collectible.reduce((sum, row) => sum + Math.max(0, Number(row.depositAmount) - Number(row.depositRefunded || 0)), 0);
   const pendingCollection = collectible.reduce((sum, booking) => sum + Math.max(0, serialize(booking).balanceDue), 0);
 
   for (const booking of open) {
     const row = serialize(booking);
-    depositHeld += Number(booking.depositAmount) || 0;
+
     if (row.isOverdue) overdue += 1;
     else if (row.toDateKey === key) dueToday += 1;
     if (booking.status === "picked_up") outNow += 1;

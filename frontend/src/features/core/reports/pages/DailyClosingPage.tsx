@@ -1,3 +1,6 @@
+import { apiRequest } from "@/lib/api/http";
+import { useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { LocalDataUnavailable } from "@/features/core/sync/LocalDataUnavailable";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
@@ -40,11 +43,12 @@ function printClosing(report: DailyClosingReport) {
       body{font-family:Arial,sans-serif;padding:24px;color:#111} h1{font-size:22px;margin:0 0 8px}.muted{color:#666;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}.box{border:1px solid #ddd;padding:10px;border-radius:8px}.label{font-size:12px;color:#666}.value{font-weight:700;font-size:18px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border-bottom:1px solid #eee;padding:7px;text-align:left}th{text-transform:uppercase;font-size:11px;color:#666}.right{text-align:right}
     </style></head><body>
       <h1>Daily Closing Report</h1><div class="muted">${escapeHtml(report.date)} • ${report.isLocalEstimate ? "Local estimate" : "Local saved data"}</div>
+      <div>${report.rentalTenders ? `Rental money (net receipts, deposits and refunds): cash ${fmt(report.rentalTenders.cash)}, UPI ${fmt(report.rentalTenders.upi)}, bank ${fmt(report.rentalTenders.bank)}` : ""}</div>
       <div class="grid">
         <div class="box"><div class="label">Total sales</div><div class="value">${fmt(report.totalSales)}</div></div>
-        <div class="box"><div class="label">Cash in (sales + old udhar)</div><div class="value">${fmt(report.cashReceived)}</div></div>
-        <div class="box"><div class="label">UPI in (sales + old udhar)</div><div class="value">${fmt(report.upiReceived)}</div></div>
-        <div class="box"><div class="label">Bank in (sales + old udhar)</div><div class="value">${fmt(report.bankReceived)}</div></div>
+        <div class="box"><div class="label">Cash in (net receipts)</div><div class="value">${fmt(report.cashReceived)}</div></div>
+        <div class="box"><div class="label">UPI in (net receipts)</div><div class="value">${fmt(report.upiReceived)}</div></div>
+        <div class="box"><div class="label">Bank in (net receipts)</div><div class="value">${fmt(report.bankReceived)}</div></div>
         <div class="box"><div class="label">Udhar given</div><div class="value">${fmt(report.udharGiven)}</div></div>
         <div class="box"><div class="label">Old udhar payment</div><div class="value">${fmt(report.oldUdharPaymentReceived)}</div></div>
         <div class="box"><div class="label">Supplier cash paid</div><div class="value">${fmt(report.purchaseCashPaid)}</div></div>
@@ -69,6 +73,8 @@ function printClosing(report: DailyClosingReport) {
 export default function DailyClosingPage() {
   useReportView("daily_closing", "Daily closing");
   const { shop } = useAuth();
+  const { t } = useAppLanguage();
+  const businessType = useBusinessTypeKey();
   const { prefs } = useSettingsPrefs();
   // Settings → Notifications → Daily Summary controls which sections the shared summary includes.
   const notif = (prefs.notifications ?? {}) as { dailySales?: boolean; dailyProfit?: boolean; dailyCashUpi?: boolean; dailyUdhar?: boolean };
@@ -122,14 +128,16 @@ export default function DailyClosingPage() {
     try {
       // The float and till movements live on this device; cash expenses are server-backed,
       // so they are fetched and handed to the same drawer calculation.
-      const [drawer, expenseCash, counts, floats, movements] = await Promise.all([
+      const [drawer, expenseCash, counts, floats, movements, rentalClosing] = await Promise.all([
         loadDrawerAdjustments(date),
         loadCashExpenseTotal(date),
         loadDrawerCounts(),
         loadOpeningFloats(),
         loadCashMovements(),
+        businessType === "clothing" ? apiRequest<{ rentalTenders: NonNullable<DailyClosingReport["rentalTenders"]> }>(`/reports/daily-closing?date=${date}&source=live`, { background: true, cache: "no-store" }) : Promise.resolve(null),
       ]);
-      const next = await buildDailyClosingReport(date, { ...drawer, cashExpenses: expenseCash });
+      if (businessType === "clothing" && !rentalClosing?.rentalTenders) throw new Error(t("rental.finance.unavailable"));
+      const next = await buildDailyClosingReport(date, { ...drawer, cashExpenses: expenseCash, rentalTenders: rentalClosing?.rentalTenders });
       if (generation !== loadGeneration.current) return;
       setCashExpenses(expenseCash);
       setReport(next);
@@ -141,7 +149,7 @@ export default function DailyClosingPage() {
       if (generation === loadGeneration.current) setReadError(true);
     }
     finally { if (generation === loadGeneration.current) setLoading(false); }
-  }, [date]);
+  }, [date, businessType, t]);
 
   useEffect(() => {
     void load({ showLoader: !reportRef.current });
@@ -282,6 +290,8 @@ export default function DailyClosingPage() {
           <Button onClick={() => { void load({ showLoader: !reportRef.current }); if (navigator.onLine) void refreshDrawerCountsFromCloud().then(setDrawerCounts).catch(() => undefined); }} disabled={loading && !report} className="h-11 min-w-0 rounded-xl px-1.5 text-xs sm:px-4 sm:text-sm"><RefreshCw size={15} className="mr-1 sm:mr-1.5" />Refresh</Button>
         </div>
       </div>
+
+        {report?.rentalTenders && <div className="rounded-xl border p-3 text-sm"><p className="font-semibold">{t("rental.finance.closing")}</p><p>{t("rental.collection.cash")}: {fmt(report.rentalTenders.cash)} · {t("rental.collection.upi")}: {fmt(report.rentalTenders.upi)} · {t("rental.collection.bank")}: {fmt(report.rentalTenders.bank)}</p></div>}
 
       {/* ── Date picker ─────────────────────────────────────────────────── */}
       <div className="flex items-end gap-4">
