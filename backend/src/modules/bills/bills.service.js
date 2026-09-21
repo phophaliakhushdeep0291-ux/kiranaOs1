@@ -13,6 +13,7 @@ import {
   getLocationQuantitiesByProduct,
   getLocationQuantity,
   incrementLocationInventory,
+  locationAlreadyResolvedForRequest,
   resolveOperationalLocation,
 } from "../stores/location-context.service.js";
 import { sellingUnitCostPrice, sellingUnitMaxPrice } from "../products/selling-unit-pricing.js";
@@ -72,7 +73,7 @@ const BILL_ITEMS_WITH_OPTIONS = { include: { addons: true } };
  *   confirmedAt
  *   retailPaymentIntentId  written when a bill is created; never read back
  */
-const BILL_REPLICA_PAYMENT_SELECT = {
+export const BILL_REPLICA_PAYMENT_SELECT = {
   select: {
     id: true, billId: true,
     clientPaymentId: true, idempotencyKey: true,
@@ -80,19 +81,28 @@ const BILL_REPLICA_PAYMENT_SELECT = {
   },
 };
 
+// Exported because /api/bills is not the only endpoint that fills the shop's
+// offline copy of a bill: /api/sync/pull writes the same rows into the same
+// IndexedDB tables, far more often. The audit above is a property of the client's
+// access paths, not of one route, so both paths send the same columns.
+export const BILL_REPLICA_ITEM_COLUMNS = {
+  id: true, billId: true, productId: true,
+  sellingUnitId: true, sellingUnitCode: true, sellingUnitLabel: true, conversionToBase: true,
+  name: true, quantity: true, enteredUnit: true, baseUnit: true, quantityInBaseUnit: true,
+  rateUnit: true, ratePerRateUnit: true, costPerRateUnit: true, gstRate: true, hsn: true,
+  originalBillItemId: true, note: true,
+  lineDiscount: true, lineTotal: true, lineCost: true, lineProfit: true, originalUnitPrice: true,
+  appliedPricingRuleId: true, appliedPricingRuleType: true, pricingExplanation: true,
+  pricingConfidence: true, pricingCalculationVersion: true,
+  wasPriceOverridden: true, priceOverrideReason: true, priceApprovedByUserId: true,
+};
+
+// `addons` is the one thing the two replica paths do NOT share. A bill item pulled
+// through /api/sync/pull has never carried its addons — the client's pull writer
+// does not read them — so adding them here would enlarge every pull with data
+// nothing consumes. Kept on the /api/bills shape, where the detail screen uses it.
 const BILL_LIST_ITEM_SELECT = {
-  select: {
-    id: true, billId: true, productId: true,
-    sellingUnitId: true, sellingUnitCode: true, sellingUnitLabel: true, conversionToBase: true,
-    name: true, quantity: true, enteredUnit: true, baseUnit: true, quantityInBaseUnit: true,
-    rateUnit: true, ratePerRateUnit: true, costPerRateUnit: true, gstRate: true, hsn: true,
-    originalBillItemId: true, note: true,
-    lineDiscount: true, lineTotal: true, lineCost: true, lineProfit: true, originalUnitPrice: true,
-    appliedPricingRuleId: true, appliedPricingRuleType: true, pricingExplanation: true,
-    pricingConfidence: true, pricingCalculationVersion: true,
-    wasPriceOverridden: true, priceOverrideReason: true, priceApprovedByUserId: true,
-    addons: true,
-  },
+  select: { ...BILL_REPLICA_ITEM_COLUMNS, addons: true },
 };
 
 /**
@@ -444,7 +454,14 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
   // Create/resolve the primary location before opening the sale transaction.
   // Recovering from a concurrent unique-key race inside a PostgreSQL transaction
   // leaves that transaction aborted, and SQLite cannot safely run both creates.
-  const operationalLocation = await resolveOperationalLocation(shopId, requestedLocationId);
+  //
+  // On the HTTP path requireLocationAccess("sell") has already resolved this exact
+  // location and checked the cashier may sell from it, so the row is in hand; the
+  // helper hands it back only when it answers the same question. A sync replay has
+  // no request and still resolves it here.
+  const operationalLocation =
+    locationAlreadyResolvedForRequest(actor?.req, shopId, requestedLocationId)
+    ?? await resolveOperationalLocation(shopId, requestedLocationId);
 
   let bill;
   let integrationDeliveries = [];
@@ -933,6 +950,18 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
     await consumeRetailPaymentIntents(tx, retailIntents);
 
     // ── 5. Deduct stock + create stock ledger entries ─────────
+    //
+    // The decrements stay one at a time: each is an optimistic claim
+    // (`updateMany` under a `gte` guard) whose row count decides whether the sale
+    // is allowed, and it reads back its own committed result to reconstruct
+    // old + change = new. Batching those would change what a concurrent sale sees.
+    //
+    // The ledger rows are the opposite: values already computed, nothing reads the
+    // created row. Appending them one INSERT at a time only lengthened how long a
+    // sale held the write lock — a twenty-line bill cost twenty round trips inside
+    // the transaction. They are collected and written once, after the loop, in the
+    // same order and with the same values.
+    const saleLedgerEntries = [];
     for (const { product, qtyInBase, sellingUnitQtyById } of stockUpdatesByProduct.values()) {
       const stockResult = await decrementLocationInventory(tx, {
         shopId,
@@ -946,28 +975,32 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
       // Record the actual stock removed so the ledger stays internally consistent
       // (old + change == new), including negative after-stock.
       const removedBaseQty = round2(stockResult.oldStock - stockResult.newStock);
-      await tx.stockLedger.create({
-        data: {
-          shopId,
-          locationId: location.id,
-          productId: product.id,
-          productName: product.name,
-          ...stockLedgerProvenance(actor),
-          action: "sale",
-          changeBaseQty: -removedBaseQty,
-          oldStockBaseQty: stockResult.oldStock,
-          newStockBaseQty: stockResult.newStock,
-          billId: bill.id,
-          clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `stock:${product.id}`),
-          idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `stock:${product.id}`),
-          sourceDeviceId: billIdentity.sourceDeviceId,
-          sourceType: "bill",
-          sourceId: bill.id,
-          note: stockResult.shortfallBaseQty > 0
-            ? `Offline sale recorded with ${stockResult.shortfallBaseQty} ${product.baseUnit} stock shortfall — reconcile inventory`
-            : undefined,
-        },
+      saleLedgerEntries.push({
+        shopId,
+        locationId: location.id,
+        productId: product.id,
+        productName: product.name,
+        ...stockLedgerProvenance(actor),
+        action: "sale",
+        changeBaseQty: -removedBaseQty,
+        oldStockBaseQty: stockResult.oldStock,
+        newStockBaseQty: stockResult.newStock,
+        billId: bill.id,
+        clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `stock:${product.id}`),
+        idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `stock:${product.id}`),
+        sourceDeviceId: billIdentity.sourceDeviceId,
+        sourceType: "bill",
+        sourceId: bill.id,
+        // `note` is nullable with no default, so an explicit null is what leaving
+        // it out already meant. Stated here because createMany fills a column the
+        // same way for every row in the batch.
+        note: stockResult.shortfallBaseQty > 0
+          ? `Offline sale recorded with ${stockResult.shortfallBaseQty} ${product.baseUnit} stock shortfall — reconcile inventory`
+          : null,
       });
+    }
+    if (saleLedgerEntries.length > 0) {
+      await tx.stockLedger.createMany({ data: saleLedgerEntries });
     }
 
     // ── 6. Udhar: create ledger entry + update customer balance ─

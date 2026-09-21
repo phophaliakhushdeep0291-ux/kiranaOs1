@@ -814,6 +814,11 @@ if (exists("prisma-postgres/schema.prisma") && migrationFiles.length) {
     // the customerId/locationId composites cannot serve that — their second column is
     // unconstrained. Without this one the read degrades with the shop's whole history.
     ["UdharLedger_shopId_businessDate_idx",   "Udhar ledger shop-wide date-range report index"],
+    // Everything that asks what stock one bill moved: the cancel and restore
+    // guards, the sync echo's sale rows, the assurance context. billId was on no
+    // index at all, so each of those scanned the shop's entire movement history
+    // to find the handful of rows belonging to a single sale.
+    ["StockLedger_shopId_billId_action_idx",  "Stock ledger per-bill movement index"],
   ];
   for (const [indexName, description] of criticalIndexes) {
     if (!allMigrationSql.includes(indexName)) {
