@@ -315,7 +315,7 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
     const qtyInBase = receivedSellingUnit
       ? round2(quantity * Number(receivedSellingUnit.conversionToBase))
       : toBaseQty(quantity, enteredUnit, product.baseUnit);
-    const factor = await rateUnitFactor(tx, shopId, product, data, receivedSellingUnit);
+    const factor = await rateUnitFactor(tx, shopId, product, data);
     const qtyInRateUnit = qtyInBase / factor;
     const pricePerRateUnit = round2(billAmount / qtyInRateUnit);
     const totalCost = multiplyMoney(pricePerRateUnit, qtyInRateUnit);
@@ -551,7 +551,7 @@ export async function recordDamage(shopId, data, identity = {}, client = db) {
       const qtyInBase = removedSellingUnit
         ? round2(quantity * Number(removedSellingUnit.conversionToBase))
         : toBaseQty(quantity, enteredUnit, product.baseUnit);
-      const factor = await rateUnitFactor(tx, shopId, product, data, removedSellingUnit);
+      const factor = await rateUnitFactor(tx, shopId, product, data);
       const qtyInRateUnit = qtyInBase / factor;
       const damageLossValue = multiplyMoney(product.costPerRateUnit, qtyInRateUnit);
 
