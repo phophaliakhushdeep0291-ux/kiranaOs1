@@ -1,8 +1,13 @@
+import { createHash } from "node:crypto";
+import { createAuditLog } from "../../../modules/audit/audit.service.js";
+import { requireDeliveryBill } from "./order-delivery.js";
+import { applyFurnitureReceiptsToBill, postFurnitureReceipt, requireFurnitureAccounting } from "./order-finance.js";
 import db from "../../../db.js";
 import { isWriteConflict, serializableTransaction } from "../../../lib/transactions.js";
 import { AppError } from "../../../middleware/error.js";
-import { round2 } from "../../../utils/money.js";
+import { round2, toPaise } from "../../../utils/money.js";
 import { dateRangeForDateOnly, formatDateInTimeZone } from "../../../utils/dates.js";
+import { getLocationQuantitiesByProduct, resolveOperationalLocation } from "../../../modules/stores/location-context.service.js";
 
 /**
  * Furniture sales orders.
@@ -15,8 +20,9 @@ import { dateRangeForDateOnly, formatDateInTimeZone } from "../../../utils/dates
  * say so.
  *
  * An order is therefore NOT a bill. It settles nothing and carries no tax
- * treatment; when the wardrobe finally goes out the shop rings an ordinary bill
- * and links it here by `billId`. What this holds is the promise — what was
+ * treatment; when the wardrobe finally goes out, invoice creation, advance
+ * application and delivery can commit together through order-invoice.js.
+ * A matching existing sale can also be linked by `billId`. This holds what was
  * agreed, what has been paid against it, and when it was said to arrive.
  */
 
@@ -77,6 +83,10 @@ function trimOrNull(value) {
   return text || null;
 }
 
+function orderLocationWhere(locationId, includeLegacy = true) {
+  return locationId ? { AND: [{ OR: [{ locationId }, ...(includeLegacy ? [{ locationId: null }] : [])] }] } : {};
+}
+
 function normalizePhone(value) {
   const digits = String(value ?? "").replace(/[^\d]/g, "");
   return digits.length >= 10 ? digits.slice(-10) : digits;
@@ -113,7 +123,7 @@ export function totalsFor({ items = [], discount = 0, deliveryCharge = 0, instal
 export function serializeOrder(order) {
   if (!order) return order;
 
-  const paidTotal = round2((order.payments ?? []).reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0));
+  const paidTotal = round2((order.payments ?? []).reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0) + (order.creditCollected ?? 0));
   const grandTotal = Number(order.grandTotal) || 0;
   const isOpen = OPEN_STATUSES.includes(order.status);
   const promisedKey = order.promisedOn ? formatDateInTimeZone(order.promisedOn) : null;
@@ -122,6 +132,10 @@ export function serializeOrder(order) {
 
   return {
     ...order,
+    payments: (order.payments ?? []).map((payment) => ({ ...payment,
+      refundableAmount: payment.amount > 0 ? round2(payment.amount + (order.payments ?? [])
+        .filter((adjustment) => adjustment.reversesPaymentId === payment.id).reduce((sum, adjustment) => sum + adjustment.amount, 0)) : 0,
+    })),
     quotedOnKey: order.quotedOn ? formatDateInTimeZone(order.quotedOn) : null,
     promisedOnKey: promisedKey,
     deliveredAtKey: order.deliveredAt ? formatDateInTimeZone(order.deliveredAt) : null,
@@ -143,10 +157,36 @@ export function serializeOrder(order) {
     daysToPromised,
 
     nextStatuses: TRANSITIONS[order.status] ?? [],
-    canCancel: isOpen,
+    canCancel: isOpen && paidTotal === 0 && !order.billId,
+    canDelete: !order.billId && !(order.payments ?? []).length && !["delivered", "installed"].includes(order.status),
+    canReceivePayment: isOpen && !order.billId && paidTotal < grandTotal,
+    needsDeliveryReview: ["delivered", "installed"].includes(order.status) && !order.billId,
     /** Nothing left to collect — the piece can go out without a word about money. */
     isPaidUp: grandTotal > 0 && paidTotal >= grandTotal - 0.009,
   };
+}
+
+// A customer's general khata payment belongs to an order only after an
+// explicit allocation. Never infer it from a customer-wide balance or name.
+async function ordersWithCollections(orders, client = db) {
+  if (!orders.length) return [];
+  const ids = orders.map((order) => order.billId).filter(Boolean);
+  if (!ids.length) return orders.map(serializeOrder);
+  const shopId = orders[0].shopId;
+  const [bills, collections, returns] = await Promise.all([
+    client.bill.findMany({ where: { shopId, id: { in: ids } }, select: { id: true, status: true, deletedAt: true, creditAmount: true } }),
+    client.udharLedger.groupBy({ by: ["billId"], where: { shopId, billId: { in: ids }, type: "payment", reversedAt: null }, _sum: { amount: true } }),
+    client.bill.findMany({ where: { shopId, returnOfBillId: { in: ids }, status: "active", deletedAt: null }, select: { returnOfBillId: true } }),
+  ]);
+  const billById = new Map(bills.map((bill) => [bill.id, bill]));
+  const collected = new Map(collections.map((row) => [row.billId, round2(row._sum.amount ?? 0)]));
+  const returned = new Set(returns.map((row) => row.returnOfBillId));
+  return orders.map((order) => {
+    const bill = billById.get(order.billId);
+    return serializeOrder({ ...order, creditCollected: collected.get(order.billId) ?? 0,
+      needsInvoiceReview: Boolean(order.billId && (!bill || bill.status !== "active" || bill.deletedAt || returned.has(order.billId))),
+    });
+  });
 }
 
 /**
@@ -191,10 +231,11 @@ function normalizeItems(items) {
  * to people waiting for delivery — so only one is actually for sale. Returns
  * Map<productId, qty>.
  */
-export async function getReservations(shopId, { excludeOrderId = null } = {}, client = db) {
+export async function getReservations(shopId, { excludeOrderId = null, locationId = null, includeLegacy = true } = {}, client = db) {
   const orders = await client.furnitureOrder.findMany({
     where: {
       shopId,
+      ...orderLocationWhere(locationId, includeLegacy),
       deletedAt: null,
       status: { in: RESERVING_STATUSES },
       ...(excludeOrderId ? { id: { not: excludeOrderId } } : {}),
@@ -221,7 +262,7 @@ async function withOrderTransaction(operation) {
   }
 }
 
-async function assertOrderStock(client, shopId, items, status, excludeOrderId = null) {
+export async function assertOrderStock(client, shopId, items, status, excludeOrderId = null, locationId = null) {
   const ids = [...new Set(items.map((item) => item.productId).filter(Boolean))];
   if (!ids.length) return;
   const products = await client.product.findMany({
@@ -230,22 +271,25 @@ async function assertOrderStock(client, shopId, items, status, excludeOrderId = 
   });
   if (products.length !== ids.length) throw new AppError("One of the items is no longer in your catalogue", 404, "ORDER_ITEM_MISSING");
   if (!RESERVING_STATUSES.includes(status)) return;
-  const held = await getReservations(shopId, { excludeOrderId }, client);
+  const location = await resolveOperationalLocation(shopId, locationId, client);
+  const quantities = await getLocationQuantitiesByProduct(client, shopId, location, products);
+  const held = await getReservations(shopId, { excludeOrderId, locationId: location.id, includeLegacy: location.isPrimary }, client);
   const wanted = new Map();
   for (const item of items) {
     if (item.productId && item.reserveStock) wanted.set(item.productId, (wanted.get(item.productId) ?? 0) + Number(item.qty));
   }
   for (const product of products) {
-    const available = Math.max(0, Number(product.stockBaseQty) - (held.get(product.id) ?? 0));
+    const available = Math.max(0, Number(quantities.get(product.id) ?? 0) - (held.get(product.id) ?? 0));
     if ((wanted.get(product.id) ?? 0) > available) {
-      throw new AppError(`"${product.name}" has only ${round2(available)} available for this order. Check stock or mark the line as made to order.`, 409, "ORDER_NOT_AVAILABLE");
+      throw new AppError(`"${product.name}" has only ${round2(available)} available for this order. Check its stock and other reserved orders.`, 409, "ORDER_NOT_AVAILABLE");
     }
   }
 }
 
-export async function listOrders(shopId, { status, search, from, to, overdueOnly = false, includeDeleted = false } = {}) {
+export async function listOrders(shopId, { status, search, from, to, overdueOnly = false, includeDeleted = false, locationId = null, includeLegacy = true } = {}) {
   const where = {
     shopId,
+    ...orderLocationWhere(locationId, includeLegacy),
     ...(includeDeleted ? {} : { deletedAt: null }),
     ...(search
       ? {
@@ -276,10 +320,9 @@ export async function listOrders(shopId, { status, search, from, to, overdueOnly
     where,
     orderBy: [{ quotedOn: "desc" }, { createdAt: "desc" }],
     include: { items: true, payments: { orderBy: { paidOn: "asc" } } },
-    take: 500,
   });
 
-  const orders = rows.map(serializeOrder);
+  const orders = await ordersWithCollections(rows);
   return overdueOnly ? orders.filter((order) => order.isOverdue) : orders;
 }
 
@@ -289,18 +332,77 @@ export async function getOrder(shopId, id) {
     include: { items: true, payments: { orderBy: { paidOn: "asc" } } },
   });
   if (!order) throw new AppError("Order not found", 404);
-  return serializeOrder(order);
+  return (await ordersWithCollections([order]))[0];
 }
 
-export async function createOrder(shopId, data, { userId = null } = {}) {
+async function collectionContext(tx, shopId, id) {
+  const order = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true, payments: true } });
+  if (!order?.billId || !["delivered", "installed"].includes(order.status)) throw new AppError("Link the delivery bill before reconciling credit collections", 409, "ORDER_BILL_REQUIRED");
+  const bill = await tx.bill.findFirst({ where: { id: order.billId, shopId, status: "active", deletedAt: null } });
+  if (!bill?.customerId || await tx.bill.findFirst({ where: { shopId, returnOfBillId: order.billId, status: "active", deletedAt: null } })) throw new AppError("Review the linked sale and returns before allocating credit payments", 409, "ORDER_PAYMENT_REVIEW");
+  return { order, bill };
+}
+
+export async function listCollections(shopId, id) {
+  const { order, bill } = await collectionContext(db, shopId, id);
+  const rows = await db.udharLedger.findMany({ where: { shopId, customerId: bill.customerId, type: "payment", reversedAt: null,
+    locationId: bill.locationId, OR: [{ billId: null }, { billId: bill.id }],
+  }, orderBy: [{ businessDate: "desc" }, { id: "desc" }] });
+  return { order: (await ordersWithCollections([order]))[0], payments: rows.map((row) => ({
+    id: row.id, amount: row.amount, mode: row.mode, businessDate: row.businessDate, linked: row.billId === bill.id,
+  })) };
+}
+
+export async function linkCollection(shopId, id, ledgerId, data, context = {}) {
+  return withOrderTransaction(async (tx) => {
+    const { order, bill } = await collectionContext(tx, shopId, id);
+    const payment = await tx.udharLedger.findFirst({ where: { id: ledgerId, shopId, customerId: bill.customerId, locationId: bill.locationId, type: "payment", reversedAt: null } });
+    if (!payment) throw new AppError("Received payment not found for this customer and branch", 404);
+    if (payment.billId === bill.id) return (await ordersWithCollections([order], tx))[0];
+    if (payment.billId) throw new AppError("This collection is already allocated to another bill", 409, "ORDER_COLLECTION_ALLOCATED");
+    const current = (await ordersWithCollections([order], tx))[0];
+    if (toPaise(current.paidTotal) !== toPaise(data.expectedPaidTotal)) throw new AppError("The order balance changed. Refresh before linking this collection", 409, "ORDER_PAYMENT_CHANGED");
+    if (toPaise(payment.amount) <= 0 || toPaise(payment.amount) > toPaise(current.balanceDue)
+      || toPaise((current.creditCollected ?? 0) + payment.amount) > toPaise(bill.creditAmount)) {
+      throw new AppError("This receipt exceeds the bill's remaining credit. Reconcile a receipt for the exact amount first.", 409, "ORDER_COLLECTION_EXCEEDS_BALANCE");
+    }
+    await tx.udharLedger.update({ where: { id: payment.id }, data: { billId: bill.id, billNo: bill.billNo } });
+    await requiredOrderAudit(tx, order, "FURNITURE_ORDER_COLLECTION_LINKED", context,
+      { ledgerId, billId: bill.id, amount: payment.amount, reason: data.reason });
+    return (await ordersWithCollections([order], tx))[0];
+  });
+}
+
+export async function listOrderPayments(shopId, { from, to, locationId = null, includeLegacy = true } = {}) {
+  const start = from ? dayBounds(from, "from").start : undefined;
+  const end = to ? dayBounds(to, "to").end : undefined;
+  if (start && end && end < start) throw new AppError("The end date cannot precede the start date", 400);
+  const orders = await db.furnitureOrder.findMany({ where: { shopId, ...orderLocationWhere(locationId, includeLegacy) },
+    select: { id: true, orderNumber: true, customerName: true, customerPhone: true } });
+  if (!orders.length) return [];
+  const byId = new Map(orders.map((order) => [order.id, order]));
+  const rows = await db.financialLedger.findMany({ where: { shopId, sourceType: "furniture_order", sourceId: { in: [...byId.keys()] },
+    entryType: { in: ["furniture_cash", "furniture_upi", "furniture_bank", "furniture_other"] },
+    businessDate: { ...(start ? { gte: start } : {}), ...(end ? { lte: end } : {}) },
+  }, orderBy: [{ businessDate: "asc" }, { id: "asc" }] });
+  return rows.map((row) => { const evidence = JSON.parse(row.evidenceJson); return {
+    ...byId.get(row.sourceId), id: row.id, orderId: row.sourceId, amount: Number(row.amountPaise) / 100,
+    paymentMode: row.paymentMode, businessDate: row.businessDate, event: evidence.event,
+    reference: evidence.reason ?? evidence.reference ?? evidence.billNumber ?? null,
+  }; });
+}
+
+export async function createOrder(shopId, data, { userId = null, locationId = null } = {}) {
+  locationId = (await resolveOperationalLocation(shopId, locationId)).id;
   const items = normalizeItems(data.items ?? []);
   const { itemsTotal, grandTotal } = totalsFor({ ...data, items });
 
   const create = () => withOrderTransaction(async (tx) => {
-    await assertOrderStock(tx, shopId, items, data.status || "quote");
+    await assertOrderStock(tx, shopId, items, data.status || "quote", null, locationId);
     return tx.furnitureOrder.create({
       data: {
         shopId,
+        locationId,
         orderNumber: await nextOrderNumber(tx, shopId),
         customerId: data.customerId || null,
         customerName: String(data.customerName).trim(),
@@ -335,7 +437,7 @@ export async function createOrder(shopId, data, { userId = null } = {}) {
 
 export async function updateOrder(shopId, id, data) {
   return withOrderTransaction(async (tx) => {
-  const existing = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true } });
+  const existing = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true, payments: true } });
   if (!existing) throw new AppError("Order not found", 404);
   if (!OPEN_STATUSES.includes(existing.status)) {
     throw new AppError(
@@ -346,7 +448,7 @@ export async function updateOrder(shopId, id, data) {
   }
 
   const items = data.items ? normalizeItems(data.items) : existing.items;
-  await assertOrderStock(tx, shopId, items, existing.status, id);
+  await assertOrderStock(tx, shopId, items, existing.status, id, existing.locationId);
   const { itemsTotal, grandTotal } = totalsFor({
     items,
     discount: data.discount ?? existing.discount,
@@ -354,6 +456,11 @@ export async function updateOrder(shopId, id, data) {
     installCharge: data.installCharge ?? existing.installCharge,
   });
 
+  const paid = serializeOrder(existing).paidTotal;
+  if (toPaise(grandTotal) < toPaise(paid)) throw new AppError("The order cannot be reduced below the money already received. Reconcile the payment first.", 409, "ORDER_PAYMENT_REVIEW");
+  if (paid > 0 && ["customerId", "customerName", "customerPhone"].some((key) => data[key] !== undefined && String(data[key] ?? "") !== String(existing[key] ?? ""))) {
+    throw new AppError("An order with received payments cannot be moved to a different customer.", 409, "ORDER_PAYMENT_REVIEW");
+  }
   const updated = await tx.furnitureOrder.update({
     where: { id: existing.id },
     data: {
@@ -387,106 +494,158 @@ export async function updateOrder(shopId, id, data) {
  * installation stamp their own dates, because "when did this actually go out?"
  * is the question a customer disputes months later.
  */
-export async function setOrderStatus(shopId, id, status, { billId = null, billNumber = null, note } = {}) {
+export async function requiredOrderAudit(tx, order, action, context = {}, metadata = {}) {
+  const audit = await createAuditLog({ client: tx, shopId: order.shopId, userId: context.userId ?? null, req: context.req ?? null,
+    module: "orders", action, entityType: "FurnitureOrder", entityId: order.id,
+    after: { status: order.status, billId: order.billId, grandTotal: order.grandTotal }, metadata });
+  if (!audit) throw new AppError("The order was not changed because its audit could not be saved", 503, "ORDER_AUDIT_FAILED");
+}
+
+export async function setOrderStatus(shopId, id, status, { billId = null, billNumber = null, note, ...context } = {}) {
+  return withOrderTransaction((tx) => setOrderStatusInTransaction(tx, shopId, id, status, { billId, billNumber, note, ...context }));
+}
+
+// Reused by invoice creation so the bill, stock, advance application and delivery
+// are one commit. HTTP callers cannot supply this transaction client.
+export async function setOrderStatusInTransaction(tx, shopId, id, status, { billId = null, billNumber = null, note, ...context } = {}) {
+    const order = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { payments: true, items: true } });
+    if (!order) throw new AppError("Order not found", 404);
+    if (order.status === status) {
+      if ((billId && order.billId !== billId) || (billNumber && order.billNumber !== billNumber)) throw new AppError("This order was already completed with different bill details.", 409, "ORDER_BILL_MISMATCH");
+      return (await ordersWithCollections([order], tx))[0];
+    }
+    const allowed = TRANSITIONS[order.status] ?? [];
+    if (!allowed.includes(status)) throw new AppError("This order cannot move to that status.", 409, "ORDER_BAD_TRANSITION");
+    if (status === "cancelled" && (toPaise(serializeOrder(order).paidTotal) !== 0 || order.billId)) {
+      throw new AppError("This order has received payments or a linked sale. Reconcile its refund or sale before cancellation; cancellation does not return money.", 409, "ORDER_PAYMENT_REVIEW");
+    }
+    if (status === "confirmed") await assertOrderStock(tx, shopId, order.items, status, id, order.locationId);
+    let bill = null;
+    if (["delivered", "installed"].includes(status)) bill = await requireDeliveryBill(tx, order, { billId, billNumber });
+    else if (billId || billNumber) throw new AppError("Link the sale bill when confirming delivery.", 409, "ORDER_BILL_TRANSITION");
+    if (status === "delivered") await applyFurnitureReceiptsToBill(tx, order, bill);
+    const updated = await tx.furnitureOrder.update({
+      where: { id: order.id },
+      data: { status,
+        ...(status === "delivered" ? { deliveredAt: new Date() } : {}),
+        ...(status === "installed" ? { installedAt: new Date() } : {}),
+        ...(bill ? { billId: bill.id, billNumber: bill.billNo } : {}),
+        ...(note ? { notes: [order.notes, String(note).trim()].filter(Boolean).join("\n") } : {}),
+      }, include: { items: true, payments: { orderBy: { paidOn: "asc" } } },
+    });
+    await requiredOrderAudit(tx, updated, status === "cancelled" ? "FURNITURE_ORDER_CANCELLED" : "FURNITURE_ORDER_STATUS_CHANGED", context, { previousStatus: order.status, note });
+    return (await ordersWithCollections([updated], tx))[0];
+}
+
+export async function cancelOrder(shopId, id, { reason, ...context } = {}) {
+  return setOrderStatus(shopId, id, "cancelled", { ...context, note: reason ? `Cancelled: ${String(reason).trim()}` : "Cancelled" });
+}
+
+// A receipt identity survives a lost response. Its contents cannot be changed
+// on retry; the receipt, balance decision and mandatory audit commit together.
+export async function addPayment(shopId, id, data, context = {}) {
+  if (!String(data.clientRequestId ?? "").trim()) throw new AppError("Reload the payment form before saving this receipt.", 400, "ORDER_PAYMENT_ID_REQUIRED");
+  const paymentId = `fop_${createHash("sha256").update(`${shopId}:${id}:${data.clientRequestId}`).digest("hex")}`;
+  const amount = round2(Number(data.amount));
+  const mode = data.mode || "cash";
+  if (!Number.isFinite(amount) || toPaise(amount) <= 0 || !["cash", "upi", "bank", "card", "other"].includes(mode)) throw new AppError("Enter a valid payment amount and method", 400);
+  const paidOn = data.paidOn ? dayBounds(data.paidOn, "paidOn").start : new Date();
+  if (formatDateInTimeZone(paidOn) > todayKey()) throw new AppError("A received payment cannot have a future date", 400);
   return withOrderTransaction(async (tx) => {
-  const order = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { payments: true, items: true } });
-  if (!order) throw new AppError("Order not found", 404);
-
-  const allowed = TRANSITIONS[order.status] ?? [];
-  if (!allowed.includes(status)) {
-    throw new AppError(
-      allowed.length === 0
-        ? `A ${STATUS_LABELS[order.status]?.toLowerCase() ?? order.status} order cannot be changed any further`
-        : `A ${STATUS_LABELS[order.status]?.toLowerCase() ?? order.status} order can only move to ${allowed.map((s) => STATUS_LABELS[s]?.toLowerCase() ?? s).join(" or ")}`,
-      409,
-      "ORDER_BAD_TRANSITION",
-    );
-  }
-
-  if (status === "confirmed") await assertOrderStock(tx, shopId, order.items, status, id);
-  if (billId) {
-    const bill = await tx.bill.findFirst({ where: { id: billId, shopId, deletedAt: null } });
-    if (!bill) throw new AppError("That bill is not in your shop", 404, "ORDER_BILL_MISSING");
-    billNumber = bill.billNo;
-  }
-  const updated = await tx.furnitureOrder.update({
-    where: { id: order.id },
-    data: {
-      status,
-      ...(status === "delivered" ? { deliveredAt: new Date() } : {}),
-      ...(status === "installed" ? { installedAt: new Date() } : {}),
-      ...(billId ? { billId } : {}),
-      ...(billNumber ? { billNumber: String(billNumber).trim() } : {}),
-      ...(note ? { notes: [order.notes, String(note).trim()].filter(Boolean).join("\n") } : {}),
-    },
-    include: { items: true, payments: { orderBy: { paidOn: "asc" } } },
+    const order = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { payments: true, items: true } });
+    if (!order) throw new AppError("Order not found", 404);
+    const existing = order.payments.find((p) => p.id === paymentId);
+    if (existing) {
+      if (toPaise(existing.amount) !== toPaise(amount) || existing.mode !== mode || existing.reference !== trimOrNull(data.reference) || existing.notes !== trimOrNull(data.notes)
+        || (data.paidOn && formatDateInTimeZone(existing.paidOn) !== formatDateInTimeZone(paidOn))) throw new AppError("This receipt was already saved with different details.", 409, "ORDER_PAYMENT_REPLAY_MISMATCH");
+      return serializeOrder(order);
+    }
+    if (!OPEN_STATUSES.includes(order.status) || order.billId) throw new AppError("Use the linked sale's payment or refund workflow for a closed order. Reconcile older deliveries without a bill first.", 409, "ORDER_PAYMENT_REVIEW");
+    await requireFurnitureAccounting(tx, order);
+    const current = serializeOrder(order);
+    if (data.expectedPaidTotal !== undefined && toPaise(data.expectedPaidTotal) !== toPaise(current.paidTotal)) throw new AppError("Another payment was recorded. Refresh the order before collecting again.", 409, "ORDER_PAYMENT_CHANGED");
+    if (toPaise(amount) > toPaise(current.balanceDue)) throw new AppError("The payment exceeds this order's remaining balance.", 409, "ORDER_PAYMENT_EXCEEDS_BALANCE");
+    const payment = await tx.furnitureOrderPayment.create({ data: { id: paymentId, orderId: order.id, amount, mode, paidOn,
+      reference: trimOrNull(data.reference), notes: trimOrNull(data.notes), createdByUserId: context.userId ?? null } });
+    await postFurnitureReceipt(tx, order, payment);
+    await requiredOrderAudit(tx, order, "FURNITURE_ORDER_PAYMENT_ADDED", context, { paymentId, amount, mode, paidOn: paidOn.toISOString() });
+    return serializeOrder({ ...order, payments: [...order.payments, payment] });
   });
-  return serializeOrder(updated);
-  });
-}
-
-export async function cancelOrder(shopId, id, { reason } = {}) {
-  return setOrderStatus(shopId, id, "cancelled", {
-    note: reason ? `Cancelled: ${String(reason).trim()}` : "Cancelled",
-  });
-}
-
-/**
- * Records an advance.
- *
- * Refused on a cancelled order — money taken against something the shop is no
- * longer making is a refund, not an advance, and recording it here would hide
- * that. Allowed on a delivered order, because the balance is very often
- * collected on the doorstep.
- */
-export async function addPayment(shopId, id, data, { userId = null } = {}) {
-  const order = await db.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!order) throw new AppError("Order not found", 404);
-  if (order.status === "cancelled") {
-    throw new AppError("A cancelled order cannot take a payment", 409, "ORDER_CANCELLED");
-  }
-
-  await db.furnitureOrderPayment.create({
-    data: {
-      orderId: order.id,
-      amount: round2(Number(data.amount) || 0),
-      mode: data.mode || "cash",
-      paidOn: data.paidOn ? dayBounds(data.paidOn, "paidOn").start : new Date(),
-      reference: trimOrNull(data.reference),
-      notes: trimOrNull(data.notes),
-      createdByUserId: userId,
-    },
-  });
-  return getOrder(shopId, id);
 }
 
 export async function removePayment(shopId, id, paymentId) {
   const order = await db.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null } });
   if (!order) throw new AppError("Order not found", 404);
-
   const payment = await db.furnitureOrderPayment.findFirst({ where: { id: paymentId, orderId: order.id } });
   if (!payment) throw new AppError("Payment not found on this order", 404);
-
-  await db.furnitureOrderPayment.delete({ where: { id: payment.id } });
-  return getOrder(shopId, id);
+  throw new AppError("Received payments are permanent history. Reconcile a refund or correction instead of deleting the receipt.", 409, "ORDER_PAYMENT_IMMUTABLE");
 }
 
-export async function softDeleteOrder(shopId, id) {
-  const order = await db.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!order) throw new AppError("Order not found", 404);
-  const deleted = await db.furnitureOrder.update({
-    where: { id: order.id },
-    data: { deletedAt: new Date() },
-    include: { items: true, payments: true },
+// Refunds and method corrections append new rows. Both require the original
+// receipt, a reason, a stable request identity and a current balance snapshot.
+export async function adjustPayment(shopId, id, paymentId, data, context = {}) {
+  const adjustmentId = `foa_${createHash("sha256").update(`${shopId}:${id}:${data.clientRequestId}`).digest("hex")}`;
+  return withOrderTransaction(async (tx) => {
+    const order = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true, payments: true } });
+    if (!order) throw new AppError("Order not found", 404);
+    const original = order.payments.find((payment) => payment.id === paymentId && payment.amount > 0);
+    if (!original) throw new AppError("Receipt not found on this order", 404);
+    const amount = round2(data.amount);
+    const reason = data.reason.trim();
+    const reference = trimOrNull(data.reference);
+    const saved = order.payments.find((payment) => payment.id === adjustmentId);
+    if (saved) {
+      const replacement = order.payments.find((payment) => payment.id === `${adjustmentId}_replacement`);
+      if (saved.reversesPaymentId !== paymentId || saved.kind !== data.kind || toPaise(saved.amount) !== -toPaise(amount)
+        || saved.reason !== reason || (data.kind === "correction" && (replacement?.mode !== data.mode || replacement?.reference !== reference))) {
+        throw new AppError("This adjustment was already recorded with different details.", 409, "ORDER_PAYMENT_REPLAY_MISMATCH");
+      }
+      return serializeOrder(order);
+    }
+    if (!OPEN_STATUSES.includes(order.status) || order.billId) throw new AppError("Use the linked bill's refund workflow after delivery.", 409, "ORDER_PAYMENT_REVIEW");
+    await requireFurnitureAccounting(tx, order);
+    const current = serializeOrder(order);
+    if (toPaise(current.paidTotal) !== toPaise(data.expectedPaidTotal)) throw new AppError("The order balance changed. Refresh before adjusting this receipt.", 409, "ORDER_PAYMENT_CHANGED");
+    const refundable = current.payments.find((payment) => payment.id === paymentId).refundableAmount;
+    if (!Number.isFinite(amount) || toPaise(amount) <= 0 || toPaise(amount) > toPaise(refundable)) throw new AppError("The adjustment exceeds the remaining receipt amount.", 409, "ORDER_REFUND_EXCEEDS_RECEIPT");
+    if (data.kind === "correction" && toPaise(amount) !== toPaise(refundable)) throw new AppError("Correct the entire remaining receipt amount.", 409, "ORDER_CORRECTION_AMOUNT");
+    const paidOn = new Date();
+    const adjustment = await tx.furnitureOrderPayment.create({ data: {
+      id: adjustmentId, orderId: id, kind: data.kind, reversesPaymentId: paymentId, reason,
+      amount: -amount, mode: original.mode, paidOn, reference: original.reference, createdByUserId: context.userId ?? null,
+    } });
+    await postFurnitureReceipt(tx, order, adjustment);
+    const payments = [...order.payments, adjustment];
+    if (data.kind === "correction") {
+      const replacement = await tx.furnitureOrderPayment.create({ data: {
+        id: `${adjustmentId}_replacement`, orderId: id, kind: "receipt", reason,
+        amount, mode: data.mode, paidOn, reference, createdByUserId: context.userId ?? null,
+      } });
+      await postFurnitureReceipt(tx, order, replacement);
+      payments.push(replacement);
+    }
+    await requiredOrderAudit(tx, order, data.kind === "refund" ? "FURNITURE_ORDER_PAYMENT_REFUNDED" : "FURNITURE_ORDER_PAYMENT_CORRECTED", context,
+      { originalPaymentId: paymentId, adjustmentId, amount, reason, originalMode: original.mode, replacementMode: data.mode });
+    return serializeOrder({ ...order, payments });
   });
-  return serializeOrder(deleted);
+}
+
+export async function softDeleteOrder(shopId, id, context = {}) {
+  return withOrderTransaction(async (tx) => {
+    const order = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { payments: true, items: true } });
+    if (!order) throw new AppError("Order not found", 404);
+    if (!serializeOrder(order).canDelete) throw new AppError("An order with payment, invoice or delivery history cannot be deleted.", 409, "ORDER_HISTORY_PROTECTED");
+    const deleted = await tx.furnitureOrder.update({ where: { id: order.id }, data: { deletedAt: new Date() }, include: { items: true, payments: true } });
+    await requiredOrderAudit(tx, deleted, "FURNITURE_ORDER_DELETED", context);
+    return serializeOrder(deleted);
+  });
 }
 
 export async function restoreOrder(shopId, id) {
   return withOrderTransaction(async (tx) => {
   const order = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: { not: null } }, include: { items: true } });
   if (!order) throw new AppError("Deleted order not found in recycle bin", 404);
-  await assertOrderStock(tx, shopId, order.items, order.status, id);
+  await assertOrderStock(tx, shopId, order.items, order.status, id, order.locationId);
   const restored = await tx.furnitureOrder.update({
     where: { id: order.id },
     data: { deletedAt: null },
@@ -497,21 +656,20 @@ export async function restoreOrder(shopId, id) {
 }
 
 /** Every order a product is promised on — "who is waiting for this sofa?" */
-export async function getOrdersForProduct(shopId, productId) {
+export async function getOrdersForProduct(shopId, productId, { locationId = null, includeLegacy = true } = {}) {
   const rows = await db.furnitureOrder.findMany({
-    where: { shopId, deletedAt: null, status: { in: RESERVING_STATUSES }, items: { some: { productId } } },
+    where: { shopId, ...orderLocationWhere(locationId, includeLegacy), deletedAt: null, status: { in: RESERVING_STATUSES }, items: { some: { productId } } },
     include: { items: true, payments: true },
     orderBy: { promisedOn: "asc" },
-    take: 100,
   });
-  return rows.map(serializeOrder);
+  return ordersWithCollections(rows);
 }
 
 /** Counter-side headline numbers: what is owed, what is late, what is on the floor for someone else. */
-export async function getOrderSummary(shopId) {
-  const orders = await listOrders(shopId, {});
+export async function getOrderSummary(shopId, { locationId = null, includeLegacy = true } = {}) {
+  const orders = await listOrders(shopId, { locationId, includeLegacy });
   const open = orders.filter((order) => order.isOpen);
-  const reservations = await getReservations(shopId);
+  const reservations = await getReservations(shopId, { locationId, includeLegacy });
 
   return {
     today: todayKey(),

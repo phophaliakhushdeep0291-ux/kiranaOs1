@@ -1,5 +1,10 @@
+import { apiRequest } from "@/lib/api/http";
+import { useBusinessType } from "@/features/core/settings/business-types";
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
+import { ReportDataUnavailable } from "@/features/core/reports/ReportDataUnavailable";
+import { LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
 import { useDataExport } from "@/features/core/reports/DataExportProvider";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import {
   ArrowUpRight,
@@ -19,6 +24,10 @@ import { listExpenses } from "@/features/core/expenses/api";
 import { buildMoneyStatement, loadMoneyStatementInput, type MoneyStatementDirection, type MoneyStatementMode, type MoneyStatementRow } from "@/features/core/money-statement/statement-data";
 import { cn } from "@/lib/utils";
 import { useReportView } from "@/lib/activity";
+
+function statementSourceLabel(row: MoneyStatementRow, t: Translate) {
+  return row.source === "Furniture payment" ? t("furniture.money.statement") : row.source === "Rental payment" ? t("rental.money.statement") : row.source;
+}
 
 type PeriodPreset = "today" | "week" | "month";
 
@@ -72,6 +81,8 @@ function downloadCsv(rows: MoneyStatementRow[]) {
 }
 
 export default function MoneyStatementPage() {
+  const { businessType } = useBusinessType();
+  const { t } = useAppLanguage();
   const requestExport = useDataExport();
   useReportView("money_statement", "Money statement");
   const [preset, setPreset] = useState<PeriodPreset>("today");
@@ -86,26 +97,33 @@ export default function MoneyStatementPage() {
   const [input, setInput] = useState<Awaited<ReturnType<typeof loadMoneyStatementInput>> | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
-  const refresh = () => {
+  const generation = useRef(0);
+  const [readError, setReadError] = useState(false);
+  const refresh = useCallback(() => {
+    const request = ++generation.current;
     setLoading(true);
     void Promise.all([
       loadMoneyStatementInput(),
-      listExpenses({ from: range.from, to: range.to }).catch(() => []),
-    ]).then(([localInput, expenses]) => {
-      setInput({ ...localInput, expenses: expenses as unknown as Record<string, unknown>[] });
-    }).finally(() => setLoading(false));
-  };
+      listExpenses({ from: range.from, to: range.to }),
+      businessType === "clothing" ? apiRequest<Record<string, unknown>[]>(`/rentals/payments?from=${range.from}&to=${range.to}`, { cache: "no-store" }) : [],
+      businessType === "furniture" ? apiRequest<Record<string, unknown>[]>(`/furniture-orders/payments?from=${range.from}&to=${range.to}`, { cache: "no-store" }) : [],
+    ]).then(([localInput, expenses, rentalPayments, furniturePayments]) => {
+      if (request !== generation.current) return;
+      setInput({ ...localInput, expenses: expenses as unknown as Record<string, unknown>[], rentalPayments, furniturePayments });
+      setReadError(false);
+    }).catch(() => { if (request === generation.current) setReadError(true); })
+      .finally(() => { if (request === generation.current) setLoading(false); });
+  }, [range.from, range.to, businessType]);
 
   useEffect(() => {
     refresh();
-    window.addEventListener("kirana:local-data-changed", refresh);
-    window.addEventListener("kirana:sync-queue-updated", refresh);
+    const events = ["kirana:local-data-changed", "kirana:sync-queue-updated", LOCATION_CHANGED_EVENT];
+    for (const event of events) window.addEventListener(event, refresh);
     return () => {
-      window.removeEventListener("kirana:local-data-changed", refresh);
-      window.removeEventListener("kirana:sync-queue-updated", refresh);
+      generation.current += 1;
+      for (const event of events) window.removeEventListener(event, refresh);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range.from, range.to]);
+  }, [refresh]);
 
   const statement = useMemo(
     () => buildMoneyStatement(input ?? {}, { ...range, mode, direction, search }),
@@ -168,6 +186,8 @@ export default function MoneyStatementPage() {
     setPreset(next);
     setRange(presetRange(next));
   };
+
+  if (readError || !input || loading) return <ReportDataUnavailable checking={!readError && loading} onRetry={refresh} />;
 
   return (
     <div className="min-h-full bg-white p-4 font-sans sm:p-5 2xl:p-6">
@@ -306,7 +326,7 @@ export default function MoneyStatementPage() {
                       {row.partyMobile && <p className="text-[11px] text-[#718096]">{row.partyMobile}</p>}
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-black text-[var(--brand-ink)]">{row.source}</p>
+                      <p className="font-black text-[var(--brand-ink)]">{statementSourceLabel(row, t)}</p>
                       <p className="text-[11px] text-[#718096]">{row.reference}</p>
                     </td>
                     <td className="px-4 py-3"><ModeBadge mode={row.mode} /></td>
@@ -333,7 +353,7 @@ export default function MoneyStatementPage() {
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <ModeBadge mode={row.mode} />
-                  <span className="rounded-full bg-[#f3f7fc] px-2 py-1 text-[10px] font-black text-[#62708a]">{row.source}</span>
+                  <span className="rounded-full bg-[#f3f7fc] px-2 py-1 text-[10px] font-black text-[#62708a]">{statementSourceLabel(row, t)}</span>
                   <span className="text-[11px] font-semibold text-[#718096]">{row.reference}</span>
                 </div>
               </button>
@@ -377,6 +397,7 @@ function DetailMetric({ label, value, tone = "default" }: { label: string; value
 }
 
 function MoneyStatementDetailPanel({ row, onClose }: { row: MoneyStatementRow; onClose: () => void }) {
+  const { t } = useAppLanguage();
   const detail = row.detail;
   const items = detail?.items ?? [];
 
@@ -396,7 +417,7 @@ function MoneyStatementDetailPanel({ row, onClose }: { row: MoneyStatementRow; o
                 <ReceiptText size={18} />
               </span>
               <div>
-                <h3 className="font-display text-[20px] font-black text-[#071333]">{detail?.title ?? row.source}</h3>
+                <h3 className="font-display text-[20px] font-black text-[#071333]">{detail?.title ?? statementSourceLabel(row, t)}</h3>
                 <p className="text-[12px] font-semibold text-[#718096]">{row.dateLabel} at {row.timeLabel}</p>
               </div>
             </div>
@@ -424,7 +445,7 @@ function MoneyStatementDetailPanel({ row, onClose }: { row: MoneyStatementRow; o
             <div className="rounded-[16px] border border-[#e3eaf4] bg-white p-4">
               <p className="text-[10px] font-black uppercase tracking-[0.04em] text-[#75839d]">Reference</p>
               <p className="mt-1 font-display text-[18px] font-black text-[#071333]">{detail?.billNo || row.reference}</p>
-              <p className="mt-1 text-[12px] font-semibold text-[#718096]">{row.source}</p>
+              <p className="mt-1 text-[12px] font-semibold text-[#718096]">{statementSourceLabel(row, t)}</p>
               {detail?.paymentId && <p className="mt-2 break-all text-[11px] font-semibold text-[#8a96aa]">Payment ID: {detail.paymentId}</p>}
             </div>
           </div>

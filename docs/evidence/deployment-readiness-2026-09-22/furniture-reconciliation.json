@@ -1,0 +1,65 @@
+{
+  "status": "passed",
+  "source": "Browser-created synthetic order; read-only database reconciliation",
+  "orderNumber": "SO-000002",
+  "orderStatus": "installed",
+  "grandTotal": 100,
+  "receiptCount": 1,
+  "received": 100,
+  "receiptMode": "cash",
+  "billNumber": "KOS-2026-000001",
+  "billCount": 1,
+  "salePaymentCount": 1,
+  "salePaid": 100,
+  "stock": {
+    "name": "QA Trade Item",
+    "before": 20,
+    "after": 19,
+    "movementCount": 1,
+    "change": -1
+  },
+  "audits": [
+    {
+      "action": "FURNITURE_ORDER_PAYMENT_ADDED",
+      "after": {
+        "status": "confirmed",
+        "billId": null,
+        "grandTotal": 100
+      }
+    },
+    {
+      "action": "FURNITURE_ORDER_STATUS_CHANGED",
+      "after": {
+        "status": "ready",
+        "billId": null,
+        "grandTotal": 100
+      }
+    },
+    {
+      "action": "FURNITURE_ORDER_STATUS_CHANGED",
+      "after": {
+        "status": "delivered",
+        "billId": "cmucar9wk0028lag1vpzo9tbd",
+        "grandTotal": 100
+      }
+    },
+    {
+      "action": "FURNITURE_ORDER_STATUS_CHANGED",
+      "after": {
+        "status": "installed",
+        "billId": "cmucar9wk0028lag1vpzo9tbd",
+        "grandTotal": 100
+      }
+    }
+  ],
+  "legacyOrderUntouched": {
+    "orderNumber": "SO-000001",
+    "status": "installed",
+    "billId": null
+  },
+  "limitations": [
+    "This is one same-day cash fixture; the order receipt and sale tender describe the same received money. No real money was collected.",
+    "The link does not post a second sale receipt or stock movement. Advance dates and invoice application still need a furniture accounting workflow.",
+    "Legacy order remains unreconciled and is visibly flagged."
+  ]
+}

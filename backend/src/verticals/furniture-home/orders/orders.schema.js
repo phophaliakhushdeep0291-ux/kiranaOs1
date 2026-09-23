@@ -80,6 +80,8 @@ export const setStatusSchema = z.object({
 });
 
 export const addPaymentSchema = z.object({
+  clientRequestId: z.string().trim().min(8).max(120),
+  expectedPaidTotal: z.coerce.number().finite().nonnegative().optional(),
   amount: z.coerce.number().finite().positive("Enter how much was paid").max(100_000_000),
   mode: z.enum(PAYMENT_MODES).default("cash"),
   /** Defaults to today. Backdating catches up an advance taken and not entered. */
@@ -91,3 +93,30 @@ export const addPaymentSchema = z.object({
 export const cancelOrderSchema = z.object({
   reason: z.string().trim().max(500).nullish(),
 });
+
+export const linkCollectionSchema = z.object({
+  expectedPaidTotal: z.coerce.number().finite().nonnegative(),
+  reason: z.string().trim().min(3).max(500),
+});
+
+export const createOrderInvoiceSchema = z.object({
+  previewToken: z.string().regex(/^[a-f0-9]{64}$/),
+  taxMode: z.enum(["none", "inclusive"]),
+  customerId: z.string().trim().min(1).optional(),
+  reason: z.string().trim().min(3).max(500),
+  taxes: z.array(z.object({
+    lineId: z.string().min(1),
+    gstRate: z.number().finite().min(0).max(100),
+    hsn: z.string().trim().regex(/^\d{4}(?:\d{2})?(?:\d{2})?$/).optional(),
+  })).min(1).max(102),
+});
+
+export const adjustPaymentSchema = z.object({
+  clientRequestId: z.string().trim().min(8).max(120),
+  kind: z.enum(["refund", "correction"]),
+  amount: z.coerce.number().finite().positive().max(100_000_000),
+  expectedPaidTotal: z.coerce.number().finite().nonnegative(),
+  reason: z.string().trim().min(3).max(500),
+  mode: z.enum(PAYMENT_MODES).optional(),
+  reference: z.string().trim().max(80).nullish(),
+}).refine((input) => input.kind !== "correction" || Boolean(input.mode), { message: "Select the correct payment method", path: ["mode"] });

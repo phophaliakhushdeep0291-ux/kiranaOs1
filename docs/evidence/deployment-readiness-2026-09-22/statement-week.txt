@@ -1,0 +1,96 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Cash & Payments" [level=1]
+  - generic: Release QA clothing · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: Cash & Payments page loaded
+  - link "Net + Cash Balance ₹100 ₹300 received · ₹200 paid":
+    - /url: /money-statement?mode=cash
+    - generic: Net +
+    - paragraph: Cash Balance
+    - paragraph: ₹100
+    - paragraph: ₹300 received · ₹200 paid
+  - link "Net + UPI Balance ₹10 ₹10 received · ₹0 paid":
+    - /url: /money-statement?mode=upi
+    - generic: Net +
+    - paragraph: UPI Balance
+    - paragraph: ₹10
+    - paragraph: ₹10 received · ₹0 paid
+  - link "Net + Bank Balance ₹0 ₹0 received · ₹0 paid":
+    - /url: /money-statement?mode=bank
+    - generic: Net +
+    - paragraph: Bank Balance
+    - paragraph: ₹0
+    - paragraph: ₹0 received · ₹0 paid
+  - link "Net + Total Net ₹110 ₹310 in · ₹200 out":
+    - /url: /money-statement
+    - generic: Net +
+    - paragraph: Total Net
+    - paragraph: ₹110
+    - paragraph: ₹310 in · ₹200 out
+  - textbox:
+    - /placeholder: Search name, mobile or bill no
+  - button "today"
+  - button "week"
+  - button "month"
+  - textbox "From date": 2026-09-16
+  - textbox "To date": 2026-09-22
+  - button "Refresh":
+    - text: Refresh
+  - button "all"
+  - button "cash"
+  - button "upi"
+  - button "bank"
+  - button "All flow"
+  - button "Received"
+  - button "Paid"
+  - button "Export":
+    - text: Export
+  - heading "Cash, UPI & Bank Statement" [level=2]
+  - paragraph: Every received and paid entry with date, time, party, and payment mode.
+  - text: 3 rows
+  - button "QA Rental Finance 22 Sep 2026 · 01:18 AM -₹200 cash Rental payment / refund RNT-000002":
+    - paragraph: QA Rental Finance
+    - paragraph: 22 Sep 2026 · 01:18 AM
+    - paragraph: "-₹200"
+    - generic: cash
+    - generic: Rental payment / refund
+    - generic: RNT-000002
+  - button "QA Rental Finance 22 Sep 2026 · 01:18 AM +₹10 upi Rental payment / refund RNT-000002":
+    - paragraph: QA Rental Finance
+    - paragraph: 22 Sep 2026 · 01:18 AM
+    - paragraph: +₹10
+    - generic: upi
+    - generic: Rental payment / refund
+    - generic: RNT-000002
+  - button "QA Rental Finance 21 Sep 2026 · 10:55 PM +₹300 cash Rental payment / refund RNT-000002":
+    - paragraph: QA Rental Finance
+    - paragraph: 21 Sep 2026 · 10:55 PM
+    - paragraph: +₹300
+    - generic: cash
+    - generic: Rental payment / refund
+    - generic: RNT-000002
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

@@ -5,6 +5,7 @@ import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/off
 import { ownerPinRequiredActionSchema } from "@/lib/validation";
 import type { Bill, Customer, Product } from "@/types/api";
 import { buildAuditLogOutboxInput, buildAuditLogRow } from "@/features/core/audit-logs/local-actions";
+import { productTracksStock } from "@/features/core/inventory/stock-display";
 
 const BILL_CACHE_KEY = "bills";
 const CUSTOMER_CACHE_KEY = "customers";
@@ -132,7 +133,7 @@ async function buildCancellationStockChanges(bill: Bill & Record<string, unknown
     const productId = item.productId ?? item.product_id;
     if (!productId) continue;
     const product = productsById.get(productId);
-    if (!product) continue;
+    if (!product || !productTracksStock(product)) continue;
     const quantityBase = cancellationItemBaseQuantity(item);
     if (!(quantityBase > 0)) continue;
     const before = runningBaseStock.has(productId)

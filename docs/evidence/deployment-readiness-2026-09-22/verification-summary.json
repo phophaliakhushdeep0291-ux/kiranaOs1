@@ -1,0 +1,160 @@
+{
+  "date": "2026-09-22",
+  "decision": "NO-GO",
+  "baseCommit": "079f436d708a36d14adef9c7988aa24b22decb8e",
+  "branch": "work/free-access-launch",
+  "sourceState": "uncommitted local working tree",
+  "deployed": false,
+  "finalIntegration": {
+    "status": "passed",
+    "exitCode": 0,
+    "files": 45,
+    "tests": 418,
+    "pass": 415,
+    "fail": 0,
+    "skipped": 3,
+    "skips": [
+      "ok 7 - concurrent whole-order returns refund and restore each consignment only once # SKIP PostgreSQL is required to prove concurrent returns",
+      "ok 1 - production concurrency integration tests skipped on SQLite # SKIP SQLite cannot prove production concurrent write behavior; run npm run test:postgres for the PostgreSQL proof.",
+      "ok 1 - the losing transaction runs again and neither write is lost # SKIP SQLite has one writer, so two open transactions cannot be forced to overlap; PostgreSQL proves this in CI."
+    ],
+    "scope": "All integration files including manufacturing, all trade flows, rental financial history, furniture delivery and payment safeguards."
+  },
+  "frontendProductionGate": {
+    "status": "passed",
+    "exitCode": 0,
+    "testsPassed": 2946,
+    "testsSkipped": 1,
+    "filesPassed": 394,
+    "filesSkipped": 1,
+    "translationKeys": 6227,
+    "translationModules": 18,
+    "stages": [
+      "typecheck",
+      "translation parity",
+      "production build",
+      "bundle budgets",
+      "offline boot and production app checks",
+      "full Vitest suite"
+    ],
+    "stageNote": "Full gate after furniture safeguards, before the one-line delivered-item held-label correction."
+  },
+  "lastLabelCorrection": {
+    "file": "frontend/src/features/verticals/furniture-home/orders/pages/FurnitureOrdersPage.tsx",
+    "change": "Only show held for confirmed, in_production or ready order items.",
+    "status": "passed",
+    "checks": [
+      "typecheck",
+      "production build",
+      "unchanged bundle/security budgets",
+      "offline boot check",
+      "browser reload verifies installed item has no held label"
+    ],
+    "fullTestSuiteRepeated": false
+  },
+  "finalBuild": {
+    "initialJsRawKB": 867.7,
+    "initialJsGzipKB": 262.1,
+    "initialFiles": 5,
+    "largestOfflineTrade": "restaurant",
+    "largestOfflineRawKB": 4489.2,
+    "largestOfflineGzipKB": 1264.2,
+    "largestOfflineFiles": 186,
+    "offlineBootEntries": 32,
+    "installedAssets": 179,
+    "budgetsChanged": false
+  },
+  "backendProductionGate": {
+    "status": "passed",
+    "exitCode": 0,
+    "checks": [
+      "module graph",
+      "production readiness source checks",
+      "dependency security"
+    ]
+  },
+  "backendExamples": {
+    "status": "passed",
+    "fullSuiteStage": "Before final rental branch/tender/statement additions and furniture follow-up; later full integration and production gates cover changed backend behavior.",
+    "furnitureExamples": "Passed after furniture service/schema changes through the guarded disposable-database runner."
+  },
+  "migrations": {
+    "safety": "passed, zero warnings",
+    "postgresSchema": "validated; actual PostgreSQL migration not run",
+    "sqliteUpgrade": "passed against disposable copy, preserves legacy version-0 row; see migration-smoke.json",
+    "requiredMigration": "000136_rental_financial_history"
+  },
+  "browser": {
+    "rental": "Return + damage charge + final UPI collection + cash deposit refund, daily closing, dated statement and connection loss/recovery verified; see rental-reconciliation.json.",
+    "furniture": "Create confirmed order; block overpayment; record cash; ready; reject missing bill; create matching sale; link delivery; install; reload; verify legacy warning and absent destructive/payment actions.",
+    "furnitureFixture": "SO-000002, KOS-2026-000001, INR100; stock 20 to 19 exactly once",
+    "geometry": {
+      "viewportWidth": 472,
+      "documentWidth": 472,
+      "scope": "Final furniture page only, not a complete responsive matrix"
+    },
+    "manufacturing": "Prior-session browser evidence retained separately; final automated integration includes manufacturing."
+  },
+  "remaining": [
+    "Exact committed candidate CI and PostgreSQL/Redis/container/hosting proof",
+    "Legacy rental reconciliation path and safe migration/restore plan",
+    "Furniture advance journal/report posting, invoice application, credit/refund/correction, legacy delivery repair and branch certification",
+    "Physical printer/device and provider checks, deployed backup/restore/worker proof, release-owner approval"
+  ],
+  "localLogs": {
+    "backend-suite.log": {
+      "sha256": "7a49db4b5130da7b59e575b5076a0bc31c2a385c7fa8fabbc85077c3563af4d5",
+      "path": "/private/tmp/kirana-release-qa-20260922/backend-suite.log"
+    },
+    "frontend-final-verified.log": {
+      "sha256": "e6ab839418720ecbb8a4398783026515e963936a77eddd08bee9a2a5d51bfebe",
+      "path": "/private/tmp/kirana-release-qa-20260922/frontend-final-verified.log"
+    },
+    "integration-final.log": {
+      "sha256": "f5f2ffcf2c0c07a728cf9f89d5febd417c254c40e95bfbd1a398a6b863224880",
+      "path": "/private/tmp/kirana-release-qa-20260922/integration-final.log"
+    },
+    "migration-safety-final.log": {
+      "sha256": "d65bbfc44bcfabf42736f71ca27b38c6f46405ffbf9a0bff1fbdb91670d7d0fe",
+      "path": "/private/tmp/kirana-release-qa-20260922/migration-safety-final.log"
+    },
+    "postgres-schema.log": {
+      "sha256": "2d21146a20e0a7aa769b8c1845f8b0fd662f1ab2c0d7be53eb29f6d011e25948",
+      "path": "/private/tmp/kirana-release-qa-20260922/postgres-schema.log"
+    },
+    "furniture-examples.log": {
+      "sha256": "713963fa1a76007eb74a96691554b07a234ddfc47ce296cf2fc0c644afb74bb6",
+      "path": "/private/tmp/kirana-release-qa-20260922/furniture-examples.log"
+    },
+    "furniture-integration-verified.log": {
+      "sha256": "80d20ee78d4d2f7b30e23eb569479ae450e95eb42a16c1d093b81861ec346b39",
+      "path": "/private/tmp/kirana-release-qa-20260922/furniture-integration-verified.log"
+    },
+    "integration-release-final.log": {
+      "sha256": "848e7bb0c6c362255a95110181b2692b0b50d279d464b27a5e623b8598477a42",
+      "path": "/private/tmp/kirana-release-qa-20260922/integration-release-final.log"
+    },
+    "frontend-release-verified.log": {
+      "sha256": "7188da0ba5ef29e010a81ee8be68e891eabef510d1622c733921fceea1b334c2",
+      "path": "/private/tmp/kirana-release-qa-20260922/frontend-release-verified.log"
+    },
+    "backend-release-final.log": {
+      "sha256": "c39a3d42ee42524bd361b6e9afad737e2930a00f7b650afda932f48824e2c59d",
+      "path": "/private/tmp/kirana-release-qa-20260922/backend-release-final.log"
+    },
+    "frontend-held-label-build.log": {
+      "sha256": "898f173ef05457aaf279502fee38c6928b72f8fa4feb6d8e7350703622c78a20",
+      "path": "/private/tmp/kirana-release-qa-20260922/frontend-held-label-build.log"
+    }
+  },
+  "recoveryCopies": {
+    "verified-source-final.tar.gz": {
+      "localPath": "/private/tmp/kirana-release-qa-20260922/verified-source-final.tar.gz",
+      "sha256": "5697a1e5ddb2419d739ee8f2deffaab7fe8dfca8260807bf01e6fd42fc2ac776"
+    },
+    "verified-source-final.patch": {
+      "localPath": "/private/tmp/kirana-release-qa-20260922/verified-source-final.patch",
+      "sha256": "a70b3765b226104683061e3222d9cd815f34231d3ba385ebb16988798b878da4"
+    }
+  }
+}

@@ -1,4 +1,6 @@
 import db from "../../../db.js";
+import { serializableTransaction } from "../../../lib/transactions.js";
+import { createAuditLog } from "../../../modules/audit/audit.service.js";
 import { AppError } from "../../../middleware/error.js";
 import { listProducts } from "../../../modules/products/products.service.js";
 
@@ -35,7 +37,10 @@ function trimOrNull(value) {
 function toYear(value) {
   if (value === null || value === undefined || value === "") return null;
   const year = Number(value);
-  return Number.isFinite(year) ? Math.trunc(year) : null;
+  if (!Number.isInteger(year) || year < 1900 || year > 2100) {
+    throw new AppError("Enter a whole year between 1900 and 2100", 400, "FITMENT_BAD_YEAR");
+  }
+  return year;
 }
 
 /**
@@ -72,8 +77,8 @@ export function serializeCrossReference(reference) {
   };
 }
 
-async function requireProduct(shopId, productId) {
-  const product = await db.product.findFirst({
+async function requireProduct(shopId, productId, client = db) {
+  const product = await client.product.findFirst({
     where: { id: productId, shopId, deletedAt: null },
     select: { id: true, name: true },
   });
@@ -106,7 +111,7 @@ export function fitmentCoversYear(fitment, year) {
  * than the predicate above, and a shop's whole fitment table is thousands of
  * rows at most — already narrowed by make and model before this runs.
  */
-export async function findPartsForVehicle(shopId, { make, model, variant, year, search } = {}) {
+export async function findPartsForVehicle(shopId, { make, model, variant, year, search, locationId } = {}) {
   if (!matchKey(make)) throw new AppError("Choose a make to search", 400, "FITMENT_MAKE_REQUIRED");
 
   // Deliberately not filtered by make in SQL. SQLite compares ASCII text
@@ -114,12 +119,12 @@ export async function findPartsForVehicle(shopId, { make, model, variant, year, 
   // "insensitive"` exists only on PostgreSQL — so a SQL filter would quietly
   // return different results on the two databases this app ships against, and
   // a shop that typed "maruti" once would lose those parts in production only.
-  // A shop's whole fitment table is a few thousand rows, so the fold is done
-  // here where it behaves the same everywhere.
+  // Fold here so matching behaves the same on SQLite and PostgreSQL. Do not
+  // cap the read: an arbitrary cutoff makes later fitments invisible at the
+  // counter while the summary still counts them.
   const rows = await db.partFitment.findMany({
     where: { shopId, deletedAt: null },
     orderBy: [{ model: "asc" }, { productName: "asc" }],
-    take: 5000,
   });
 
   const wantedMake = matchKey(make);
@@ -135,7 +140,6 @@ export async function findPartsForVehicle(shopId, { make, model, variant, year, 
     // variant filter — that is what "null means all" has to mean at the counter.
     if (wantedVariant && fitment.variant && matchKey(fitment.variant) !== wantedVariant) return false;
     if (!fitmentCoversYear(fitment, wantedYear)) return false;
-    if (term && !matchKey(fitment.productName).includes(term)) return false;
     return true;
   });
 
@@ -150,10 +154,9 @@ export async function findPartsForVehicle(shopId, { make, model, variant, year, 
 
   // Stock and price come from the catalogue, so the answer is "yes it fits, and
   // we have two on the shelf" rather than only the first half.
-  const products = await db.product.findMany({
-    where: { id: { in: [...byProduct.keys()] }, shopId, deletedAt: null },
-    select: { id: true, name: true, sku: true, brand: true, stockBaseQty: true, defaultPricePerRateUnit: true, displayUnit: true },
-  });
+  const wantedProductIds = new Set(byProduct.keys());
+  const products = (await listProducts(shopId, { locationId }))
+    .filter((product) => wantedProductIds.has(product.id));
   const productById = new Map(products.map((product) => [product.id, product]));
 
   return [...byProduct.values()].map((entry) => {
@@ -167,10 +170,10 @@ export async function findPartsForVehicle(shopId, { make, model, variant, year, 
       sku: product?.sku ?? null,
       brand: product?.brand ?? null,
       stockQty: product ? Number(product.stockBaseQty) || 0 : 0,
-      unit: product?.displayUnit ?? "piece",
+      unit: product?.baseUnit ?? "piece",
       price: product ? Number(product.defaultPricePerRateUnit) || 0 : 0,
     };
-  }).sort((a, b) => {
+  }).filter((part) => !term || [part.productName, part.sku, productById.get(part.productId)?.attributes?.oemNumber].some((value) => matchKey(value).includes(term))).sort((a, b) => {
     // What is actually on the shelf comes first: a counter wants to sell today.
     if ((a.stockQty > 0) !== (b.stockQty > 0)) return a.stockQty > 0 ? -1 : 1;
     return a.productName.localeCompare(b.productName);
@@ -178,23 +181,24 @@ export async function findPartsForVehicle(shopId, { make, model, variant, year, 
 }
 
 /** Every vehicle the shop has recorded a part for, for the make/model pickers. */
-export async function getVehicleOptions(shopId, { make } = {}) {
+export async function getVehicleOptions(shopId, { make, model } = {}) {
   const rows = await db.partFitment.findMany({
     where: { shopId, deletedAt: null },
     select: { make: true, model: true, variant: true },
-    take: 5000,
   });
 
   const makes = new Map();
   const models = new Map();
   const variants = new Map();
   const wantedMake = matchKey(make);
+  const wantedModel = matchKey(model);
 
   for (const row of rows) {
     if (!makes.has(matchKey(row.make))) makes.set(matchKey(row.make), row.make);
     if (!wantedMake || matchKey(row.make) === wantedMake) {
       if (!models.has(matchKey(row.model))) models.set(matchKey(row.model), row.model);
-      if (row.variant && !variants.has(matchKey(row.variant))) variants.set(matchKey(row.variant), row.variant);
+      if ((!wantedModel || matchKey(row.model) === wantedModel)
+        && row.variant && !variants.has(matchKey(row.variant))) variants.set(matchKey(row.variant), row.variant);
     }
   }
 
@@ -216,7 +220,6 @@ export async function listFitments(shopId, { make, model, search } = {}) {
   const rows = await db.partFitment.findMany({
     where: { shopId, deletedAt: null },
     orderBy: [{ make: "asc" }, { model: "asc" }, { productName: "asc" }],
-    take: 2000,
   });
   const wantedMake = matchKey(make);
   const wantedModel = matchKey(model);
@@ -238,34 +241,37 @@ export async function listFitments(shopId, { make, model, search } = {}) {
  * fitments over months will re-enter one, and two identical rows make the
  * product view read as though it fits the same car twice.
  */
-export async function createFitment(shopId, data) {
-  const product = await requireProduct(shopId, data.productId);
-  const yearFrom = toYear(data.yearFrom);
-  const yearTo = toYear(data.yearTo);
+export async function createFitment(shopId, data, context = {}) {
+  return serializableTransaction(async (tx) => {
+    const product = await requireProduct(shopId, data.productId, tx);
+    const yearFrom = toYear(data.yearFrom);
+    const yearTo = toYear(data.yearTo);
 
-  const existing = await findDuplicateFitment(shopId, product.id, { ...data, yearFrom, yearTo });
-  if (existing) return serializeFitment(existing);
+    const existing = await findDuplicateFitment(shopId, product.id, { ...data, yearFrom, yearTo }, tx);
+    if (existing) return serializeFitment(existing);
 
-  const created = await db.partFitment.create({
-    data: {
-      shopId,
-      productId: product.id,
-      productName: product.name,
-      make: String(data.make).trim(),
-      model: String(data.model).trim(),
-      variant: trimOrNull(data.variant),
-      yearFrom,
-      yearTo,
-      notes: trimOrNull(data.notes),
-    },
+    const created = await tx.partFitment.create({
+      data: {
+        shopId,
+        productId: product.id,
+        productName: product.name,
+        make: String(data.make).trim(),
+        model: String(data.model).trim(),
+        variant: trimOrNull(data.variant),
+        yearFrom,
+        yearTo,
+        notes: trimOrNull(data.notes),
+      },
+    });
+    await auditChange(tx, context, "FITMENT_CREATED", "PartFitment", null, created);
+    return serializeFitment(created);
   });
-  return serializeFitment(created);
 }
 
-async function findDuplicateFitment(shopId, productId, data) {
-  const candidates = await db.partFitment.findMany({ where: { shopId, productId, deletedAt: null } });
-  return candidates.find((fitment) =>
-    matchKey(fitment.make) === matchKey(data.make)
+async function findDuplicateFitment(shopId, productId, data, client = db, excludeId = null) {
+  const candidates = await client.partFitment.findMany({ where: { shopId, productId, deletedAt: null } });
+  return candidates.find((fitment) => fitment.id !== excludeId
+    && matchKey(fitment.make) === matchKey(data.make)
     && matchKey(fitment.model) === matchKey(data.model)
     && matchKey(fitment.variant) === matchKey(data.variant)
     && (fitment.yearFrom ?? null) === (data.yearFrom ?? null)
@@ -273,67 +279,79 @@ async function findDuplicateFitment(shopId, productId, data) {
 }
 
 /** Several vehicles for one part at once — one filter routinely covers a dozen. */
-export async function createFitmentsBulk(shopId, { productId, fitments }) {
-  const product = await requireProduct(shopId, productId);
-  const created = [];
-  const skipped = [];
+export async function createFitmentsBulk(shopId, { productId, fitments }, context = {}) {
+  return serializableTransaction(async (tx) => {
+    const product = await requireProduct(shopId, productId, tx);
+    const created = [];
+    const skipped = [];
 
-  for (const entry of fitments) {
-    const yearFrom = toYear(entry.yearFrom);
-    const yearTo = toYear(entry.yearTo);
-    const duplicate = await findDuplicateFitment(shopId, product.id, { ...entry, yearFrom, yearTo });
-    if (duplicate) {
-      skipped.push(serializeFitment(duplicate));
-      continue;
+    for (const entry of fitments) {
+      const yearFrom = toYear(entry.yearFrom);
+      const yearTo = toYear(entry.yearTo);
+      const duplicate = await findDuplicateFitment(shopId, product.id, { ...entry, yearFrom, yearTo }, tx);
+      if (duplicate) {
+        skipped.push(serializeFitment(duplicate));
+        continue;
+      }
+      const row = await tx.partFitment.create({
+        data: {
+          shopId,
+          productId: product.id,
+          productName: product.name,
+          make: String(entry.make).trim(),
+          model: String(entry.model).trim(),
+          variant: trimOrNull(entry.variant),
+          yearFrom,
+          yearTo,
+          notes: trimOrNull(entry.notes),
+        },
+      });
+      await auditChange(tx, context, "FITMENT_CREATED", "PartFitment", null, row);
+      created.push(serializeFitment(row));
     }
-    const row = await db.partFitment.create({
+
+    return { created, skipped };
+  });
+}
+
+export async function updateFitment(shopId, id, data, context = {}) {
+  return serializableTransaction(async (tx) => {
+    const existing = await tx.partFitment.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!existing) throw new AppError("Fitment not found", 404);
+
+    const yearFrom = data.yearFrom === undefined ? existing.yearFrom : toYear(data.yearFrom);
+    const yearTo = data.yearTo === undefined ? existing.yearTo : toYear(data.yearTo);
+    if (yearFrom != null && yearTo != null && yearTo < yearFrom) {
+      throw new AppError("The last year cannot be before the first", 400, "FITMENT_BAD_YEARS");
+    }
+
+    const duplicate = await findDuplicateFitment(shopId, existing.productId, { ...existing, ...data, yearFrom, yearTo }, tx, existing.id);
+    if (duplicate) throw new AppError("This fitment is already recorded", 409, "FITMENT_DUPLICATE");
+
+    const updated = await tx.partFitment.update({
+      where: { id: existing.id },
       data: {
-        shopId,
-        productId: product.id,
-        productName: product.name,
-        make: String(entry.make).trim(),
-        model: String(entry.model).trim(),
-        variant: trimOrNull(entry.variant),
-        yearFrom,
-        yearTo,
-        notes: trimOrNull(entry.notes),
+        ...(data.make !== undefined ? { make: String(data.make).trim() } : {}),
+        ...(data.model !== undefined ? { model: String(data.model).trim() } : {}),
+        ...(data.variant !== undefined ? { variant: trimOrNull(data.variant) } : {}),
+        ...(data.yearFrom !== undefined ? { yearFrom } : {}),
+        ...(data.yearTo !== undefined ? { yearTo } : {}),
+        ...(data.notes !== undefined ? { notes: trimOrNull(data.notes) } : {}),
       },
     });
-    created.push(serializeFitment(row));
-  }
-
-  return { created, skipped };
-}
-
-export async function updateFitment(shopId, id, data) {
-  const existing = await db.partFitment.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!existing) throw new AppError("Fitment not found", 404);
-
-  const yearFrom = data.yearFrom === undefined ? existing.yearFrom : toYear(data.yearFrom);
-  const yearTo = data.yearTo === undefined ? existing.yearTo : toYear(data.yearTo);
-  if (yearFrom != null && yearTo != null && yearTo < yearFrom) {
-    throw new AppError("The last year cannot be before the first", 400, "FITMENT_BAD_YEARS");
-  }
-
-  const updated = await db.partFitment.update({
-    where: { id: existing.id },
-    data: {
-      ...(data.make !== undefined ? { make: String(data.make).trim() } : {}),
-      ...(data.model !== undefined ? { model: String(data.model).trim() } : {}),
-      ...(data.variant !== undefined ? { variant: trimOrNull(data.variant) } : {}),
-      ...(data.yearFrom !== undefined ? { yearFrom } : {}),
-      ...(data.yearTo !== undefined ? { yearTo } : {}),
-      ...(data.notes !== undefined ? { notes: trimOrNull(data.notes) } : {}),
-    },
+    await auditChange(tx, context, "FITMENT_UPDATED", "PartFitment", existing, updated);
+    return serializeFitment(updated);
   });
-  return serializeFitment(updated);
 }
 
-export async function deleteFitment(shopId, id) {
-  const existing = await db.partFitment.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!existing) throw new AppError("Fitment not found", 404);
-  const deleted = await db.partFitment.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
-  return serializeFitment(deleted);
+export async function deleteFitment(shopId, id, context = {}) {
+  return serializableTransaction(async (tx) => {
+    const existing = await tx.partFitment.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!existing) throw new AppError("Fitment not found", 404);
+    const deleted = await tx.partFitment.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
+    await auditChange(tx, context, "FITMENT_REMOVED", "PartFitment", existing, deleted);
+    return serializeFitment(deleted);
+  });
 }
 
 /* ── Cross-references ─────────────────────────────────────────────────────── */
@@ -353,17 +371,23 @@ export async function listCrossReferences(shopId, productId) {
  * that number, and any part the shop has cross-referenced to it. A counter does
  * not know or care which of the two made the match.
  */
-export async function findByPartNumber(shopId, partNumber) {
+export async function findByPartNumber(shopId, partNumber, { locationId } = {}) {
   const wanted = matchKey(partNumber);
   if (!wanted) return { partNumber: "", products: [], references: [] };
 
-  const [products, references] = await Promise.all([
-    listProducts(shopId).then((rows) => rows.filter((product) =>
-      matchKey(product.sku) === wanted || matchKey(product.barcode) === wanted)),
-    db.partCrossReference.findMany({ where: { shopId, deletedAt: null }, take: 2000 }),
+  const [catalogue, references] = await Promise.all([
+    listProducts(shopId, { locationId }),
+    db.partCrossReference.findMany({ where: { shopId, deletedAt: null } }),
   ]);
 
   const matchedReferences = references.filter((reference) => matchKey(reference.partNumber) === wanted);
+  const referencedProductIds = new Set(matchedReferences.flatMap((reference) =>
+    [reference.productId, reference.alternateProductId].filter(Boolean)));
+  const products = catalogue.filter((product) =>
+    matchKey(product.sku) === wanted
+    || matchKey(product.attributes?.oemNumber) === wanted
+    || matchKey(product.barcode) === wanted
+    || referencedProductIds.has(product.id));
 
   return {
     partNumber: String(partNumber).trim(),
@@ -379,66 +403,86 @@ export async function findByPartNumber(shopId, partNumber) {
   };
 }
 
-export async function createCrossReference(shopId, data) {
-  const product = await requireProduct(shopId, data.productId);
-  if (data.alternateProductId) {
-    if (data.alternateProductId === product.id) {
-      throw new AppError("A part cannot be its own alternative", 400, "CROSSREF_SELF");
+export async function createCrossReference(shopId, data, context = {}) {
+  return serializableTransaction(async (tx) => {
+    const product = await requireProduct(shopId, data.productId, tx);
+    if (data.alternateProductId) {
+      if (data.alternateProductId === product.id) {
+        throw new AppError("A part cannot be its own alternative", 400, "CROSSREF_SELF");
+      }
+      await requireProduct(shopId, data.alternateProductId, tx);
     }
-    await requireProduct(shopId, data.alternateProductId);
-  }
 
-  // The same number entered twice is returned rather than duplicated: a shop
-  // builds these up over months and will re-enter one.
-  const siblings = await db.partCrossReference.findMany({
-    where: { shopId, productId: product.id, deletedAt: null },
-  });
-  const existing = siblings.find((row) => matchKey(row.partNumber) === matchKey(data.partNumber));
-  if (existing) return serializeCrossReference(existing);
+    // The same number entered twice is returned rather than duplicated: a shop
+    // builds these up over months and will re-enter one.
+    const siblings = await tx.partCrossReference.findMany({
+      where: { shopId, productId: product.id, deletedAt: null },
+    });
+    const existing = siblings.find((row) => matchKey(row.partNumber) === matchKey(data.partNumber));
+    if (existing) {
+      if (existing.kind !== (data.kind || "alternative") || (existing.alternateProductId ?? null) !== (data.alternateProductId || null)
+        || (existing.brand ?? null) !== trimOrNull(data.brand) || (existing.notes ?? null) !== trimOrNull(data.notes)) {
+        throw new AppError("This part number is already recorded with different details", 409, "CROSSREF_DUPLICATE");
+      }
+      return serializeCrossReference(existing);
+    }
 
-  const created = await db.partCrossReference.create({
-    data: {
-      shopId,
-      productId: product.id,
-      productName: product.name,
-      alternateProductId: data.alternateProductId || null,
-      partNumber: String(data.partNumber).trim(),
-      brand: trimOrNull(data.brand),
-      kind: data.kind || "alternative",
-      notes: trimOrNull(data.notes),
-    },
+    const created = await tx.partCrossReference.create({
+      data: {
+        shopId,
+        productId: product.id,
+        productName: product.name,
+        alternateProductId: data.alternateProductId || null,
+        partNumber: String(data.partNumber).trim(),
+        brand: trimOrNull(data.brand),
+        kind: data.kind || "alternative",
+        notes: trimOrNull(data.notes),
+      },
+    });
+    await auditChange(tx, context, "PART_REFERENCE_CREATED", "PartCrossReference", null, created);
+    return serializeCrossReference(created);
   });
-  return serializeCrossReference(created);
 }
 
-export async function updateCrossReference(shopId, id, data) {
-  const existing = await db.partCrossReference.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!existing) throw new AppError("Cross-reference not found", 404);
-  if (data.alternateProductId) {
-    if (data.alternateProductId === existing.productId) {
-      throw new AppError("A part cannot be its own alternative", 400, "CROSSREF_SELF");
+export async function updateCrossReference(shopId, id, data, context = {}) {
+  return serializableTransaction(async (tx) => {
+    const existing = await tx.partCrossReference.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!existing) throw new AppError("Cross-reference not found", 404);
+    if (data.alternateProductId) {
+      if (data.alternateProductId === existing.productId) {
+        throw new AppError("A part cannot be its own alternative", 400, "CROSSREF_SELF");
+      }
+      await requireProduct(shopId, data.alternateProductId, tx);
     }
-    await requireProduct(shopId, data.alternateProductId);
-  }
 
-  const updated = await db.partCrossReference.update({
-    where: { id: existing.id },
-    data: {
-      ...(data.alternateProductId !== undefined ? { alternateProductId: data.alternateProductId || null } : {}),
-      ...(data.partNumber !== undefined ? { partNumber: String(data.partNumber).trim() } : {}),
-      ...(data.brand !== undefined ? { brand: trimOrNull(data.brand) } : {}),
-      ...(data.kind !== undefined ? { kind: data.kind } : {}),
-      ...(data.notes !== undefined ? { notes: trimOrNull(data.notes) } : {}),
-    },
+    const siblings = await tx.partCrossReference.findMany({ where: { shopId, productId: existing.productId, deletedAt: null } });
+    if (siblings.some((row) => row.id !== existing.id && matchKey(row.partNumber) === matchKey(data.partNumber ?? existing.partNumber))) {
+      throw new AppError("This part number is already recorded", 409, "CROSSREF_DUPLICATE");
+    }
+
+    const updated = await tx.partCrossReference.update({
+      where: { id: existing.id },
+      data: {
+        ...(data.alternateProductId !== undefined ? { alternateProductId: data.alternateProductId || null } : {}),
+        ...(data.partNumber !== undefined ? { partNumber: String(data.partNumber).trim() } : {}),
+        ...(data.brand !== undefined ? { brand: trimOrNull(data.brand) } : {}),
+        ...(data.kind !== undefined ? { kind: data.kind } : {}),
+        ...(data.notes !== undefined ? { notes: trimOrNull(data.notes) } : {}),
+      },
+    });
+    await auditChange(tx, context, "PART_REFERENCE_UPDATED", "PartCrossReference", existing, updated);
+    return serializeCrossReference(updated);
   });
-  return serializeCrossReference(updated);
 }
 
-export async function deleteCrossReference(shopId, id) {
-  const existing = await db.partCrossReference.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!existing) throw new AppError("Cross-reference not found", 404);
-  const deleted = await db.partCrossReference.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
-  return serializeCrossReference(deleted);
+export async function deleteCrossReference(shopId, id, context = {}) {
+  return serializableTransaction(async (tx) => {
+    const existing = await tx.partCrossReference.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!existing) throw new AppError("Cross-reference not found", 404);
+    const deleted = await tx.partCrossReference.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
+    await auditChange(tx, context, "PART_REFERENCE_REMOVED", "PartCrossReference", existing, deleted);
+    return serializeCrossReference(deleted);
+  });
 }
 
 /** Headline numbers: how much of the catalogue the shop has actually mapped. */
@@ -447,20 +491,28 @@ export async function getFitmentSummary(shopId) {
     db.partFitment.count({ where: { shopId, deletedAt: null } }),
     db.partCrossReference.count({ where: { shopId, deletedAt: null } }),
     db.partFitment.findMany({ where: { shopId, deletedAt: null }, select: { productId: true }, distinct: ["productId"] }),
-    db.product.count({ where: { shopId, deletedAt: null } }),
+    db.product.findMany({ where: { shopId, deletedAt: null }, select: { id: true } }),
   ]);
 
   const { makes } = await getVehicleOptions(shopId);
-  const mapped = mappedProducts.length;
+  const activeIds = new Set(catalogue.map((product) => product.id));
+  const mapped = mappedProducts.filter((product) => activeIds.has(product.productId)).length;
 
   return {
     fitments,
     references,
     mappedParts: mapped,
-    catalogueSize: catalogue,
+    catalogueSize: catalogue.length,
     // What is still invisible to a "does this fit?" search — the number that
     // tells a shop whether this feature is doing anything for them yet.
-    unmappedParts: Math.max(0, catalogue - mapped),
+    unmappedParts: Math.max(0, catalogue.length - mapped),
     makes: makes.length,
   };
+}
+
+async function auditChange(tx, context, action, entityType, before, after) {
+  const audit = await createAuditLog({ client: tx, shopId: after.shopId,
+    userId: context.userId ?? null, req: context.req ?? null, module: "inventory",
+    action, entityType, entityId: after.id, before, after });
+  if (!audit) throw new AppError("The change was not saved because its audit history could not be recorded", 503, "FITMENT_AUDIT_FAILED");
 }

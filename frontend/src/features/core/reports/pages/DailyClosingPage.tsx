@@ -1,4 +1,8 @@
-import { LocalDataUnavailable } from "@/features/core/sync/LocalDataUnavailable";
+import { paidCashExpenseTotal } from "@/features/core/reports/cash-expenses";
+import { apiRequest } from "@/lib/api/http";
+import { useBusinessType } from "@/features/core/settings/business-types";
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
+import { ReportDataUnavailable } from "@/features/core/reports/ReportDataUnavailable";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarDays, CheckCircle2, CreditCard, MessageCircle, Printer, RefreshCw, ShieldAlert, TrendingUp, Wallet, XCircle } from "lucide-react";
@@ -30,19 +34,23 @@ import { cn } from "@/lib/utils";
 import { useReportView } from "@/lib/activity";
 import { escapeHtml } from "@/lib/escape-html";
 
+type OrderClosingTenders = Pick<DailyClosingReport, "rentalTenders" | "furnitureTenders">;
+
 function fmt(value: number | undefined) {
   return "₹" + Math.round(value ?? 0).toLocaleString("en-IN");
 }
 
-function printClosing(report: DailyClosingReport) {
+function printClosing(report: DailyClosingReport, t: Translate) {
   const html = `
     <html><head><title>Daily Closing ${report.date}</title><style>
       body{font-family:Arial,sans-serif;padding:24px;color:#111} h1{font-size:22px;margin:0 0 8px}.muted{color:#666;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}.box{border:1px solid #ddd;padding:10px;border-radius:8px}.label{font-size:12px;color:#666}.value{font-weight:700;font-size:18px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border-bottom:1px solid #eee;padding:7px;text-align:left}th{text-transform:uppercase;font-size:11px;color:#666}.right{text-align:right}
     </style></head><body>
       <h1>Daily Closing Report</h1><div class="muted">${escapeHtml(report.date)} • ${report.isLocalEstimate ? "Local estimate" : "Local saved data"}</div>
+      ${report.rentalTenders ? `<p>${escapeHtml(t("rental.closing.net"))}: ${escapeHtml(t("rental.collection.cash"))} ${fmt(report.rentalTenders.cash)}, ${escapeHtml(t("rental.collection.upi"))} ${fmt(report.rentalTenders.upi)}, ${escapeHtml(t("rental.collection.bank"))} ${fmt(report.rentalTenders.bank)}, ${escapeHtml(t("rental.collection.other"))} ${fmt(report.rentalTenders.other)}</p>` : ""}
+      ${report.furnitureTenders ? `<p>${escapeHtml(t("furniture.closing.net"))}: ${escapeHtml(t("rental.collection.cash"))} ${fmt(report.furnitureTenders.cash)}, ${escapeHtml(t("rental.collection.upi"))} ${fmt(report.furnitureTenders.upi)}, ${escapeHtml(t("rental.collection.bank"))} ${fmt(report.furnitureTenders.bank)}, ${escapeHtml(t("rental.collection.other"))} ${fmt(report.furnitureTenders.other)}</p>` : ""}
       <div class="grid">
         <div class="box"><div class="label">Total sales</div><div class="value">${fmt(report.totalSales)}</div></div>
-        <div class="box"><div class="label">Cash in (sales + old udhar)</div><div class="value">${fmt(report.cashReceived)}</div></div>
+        <div class="box"><div class="label">Net cash receipts</div><div class="value">${fmt(report.cashReceived)}</div></div>
         <div class="box"><div class="label">UPI in (sales + old udhar)</div><div class="value">${fmt(report.upiReceived)}</div></div>
         <div class="box"><div class="label">Bank in (sales + old udhar)</div><div class="value">${fmt(report.bankReceived)}</div></div>
         <div class="box"><div class="label">Udhar given</div><div class="value">${fmt(report.udharGiven)}</div></div>
@@ -69,6 +77,8 @@ function printClosing(report: DailyClosingReport) {
 export default function DailyClosingPage() {
   useReportView("daily_closing", "Daily closing");
   const { shop } = useAuth();
+  const { businessType } = useBusinessType();
+  const { t } = useAppLanguage();
   const { prefs } = useSettingsPrefs();
   // Settings → Notifications → Daily Summary controls which sections the shared summary includes.
   const notif = (prefs.notifications ?? {}) as { dailySales?: boolean; dailyProfit?: boolean; dailyCashUpi?: boolean; dailyUdhar?: boolean };
@@ -78,19 +88,9 @@ export default function DailyClosingPage() {
     cashUpi: notif.dailyCashUpi !== false,
     udhar: notif.dailyUdhar !== false,
   };
-  // Only CASH expenses leave the till. A UPI or bank expense never touches the drawer,
-  // so counting it here would report a phantom short. Offline the call fails and the
-  // total stays 0 — the float and movements still apply.
+  // A failed server read blocks closing instead of reporting zero cash expenses.
   async function loadCashExpenseTotal(forDate: string): Promise<number> {
-    try {
-      const rows = await listExpenses({ from: forDate, to: forDate });
-      return (rows ?? [])
-        .filter((row) => String((row as { paymentMode?: string }).paymentMode ?? "cash").toLowerCase() === "cash")
-        .filter((row) => !(row as { deletedAt?: string | null }).deletedAt)
-        .reduce((sum, row) => sum + (Number((row as { amount?: number }).amount) || 0), 0);
-    } catch {
-      return 0;
-    }
+    return paidCashExpenseTotal(await listExpenses({ from: forDate, to: forDate, status: "paid" }));
   }
 
   const [date, setDate] = useState(toDateInputValue(new Date()));
@@ -122,14 +122,17 @@ export default function DailyClosingPage() {
     try {
       // The float and till movements live on this device; cash expenses are server-backed,
       // so they are fetched and handed to the same drawer calculation.
-      const [drawer, expenseCash, counts, floats, movements] = await Promise.all([
+      const [drawer, expenseCash, counts, floats, movements, rentalClosing] = await Promise.all([
         loadDrawerAdjustments(date),
         loadCashExpenseTotal(date),
         loadDrawerCounts(),
         loadOpeningFloats(),
         loadCashMovements(),
+        ["clothing", "furniture"].includes(businessType) ? apiRequest<OrderClosingTenders>(`/reports/daily-closing?date=${date}&source=live`, { cache: "no-store" }) : null,
       ]);
-      const next = await buildDailyClosingReport(date, { ...drawer, cashExpenses: expenseCash });
+      if (businessType === "clothing" && !rentalClosing?.rentalTenders) throw new Error(t("rental.closing.unavailable"));
+      if (businessType === "furniture" && !rentalClosing?.furnitureTenders) throw new Error(t("furniture.closing.unavailable"));
+      const next = await buildDailyClosingReport(date, { ...drawer, cashExpenses: expenseCash, rentalTenders: businessType === "clothing" ? rentalClosing?.rentalTenders : undefined, furnitureTenders: businessType === "furniture" ? rentalClosing?.furnitureTenders : undefined });
       if (generation !== loadGeneration.current) return;
       setCashExpenses(expenseCash);
       setReport(next);
@@ -141,7 +144,7 @@ export default function DailyClosingPage() {
       if (generation === loadGeneration.current) setReadError(true);
     }
     finally { if (generation === loadGeneration.current) setLoading(false); }
-  }, [date]);
+  }, [date, businessType, t]);
 
   useEffect(() => {
     void load({ showLoader: !reportRef.current });
@@ -246,10 +249,11 @@ export default function DailyClosingPage() {
   }
 
   const totalIncomingTender = (report?.cashReceived ?? 0) + (report?.upiReceived ?? 0) + (report?.bankReceived ?? 0);
+  const showTenderShare = [report?.cashReceived ?? 0, report?.upiReceived ?? 0, report?.bankReceived ?? 0].every((value) => value >= 0);
   const cashPct = totalIncomingTender > 0 ? Math.round(((report?.cashReceived ?? 0) / totalIncomingTender) * 100) : 0;
   const upiPct = totalIncomingTender > 0 ? Math.round(((report?.upiReceived ?? 0) / totalIncomingTender) * 100) : 0;
 
-  if (readError || !report) return <LocalDataUnavailable checking={!readError && loading} onRetry={() => void load()} />;
+  if (readError || !report) return <ReportDataUnavailable checking={!readError && loading} onRetry={() => void load()} />;
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-5 p-4 sm:p-5 lg:p-6">
@@ -277,11 +281,14 @@ export default function DailyClosingPage() {
           <Button asChild variant="outline" className="h-11 min-w-0 rounded-xl px-1.5 text-xs sm:px-4 sm:text-sm">
             <Link href="/reports"><CalendarDays size={15} className="mr-1 sm:mr-1.5" />Reports</Link>
           </Button>
-          <Button variant="outline" className="h-11 min-w-0 rounded-xl px-1.5 text-xs sm:px-4 sm:text-sm" onClick={() => report && printClosing(report)} disabled={!report}><Printer size={15} className="mr-1 sm:mr-1.5" />Print</Button>
+          <Button variant="outline" className="h-11 min-w-0 rounded-xl px-1.5 text-xs sm:px-4 sm:text-sm" onClick={() => report && printClosing(report, t)} disabled={!report}><Printer size={15} className="mr-1 sm:mr-1.5" />Print</Button>
           <Button variant="outline" className="h-11 min-w-0 rounded-xl border-emerald-200 px-1.5 text-xs text-emerald-700 hover:bg-emerald-50 sm:px-4 sm:text-sm" onClick={() => report && shareDailyClosingOnWhatsapp({ report, shopName: shop?.name, include: summaryInclude })} disabled={!report}><MessageCircle size={15} className="mr-1 sm:mr-1.5" />Share</Button>
           <Button onClick={() => { void load({ showLoader: !reportRef.current }); if (navigator.onLine) void refreshDrawerCountsFromCloud().then(setDrawerCounts).catch(() => undefined); }} disabled={loading && !report} className="h-11 min-w-0 rounded-xl px-1.5 text-xs sm:px-4 sm:text-sm"><RefreshCw size={15} className="mr-1 sm:mr-1.5" />Refresh</Button>
         </div>
       </div>
+
+      {report?.furnitureTenders && <p className="rounded-xl border bg-card p-3 text-sm">{t("furniture.closing.net")}: {t("rental.collection.cash")} {fmt(report.furnitureTenders.cash)} · {t("rental.collection.upi")} {fmt(report.furnitureTenders.upi)} · {t("rental.collection.bank")} {fmt(report.furnitureTenders.bank)}</p>}
+      {report?.rentalTenders && <p className="rounded-xl border bg-card p-3 text-sm">{t("rental.closing.net")}: {t("rental.collection.cash")} {fmt(report.rentalTenders.cash)} · {t("rental.collection.upi")} {fmt(report.rentalTenders.upi)} · {t("rental.collection.bank")} {fmt(report.rentalTenders.bank)} · {t("rental.collection.other")} {fmt(report.rentalTenders.other)}</p>}
 
       {/* ── Date picker ─────────────────────────────────────────────────── */}
       <div className="flex items-end gap-4">
@@ -309,8 +316,7 @@ export default function DailyClosingPage() {
                   {fmt(report?.expectedCashInDrawer)}
                 </p>
                 <p className="mt-2 text-sm leading-5 text-white/75">
-                  Opening float + cash sales + old udhar cash recovery + cash in
-                  &nbsp;-&nbsp; supplier cash paid - cash expenses - cash out
+                  {report?.furnitureTenders ? t("furniture.closing.formula") : report?.rentalTenders ? t("rental.closing.formula") : "Opening float + cash sales + old udhar cash recovery + cash in - supplier cash paid - cash expenses - cash out"}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white ring-1 ring-white/20 backdrop-blur-sm">
@@ -343,27 +349,27 @@ export default function DailyClosingPage() {
                     <span className="font-semibold text-emerald-700 dark:text-emerald-400">Cash in</span>
                     <span className="font-black tabular-nums">{fmt(report?.cashReceived)}</span>
                   </div>
-                  <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
+                  <div hidden={!showTenderShare} className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
                     <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${cashPct}%` }} />
                   </div>
-                  <p className="mt-0.5 text-right text-[11px] text-muted-foreground">{cashPct}%</p>
+                  <p hidden={!showTenderShare} className="mt-0.5 text-right text-[11px] text-muted-foreground">{cashPct}%</p>
                 </div>
                 <div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-semibold text-sky-700 dark:text-sky-400">UPI in</span>
                     <span className="font-black tabular-nums">{fmt(report?.upiReceived)}</span>
                   </div>
-                  <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
+                  <div hidden={!showTenderShare} className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
                     <div className="h-full rounded-full bg-sky-500 transition-all duration-500" style={{ width: `${upiPct}%` }} />
                   </div>
-                  <p className="mt-0.5 text-right text-[11px] text-muted-foreground">{upiPct}%</p>
+                  <p hidden={!showTenderShare} className="mt-0.5 text-right text-[11px] text-muted-foreground">{upiPct}%</p>
                 </div>
                 <div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-semibold text-indigo-700 dark:text-indigo-400">Bank in</span>
                     <span className="font-black tabular-nums">{fmt(report?.bankReceived)}</span>
                   </div>
-                  <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
+                  <div hidden={!showTenderShare} className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
                     <div className="h-full rounded-full bg-indigo-500 transition-all duration-500" style={{ width: `${totalIncomingTender > 0 ? Math.round(((report?.bankReceived ?? 0) / totalIncomingTender) * 100) : 0}%` }} />
                   </div>
                 </div>

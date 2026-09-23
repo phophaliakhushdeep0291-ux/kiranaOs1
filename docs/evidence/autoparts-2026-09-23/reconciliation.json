@@ -1,0 +1,49 @@
+{
+  "stock": [
+    {
+      "name": "QA Swift Oil Filter",
+      "stockBaseQty": 20.0
+    }
+  ],
+  "bills": [
+    {
+      "billNo": "KOS-2026-000001",
+      "billType": "normal_sale",
+      "grandTotal": 100.0,
+      "paidAmount": 100.0,
+      "returnOfBillId": null
+    },
+    {
+      "billNo": "RET-2026-000001",
+      "billType": "sales_return",
+      "grandTotal": -100.0,
+      "paidAmount": -100.0,
+      "returnOfBillId": "cmudvf8it002fyx6ffp3w7zdb"
+    }
+  ],
+  "payments": [
+    {
+      "mode": "cash",
+      "amount": 100.0
+    },
+    {
+      "mode": "cash",
+      "amount": -100.0
+    }
+  ],
+  "fitmentAudit": [
+    {
+      "action": "FITMENT_REMOVED",
+      "entityType": "PartFitment",
+      "userId": "cmudv55w20002yx6fqcl7dgm4",
+      "deviceId": "2f45e9bf-15b8-4a9f-8f70-c689421f2871"
+    },
+    {
+      "action": "FITMENT_CREATED",
+      "entityType": "PartFitment",
+      "userId": "cmudv55w20002yx6fqcl7dgm4",
+      "deviceId": "2f45e9bf-15b8-4a9f-8f70-c689421f2871"
+    }
+  ],
+  "cashNet": 0.0
+}
