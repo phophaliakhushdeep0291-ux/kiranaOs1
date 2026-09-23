@@ -12,6 +12,7 @@ import { normaliseLocalCustomer } from "@/features/core/customers/local-actions"
 import { buildAuditLogOutboxInput, buildAuditLogRow } from "@/features/core/audit-logs/local-actions";
 import { buildReturnLineBalances, consumeReturnLine } from "@/features/core/returns/return-math";
 import { withCustomerFinancialLock } from "@/features/core/ledger/customer-financial-lock";
+import { productTracksStock } from "@/features/core/inventory/stock-display";
 import { dedupeBillItemsForDisplay, dedupeBillsForDisplay } from "@/features/core/sync/bill-reconciliation";
 import type { Bill, Customer, Product } from "@/types/api";
 
@@ -304,7 +305,7 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
 
   // Inventory movements: restock resellable items (+qty); damaged -> damage write-off.
   const movements = items
-    .filter((item) => item.productId)
+    .filter((item) => item.productId && productTracksStock(findCachedProduct(item.productId)))
     .map((item) => {
       const qty = Math.abs(readNumber(item.quantity, 0));
       const damaged = item.damaged === true;

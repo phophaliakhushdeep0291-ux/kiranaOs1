@@ -1,0 +1,103 @@
+{
+  "checks": "passed",
+  "booking": "RNT-000002",
+  "status": "returned",
+  "rent": 100,
+  "damageCharge": 10,
+  "totalReceivedForRent": 110,
+  "balanceDue": 0,
+  "depositRefunded": 200,
+  "depositHeld": 0,
+  "stock": [
+    {
+      "name": "QA Trade Item",
+      "stockBaseQty": 20
+    }
+  ],
+  "journals": [
+    {
+      "businessDate": "2026-09-21T19:46:57.693Z",
+      "debitPaise": 11000,
+      "creditPaise": 11000,
+      "balanced": true
+    },
+    {
+      "businessDate": "2026-09-21T19:48:51.217Z",
+      "debitPaise": 20000,
+      "creditPaise": 20000,
+      "balanced": true
+    },
+    {
+      "businessDate": "2026-09-21T17:25:36.052Z",
+      "debitPaise": 30000,
+      "creditPaise": 30000,
+      "balanced": true
+    },
+    {
+      "businessDate": "2026-09-21T19:48:10.019Z",
+      "debitPaise": 1000,
+      "creditPaise": 1000,
+      "balanced": true
+    }
+  ],
+  "ledgerTotalsPaise": {
+    "rental_cash": 10000,
+    "rental_advance": 0,
+    "rental_deposit": 0,
+    "rental_income": 11000,
+    "rental_receivable": 0,
+    "rental_upi": 1000
+  },
+  "closing": [
+    {
+      "date": "2026-09-21",
+      "rentalTenders": {
+        "cash": 300,
+        "upi": 0,
+        "bank": 0,
+        "other": 0
+      },
+      "expectedCashPaise": 30000,
+      "upiReceivedPaise": 0,
+      "retailSalesPaise": 0
+    },
+    {
+      "date": "2026-09-22",
+      "rentalTenders": {
+        "cash": -200,
+        "upi": 10,
+        "bank": 0,
+        "other": 0
+      },
+      "expectedCashPaise": -20000,
+      "upiReceivedPaise": 1000,
+      "retailSalesPaise": 0
+    }
+  ],
+  "statement": [
+    {
+      "businessDate": "2026-09-21T19:48:51.217Z",
+      "paymentMode": "cash",
+      "amount": -200,
+      "bookingNumber": "RNT-000002"
+    },
+    {
+      "businessDate": "2026-09-21T19:48:10.019Z",
+      "paymentMode": "upi",
+      "amount": 10,
+      "bookingNumber": "RNT-000002"
+    },
+    {
+      "businessDate": "2026-09-21T17:25:36.052Z",
+      "paymentMode": "cash",
+      "amount": 300,
+      "bookingNumber": "RNT-000002"
+    }
+  ],
+  "notes": [
+    "Synthetic local account only; no production data or external payment was used.",
+    "No opening float was declared on September 22; refund-day net cash is therefore negative 200.",
+    "Historical version-0 booking remains excluded from verified deposits and requires reconciliation.",
+    "This booking was created in the September 21 QA build. Final posting metadata and the statement endpoint are additionally covered by isolated integration tests."
+  ]
+}

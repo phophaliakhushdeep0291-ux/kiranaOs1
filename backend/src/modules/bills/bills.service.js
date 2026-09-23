@@ -383,10 +383,12 @@ export async function restoreDeletedBill(shopId, billId, actor = {}) {
 // ─────────────────────────────────────────────────────────────
 // fulfilment is server-owned context for goods already dispatched. HTTP/sync
 // bodies never supply it; all accounting still runs in this transaction.
-export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
+// transactionContext composes a sale with another server-owned operation. Its
+// caller must dispatch returned integrations only after its transaction commits.
+export async function confirmBill(shopId, body, actor = {}, fulfilment = null, transactionContext = null) {
   const sensitiveActions = Array.isArray(actor.sensitiveBillActions)
     ? [...new Set(actor.sensitiveBillActions)]
-    : await deriveSensitiveBillActions(shopId, body);
+    : await deriveSensitiveBillActions(shopId, body, transactionContext?.tx ?? db);
   assertSensitiveBillReason(sensitiveActions, body.reason);
   if (sensitiveActions.length > 0 && actor.ownerPinVerified !== true) {
     throw new AppError("Owner PIN required for this sensitive bill action", 403, "OWNER_PIN_REQUIRED");
@@ -461,12 +463,13 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
   // no request and still resolves it here.
   const operationalLocation =
     locationAlreadyResolvedForRequest(actor?.req, shopId, requestedLocationId)
-    ?? await resolveOperationalLocation(shopId, requestedLocationId);
+    ?? await resolveOperationalLocation(shopId, requestedLocationId, transactionContext?.tx ?? db);
 
   let bill;
   let integrationDeliveries = [];
   try {
-    const transactionResult = await db.$transaction(async (tx) => {
+    const runTransaction = transactionContext ? (work) => work(transactionContext.tx) : (work) => db.$transaction(work);
+    const transactionResult = await runTransaction(async (tx) => {
     const existingBill = await findExistingBillByIdentity(tx, shopId, billIdentity);
     if (existingBill) return { bill: existingBill, deliveries: [] };
     const fulfilledStock = fulfilment ? await fulfilment.prepare(tx) : null;
@@ -621,7 +624,7 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
       // it — removing it from either would start refusing ordinary counter sales of
       // an under-counted item, which is the failure this comment previously implied
       // was impossible.
-      if (product && !allowStockShortfall && !fulfilledStock) {
+      if (product && product.stockTrackingEnabled !== false && !stockHandledProductIds.has(product.id) && !allowStockShortfall && !fulfilledStock) {
         const availableAtLocation = locationStockByProduct.get(product.id) ?? 0;
         if (availableAtLocation < qtyInBase) {
           throw new AppError(
@@ -1150,6 +1153,9 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
     bill = transactionResult.bill;
     integrationDeliveries = transactionResult.deliveries;
   } catch (error) {
+    // A failed PostgreSQL transaction cannot be queried for a duplicate. Let
+    // the composition owner retry the whole operation from a fresh snapshot.
+    if (transactionContext) throw error;
     if (isUniqueConstraintError(error) && hasBillIdentity(billIdentity)) {
       const existingBill = await findExistingBillByIdentity(db, shopId, billIdentity);
       if (!existingBill) throw error;
@@ -1159,6 +1165,7 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
     }
   }
 
+  if (transactionContext) return { bill, deliveries: integrationDeliveries };
   await dispatchIntegrationDeliveries(integrationDeliveries);
 
   return {
@@ -1223,11 +1230,13 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
     // Guards legacy quote-era estimates, which never moved stock at creation.
     const location = await resolveOperationalLocation(shopId, bill.locationId, tx, { allowInactive: true });
 
-    const saleLedgerRows = await tx.stockLedger.count({
+    const saleLedgerRows = await tx.stockLedger.findMany({
       where: { shopId, billId: bill.id, action: "sale" },
+      select: { productId: true },
     });
-    for (const item of saleLedgerRows > 0 ? bill.items : []) {
-      if (!item.productId) continue;
+    const soldStockIds = new Set(saleLedgerRows.map((row) => row.productId));
+    for (const item of bill.items) {
+      if (!item.productId || !soldStockIds.has(item.productId)) continue;
 
       const product = await tx.product.findFirst({ where: { id: item.productId, shopId } });
       if (!product) continue;
@@ -1663,7 +1672,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
           ...moneyShadows({ ratePerRateUnit: authoritativeRate, costPerRateUnit, lineDiscount: -lineDiscount, lineTotal: -lineTotal, lineCost: -lineCost, lineProfit: -lineProfit }),
         });
 
-        if (product) {
+        if (product && product.stockTrackingEnabled !== false) {
           restockPlan.push({
             product,
             qtyInBase: round2(qtyInBase),
@@ -1979,11 +1988,13 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
 
     // Re-deduct only stock the cancellation actually restored ("cancel_reversal" rows exist);
     // legacy quote-era estimates never moved stock in either direction.
-    const cancelReversalRows = await tx.stockLedger.count({
+    const cancelReversalRows = await tx.stockLedger.findMany({
       where: { shopId, billId: bill.id, action: "cancel_reversal" },
+      select: { productId: true },
     });
-    for (const item of cancelReversalRows > 0 ? bill.items : []) {
-      if (!item.productId) continue;
+    const restoredStockIds = new Set(cancelReversalRows.map((row) => row.productId));
+    for (const item of bill.items) {
+      if (!item.productId || !restoredStockIds.has(item.productId)) continue;
 
       const product = await tx.product.findFirst({
         where: { id: item.productId, shopId, deletedAt: null },

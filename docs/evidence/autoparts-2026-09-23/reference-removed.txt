@@ -1,0 +1,85 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Part Finder" [level=1]
+  - generic: Auto Parts QA Sep23 · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: Part Finder page loaded
+  - heading "What fits this vehicle?" [level=3]
+  - paragraph: Pick the make, then narrow as far as the customer can tell you.
+  - generic: Make *
+  - combobox "Make *"
+  - generic: Model
+  - combobox "Model" [disabled]
+  - generic: Variant
+  - combobox "Variant" [disabled]
+  - generic: Year
+  - spinbutton "Year"
+  - textbox "Narrow by part — e.g. filter, brake"
+  - button "Find Parts" [disabled]:
+    - text: Find Parts
+  - heading "Have a part number?" [level=3]
+  - paragraph: Check a SKU, barcode or recorded equivalent from the box.
+  - button "Record part number":
+    - text: Record part number
+  - textbox "Part number":
+    - /placeholder: Enter the exact number
+    - text: EQUIV-SWIFT-23
+  - button "Look up":
+    - text: Look up
+  - status: No catalogue part or recorded reference matches “EQUIV-SWIFT-23”.
+  - paragraph: Fitments recorded
+  - paragraph: "1"
+  - paragraph: Makes covered
+  - paragraph: "1"
+  - paragraph: Parts mapped
+  - paragraph: "1"
+  - paragraph: Parts not yet mapped
+  - paragraph: "0"
+  - heading "Fitment book" [level=3]
+  - paragraph: Every part you have told the app about, and the vehicles it fits.
+  - button "Record Fitment":
+    - text: Record Fitment
+  - table:
+    - rowgroup:
+      - row "Part Fits Years":
+        - columnheader "Part"
+        - columnheader "Fits"
+        - columnheader "Years"
+        - columnheader
+    - rowgroup:
+      - row "Part QA Swift Oil Filter Fits Maruti Suzuki Swift Diesel Years 2015–2020 Actions Remove QA Swift Oil Filter from Maruti Suzuki Swift":
+        - cell "Part QA Swift Oil Filter":
+          - text: Part
+          - paragraph: QA Swift Oil Filter
+        - cell "Fits Maruti Suzuki Swift Diesel":
+          - text: Fits
+          - paragraph: Maruti Suzuki Swift
+          - paragraph: Diesel
+        - cell "Years 2015–2020"
+        - cell "Actions Remove QA Swift Oil Filter from Maruti Suzuki Swift":
+          - text: Actions
+          - button "Remove QA Swift Oil Filter from Maruti Suzuki Swift":
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

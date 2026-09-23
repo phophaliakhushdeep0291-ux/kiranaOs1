@@ -1,3 +1,4 @@
+import { getActiveLocationId } from "@/features/core/stores/location-context";
 import { ApiClientError, apiRequest } from "@/lib/api/http";
 import { offlineDB } from "@/lib/offline/db";
 import type {
@@ -27,6 +28,7 @@ export interface FurnitureOrderFilters {
 }
 
 export async function listFurnitureOrders(filters: FurnitureOrderFilters = {}) {
+  const cacheKey = `${ORDERS_CACHE_KEY}:${getActiveLocationId() ?? "primary"}`;
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
     if (value) params.set(key, String(value));
@@ -36,12 +38,12 @@ export async function listFurnitureOrders(filters: FurnitureOrderFilters = {}) {
     const orders = await apiRequest<FurnitureOrder[]>(`/furniture-orders${qs ? `?${qs}` : ""}`, { background: true });
     // Only the unfiltered list is worth caching — a cached filter would be a
     // confusing half-truth the next time the page opens offline.
-    if (!qs) await offlineDB.setSetting(ORDERS_CACHE_KEY, orders).catch(() => undefined);
+    if (!qs) await offlineDB.setSetting(cacheKey, orders).catch(() => undefined);
     return orders;
   } catch (error) {
     // Never hide an auth/permission error behind stale data.
     if (error instanceof ApiClientError && error.status > 0 && error.status < 500 && ![408, 429].includes(error.status)) throw error;
-    const cached = await offlineDB.getSetting<FurnitureOrder[]>(ORDERS_CACHE_KEY).catch(() => undefined);
+    const cached = await offlineDB.getSetting<FurnitureOrder[]>(cacheKey).catch(() => undefined);
     if (cached) return cached;
     throw error;
   }
@@ -53,6 +55,24 @@ export function getFurnitureOrder(id: string) {
 
 export function getFurnitureOrderSummary() {
   return apiRequest<FurnitureOrderSummary>("/furniture-orders/summary", { background: true });
+}
+
+export interface FurnitureInvoiceLine {
+  lineId: string; name: string; quantity: number; enteredUnit: string; amount: number; gstRate: number; hsn?: string; productId?: string;
+}
+export interface FurnitureInvoicePreview {
+  order: FurnitureOrder; previewToken: string; lines: FurnitureInvoiceLine[];
+  customers: { id: string; name: string; mobile: string | null }[];
+}
+export interface FurnitureInvoiceInput {
+  previewToken: string; taxMode: "none" | "inclusive"; customerId?: string; reason: string;
+  taxes: { lineId: string; gstRate: number; hsn?: string }[];
+}
+export function previewFurnitureInvoice(id: string) {
+  return apiRequest<FurnitureInvoicePreview>(`/furniture-orders/${id}/invoice-preview`, { cache: "no-store" });
+}
+export function createFurnitureInvoice(id: string, input: FurnitureInvoiceInput, ownerPin: string) {
+  return apiRequest<FurnitureOrder>(`/furniture-orders/${id}/invoice`, { method: "POST", body: JSON.stringify(input), ownerPin });
 }
 
 /**
@@ -95,7 +115,7 @@ export function cancelFurnitureOrder(id: string, reason?: string) {
 
 export function addFurnitureOrderPayment(
   id: string,
-  data: { amount: number; mode?: string; paidOn?: string; reference?: string | null; notes?: string | null },
+  data: { amount: number; clientRequestId: string; expectedPaidTotal?: number; mode?: string; paidOn?: string; reference?: string | null; notes?: string | null },
 ) {
   return apiRequest<FurnitureOrder>(`/furniture-orders/${id}/payments`, { method: "POST", body: JSON.stringify(data) });
 }
@@ -106,4 +126,18 @@ export function removeFurnitureOrderPayment(id: string, paymentId: string) {
 
 export function deleteFurnitureOrder(id: string) {
   return apiRequest<FurnitureOrder>(`/furniture-orders/${id}`, { method: "DELETE" });
+}
+
+export interface FurniturePaymentAdjustment {
+  clientRequestId: string;
+  kind: "refund" | "correction";
+  amount: number;
+  expectedPaidTotal: number;
+  reason: string;
+  mode?: string;
+  reference?: string;
+}
+
+export function adjustFurniturePayment(id: string, paymentId: string, data: FurniturePaymentAdjustment, ownerPin: string) {
+  return apiRequest<FurnitureOrder>(`/furniture-orders/${id}/payments/${paymentId}/adjust`, { method: "POST", body: JSON.stringify(data), ownerPin });
 }

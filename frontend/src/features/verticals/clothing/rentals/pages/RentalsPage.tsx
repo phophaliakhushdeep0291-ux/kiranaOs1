@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -17,7 +17,7 @@ import { useOfflineStatus } from "@/features/core/sync";
 import { useListProducts } from "@/features/core/products/queries";
 import {
   cancelRental, createRental, deleteRental, getRentalSummary,
-  listRentals, markRentalPickedUp, markRentalReturned, settleRental, updateRental,
+  listRentals, markRentalPickedUp, markRentalReturned, settleRental, refundRental, updateRental,
 } from "@/features/verticals/clothing/rentals/api";
 import { RentalBookingPanel } from "@/features/verticals/clothing/rentals/components/RentalBookingPanel";
 import type { RentalBooking, RentalBookingInput, RentalStatus } from "@/types/api";
@@ -67,6 +67,10 @@ export default function RentalsPage() {
   const [editing, setEditing] = useState<RentalBooking | null>(null);
   const [returning, setReturning] = useState<RentalBooking | null>(null);
   const [deleting, setDeleting] = useState<RentalBooking | null>(null);
+  const [refunding, setRefunding] = useState<RentalBooking | null>(null);
+  const [refundMode, setRefundMode] = useState("cash");
+  const [refundReason, setRefundReason] = useState("");
+  const [refundPin, setRefundPin] = useState("");
   const [collecting, setCollecting] = useState<RentalBooking | null>(null);
   const [collectionMode, setCollectionMode] = useState("cash");
   const [collectionReference, setCollectionReference] = useState("");
@@ -150,6 +154,13 @@ export default function RentalsPage() {
     onError: failure(t("rental.collection.failed")),
   });
 
+  const refundAmount = (booking: RentalBooking) => (booking.depositHeld ?? 0) + (booking.status === "cancelled" ? booking.advancePaid : 0);
+  const refundMut = useMutation({
+    mutationFn: (booking: RentalBooking) => refundRental(booking.id, { amount: refundAmount(booking), paymentMode: refundMode, reason: refundReason.trim() }, refundPin),
+    onSuccess: () => { invalidate(); setRefunding(null); setRefundPin(""); toast({ title: t("rental.refund.saved") }); },
+    onError: failure(t("rental.refund.failed")),
+  });
+
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteRental(id),
     onSuccess: () => { invalidate(); setDeleting(null); toast({ title: "Booking moved to recycle bin" }); },
@@ -157,6 +168,7 @@ export default function RentalsPage() {
   });
 
   const all = bookingsQ.data ?? [];
+  const hasLegacy = all.some((booking) => booking.financialVersion !== 1);
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
     return all
@@ -306,32 +318,37 @@ export default function RentalsPage() {
                         </td>
                         <td data-label="Balance" className="px-5 py-3 text-right align-top">
                           <p className="font-bold text-[var(--brand-ink)]">{inr(booking.balanceDue)}</p>
-                          {booking.depositAmount > 0 && <p className="mt-0.5 text-[11px] text-[#8492ac]">{inr(booking.depositAmount)} deposit</p>}
+                          {booking.depositAmount > 0 && <p className="mt-0.5 text-[11px] text-[#8492ac]">{inr(booking.depositHeld ?? booking.depositAmount)} {t(booking.financialVersion === 1 ? "rental.money.depositHeld" : "rental.money.depositUnverified")}</p>}
                         </td>
                         <td data-label="Actions" className="px-5 py-3 align-top">
                           <div className="flex flex-wrap items-center justify-end gap-2 lg:mouse:gap-1.5">
-                            {booking.status === "returned" && booking.balanceDue > 0 && (
+                            {booking.financialVersion === 1 && booking.status === "returned" && booking.balanceDue > 0 && (
                               <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" disabled={!isOnline} onClick={() => { setCollecting(booking); setCollectionMode("cash"); setCollectionReference(""); }}>
                                 <IndianRupee size={13} /> {t("rental.collection.action")}
                               </Button>
                             )}
-                            {booking.status === "booked" && (
+                            {booking.financialVersion === 1 && ["returned", "cancelled"].includes(booking.status) && refundAmount(booking) > 0 && (
+                              <Button variant="outline" className="h-11 gap-1.5 rounded-lg px-2.5 text-xs" disabled={!isOnline} onClick={() => { setRefunding(booking); setRefundMode("cash"); setRefundReason(""); setRefundPin(""); }}>
+                                <Undo2 size={13} /> {t("rental.refund.action")}
+                              </Button>
+                            )}
+                            {booking.financialVersion === 1 && booking.status === "booked" && (
                               <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" disabled={pickupMut.isPending} onClick={() => pickupMut.mutate(booking.id)}>
                                 <Check size={13} /> Picked up
                               </Button>
                             )}
-                            {open && (
+                            {open && booking.financialVersion === 1 && (
                               <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] border-emerald-200 px-2.5 text-[11.5px] font-bold text-emerald-700 hover:bg-emerald-50" onClick={() => setReturning(booking)}>
                                 <Undo2 size={13} /> Return
                               </Button>
                             )}
-                            {open && (
+                            {open && booking.financialVersion === 1 && (
                               <button onClick={() => openEdit(booking)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label="Edit booking"><Pencil size={14} /></button>
                             )}
-                            {open && (
+                            {booking.status === "booked" && booking.financialVersion === 1 && (
                               <button onClick={() => cancelMut.mutate(booking.id)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label="Cancel booking"><X size={15} /></button>
                             )}
-                            <button onClick={() => setDeleting(booking)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label="Delete booking"><Trash2 size={14} /></button>
+                            {booking.financialVersion !== 1 && booking.status === "cancelled" && booking.depositAmount === 0 && booking.advancePaid === 0 && <button onClick={() => setDeleting(booking)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label="Delete booking"><Trash2 size={14} /></button>}
                           </div>
                         </td>
                       </tr>
@@ -343,6 +360,26 @@ export default function RentalsPage() {
           )}
         </div>
       </div>
+
+      {hasLegacy && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{t("rental.money.legacy")}</p>}
+
+      <Dialog open={Boolean(refunding)} onOpenChange={(open) => { if (!open && !refundMut.isPending) { setRefunding(null); setRefundPin(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{t("rental.refund.action")}</DialogTitle></DialogHeader>
+          <p>{refunding?.customerName} · {refunding?.bookingNumber}</p>
+          <p className="text-xl font-bold">{inr(refunding ? refundAmount(refunding) : 0)}</p>
+          <p className="text-sm text-muted-foreground">{t("rental.refund.help")}</p>
+          <Label htmlFor="rental-refund-mode">{t("rental.collection.mode")}</Label>
+          <select id="rental-refund-mode" className="h-11 rounded-md border bg-background px-3" value={refundMode} onChange={(event) => setRefundMode(event.target.value)} disabled={refundMut.isPending}>
+            {(["cash", "upi", "bank", "card", "other"] as const).map((mode) => <option key={mode} value={mode}>{t(`rental.collection.${mode}`)}</option>)}
+          </select>
+          <Label htmlFor="rental-refund-reason">{t("rental.refund.reason")}</Label>
+          <Input id="rental-refund-reason" value={refundReason} onChange={(event) => setRefundReason(event.target.value)} disabled={refundMut.isPending} />
+          <Label htmlFor="rental-refund-pin">{t("rental.refund.pin")}</Label>
+          <Input id="rental-refund-pin" type="password" inputMode="numeric" autoComplete="off" value={refundPin} onChange={(event) => setRefundPin(event.target.value)} disabled={refundMut.isPending} />
+          <Button disabled={!isOnline || refundMut.isPending || !refundReason.trim() || !refundPin} onClick={() => refunding && refundMut.mutate(refunding)}>{t(refundMut.isPending ? "rental.collection.saving" : "rental.refund.confirm")}</Button>
+        </DialogContent>
+      </Dialog>
 
       <RentalBookingPanel
         open={panelOpen}
@@ -405,8 +442,10 @@ function ReturnDialog({ booking, saving, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (lateFee: number, damageCharge: number) => void;
 }) {
+  const { t } = useAppLanguage();
   const [lateFee, setLateFee] = useState("0");
   const [damageCharge, setDamageCharge] = useState("0");
+  useEffect(() => { setLateFee("0"); setDamageCharge("0"); }, [booking?.id]);
 
   return (
     <Dialog
@@ -429,16 +468,16 @@ function ReturnDialog({ booking, saving, onClose, onConfirm }: {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Late fee (₹)</Label>
-                <Input className="h-10" type="number" min="0" step="0.01" value={lateFee} onChange={(e) => setLateFee(e.target.value)} />
+                <Label htmlFor="rental-return-late-fee" className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Late fee (₹)</Label>
+                <Input id="rental-return-late-fee" className="h-10" type="number" min="0" step="0.01" value={lateFee} onChange={(e) => setLateFee(e.target.value)} />
               </div>
               <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Damage charge (₹)</Label>
-                <Input className="h-10" type="number" min="0" step="0.01" value={damageCharge} onChange={(e) => setDamageCharge(e.target.value)} />
+                <Label htmlFor="rental-return-damage" className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Damage charge (₹)</Label>
+                <Input id="rental-return-damage" className="h-10" type="number" min="0" step="0.01" value={damageCharge} onChange={(e) => setDamageCharge(e.target.value)} />
               </div>
             </div>
             <p className="text-[11px] text-[#8492ac]">
-              The {inr(booking.depositAmount)} deposit is refundable — deduct any charges from it at the counter.
+              {t("rental.money.returnHelp")}
             </p>
             <div className="flex gap-2.5 pt-1">
               <Button variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>

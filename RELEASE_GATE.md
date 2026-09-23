@@ -2,9 +2,36 @@
 
 Current decision: **NO-GO — candidate/external/manual evidence incomplete**
 Gate owner: Release owner  
-Last evaluated: 2026-09-17
+Last evaluated: 2026-09-23 (local furniture and restaurant follow-up; historical certification below retains its own dates)
 
 No new feature should enter a release branch while the P0 production gate is red. This document records the decision; `PRODUCTION_CHECKLIST.md` contains the full operational checklist.
+
+## Local follow-up — 22 September 2026
+
+**23 September supplement:** furniture refund/correction, credit allocation and
+reporting/reconciliation fixes are recorded in
+[`FURNITURE_ACCOUNTING_2026-09-23.md`](docs/FURNITURE_ACCOUNTING_2026-09-23.md).
+Restaurant dish-stock display and movement fixes are recorded in
+[`RESTAURANT_STOCK_2026-09-23.md`](docs/RESTAURANT_STOCK_2026-09-23.md).
+Those reports supersede the applicable open implementation items below.
+Atomic furniture invoicing/delivery, legacy reconciliation, PostgreSQL runtime
+proof, authenticated UI verification and the existing operational gates remain open.
+The decision remains **NO-GO**. No production data or deployed application was changed.
+
+The rental booking → return → final collection → deposit refund flow now has dated
+payment events, balanced journals, PIN-protected refunds and consistent closing /
+money statements. Browser and database evidence are in
+[`DEPLOYMENT_READINESS_2026-09-22.md`](docs/DEPLOYMENT_READINESS_2026-09-22.md).
+Furniture delivery now requires a matching sale, stock deductions and received payments; receipt replay and audit rollback are protected. The wider furniture accounting gap remains open.
+The frontend production gate passes 2,946 tests (one skipped). Final integration
+suite passes 415 tests with three PostgreSQL-only skips. Source fingerprints and the final label-only rebuild are recorded with that evidence.
+
+The decision remains **NO-GO**. This is an uncommitted local candidate based on
+`079f436d`, not clean-candidate CI or deployment proof. PostgreSQL migration
+`000136_rental_financial_history`, legacy-rental reconciliation, the open furniture
+invoice/stock gap, and all existing external/manual gates must be addressed.
+The older certification rows below are historical evidence, not reasserted proofs
+for this working tree.
 
 ## Candidate
 

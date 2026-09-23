@@ -1,7 +1,7 @@
 # Bug Backlog
 
 Status: Active  
-Last triage: 2026-09-20
+Last triage: 2026-09-22 (rental/report follow-up; broader 20 September triage retained)
 
 ## Triage of 2026-09-20
 
@@ -152,3 +152,23 @@ QA flow and verifier:
 ## Triage rules
 
 Triage daily during hardening and beta. A bug affecting money, inventory or offline writes must include backend validation and idempotency analysis. A mobile bug must name viewport and keyboard/nav state. Beta feedback becomes a bug only when reproducible; otherwise log it as a research observation and assign an experiment.
+
+
+## Rental/report follow-up — 22 September 2026
+
+These entries supplement the historical 61-item triage above. Evidence:
+`docs/evidence/deployment-readiness-2026-09-22/`.
+
+| ID | Severity | State | Area | Finding | Verification / remaining work |
+|---|---|---|---|---|---|
+| BUG-062 | P1 | Verified locally for new bookings | Rentals, closing, accounting | Advances, deposits and collections were booking fields/audits with no complete dated financial history; refunds had no protected workflow and money statements omitted rental cash. | Balanced, mandatory-audited event posting, owner-PIN refunds, replay/concurrency guards, branch access and dated reports. Browser RNT-000002 nets ₹110 with no remaining liability or due and unchanged stock. Legacy reconciliation and PostgreSQL proof remain release conditions. |
+| BUG-063 | P1 | Verified locally | Financial report reads | Failed statement reads could become empty arrays; closing could silently assume zero cash expenses and include unpaid expenses. | Required reads now fail the report visibly, retry recovers, and closing counts only paid active cash expenses. Frontend regression plus browser connection-loss/recovery proof. |
+| BUG-064 | P1 | In progress | Furniture order fulfilment | An installed legacy order can hold ₹120 of recorded payments with no linked bill and unchanged catalog stock. | Receipts, refunds/corrections, whole-receipt credit allocation, invoice application, dated reports and bank reconciliation have local regression coverage. The prior SO-000001 remains unrepaired. Atomic invoice creation/delivery, legacy reconciliation and exact-candidate PostgreSQL/manual proof remain open. See docs/FURNITURE_ACCOUNTING_2026-09-23.md. |
+| BUG-065 | P1 | Verified locally; rollout pending | Restaurant dish stock | Products and billing displayed negative/out-of-stock counts for untracked dishes. Combos could decrement their own stock and untracked components; mixed-bill cancellation/returns could invent dish stock. | Tracking-aware badges, filters and counters; combo stock ownership and migration 000139; mixed cancellation/restore and local/server return safeguards. Restaurant and shared billing integration coverage passes. Historical quantities are preserved. User-screen verification and migration rollout remain pending. See docs/RESTAURANT_STOCK_2026-09-23.md. |
+
+
+Furniture follow-up on 22 September: BUG-064 remains **open, partially mitigated**. New delivery transitions require a matching active sale bill and stock deductions; receipt identity, balanced advance journals, dated closing reporting, invoice application, branch access/stock scoping, stale-balance protection, mandatory audit rollback and immutable payment history are covered by seven isolated integration scenarios. The UI asks for the matching bill and flags older unlinked deliveries. Refund/correction, credit recovery, legacy repair and exact-candidate PostgreSQL/branch certification remain required. Do not mark the whole furniture workflow verified from these safeguards.
+
+23 September update: the refund/correction and whole-receipt credit recovery requirements above now have implementations and regression tests. The remaining conditions and current verification results are in the two follow-up reports linked in BUG-064/065. The 22 September paragraph is historical.
+
+| BUG-066 | P1 | Verified locally | Auto-parts lookup and records | Vehicle matching could accept invalid years, miss OEM attributes, use stale searches and silently hide register entries; mutations lacked atomic audit/duplicate protection. | Integer-year guards, OEM search, query-bound results, honest cached availability, full register access, confirmed reference removal and audited serializable mutations. 17 integration scenarios and browser sale/return/connection-loss checks pass. See docs/AUTOPARTS_LOOKUP_2026-09-23.md. |

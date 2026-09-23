@@ -3682,6 +3682,11 @@ model RentalBooking {
   id            String @id @default(cuid())
   shopId        String
   bookingNumber String
+  // Existing bookings have no reliable tender history; never infer opening cash.
+  financialVersion Int @default(0)
+  locationId String?
+  clientRequestId String?
+  depositRefunded Float @default(0)
 
   customerId      String?
   customerName    String
@@ -3711,6 +3716,8 @@ model RentalBooking {
   items RentalBookingItem[]
 
   @@unique([shopId, bookingNumber])
+  @@unique([shopId, clientRequestId])
+  @@index([shopId, locationId])
   @@index([shopId, deletedAt])
   @@index([shopId, status, fromDate, toDate])
   @@index([shopId, status, toDate])
@@ -4019,6 +4026,7 @@ model BookListItem {
 model FurnitureOrder {
   id          String @id @default(cuid())
   shopId      String
+  locationId  String?
   orderNumber String
 
   // Captured on the order itself: a showroom sale is often a one-off, and the
@@ -4062,6 +4070,7 @@ model FurnitureOrder {
 
   @@unique([shopId, orderNumber])
   @@index([shopId, deletedAt])
+  @@index([shopId, locationId])
   @@index([shopId, status, promisedOn])
   @@index([shopId, customerPhone])
   @@index([shopId, quotedOn])
@@ -4097,6 +4106,10 @@ model FurnitureOrderItem {
 model FurnitureOrderPayment {
   id      String @id @default(cuid())
   orderId String
+  // Adjustments preserve the original receipt and carry a negative amount.
+  kind String @default("receipt") // receipt | refund | correction
+  reversesPaymentId String?
+  reason String?
 
   amount    Float    @default(0)
   mode      String   @default("cash")

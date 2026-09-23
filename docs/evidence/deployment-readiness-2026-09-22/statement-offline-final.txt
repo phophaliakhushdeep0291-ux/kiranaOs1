@@ -1,0 +1,37 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Cash & Payments" [level=1]
+  - generic: Release QA clothing · Cloud paused
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- text: Cloud backup is paused because the backend is not reachable. Local billing still works.
+- link "Open Sync Status ->":
+  - /url: /sync-status
+- main:
+  - status: Cash & Payments page loaded
+  - alert:
+    - heading "Report is incomplete" [level=2]
+    - paragraph: Some saved entries or online payments could not be loaded. Check your connection and retry before using these totals.
+    - button "Retry report"
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

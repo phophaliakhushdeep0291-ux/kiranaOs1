@@ -184,7 +184,7 @@ export async function getSnapshotStaleness(shopId, date, snapshot, locationId = 
       select: { updatedAt: true },
     }),
     db.financialLedger.findFirst({
-      where: { shopId, sourceType: { in: ["supplier_payment", "supplier_payment_reversal"] }, createdAt: { gt: generatedAt } },
+      where: { shopId, sourceType: { in: ["supplier_payment", "supplier_payment_reversal", "rental", "furniture_order"] }, createdAt: { gt: generatedAt } },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true },
     }),

@@ -67,10 +67,10 @@ export function registerComboConsumptionGuard() {
       const portions = round2((Number(item.quantity) || 0) * Number(unit?.conversionToBase ?? 1));
       if (portions > 0) comboPortions.set(item.productId, round2((comboPortions.get(item.productId) ?? 0) + portions));
     }
-    if (comboPortions.size === 0) return null;
+    if (comboPortions.size === 0) return { stockHandledProductIds: comboIds };
 
     const expanded = expandComboPortions(comboPortions, components);
-    if (expanded.length === 0) return null;
+    if (expanded.length === 0) return { stockHandledProductIds: comboIds };
 
     // Level two: the components' own recipes, through the recipe layer's arithmetic
     // rather than a second copy of it.
@@ -89,9 +89,10 @@ export function registerComboConsumptionGuard() {
     const dishesWithRecipes = new Set(recipeComponents.map((row) => row.dishProductId));
     const directStock = expanded.filter((row) => !dishesWithRecipes.has(row.componentProductId));
 
-    if (ingredientConsumption.length === 0 && directStock.length === 0) return null;
+    if (ingredientConsumption.length === 0 && directStock.length === 0) return { stockHandledProductIds: comboIds };
 
     return {
+      stockHandledProductIds: comboIds,
       onConfirmed: async ({ tx: confirmTx, bill, location: confirmedLocation, actor }) => {
         const target = confirmedLocation ?? location;
         const moves = [
@@ -109,14 +110,22 @@ export function registerComboConsumptionGuard() {
           })),
         ];
 
+        // An ingredient may also be sold directly inside the same combo.
+        // Combine both uses before writing its unique bill movement.
+        const byProduct = new Map();
         for (const move of moves) {
+          const existing = byProduct.get(move.productId);
+          if (existing) existing.qtyBase = round2(existing.qtyBase + move.qtyBase);
+          else byProduct.set(move.productId, { ...move });
+        }
+        for (const move of byProduct.values()) {
           const product = await confirmTx.product.findFirst({
             where: { id: move.productId, shopId, deletedAt: null },
           });
           // Deleted from the catalogue between the combo being built and sold.
           // Nothing to move, and a guest's bill is not where to raise it — the
           // kitchen stock screen already reports the broken line.
-          if (!product) continue;
+          if (!product || product.stockTrackingEnabled === false) continue;
           const stockResult = await decrementLocationInventory(confirmTx, {
             shopId,
             location: target,

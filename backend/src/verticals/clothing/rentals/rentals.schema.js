@@ -25,6 +25,8 @@ const rentalItemSchema = z.object({
 
 export const createRentalSchema = z
   .object({
+    clientRequestId: z.string().trim().min(8).max(120).optional(),
+    paymentMode: z.enum(["cash", "upi", "bank", "card", "other"]).optional(),
     customerId: z.string().trim().min(1).nullish(),
     customerName: z.string().trim().min(1, "Renter name is required").max(160),
     customerPhone: phone,
@@ -77,4 +79,10 @@ export const settleRentalSchema = z.object({
   amount: z.number().finite().positive().multipleOf(0.01),
   paymentMode: z.enum(["cash", "upi", "bank", "card", "other"]),
   reference: z.string().trim().max(160).optional(),
+});
+
+export const refundRentalSchema = z.object({
+  amount: z.number().finite().positive().multipleOf(0.01),
+  paymentMode: z.enum(["cash", "upi", "bank", "card", "other"]),
+  reason: z.string().trim().min(1).max(500),
 });

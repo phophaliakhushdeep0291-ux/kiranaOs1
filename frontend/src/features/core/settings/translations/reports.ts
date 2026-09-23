@@ -4,6 +4,11 @@
 // kept — but in the words an Indian shop owner actually uses: "पेआउट", "सेटलमेंट"
 // and "मिलान", not translated-from-textbook coinages nobody says out loud.
 export const reportsEn = {
+  "reports.read.checking": "Loading the complete report…",
+  "reports.read.unavailable": "Report is incomplete",
+  "reports.read.help": "Some saved entries or online payments could not be loaded. Check your connection and retry before using these totals.",
+  "reports.read.retry": "Retry report",
+
   // ── Channel settlements: header ──
   "reports.settlement.controlBadge": "Suggestion-only financial control",
   "reports.settlement.title": "Channel payout reconciliation",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fromBaseQty, isLowStock, toBaseQty } from "@/features/core/products/pages/product-pricing";
+import { fromBaseQty, isLowStock, isOutOfStock, toBaseQty } from "@/features/core/products/pages/product-pricing";
 import type { Product } from "@/types/api";
 
 function product(overrides: Partial<Product>): Product {
@@ -29,5 +29,13 @@ describe("low stock classification", () => {
   it("round-trips the alert between form display units and storage", () => {
     expect(fromBaseQty(toBaseQty(2, "kg"), "kg")).toBe(2);
     expect(fromBaseQty(toBaseQty(10, "piece"), "piece")).toBe(10);
+  });
+
+  it("excludes cooked dishes with historical negative counts from stock alerts", () => {
+    const dish = product({ name: "Dal Fry", stockBaseQty: -12, lowStockThreshold: 5, stockTrackingEnabled: false });
+    expect(isLowStock(dish)).toBe(false);
+    expect(isOutOfStock(dish)).toBe(false);
+    expect(isOutOfStock(product({ stockBaseQty: -2, trackStock: false }))).toBe(false);
+    expect(isOutOfStock(product({ name: "Bottled Water", stockBaseQty: 0, stockTrackingEnabled: true }))).toBe(true);
   });
 });

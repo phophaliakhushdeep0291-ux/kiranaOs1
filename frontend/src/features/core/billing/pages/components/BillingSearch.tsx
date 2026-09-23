@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { resolveBillPaymentMode } from "@/features/core/bills/payment-mode";
+import { productTracksStock } from "@/features/core/inventory/stock-display";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { useListBills } from "@/features/core/bills/queries";
@@ -1053,7 +1054,7 @@ export function BillingSearch({
 /* ─── Product card — spec: 176px height, absolute price + add button ─── */
 // `t` arrives as a prop rather than from the context: this renders once per tile in the
 // product grid, and the page above it already holds the translator.
-function ProductCard({ product, onAdd, trending = false, t }: { product: Product; onAdd: () => void; trending?: boolean; t: Translate }) {
+export function ProductCard({ product, onAdd, trending = false, t }: { product: Product; onAdd: () => void; trending?: boolean; t: Translate }) {
   const sellingUnits = (product.sellingUnits ?? []).filter((unit) => unit.isActive !== false);
   const defaultUnit = sellingUnits.find((unit) => unit.isDefault) ?? sellingUnits[0];
   const price = productTilePrice(product, defaultUnit, defaultUnit);
@@ -1073,9 +1074,9 @@ function ProductCard({ product, onAdd, trending = false, t }: { product: Product
       {/* Image area — neutral photo placeholder */}
       <div className="relative mb-2.5 flex h-[76px] items-center justify-center overflow-hidden rounded-[7px] bg-[#FAF8F2]">
         {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-contain p-1" /> : <span className="text-[40px] leading-none" aria-hidden="true">{emoji}</span>}
-        {stock <= 0 ? (
+        {productTracksStock(product) && stock <= 0 ? (
           <span className="absolute bottom-1 right-1 rounded bg-red-600 px-1 py-0.5 text-[9px] font-bold text-white">{t("billing.search.stockOut")}</span>
-        ) : stock <= 5 ? (
+        ) : productTracksStock(product) && stock <= 5 ? (
           <span className="absolute bottom-1 right-1 rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white">{t("billing.search.stockLow")}</span>
         ) : null}
         {sellingUnits.length > 1 ? (
