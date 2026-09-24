@@ -262,6 +262,24 @@ async function withOrderTransaction(operation) {
   }
 }
 
+async function withPaymentTransaction(shopId, orderId, paymentId, operation) {
+  try {
+    return await withOrderTransaction(operation);
+  } catch (error) {
+    // PostgreSQL can report a unique-key collision instead of a serialization
+    // conflict when another request commits this receipt first. The failed
+    // transaction is already rolled back; only replay a committed identity on
+    // this tenant's order, and re-run the normal content checks in a fresh one.
+    if (error?.code !== "P2002") throw error;
+    const committed = await db.furnitureOrderPayment.findFirst({
+      where: { id: paymentId, orderId, order: { shopId, deletedAt: null } },
+      select: { id: true },
+    });
+    if (!committed) throw error;
+    return withOrderTransaction(operation);
+  }
+}
+
 export async function assertOrderStock(client, shopId, items, status, excludeOrderId = null, locationId = null) {
   const ids = [...new Set(items.map((item) => item.productId).filter(Boolean))];
   if (!ids.length) return;
@@ -551,7 +569,7 @@ export async function addPayment(shopId, id, data, context = {}) {
   if (!Number.isFinite(amount) || toPaise(amount) <= 0 || !["cash", "upi", "bank", "card", "other"].includes(mode)) throw new AppError("Enter a valid payment amount and method", 400);
   const paidOn = data.paidOn ? dayBounds(data.paidOn, "paidOn").start : new Date();
   if (formatDateInTimeZone(paidOn) > todayKey()) throw new AppError("A received payment cannot have a future date", 400);
-  return withOrderTransaction(async (tx) => {
+  return withPaymentTransaction(shopId, id, paymentId, async (tx) => {
     const order = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { payments: true, items: true } });
     if (!order) throw new AppError("Order not found", 404);
     const existing = order.payments.find((p) => p.id === paymentId);
@@ -585,7 +603,7 @@ export async function removePayment(shopId, id, paymentId) {
 // receipt, a reason, a stable request identity and a current balance snapshot.
 export async function adjustPayment(shopId, id, paymentId, data, context = {}) {
   const adjustmentId = `foa_${createHash("sha256").update(`${shopId}:${id}:${data.clientRequestId}`).digest("hex")}`;
-  return withOrderTransaction(async (tx) => {
+  return withPaymentTransaction(shopId, id, adjustmentId, async (tx) => {
     const order = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true, payments: true } });
     if (!order) throw new AppError("Order not found", 404);
     const original = order.payments.find((payment) => payment.id === paymentId && payment.amount > 0);
