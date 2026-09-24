@@ -9,6 +9,11 @@ export const SYSTEM_ACCOUNTS = [
   ["1020", "Bank", "asset", "debit", "bank"],
   ["1030", "Other payment clearing", "asset", "debit", "other_clearing"],
   ["1100", "Customer receivables", "asset", "debit", "receivables"],
+  ["1110", "Rental receivables", "asset", "debit", "rental_receivables"],
+  ["2400", "Rental advances", "liability", "credit", "rental_advances"],
+  ["2410", "Refundable rental deposits", "liability", "credit", "rental_deposits"],
+  ["2420", "Furniture order advances", "liability", "credit", "furniture_advances"],
+  ["4100", "Rental income", "income", "credit", "rental_income"],
   ["1200", "Inventory at recorded purchase cost", "asset", "debit", "inventory"],
   ["1300", "Supplier advances and credits", "asset", "debit", "supplier_credits"],
   ["2000", "Supplier payables", "liability", "credit", "payables"],
@@ -26,6 +31,10 @@ export const SYSTEM_ACCOUNTS = [
 ].map(([code, name, category, normalSide, systemKey]) => ({ code, name, category, normalSide, systemKey }));
 
 const ENTRY_MAPPING = {
+  rental_cash: ["1000", "debit"], rental_upi: ["1010", "debit"], rental_bank: ["1020", "debit"], rental_other: ["1030", "debit"],
+  rental_advance: ["2400", "credit"], rental_deposit: ["2410", "credit"], rental_receivable: ["1110", "debit"], rental_income: ["4100", "credit"],
+  furniture_cash: ["1000", "debit"], furniture_upi: ["1010", "debit"], furniture_bank: ["1020", "debit"], furniture_other: ["1030", "debit"],
+  furniture_advance: ["2420", "credit"],
   sale: ["4000", "credit"], cash_in: ["1000", "debit"], upi_in: ["1010", "debit"], bank_in: ["1020", "debit"],
   udhar_debit: ["1100", "debit"], udhar_credit: ["1100", "credit"], udhar_return_credit: ["1100", "credit"],
   gift_card_issued: ["2100", "credit"], gift_card_redeemed: ["2100", "debit"], waiver_expense: ["6100", "debit"],
@@ -111,7 +120,7 @@ export async function postFinancialLedgerRows(client, rows) {
   if (!client.chartOfAccount || !client.journalEntry) return createdRows;
   const groups = Map.groupBy(createdRows, (row) => `${row.sourceType}\u0000${row.sourceId}`);
   let accounts = await client.chartOfAccount.findMany({ where: { shopId, active: true } });
-  if (accounts.length < SYSTEM_ACCOUNTS.length) accounts = await ensureSystemAccounts(shopId, client);
+  if (SYSTEM_ACCOUNTS.some((required) => !accounts.some((account) => account.code === required.code))) accounts = await ensureSystemAccounts(shopId, client);
   const accountByCode = new Map(accounts.map((account) => [account.code, account]));
   for (const sourceRows of groups.values()) {
     const source = sourceRows[0];

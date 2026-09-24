@@ -1,0 +1,33 @@
+{
+  "baseCommit": "079f436d708a36d14adef9c7988aa24b22decb8e",
+  "buildId": "autoparts-20260923d",
+  "scope": "Local dirty working tree; auto-parts touched sources and captured evidence only. Not a full production certification.",
+  "source": {
+    "backend/src/verticals/auto-parts/fitment/fitment.controller.js": "68da38e39685482494fae8ce5578a651ec48b6e5b8939646cf8ea0648d27da79",
+    "backend/src/verticals/auto-parts/fitment/fitment.routes.js": "523ec11e30eef0be7144db1dbb29b41a4f99107fa25b5789bad56225612e78e0",
+    "backend/src/verticals/auto-parts/fitment/fitment.schema.js": "34adb271b5a489b2c72c5cf6b0a6ab9df48712a73fd9c8d9f5b4e26f1afde94b",
+    "backend/src/verticals/auto-parts/fitment/fitment.service.js": "2b92b3b7db7b9b136ea5a1bc838067c7b2e8c2f93ffa6eadcd16fce6e0457360",
+    "backend/tests/integration/auto-parts-integrity.integration.test.js": "702196baf919318465869785277e04a4763bb46721d5470af39c8056db10afc2",
+    "backend/tests/integration/shop-type-flows.integration.test.js": "3338e33c544fb8e6d0a53520d9e0cb4acd967fe1e4838e5fc4ea6fe87fd6fbbe",
+    "frontend/src/features/core/settings/translations/settings-pages.hi.ts": "49e0e80484284d3d7e09757cacf78572155f7392e062b705ca3ffc895990116e",
+    "frontend/src/features/core/settings/translations/shop-types.hi.ts": "bf1644ee9a701875ab216201e84e4a75c20a9711b7df68620d64f3dfade6bf0a",
+    "frontend/src/features/core/settings/translations/shop-types.ts": "dea292840c9638303366702cf56257d67625879605c4f03a5dd192964e4ac1ea",
+    "frontend/src/features/verticals/auto-parts/fitment/api.ts": "eef567093802d7ecd27dd3448d4fdd85848c6d6de7e5e71cffacb5fc8fa9299e",
+    "frontend/src/features/verticals/auto-parts/fitment/pages/FitmentPage.tsx": "277ccc61750f449f7864264d1f9cb49b770886749248b9f30340b813c6bbc05a",
+    "frontend/src/tests/fitment-year-validation.test.ts": "a9320140907161e617e53fea717290ea9ac93574f8e6922933ed69bfaccaf161",
+    "frontend/src/types/api.ts": "852d8af24dd3005353099569a6eec3d0f632b0b8a8e795669b42750e76fce974"
+  },
+  "evidence": {
+    "backend-check.log": "c39a3d42ee42524bd361b6e9afad737e2930a00f7b650afda932f48824e2c59d",
+    "examples-check.log": "4bb8d44d0c2c6e670fff6801439999783c017ab4a6081e31bdd854fba888385c",
+    "final-preview.txt": "6083fbdf14e99c4e67d222f6d21213acecef36990ffed691f813160a702648c2",
+    "fitment-connection-lost.txt": "2e77b6b29fbec546eee835ca3db7fb52915645cc717d96ef4f14d2a1b0ff7c93",
+    "fitment-online.png": "9c431450b6145fb92614b81c9a47b04c4463994e7e5fd06143129b6812eb7d30",
+    "fitment-online.txt": "4195f3f51619183354b12b13cdfc7813e58b4c7f186c0ab18ec122a6ea0dbe01",
+    "frontend-check.log": "ad591fe71d0853163297f64c485d860da80c5affe23934f6e313a42f5743208d",
+    "integration-check.log": "4aa72bdbde689976ad33814cf4f325c9c020e2f94c42e7d3b2652326f54af11e",
+    "reconciliation.json": "acf730dc129c559dafc23a0eaa96f2a67f32233b67b4192058ca6fd03b1e0ae1",
+    "reference-removal-audit.json": "28c38c2483bca0ce6ec38292c61e5a1f3f0cead7ed52308862d885bd4fe2bc64",
+    "reference-removed.txt": "610e28a451a4200debf26b056d560308fd4d08c4928e6187bbfed86ba1cd7655"
+  }
+}

@@ -1,0 +1,88 @@
+- link:
+  - /url: "#main-content"
+  - text: Skip to main content
+- banner:
+  - link:
+    - /url: /dashboard
+  - heading [level=1]: Order Book
+  - generic: Release QA furniture · Synced
+  - button:
+  - link:
+    - /url: /sync-status
+- main:
+  - status: Order Book page loaded
+  - paragraph: Open orders
+  - paragraph: "1"
+  - paragraph: Past the promised date
+  - paragraph: "0"
+  - paragraph: Advances held
+  - paragraph: ₹100
+  - paragraph: Still to collect
+  - paragraph: ₹0
+  - text: ₹100 of work promised and not yet delivered ·
+  - generic: 1 ready to go out
+  - text: · 1 product held off the floor
+  - heading [level=3]: Order book
+  - paragraph: Quote, advance, make, deliver, install — and what is still owed at every step.
+  - button:
+    - text: New Order
+  - button: Open
+  - button: Quotes
+  - button: Being made
+  - button: Ready
+  - button: Delivered
+  - button: Everything
+  - button: Late only
+  - textbox:
+    - /placeholder: Customer, order no., item
+  - button:
+    - paragraph: QA Delivery Proof 22
+    - paragraph:
+      - generic: SO-000002
+      - generic: 1 item
+  - generic: Ready to deliver
+  - paragraph: ₹100
+  - paragraph: paid up
+  - button:
+    - text: Delivered
+  - button:
+  - button:
+    - paragraph: QA Furniture Buyer
+    - paragraph:
+      - generic: SO-000001
+      - generic: 1 item
+  - generic: Installed
+  - paragraph: ₹120
+  - paragraph: paid up
+  - status: This older delivery has no linked sale bill. Review its invoice, payments and stock before further changes.
+- navigation:
+  - link:
+    - /url: /dashboard
+    - generic: Home
+  - link:
+    - /url: /billing
+    - generic: Sell
+  - link:
+    - /url: /inventory
+    - generic: Stock
+  - link:
+    - /url: /customers
+    - generic: Customers
+  - button:
+    - generic: More
+- button:
+- list:
+  - generic: Could not move the order along
+  - generic: That bill is not in your shop
+  - button:
+- dialog "Confirm delivery with a bill" [active]:
+  - heading "Confirm delivery with a bill" [level=2]
+  - paragraph: Use the existing sale bill for this customer, these goods and the same received payments. Linking it does not collect money or deduct stock again. Reconcile any earlier advances before linking.
+  - paragraph: SO-000002 · QA Delivery Proof 22 · ₹100
+  - generic: Sale bill number
+  - textbox "Sale bill number": QA-NO-SUCH-BILL
+  - button "Go back"
+  - button "Link bill and deliver"
+  - button "Close":
+    - generic: Close
+- status: Notification Could not move the order alongThat bill is not in your shop

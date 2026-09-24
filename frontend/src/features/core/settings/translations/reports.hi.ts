@@ -3,6 +3,11 @@
 import type { reportsEn } from "./reports";
 
 export const reportsHi: Record<keyof typeof reportsEn, string> = {
+  "reports.read.checking": "पूरी रिपोर्ट लोड हो रही है…",
+  "reports.read.unavailable": "रिपोर्ट अधूरी है",
+  "reports.read.help": "कुछ सेव की गई प्रविष्टियाँ या ऑनलाइन भुगतान लोड नहीं हो पाए। कुल राशि का उपयोग करने से पहले कनेक्शन जाँचें और फिर कोशिश करें।",
+  "reports.read.retry": "रिपोर्ट फिर लोड करें",
+
   // ── चैनल सेटलमेंट: हेडर ──
   // "पेआउट", "सेटलमेंट", "ऑर्डर" वही शब्द हैं जो दुकान मालिक बोलता है।
   "reports.settlement.controlBadge": "सिर्फ सुझाव देता है, खुद कुछ नहीं चढ़ाता",

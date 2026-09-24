@@ -4,6 +4,7 @@ import { requireDeviceActivated } from "../../../modules/devices/device.middlewa
 import { requireShop } from "../../../middleware/permissions.js";
 import { requireFeature } from "../../../modules/feature-gates/featureGate.middleware.js";
 import { requireCapability } from "../../../modules/shops/businessProfile.middleware.js";
+import { requireLocationAccess } from "../../../modules/stores/location-access.service.js";
 import { validate } from "../../../middleware/validate.js";
 import {
   bulkFitmentSchema,
@@ -18,7 +19,7 @@ const router = Router();
 // Gated on the capability rather than the business type: a hardware shop runs
 // the same pack without fitment, and a shop that does not answer "does this
 // fit?" is turned away by the server, not only by a hidden sidebar entry.
-router.use(requireAuth, requireShop, requireDeviceActivated(), requireFeature("vehicle_fitment"), requireCapability("VEHICLE_FITMENT"));
+router.use(requireAuth, requireShop, requireDeviceActivated(), requireFeature("vehicle_fitment"), requireCapability("VEHICLE_FITMENT"), requireLocationAccess("view"));
 
 // Static paths first — none of these may be swallowed by "/:id".
 router.get("/search", ctrl.findForVehicle);
@@ -28,17 +29,17 @@ router.get("/part-number/:partNumber", ctrl.byPartNumber);
 router.get("/for-product/:productId", ctrl.forProduct);
 router.get("/", ctrl.list);
 
-router.post("/", validate(createFitmentSchema), ctrl.create);
-router.post("/bulk", validate(bulkFitmentSchema), ctrl.createBulk);
+router.post("/", requireLocationAccess("inventory"), validate(createFitmentSchema), ctrl.create);
+router.post("/bulk", requireLocationAccess("inventory"), validate(bulkFitmentSchema), ctrl.createBulk);
 
 // Cross-references live under the same capability: "what else will do?" is the
 // other half of the same counter conversation. Registered before the "/:id"
 // routes so the prefix can never be read as a fitment id.
-router.post("/references", validate(createCrossReferenceSchema), ctrl.createReference);
-router.patch("/references/:id", validate(updateCrossReferenceSchema), ctrl.updateReference);
-router.delete("/references/:id", ctrl.removeReference);
+router.post("/references", requireLocationAccess("inventory"), validate(createCrossReferenceSchema), ctrl.createReference);
+router.patch("/references/:id", requireLocationAccess("inventory"), validate(updateCrossReferenceSchema), ctrl.updateReference);
+router.delete("/references/:id", requireLocationAccess("inventory"), ctrl.removeReference);
 
-router.patch("/:id", validate(updateFitmentSchema), ctrl.update);
-router.delete("/:id", ctrl.remove);
+router.patch("/:id", requireLocationAccess("inventory"), validate(updateFitmentSchema), ctrl.update);
+router.delete("/:id", requireLocationAccess("inventory"), ctrl.remove);
 
 export default router;

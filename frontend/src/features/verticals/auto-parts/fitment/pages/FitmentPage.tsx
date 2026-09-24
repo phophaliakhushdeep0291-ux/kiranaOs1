@@ -16,10 +16,10 @@ import { useAppLanguage } from "@/features/core/settings/i18n";
 import { queueProductsForBilling } from "@/features/core/billing/pending-cart-additions";
 import { useListProducts } from "@/features/core/products/queries";
 import {
-  createFitment, deleteFitment, findPartsForVehicle, getFitmentSummary,
+  createCrossReference, createFitment, deleteCrossReference, deleteFitment, findByPartNumber, findPartsForVehicle, getFitmentSummary,
   getVehicleOptions, listFitments,
 } from "@/features/verticals/auto-parts/fitment/api";
-import type { FittingPart, PartFitment, PartFitmentInput } from "@/types/api";
+import type { FittingPart, PartCrossReference, PartCrossReferenceInput, PartCrossReferenceKind, PartFitment, PartFitmentInput, PartNumberLookup } from "@/types/api";
 
 function inr(n: number) {
   return `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -37,9 +37,14 @@ export default function FitmentPage() {
   const [variant, setVariant] = useState("");
   const [year, setYear] = useState("");
   const [partSearch, setPartSearch] = useState("");
-  const [searched, setSearched] = useState<{ make: string; model: string; year: string } | null>(null);
+  const [partNumber, setPartNumber] = useState("");
+  const [numberResult, setNumberResult] = useState<PartNumberLookup | null>(null);
+  const [searched, setSearched] = useState<{ make: string; model: string; variant: string; year: string } | null>(null);
   const [results, setResults] = useState<FittingPart[] | null>(null);
   const [adding, setAdding] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(40);
+  const [addingNumber, setAddingNumber] = useState(false);
+  const [removingReference, setRemovingReference] = useState<PartCrossReference | null>(null);
   const [removing, setRemoving] = useState<PartFitment | null>(null);
 
   /**
@@ -49,7 +54,7 @@ export default function FitmentPage() {
    * a bill, not on a screen the counter then has to remember and retype. Billing
    * prices it, because billing owns pricing.
    */
-  const sellPart = useCallback(async (part: FittingPart) => {
+  const sellPart = useCallback(async (part: { productId: string; productName: string }) => {
     await queueProductsForBilling([{ productId: part.productId, name: part.productName }]);
     navigate("/billing");
   }, [navigate]);
@@ -61,19 +66,42 @@ export default function FitmentPage() {
     queryFn: () => getVehicleOptions(make),
     enabled: Boolean(make),
   });
+  const variantsQ = useQuery({
+    queryKey: ["fitment", "vehicles", make, model],
+    queryFn: () => getVehicleOptions(make, model),
+    enabled: Boolean(make && model),
+  });
   const allFitmentsQ = useQuery({ queryKey: ["fitment", "list"], queryFn: () => listFitments() });
 
-  const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["fitment"] });
+  const invalidate = () => { setResults(null); setSearched(null); void queryClient.invalidateQueries({ queryKey: ["fitment"] }); };
 
   function failure(title: string) {
     return (err: unknown) =>
-      toast({ title, description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+      toast({ title, description: err instanceof Error ? err.message : t("shopType.fitment.book.retryHelp"), variant: "destructive" });
   }
 
   const searchMut = useMutation({
-    mutationFn: () => findPartsForVehicle({ make, model: model || undefined, variant: variant || undefined, year: year || undefined, search: partSearch || undefined }),
-    onSuccess: (parts) => { setResults(parts); setSearched({ make, model, year }); },
+    mutationFn: (query: { make: string; model: string; variant: string; year: string; search: string }) => findPartsForVehicle(query),
+    onMutate: () => { setResults(null); setSearched(null); },
+    onSuccess: (parts, query) => { setResults(parts); setSearched(query); },
     onError: failure("Could not search"),
+  });
+  const numberMut = useMutation({
+    mutationFn: (number: string) => findByPartNumber(number),
+    onMutate: () => setNumberResult(null),
+    onSuccess: setNumberResult,
+    onError: failure("Could not look up the part number"),
+  });
+  const addNumberMut = useMutation({
+    mutationFn: (data: PartCrossReferenceInput) => createCrossReference(data),
+    onSuccess: (reference) => {
+      invalidate();
+      setAddingNumber(false);
+      setPartNumber(reference.partNumber);
+      numberMut.mutate(reference.partNumber);
+      toast({ title: t("shopType.fitment.number.saved") });
+    },
+    onError: failure(t("shopType.fitment.number.saveFailed")),
   });
 
   const addMut = useMutation({
@@ -92,12 +120,22 @@ export default function FitmentPage() {
     onError: failure("Could not remove it"),
   });
 
+  const removeReferenceMut = useMutation({
+    mutationFn: (id: string) => deleteCrossReference(id),
+    onSuccess: () => {
+      invalidate(); setRemovingReference(null); setNumberResult(null);
+      if (partNumber.trim()) numberMut.mutate(partNumber.trim());
+      toast({ title: t("shopType.fitment.number.removed") });
+    },
+    onError: failure(t("shopType.fitment.number.removeFailed")),
+  });
+
   const summary = summaryQ.data;
   const makes = makesQ.data?.makes ?? [];
   const models = modelsQ.data?.models ?? [];
-  const variants = modelsQ.data?.variants ?? [];
+  const variants = variantsQ.data?.variants ?? [];
 
-  const recent = useMemo(() => (allFitmentsQ.data ?? []).slice(0, 40), [allFitmentsQ.data]);
+  const recent = useMemo(() => (allFitmentsQ.data ?? []).slice(0, visibleCount), [allFitmentsQ.data, visibleCount]);
 
   return (
     <div className="app-docked-page">
@@ -111,7 +149,7 @@ export default function FitmentPage() {
         {/* ── The counter question ── */}
         <form
           className="rounded-[14px] border border-[#e6ecf4] bg-white p-4 shadow-[0_8px_24px_rgba(15,35,80,0.04)]"
-          onSubmit={(e) => { e.preventDefault(); if (make) searchMut.mutate(); }}
+          onSubmit={(e) => { e.preventDefault(); if (make.trim()) searchMut.mutate({ make, model, variant, year, search: partSearch }); }}
         >
           <div className="mb-2.5 flex items-center gap-2">
             <span className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand)]"><Car size={16} /></span>
@@ -121,7 +159,7 @@ export default function FitmentPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <fieldset disabled={searchMut.isPending} className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             <Fld label="Make *">
               <input
                 list="fitment-makes"
@@ -138,7 +176,7 @@ export default function FitmentPage() {
                 className="h-11 lg:mouse:h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
                 placeholder="Swift"
                 value={model}
-                onChange={(e) => setModel(e.target.value)}
+                onChange={(e) => { setModel(e.target.value); setVariant(""); }}
                 disabled={!make}
               />
               <datalist id="fitment-models">{models.map((m) => <option key={m} value={m} />)}</datalist>
@@ -157,7 +195,7 @@ export default function FitmentPage() {
             <Fld label="Year">
               <Input className="h-10" type="number" min="1900" max="2100" placeholder="2015" value={year} onChange={(e) => setYear(e.target.value)} />
             </Fld>
-          </div>
+          </fieldset>
 
           <div className="mt-2.5 flex flex-wrap gap-2">
             <div className="relative min-w-[180px] flex-1">
@@ -180,14 +218,44 @@ export default function FitmentPage() {
 
         {results && <VehicleResults results={results} searched={searched} onSell={sellPart} sellLabel={t("shopType.fitment.sell")} />}
 
+        <form
+          className="rounded-[14px] border border-[#e6ecf4] bg-white p-4 shadow-[0_8px_24px_rgba(15,35,80,0.04)]"
+          onSubmit={(e) => { e.preventDefault(); if (partNumber.trim()) numberMut.mutate(partNumber.trim()); }}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h3 className="font-display text-[14px] font-black text-[var(--brand-ink)]">{t("shopType.fitment.number.title")}</h3>
+              <p className="mt-0.5 text-[11.5px] text-[#64748b]">{t("shopType.fitment.number.help")}</p>
+            </div>
+            <Button type="button" variant="outline" className="h-11 gap-2" disabled={!isOnline} onClick={() => setAddingNumber(true)}>
+              <Plus size={15} /> {t("shopType.fitment.number.record")}
+            </Button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Input
+              aria-label={t("shopType.fitment.number.label")}
+              className="h-11 min-w-[180px] flex-1"
+              placeholder={t("shopType.fitment.number.placeholder")}
+              value={partNumber}
+              disabled={numberMut.isPending}
+              onChange={(e) => { setPartNumber(e.target.value); setNumberResult(null); }}
+            />
+            <Button type="submit" className="h-11 gap-2" disabled={!isOnline || !partNumber.trim() || numberMut.isPending}>
+              {numberMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} {t("shopType.fitment.number.lookup")}
+            </Button>
+          </div>
+          {!isOnline && <p className="mt-2 text-[11.5px] text-amber-800">{t("shopType.fitment.number.offline")}</p>}
+          {numberResult && <PartNumberResults result={numberResult} onSell={sellPart} onRemove={setRemovingReference} canRemove={isOnline} />}
+        </form>
+
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <Kpi icon={<Layers size={16} />} label="Fitments recorded" value={String(summary?.fitments ?? 0)} tone="blue" />
-          <Kpi icon={<Car size={16} />} label="Makes covered" value={String(summary?.makes ?? 0)} tone="violet" />
-          <Kpi icon={<Package size={16} />} label="Parts mapped" value={String(summary?.mappedParts ?? 0)} tone="green" />
+          <Kpi icon={<Layers size={16} />} label="Fitments recorded" value={summary ? String(summary.fitments) : "—"} tone="blue" />
+          <Kpi icon={<Car size={16} />} label="Makes covered" value={summary ? String(summary.makes) : "—"} tone="violet" />
+          <Kpi icon={<Package size={16} />} label="Parts mapped" value={summary ? String(summary.mappedParts) : "—"} tone="green" />
           <Kpi
             icon={<CircleAlert size={16} />}
             label="Parts not yet mapped"
-            value={String(summary?.unmappedParts ?? 0)}
+            value={summary ? String(summary.unmappedParts) : "—"}
             tone={summary?.unmappedParts ? "amber" : "green"}
           />
         </div>
@@ -209,6 +277,12 @@ export default function FitmentPage() {
 
           {allFitmentsQ.isLoading ? (
             <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[#64748b]"><Loader2 size={16} className="animate-spin" /> Loading…</div>
+          ) : allFitmentsQ.isError ? (
+            <div role="alert" className="flex flex-col items-center gap-2 px-5 py-10 text-center">
+              <p className="text-[13px] font-bold text-[var(--brand-ink)]">{t("shopType.fitment.book.unavailable")}</p>
+              <p className="text-[12px] text-[#64748b]">{t("shopType.fitment.book.retryHelp")}</p>
+              <Button type="button" variant="outline" className="h-11" onClick={() => void allFitmentsQ.refetch()}>{t("shopType.fitment.book.retry")}</Button>
+            </div>
           ) : recent.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
               <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]"><Wrench size={22} /></span>
@@ -248,18 +322,37 @@ export default function FitmentPage() {
                   ))}
                 </tbody>
               </table>
+              {(allFitmentsQ.data?.length ?? 0) > visibleCount && <Button type="button" variant="outline" className="m-3 h-11" onClick={() => setVisibleCount((count) => count + 40)}>{t("shopType.fitment.more")}</Button>}
             </div>
           )}
         </div>
       </div>
 
-      <AddFitmentDialog
+      {adding && <AddFitmentDialog
         open={adding}
         saving={addMut.isPending}
         knownMakes={makes}
         onClose={() => setAdding(false)}
         onSubmit={(data) => addMut.mutate(data)}
-      />
+      />}
+      {addingNumber && <AddPartNumberDialog
+        open={addingNumber}
+        saving={addNumberMut.isPending}
+        onClose={() => setAddingNumber(false)}
+        onSubmit={(data) => addNumberMut.mutate(data)}
+      />}
+
+      <Dialog open={removingReference !== null} onOpenChange={(open) => { if (!open && !removeReferenceMut.isPending) setRemovingReference(null); }}>
+        <DialogContent className="max-w-[400px]">
+          <DialogHeader><DialogTitle>{t("shopType.fitment.number.removeTitle")}</DialogTitle></DialogHeader>
+          <p className="text-[13px]">{removingReference?.partNumber} · {removingReference?.productName}</p>
+          <p className="text-[12px] text-[#64748b]">{t("shopType.fitment.number.removeHelp")}</p>
+          <div className="flex gap-2">
+            <Button variant="outline" disabled={removeReferenceMut.isPending} onClick={() => setRemovingReference(null)}>{t("shopType.fitment.number.cancel")}</Button>
+            <Button disabled={removeReferenceMut.isPending} onClick={() => removingReference && removeReferenceMut.mutate(removingReference.id)}>{t("shopType.fitment.number.remove")}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={removing !== null} onOpenChange={(o) => !o && setRemoving(null)}>
         <DialogContent className="max-w-[400px]">
@@ -279,13 +372,69 @@ export default function FitmentPage() {
   );
 }
 
+function PartNumberResults({ result, onSell, onRemove, canRemove }: {
+  result: PartNumberLookup;
+  onSell: (part: { productId: string; productName: string }) => void;
+  onRemove: (reference: PartCrossReference) => void;
+  canRemove: boolean;
+}) {
+  const { t } = useAppLanguage();
+  if (result.products.length === 0 && result.references.length === 0) {
+    return <p role="status" className="mt-3 rounded-[9px] bg-[#f7f9fd] px-3 py-3 text-[12px] text-[#52627e]">{t("shopType.fitment.number.noMatch", { number: result.partNumber })}</p>;
+  }
+
+  return (
+    <div className="mt-3 space-y-3" role="region" aria-label={t("shopType.fitment.number.results", { number: result.partNumber })}>
+      {result.products.length > 0 && (
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-[#64748b]">{t("shopType.fitment.number.catalogue")}</p>
+          <ul className="mt-1 divide-y divide-[#eef2f8] rounded-[9px] border border-[#e6ecf4]">
+            {result.products.map((part) => (
+              <li key={part.productId} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-bold text-[var(--brand-ink)]">{part.productName}</p>
+                  <p className="text-[11.5px] text-[#64748b]">{part.stockQty > 0 ? t("shopType.fitment.number.inStock", { count: part.stockQty }) : t("shopType.fitment.number.outOfStock")}{part.price > 0 ? ` · ${inr(part.price)}` : ""}</p>
+                </div>
+                <Button type="button" variant="outline" className="h-11 gap-1.5" onClick={() => onSell(part)}><Receipt size={14} /> {t("shopType.fitment.sell")}</Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {result.references.length > 0 && (
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-[#64748b]">{t("shopType.fitment.number.references")}</p>
+          <ul className="mt-1 divide-y divide-[#eef2f8] rounded-[9px] border border-[#e6ecf4]">
+            {result.references.map((reference) => (
+              <li key={reference.id} className="px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[13px] font-bold text-[var(--brand-ink)]">{reference.productName}</p>
+                  <Button type="button" variant="ghost" className="h-11" disabled={!canRemove} aria-label={t("shopType.fitment.number.removeNamed", { number: reference.partNumber })} onClick={() => onRemove(reference)}><Trash2 size={14} /></Button>
+                </div>
+                <p className="text-[11.5px] text-[#64748b]">
+                  {reference.kind === "oem" ? t("shopType.fitment.reference.oem")
+                    : reference.kind === "supersedes" ? t("shopType.fitment.reference.supersedes")
+                      : reference.kind === "superseded_by" ? t("shopType.fitment.reference.supersededBy")
+                        : t("shopType.fitment.reference.alternative")}
+                  {reference.brand ? ` · ${reference.brand}` : ""} · {t("shopType.fitment.number.verify")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function VehicleResults({ results, searched, onSell, sellLabel }: {
   results: FittingPart[];
-  searched: { make: string; model: string; year: string } | null;
+  searched: { make: string; model: string; variant: string; year: string } | null;
   onSell: (part: FittingPart) => void;
   sellLabel: string;
 }) {
-  const label = [searched?.make, searched?.model, searched?.year].filter(Boolean).join(" ");
+  const { t } = useAppLanguage();
+  const label = [searched?.make, searched?.model, searched?.variant, searched?.year].filter(Boolean).join(" ");
   const inStock = results.filter((part) => part.stockQty > 0);
 
   if (results.length === 0) {
@@ -307,7 +456,7 @@ function VehicleResults({ results, searched, onSell, sellLabel }: {
           {results.length} part{results.length === 1 ? "" : "s"} fit {label}
         </h3>
         <p className="mt-0.5 text-[11.5px] text-[#64748b]">
-          {inStock.length > 0 ? `${inStock.length} of them on the shelf right now.` : "None of them are in stock at the moment."}
+          {results.some((part) => part.stockKnown === false) ? t("shopType.fitment.stockUnknown") : inStock.length > 0 ? `${inStock.length} of them on the shelf right now.` : "None of them are in stock at the moment."}
         </p>
       </div>
       <ul className="divide-y divide-[#eef2f8]">
@@ -360,6 +509,96 @@ function VehicleResults({ results, searched, onSell, sellLabel }: {
   );
 }
 
+function AddPartNumberDialog({ open, saving, onClose, onSubmit }: {
+  open: boolean;
+  saving: boolean;
+  onClose: () => void;
+  onSubmit: (data: PartCrossReferenceInput) => void;
+}) {
+  const { t } = useAppLanguage();
+  const [productId, setProductId] = useState("");
+  const [productSearch, setProductSearch] = useState("");
+  const [partNumber, setPartNumber] = useState("");
+  const [brand, setBrand] = useState("");
+  const [kind, setKind] = useState<PartCrossReferenceKind>("oem");
+  const [error, setError] = useState<string | null>(null);
+  const productsQ = useListProducts(
+    { search: productSearch.trim(), limit: 20 },
+    { query: { enabled: open && Boolean(productSearch.trim()) } },
+  );
+  const catalogue = productsQ.data ?? [];
+  const chosen = catalogue.find((product) => product.id === productId) ?? null;
+  const matches = useMemo(() => {
+    const term = productSearch.trim().toLowerCase();
+    if (!term) return [];
+    return catalogue.filter((product) =>
+      product.name.toLowerCase().includes(term)
+      || (product.sku ?? "").toLowerCase().includes(term)).slice(0, 8);
+  }, [catalogue, productSearch]);
+
+  function reset() {
+    setProductId(""); setProductSearch(""); setPartNumber(""); setBrand("");
+    setKind("oem"); setError(null);
+  }
+
+  function submit() {
+    if (!productId) return setError(t("shopType.fitment.number.choosePart"));
+    if (!partNumber.trim()) return setError(t("shopType.fitment.number.required"));
+    setError(null);
+    onSubmit({ productId, partNumber: partNumber.trim(), brand: brand.trim() || null, kind });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => { if (!next) { reset(); onClose(); } }}>
+      <DialogContent className="max-w-[460px]">
+        <DialogHeader><DialogTitle>{t("shopType.fitment.number.record")}</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          {chosen ? (
+            <div className="flex items-center gap-2 rounded-[10px] border border-[#e7edf7] bg-[#f7f9fd] px-3 py-2.5">
+              <Package size={16} className="text-[var(--brand)]" />
+              <p className="min-w-0 flex-1 truncate text-[13px] font-bold">{chosen.name}</p>
+              <Button type="button" variant="ghost" className="h-11" onClick={() => { setProductId(""); setProductSearch(""); }}>{t("shopType.fitment.number.change")}</Button>
+            </div>
+          ) : (
+            <div className="relative">
+              <Label>{t("shopType.fitment.number.choosePart")}</Label>
+              <Input className="mt-1.5 h-11" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} placeholder={t("shopType.fitment.number.partSearch")} />
+              {productSearch.trim() && (
+                <div className="absolute z-30 mt-1 max-h-[200px] w-full overflow-y-auto rounded-[10px] border bg-white shadow-lg">
+                  {matches.length ? matches.map((product) => (
+                    <button key={product.id} type="button" className="block min-h-11 w-full border-b px-3 py-2 text-left text-[12.5px] font-bold last:border-0 hover:bg-[#f7f9fd]" onClick={() => setProductId(product.id)}>{product.name}{product.sku ? ` · ${product.sku}` : ""}</button>
+                  )) : <p className="px-3 py-4 text-[12px] text-[#64748b]">{t("shopType.fitment.number.noParts")}</p>}
+                </div>
+              )}
+            </div>
+          )}
+          <Fld label={t("shopType.fitment.number.label")}>
+            <Input className="h-11" value={partNumber} onChange={(e) => setPartNumber(e.target.value)} placeholder={t("shopType.fitment.number.placeholder")} />
+          </Fld>
+          <div className="grid grid-cols-2 gap-3">
+            <Fld label={t("shopType.fitment.number.kind")}>
+              <select className="h-11 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px]" value={kind} onChange={(e) => setKind(e.target.value as PartCrossReferenceKind)}>
+                <option value="oem">{t("shopType.fitment.reference.oem")}</option>
+                <option value="alternative">{t("shopType.fitment.reference.alternative")}</option>
+                <option value="supersedes">{t("shopType.fitment.reference.supersedes")}</option>
+                <option value="superseded_by">{t("shopType.fitment.reference.supersededBy")}</option>
+              </select>
+            </Fld>
+            <Fld label={t("shopType.fitment.number.brand")}>
+              <Input className="h-11" value={brand} onChange={(e) => setBrand(e.target.value)} />
+            </Fld>
+          </div>
+          {error && <p role="alert" className="rounded-[9px] bg-rose-50 px-3 py-2 text-[12px] font-semibold text-rose-700">{error}</p>}
+          <div className="flex gap-2 pt-1">
+            <Button type="button" variant="outline" className="h-11 flex-1" onClick={() => { reset(); onClose(); }}>{t("shopType.fitment.number.cancel")}</Button>
+            <Button type="button" className="h-11 flex-1" disabled={saving} onClick={submit}>{saving ? <Loader2 size={15} className="animate-spin" /> : t("shopType.fitment.number.save")}</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AddFitmentDialog({ open, saving, knownMakes, onClose, onSubmit }: {
   open: boolean;
   saving: boolean;
@@ -372,11 +611,15 @@ function AddFitmentDialog({ open, saving, knownMakes, onClose, onSubmit }: {
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [variant, setVariant] = useState("");
+  const { t } = useAppLanguage();
   const [yearFrom, setYearFrom] = useState("");
   const [yearTo, setYearTo] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const productsQ = useListProducts({ limit: 500 }, { query: { enabled: open } });
+  const productsQ = useListProducts(
+    { search: productSearch.trim(), limit: 20 },
+    { query: { enabled: open && Boolean(productSearch.trim()) } },
+  );
   const catalogue = productsQ.data ?? [];
   const chosen = catalogue.find((product) => product.id === productId) ?? null;
 
@@ -399,6 +642,7 @@ function AddFitmentDialog({ open, saving, knownMakes, onClose, onSubmit }: {
     if (!model.trim()) return setError("Enter the model.");
     const from = yearFrom ? Number(yearFrom) : null;
     const to = yearTo ? Number(yearTo) : null;
+    if ([from, to].some((value) => value !== null && (!Number.isInteger(value) || value < 1900 || value > 2100))) return setError(t("shopType.fitment.invalidYear"));
     if (from && to && to < from) return setError("The last year cannot be before the first.");
     setError(null);
     onSubmit({
@@ -438,7 +682,7 @@ function AddFitmentDialog({ open, saving, knownMakes, onClose, onSubmit }: {
                     <ul className="divide-y divide-[#eef2f8]">
                       {matches.map((product) => (
                         <li key={product.id}>
-                          <button type="button" className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-[#f7f9fd]" onClick={() => { setProductId(product.id); setProductSearch(""); }}>
+                          <button type="button" className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-[#f7f9fd]" onClick={() => setProductId(product.id)}>
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-[12.5px] font-bold text-[var(--brand-ink)]">{product.name}</span>
                               {product.sku && <span className="block truncate text-[11px] text-[#8492ac]">{product.sku}</span>}
@@ -504,11 +748,11 @@ function AddFitmentDialog({ open, saving, knownMakes, onClose, onSubmit }: {
 
 function Fld({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{label}</Label>
+    <label className="block">
+      <span className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{label}</span>
       {children}
-      {hint && <p className="mt-1 text-[11px] text-[#9aa6bb]">{hint}</p>}
-    </div>
+      {hint && <span className="mt-1 block text-[11px] text-[#9aa6bb]">{hint}</span>}
+    </label>
   );
 }
 

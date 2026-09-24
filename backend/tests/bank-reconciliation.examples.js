@@ -193,3 +193,12 @@ for (const model of [
 // the preserved credential/control plane, and the shop maintenance lock.
 assert.ok(backupSource.includes('BACKUP_SCHEMA_VERSION = "2026-08-27-complete-v6"'));
 console.log("bank-reconciliation.examples.js OK");
+
+// Rental deposits, collections and refunds have the same signed asset impact as their journals.
+for (const [entryType, accountType] of [["rental_bank", "bank"], ["rental_upi", "upi"], ["furniture_bank", "bank"], ["furniture_upi", "upi"]]) {
+  assert.deepEqual(bankImpactForLedgerRow({ entryType, amountPaise: 20000n }, accountType), { direction: "credit", amountPaise: 20000n });
+  assert.deepEqual(bankImpactForLedgerRow({ entryType, amountPaise: -20000n }, accountType), { direction: "debit", amountPaise: 20000n });
+  assert.equal(bankImpactForLedgerRow({ entryType, amountPaise: 20000n }, accountType === "bank" ? "upi" : "bank"), null);
+}
+
+assert.equal(bankImpactForLedgerRow({ sourceType: "furniture_order", entryType: "furniture_upi", amountPaise: -10000n, evidenceJson: JSON.stringify({ event: "invoice_application" }) }, "upi"), null, "applying an advance is not a second bank transfer");

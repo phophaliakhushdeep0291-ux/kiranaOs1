@@ -1013,6 +1013,10 @@ export interface RentalBookingItem {
 }
 
 export interface RentalBooking {
+  financialVersion?: number;
+  depositRefunded?: number;
+  depositHeld?: number | null;
+  locationId?: string | null;
   id: string;
   bookingNumber: string;
   customerId?: string | null;
@@ -1045,6 +1049,8 @@ export interface RentalBooking {
 }
 
 export interface RentalBookingInput {
+  clientRequestId?: string;
+  paymentMode?: string;
   customerId?: string | null;
   customerName: string;
   customerPhone: string;
@@ -1317,6 +1323,8 @@ export interface BulkPartFitmentInput {
 
 /** A part that fits the vehicle being asked about, with what the shop holds of it. */
 export interface FittingPart {
+  /** False when only a cached fitment claim is available. */
+  stockKnown?: boolean;
   productId: string;
   productName: string;
   /** False when the fitment outlived the product it was recorded against. */
@@ -1581,6 +1589,10 @@ export interface FurnitureOrderItem {
 }
 
 export interface FurnitureOrderPayment {
+  kind?: "receipt" | "refund" | "correction";
+  reversesPaymentId?: string | null;
+  reason?: string | null;
+  refundableAmount?: number;
   id: string;
   amount: number;
   mode: FurniturePaymentMode;
@@ -1591,6 +1603,8 @@ export interface FurnitureOrderPayment {
 }
 
 export interface FurnitureOrder {
+  creditCollected?: number;
+  needsInvoiceReview?: boolean;
   id: string;
   orderNumber: string;
   customerId?: string | null;

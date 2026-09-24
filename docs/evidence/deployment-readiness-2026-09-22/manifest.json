@@ -1,0 +1,27 @@
+{
+  "baseCommit": "079f436d708a36d14adef9c7988aa24b22decb8e",
+  "createdAt": "2026-09-22T06:46:45.969631+00:00",
+  "scope": "Local synthetic verification; not production approval",
+  "sha256": {
+    "README.md": "9fc5a13216224ab7fdb306a25b93d4d97e17911ec9b8919f5262e7ad442dd768",
+    "closing-21.txt": "237181ba1bb79627c65d04708a29982402197badc941399ee4db403150c763df",
+    "closing-22.txt": "939144358a8064034e12d40a6b78b1349a778beabe57ae2fb5068b31e7b5740c",
+    "furniture-installed-verified.txt": "85019520fdee64f530a2c6130be02ba8ccf299c3362ecce03e9e9058ad5c6a2c",
+    "furniture-installed.png": "67b9cfaa8ccd0a2eb64b6bd0fa6f794544c689e3180f287d455f4e7a6fdc1d26",
+    "furniture-invalid-bill.txt": "05afb9f829469c0f748b9ac9f8a34a5c92884b7efa17cc3ddd20c08c3b236527",
+    "furniture-open-gap.json": "ddfff8dcf762b074f212790380d61e4b69f0c4cf53a72b6719a1e22d619d8b8d",
+    "furniture-reconciliation.json": "eec001839771df5ffecf000468faf298b55a1906f37294863b58c71ad8c38fb7",
+    "manufacturing-prior-session.json": "c0fb6c0df5b0f4249cc1df5c6e662ddb1da22269d2ac7e5d829bdb4fa4151a3d",
+    "migration-smoke.json": "ba7ee1b127c7d48157b44348ea6e6e702a9f5f170704a8508fb7a0f44fea8f2d",
+    "rental-final.txt": "4101209d7f0046025e5de07c1e5a428b2d374ac1ff2e4a493cee97d79c67b758",
+    "rental-reconciliation.json": "5e815f2b0962314c2d788521b1aece77a2b55cb5ae6b179f695cb3a2059fd394",
+    "rental-source-fingerprint.json": "86ee004625a18d14c5794cfded60dfb791485b1f4c03047a6b84a67fb44dd05f",
+    "source-fingerprint.json": "6d142e059268168bb10133f5dc997596eef10f561fb461cf1b70f7188b5368c0",
+    "statement-offline-final.txt": "9822a0ac765be2a803ffcb7d029022a02d13d18982d6f2a14829bf001bd57202",
+    "statement-recovered-final.txt": "21fc9ac05a6139920332684433c1e67edf636a6777d7472962a34aec4413a941",
+    "statement-today.txt": "4fdb0ed63a657d9cbc7f6727d044c307187a45273c4c0fca7b8a579add59d0f2",
+    "statement-week.txt": "b82c1a2220b4601a4f5e42c9f6f76e3d47c5cf67126c5da5521815612f0c81ad",
+    "test-results.txt": "a3b0bcdb2d88be564fc46af52091b912b81437bca49202849f6862c4cd375134",
+    "verification-summary.json": "fc8a3e65bef51e3fde66c56dfa768c51a6e28b93ada425093cfb57244affb1fa"
+  }
+}

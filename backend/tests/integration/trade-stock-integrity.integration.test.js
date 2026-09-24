@@ -52,10 +52,11 @@ else {
     await assert.rejects(() => orders.createOrder(foreign.shop.id, payload), { code: "ORDER_ITEM_MISSING" });
     await orders.setOrderStatus(shop.id, first.id, "ready");
     await assert.rejects(() => orders.setOrderStatus(shop.id, first.id, "delivered", { billId: "missing-bill" }), { code: "ORDER_BILL_MISSING" });
-    await orders.addPayment(shop.id, first.id, { amount: 40 });
-    await orders.setOrderStatus(shop.id, first.id, "delivered");
+    await orders.addPayment(shop.id, first.id, { amount: 40, clientRequestId: "qa-stock-advance" });
+    await assert.rejects(() => orders.setOrderStatus(shop.id, first.id, "delivered"), { code: "ORDER_BILL_REQUIRED" });
     assert.equal((await orders.getOrderSummary(shop.id)).pendingCollection, 60);
-    await orders.setOrderStatus(shop.id, first.id, "installed");
+    assert.equal((await orders.getOrder(shop.id, first.id)).status, "ready");
+    assert.equal((await orders.getReservations(shop.id)).get(product.id), 1, "refused delivery retains its stock hold");
     assert.equal((await orders.getOrderSummary(shop.id)).pendingCollection, 60);
   });
 }

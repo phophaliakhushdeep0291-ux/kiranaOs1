@@ -1,5 +1,18 @@
 import * as service from "./compliance.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
+import { getTaxReview } from "./tax-review.service.js";
+import { reconcileForShop } from "./tax-reconciliation.service.js";
+
+export async function taxReconciliation(req, res, next) {
+  try { res.json({ success: true, data: await reconcileForShop(req.shopId, req.body, req.user) }); }
+  catch (error) { next(error); }
+}
+
+export async function taxReview(req, res, next) {
+  try {
+    res.json({ success: true, data: await getTaxReview(req.shopId, { ...req.query, locationId: requestLocationId(req) }) });
+  } catch (error) { next(error); }
+}
 
 export async function readiness(req, res, next) {
   try { res.json({ success: true, data: await service.getReadiness(req.shopId) }); } catch (error) { next(error); }

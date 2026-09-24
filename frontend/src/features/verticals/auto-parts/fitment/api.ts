@@ -47,7 +47,11 @@ export async function listFitments(filters: { make?: string; model?: string; sea
   } catch (error) {
     if (!isOfflineish(error)) throw error;
     const cached = await offlineDB.getSetting<PartFitment[]>(FITMENTS_CACHE_KEY).catch(() => undefined);
-    if (cached) return cached;
+    if (cached) return cached.filter((fitment) =>
+      (!filters.make || matchKey(fitment.make) === matchKey(filters.make))
+      && (!filters.model || matchKey(fitment.model) === matchKey(filters.model))
+      && (!filters.search || [fitment.productName, fitment.make, fitment.model, fitment.variant]
+        .some((value) => matchKey(value).includes(matchKey(filters.search)))));
     throw error;
   }
 }
@@ -61,6 +65,10 @@ export async function listFitments(filters: { make?: string; model?: string; sea
  * claiming a shelf count it cannot verify.
  */
 export async function findPartsForVehicle(query: { make: string; model?: string; variant?: string; year?: number | string; search?: string }) {
+  const year = query.year === undefined || query.year === "" ? null : Number(query.year);
+  if (year !== null && (!Number.isInteger(year) || year < 1900 || year > 2100)) {
+    throw new ApiClientError("Enter a whole year between 1900 and 2100", 400, { code: "FITMENT_BAD_YEAR" });
+  }
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
@@ -72,7 +80,6 @@ export async function findPartsForVehicle(query: { make: string; model?: string;
     const cached = await offlineDB.getSetting<PartFitment[]>(FITMENTS_CACHE_KEY).catch(() => undefined);
     if (!cached) throw error;
 
-    const year = query.year === undefined || query.year === "" ? null : Number(query.year);
     const matched = cached.filter((fitment) => {
       if (matchKey(fitment.make) !== matchKey(query.make)) return false;
       if (query.model && matchKey(fitment.model) !== matchKey(query.model)) return false;
@@ -96,6 +103,7 @@ export async function findPartsForVehicle(query: { make: string; model?: string;
           productId: fitment.productId,
           productName: fitment.productName,
           inCatalogue: false,
+          stockKnown: false,
           sku: null,
           brand: null,
           stockQty: 0,
@@ -109,8 +117,11 @@ export async function findPartsForVehicle(query: { make: string; model?: string;
   }
 }
 
-export async function getVehicleOptions(make?: string) {
-  const qs = make ? `?make=${encodeURIComponent(make)}` : "";
+export async function getVehicleOptions(make?: string, model?: string) {
+  const params = new URLSearchParams();
+  if (make) params.set("make", make);
+  if (model) params.set("model", model);
+  const qs = params.size ? `?${params.toString()}` : "";
   try {
     return await apiRequest<VehicleOptions>(`/fitment/vehicles${qs}`, { background: true });
   } catch (error) {
@@ -125,7 +136,8 @@ export async function getVehicleOptions(make?: string) {
       if (!makes.has(matchKey(fitment.make))) makes.set(matchKey(fitment.make), fitment.make);
       if (!make || matchKey(fitment.make) === matchKey(make)) {
         if (!models.has(matchKey(fitment.model))) models.set(matchKey(fitment.model), fitment.model);
-        if (fitment.variant && !variants.has(matchKey(fitment.variant))) variants.set(matchKey(fitment.variant), fitment.variant);
+        if ((!model || matchKey(fitment.model) === matchKey(model))
+          && fitment.variant && !variants.has(matchKey(fitment.variant))) variants.set(matchKey(fitment.variant), fitment.variant);
       }
     }
     const sorted = (map: Map<string, string>) => [...map.values()].sort((a, b) => a.localeCompare(b));

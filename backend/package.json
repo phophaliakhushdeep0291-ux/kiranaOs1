@@ -29,6 +29,7 @@
     "test:sync-conflicts": "node scripts/run-db-example-tests.js tests/sync-conflict-entity-matrix.examples.js tests/sync-id-format.examples.js",
     "test:warehouse": "node scripts/run-db-example-tests.js tests/storage-bins.examples.js tests/stock-repack.examples.js tests/replenishment-run.examples.js",
     "replenishment:run": "node scripts/run-replenishment.js",
+    "test:tax-review": "node scripts/run-db-example-tests.js tests/tax-review.test.js tests/tax-reconciliation.test.js tests/integration/tax-review.integration.test.js",
     "test:compliance": "node tests/compliance-tax.examples.js && node tests/gst-invoice-discount.examples.js",
     "test:tally": "node tests/tally-voucher.examples.js",
     "test:manufacturing": "node scripts/run-db-example-tests.js tests/manufacturing-vertical.examples.js tests/trade-auto-allocation.examples.js",

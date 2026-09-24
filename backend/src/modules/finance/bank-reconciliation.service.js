@@ -324,15 +324,16 @@ function publicMoney(paise) {
  */
 export function bankImpactForLedgerRow(row, accountType) {
   const entryType = String(row?.entryType ?? "").toLowerCase();
+  if (row?.sourceType === "furniture_order" && safeJson(row.evidenceJson)?.event === "invoice_application") return null;
   const paymentMode = String(row?.paymentMode ?? "").toLowerCase();
   let baseSign = 0n;
 
   if (accountType === "bank") {
-    if (["bank_in", "bank_refund_in"].includes(entryType)) baseSign = 1n;
+    if (["bank_in", "bank_refund_in", "rental_bank", "furniture_bank"].includes(entryType)) baseSign = 1n;
     else if (entryType === "bank_out") baseSign = -1n;
     else if (entryType === "supplier_payment" && ["bank", "card"].includes(paymentMode)) baseSign = -1n;
   } else if (accountType === "upi") {
-    if (["upi_in", "upi_refund_in"].includes(entryType)) baseSign = 1n;
+    if (["upi_in", "upi_refund_in", "rental_upi", "furniture_upi"].includes(entryType)) baseSign = 1n;
     else if (entryType === "upi_out") baseSign = -1n;
     else if (entryType === "supplier_payment" && paymentMode === "upi") baseSign = -1n;
   }
@@ -683,7 +684,7 @@ export async function getBankReconciliation(shopId, query = {}) {
         shopId,
         businessDate: { gte: start, lte: end },
         OR: [
-          { entryType: { in: ["bank_in", "bank_out", "bank_refund_in", "upi_in", "upi_out", "upi_refund_in"] } },
+          { entryType: { in: ["bank_in", "bank_out", "bank_refund_in", "upi_in", "upi_out", "upi_refund_in", "rental_bank", "furniture_bank", "rental_upi", "furniture_upi"] } },
           { entryType: "supplier_payment", paymentMode: { in: ["bank", "card", "upi"] } },
         ],
       },
@@ -695,6 +696,7 @@ export async function getBankReconciliation(shopId, query = {}) {
       ledgerRows = ledgerRows.slice(0, 5_000);
     }
   }
+  ledgerRows = await withoutAppliedFurnitureBillTenders(db, shopId, ledgerRows);
   const ledgerIds = ledgerRows.map((row) => row.id);
   const activeLedgerRowIds = new Set();
   for (let index = 0; index < ledgerIds.length; index += 400) {
@@ -792,6 +794,17 @@ function assertReconciliationState(transaction) {
   return allocated;
 }
 
+async function withoutAppliedFurnitureBillTenders(client, shopId, rows) {
+  const billIds = [...new Set(rows.filter((row) => row.sourceType === "bill" && ["bank_in", "upi_in"].includes(row.entryType)).map((row) => row.billId).filter(Boolean))];
+  if (!billIds.length) return rows;
+  const orders = await client.furnitureOrder.findMany({ where: { shopId, billId: { in: billIds } }, select: { id: true, billId: true } });
+  if (!orders.length) return rows;
+  const applications = await client.financialLedger.findMany({ where: { shopId, sourceType: "furniture_order", sourceId: { in: orders.map((order) => order.id) }, idempotencyKey: { contains: ":invoice:" } }, select: { sourceId: true } });
+  const appliedOrderIds = new Set(applications.map((row) => row.sourceId));
+  const appliedBillIds = new Set(orders.filter((order) => appliedOrderIds.has(order.id)).map((order) => order.billId));
+  return rows.filter((row) => !(row.sourceType === "bill" && appliedBillIds.has(row.billId) && ["bank_in", "upi_in"].includes(row.entryType)));
+}
+
 export async function matchBankTransaction(shopId, transactionId, input, rawActor = {}) {
   const actor = normalizeActor(rawActor);
   const { userId } = actor;
@@ -805,6 +818,9 @@ export async function matchBankTransaction(shopId, transactionId, input, rawActo
   });
   if (ledgerRows.length !== input.ledgerRowIds.length) {
     fail("One or more ledger rows do not exist in this shop", 404, "BANK_LEDGER_ROW_NOT_FOUND");
+  }
+  if ((await withoutAppliedFurnitureBillTenders(db, shopId, ledgerRows)).length !== ledgerRows.length) {
+    fail("Match the original order receipt; this invoice applies money already received.", 409, "BANK_FURNITURE_ADVANCE_APPLIED");
   }
   const rowById = new Map(ledgerRows.map((row) => [row.id, row]));
   const orderedRows = input.ledgerRowIds.map((id) => rowById.get(id));
@@ -853,6 +869,11 @@ export async function matchBankTransaction(shopId, transactionId, input, rawActo
 
   try {
     await runReconciliationTransaction(async (tx) => {
+      // Recheck under the same isolation as the allocation: delivery may have
+      // applied an advance after the candidate list was loaded.
+      if ((await withoutAppliedFurnitureBillTenders(tx, shopId, ledgerRows)).length !== ledgerRows.length) {
+        fail("Match the original order receipt; this invoice applies money already received.", 409, "BANK_FURNITURE_ADVANCE_APPLIED");
+      }
       for (const item of evidence) {
         await tx.bankReconciliationAllocation.create({
           data: {

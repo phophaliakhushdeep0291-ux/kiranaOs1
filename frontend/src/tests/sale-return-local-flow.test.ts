@@ -90,6 +90,18 @@ describe("sale return local-first", () => {
     seed();
   });
 
+  it("refunds an untracked dish without projecting a stock return", async () => {
+    dbState.instant.products = [{ id: "dish", name: "Dal Fry", stockBaseQty: -12, stockTrackingEnabled: false, defaultPricePerRateUnit: 100 }];
+    const returned = await createSaleReturnLocalFirst({
+      items: [{ productId: "dish", name: "Dal Fry", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 100 }],
+      refundMode: "cash", ownerPin: "4321",
+    });
+    expect(returned.grandTotal).toBe(-100);
+    expect(rows("payments")[0]).toMatchObject({ amount: -100 });
+    expect(rows("inventory_movements")).toEqual([]);
+    expect(rows("sync_outbox").some((row) => row.operation_type === "CREATE_SALE_RETURN")).toBe(true);
+  });
+
   it("cash refund: negative sales_return bill, restock movement, negative payment, CREATE_SALE_RETURN op", async () => {
     const ret = await createSaleReturnLocalFirst({
       items: [{ productId: "product_sugar", name: "Sugar", quantity: 2, enteredUnit: "piece", ratePerRateUnit: 25, gstRate: 0 }],

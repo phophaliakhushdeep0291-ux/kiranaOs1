@@ -173,6 +173,8 @@ export async function listProducts(shopId, { category, search, lowStock, locatio
       OR: [
         { name: { contains: search } },
         { aliasesJson: { contains: search } },
+        { sku: { contains: search } },
+        { barcode: { contains: search } },
       ],
     }),
   };
@@ -188,7 +190,7 @@ export async function listProducts(shopId, { category, search, lowStock, locatio
 
   if (lowStock) {
     return parsed.filter(
-      (p) => p.lowStockThreshold > 0 && p.stockBaseQty <= p.lowStockThreshold
+      (p) => p.stockTrackingEnabled !== false && p.lowStockThreshold > 0 && p.stockBaseQty <= p.lowStockThreshold
     );
   }
 

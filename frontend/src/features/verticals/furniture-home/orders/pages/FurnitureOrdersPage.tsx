@@ -1,4 +1,9 @@
-import { useMemo, useState } from "react";
+import { CollectionLinkDialog } from "../components/CollectionLinkDialog";
+import { InvoiceDeliveryDialog } from "../components/InvoiceDeliveryDialog";
+import { PaymentAdjustmentDialog } from "../components/PaymentAdjustmentDialog";
+import { getActiveLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
+import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, ArrowRight, Ban, CalendarClock, CheckCircle2, Hammer, IndianRupee,
@@ -18,7 +23,7 @@ import {
   getFurnitureOrderSummary, listFurnitureOrders, setFurnitureOrderStatus, updateFurnitureOrder,
 } from "@/features/verticals/furniture-home/orders/api";
 import { OrderPanel } from "@/features/verticals/furniture-home/orders/components/OrderPanel";
-import type { FurnitureOrder, FurnitureOrderInput, FurnitureOrderStatus } from "@/types/api";
+import type { FurnitureOrder, FurnitureOrderInput, FurnitureOrderStatus, FurnitureOrderPayment } from "@/types/api";
 
 function inr(n: number) {
   return `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -65,17 +70,27 @@ export default function FurnitureOrdersPage() {
   const queryClient = useQueryClient();
   const { isOnline } = useOfflineStatus();
 
+  const [locationId, setLocationId] = useState(getActiveLocationId);
+  useEffect(() => {
+    const changed = () => { setLocationId(getActiveLocationId()); setPaying(null); setDelivering(null); setInvoicing(null); setAdjusting(null); setCollecting(null); setPanelOpen(false); };
+    window.addEventListener(LOCATION_CHANGED_EVENT, changed);
+    return () => window.removeEventListener(LOCATION_CHANGED_EVENT, changed);
+  }, []);
+  const [collecting, setCollecting] = useState<FurnitureOrder | null>(null);
+  const [adjusting, setAdjusting] = useState<{ order: FurnitureOrder; payment: FurnitureOrderPayment; kind: "refund" | "correction" } | null>(null);
   const [filter, setFilter] = useState("open");
   const [search, setSearch] = useState("");
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<FurnitureOrder | null>(null);
   const [paying, setPaying] = useState<FurnitureOrder | null>(null);
+  const [delivering, setDelivering] = useState<FurnitureOrder | null>(null);
+  const [invoicing, setInvoicing] = useState<FurnitureOrder | null>(null);
   const [deleting, setDeleting] = useState<FurnitureOrder | null>(null);
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:furniture-order-panel-width", { defaultWidth: 540 });
 
-  const ordersQ = useQuery({ queryKey: ["furniture-orders"], queryFn: () => listFurnitureOrders() });
-  const summaryQ = useQuery({ queryKey: ["furniture-orders", "summary"], queryFn: getFurnitureOrderSummary });
+  const ordersQ = useQuery({ queryKey: ["furniture-orders", locationId], queryFn: () => listFurnitureOrders() });
+  const summaryQ = useQuery({ queryKey: ["furniture-orders", locationId, "summary"], queryFn: getFurnitureOrderSummary });
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["furniture-orders"] });
@@ -92,7 +107,7 @@ export default function FurnitureOrdersPage() {
           variant: "destructive",
         });
       }
-      toast({ title, description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+      toast({ title, description: err instanceof Error ? err.message : "Try again", variant: "destructive" });
     };
   }
 
@@ -109,9 +124,10 @@ export default function FurnitureOrdersPage() {
   });
 
   const statusMut = useMutation({
-    mutationFn: (vars: { id: string; status: FurnitureOrderStatus }) => setFurnitureOrderStatus(vars.id, vars.status),
+    mutationFn: (vars: { id: string; status: FurnitureOrderStatus; billNumber?: string }) => setFurnitureOrderStatus(vars.id, vars.status, { billNumber: vars.billNumber }),
     onSuccess: (order) => {
       invalidate();
+      setDelivering(null);
       toast({
         title: `${order.orderNumber} — ${order.statusLabel.toLowerCase()}`,
         description: order.balanceDue > 0 ? `${inr(order.balanceDue)} still to collect.` : undefined,
@@ -121,7 +137,7 @@ export default function FurnitureOrdersPage() {
   });
 
   const payMut = useMutation({
-    mutationFn: (vars: { id: string; amount: number; mode: string }) => addFurnitureOrderPayment(vars.id, vars),
+    mutationFn: (vars: { id: string; amount: number; mode: string; clientRequestId: string; expectedPaidTotal: number }) => addFurnitureOrderPayment(vars.id, vars),
     onSuccess: (order) => {
       invalidate();
       setPaying(null);
@@ -260,9 +276,11 @@ export default function FurnitureOrdersPage() {
                 <OrderRow
                   key={order.id}
                   order={order}
-                  busy={statusMut.isPending}
-                  onAdvance={(status) => statusMut.mutate({ id: order.id, status })}
+                  busy={!isOnline || statusMut.isPending || payMut.isPending || cancelMut.isPending || deleteMut.isPending}
+                  onAdvance={(status) => status === "delivered" ? setDelivering(order) : statusMut.mutate({ id: order.id, status })}
                   onPay={() => setPaying(order)}
+                  onCollect={() => setCollecting(order)}
+                  onAdjust={(payment, kind) => setAdjusting({ order, payment, kind })}
                   onEdit={() => { setEditing(order); setPanelOpen(true); }}
                   onCancel={() => cancelMut.mutate(order.id)}
                   onDelete={() => setDeleting(order)}
@@ -283,11 +301,18 @@ export default function FurnitureOrdersPage() {
         onSubmit={(data) => saveMut.mutate({ id: editing?.id, data })}
       />
 
+      <DeliveryDialog key={delivering?.id ?? "closed-delivery"} order={delivering} saving={statusMut.isPending} onClose={() => setDelivering(null)} onCreate={() => { setInvoicing(delivering); setDelivering(null); }} onConfirm={(billNumber) => delivering && statusMut.mutate({ id: delivering.id, status: "delivered", billNumber })} />
+      {invoicing && <InvoiceDeliveryDialog key={invoicing.id} order={invoicing} onClose={() => setInvoicing(null)} onSaved={() => { invalidate(); setInvoicing(null); void queryClient.invalidateQueries({ queryKey: ["bills"] }); void queryClient.invalidateQueries({ queryKey: ["customers"] }); }} />}
+
+      {collecting && <CollectionLinkDialog key={collecting.id} order={collecting} onClose={() => setCollecting(null)} onSaved={() => { invalidate(); setCollecting(null); }} />}
+      {adjusting && <PaymentAdjustmentDialog key={`${adjusting.payment.id}:${adjusting.kind}`} {...adjusting} onClose={() => setAdjusting(null)} onSaved={() => { invalidate(); setAdjusting(null); }} />}
+
       <PaymentDialog
+        key={paying?.id ?? "closed-payment"}
         order={paying}
         saving={payMut.isPending}
         onClose={() => setPaying(null)}
-        onConfirm={(amount, mode) => paying && payMut.mutate({ id: paying.id, amount, mode })}
+        onConfirm={(amount, mode, clientRequestId) => paying && payMut.mutate({ id: paying.id, amount, mode, clientRequestId, expectedPaidTotal: paying.paidTotal })}
       />
 
       <Dialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
@@ -311,19 +336,23 @@ export default function FurnitureOrdersPage() {
   );
 }
 
-function OrderRow({ order, busy, onAdvance, onPay, onEdit, onCancel, onDelete }: {
+function OrderRow({ order, busy, onAdvance, onPay, onAdjust, onCollect, onEdit, onCancel, onDelete }: {
   order: FurnitureOrder;
   busy: boolean;
   onAdvance: (status: FurnitureOrderStatus) => void;
   onPay: () => void;
+  onCollect: () => void;
+  onAdjust: (payment: FurnitureOrderPayment, kind: "refund" | "correction") => void;
   onEdit: () => void;
   onCancel: () => void;
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { t } = useAppLanguage();
   const chip = STATUS_CHIP[order.status] ?? STATUS_CHIP.quote;
   // "cancelled" is offered as its own button, so it is kept out of the forward move.
-  const forward = order.nextStatuses.filter((status) => status !== "cancelled");
+  const needsReview = ["delivered", "installed"].includes(order.status) && !order.billId;
+  const forward = needsReview ? [] : order.nextStatuses.filter((status) => status !== "cancelled");
 
   return (
     <div className="px-5 py-3.5">
@@ -361,6 +390,9 @@ function OrderRow({ order, busy, onAdvance, onPay, onEdit, onCancel, onDelete }:
         </div>
       </div>
 
+      {needsReview && <p role="status" className="mt-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{t("furniture.delivery.review")}</p>}
+      {order.needsInvoiceReview && <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm">{t("furniture.invoice.review")}</p>}
+      {order.billNumber && <p className="mt-2 text-sm text-slate-600">{t("furniture.delivery.linked")}: {order.billNumber}</p>}
       <div className="mt-2 flex flex-wrap items-center gap-2 lg:mouse:gap-1.5">
         {forward.map((status) => (
           <Button
@@ -374,22 +406,24 @@ function OrderRow({ order, busy, onAdvance, onPay, onEdit, onCancel, onDelete }:
             {NEXT_LABEL[status]}
           </Button>
         ))}
-        {order.status !== "cancelled" && (
+        {order.isOpen && !order.billId && order.balanceDue > 0 && (
           <Button
             variant="outline"
             className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] border-emerald-200 px-2.5 text-[11.5px] font-bold text-emerald-700 hover:bg-emerald-50"
+            disabled={busy}
             onClick={onPay}
           >
             <Wallet size={13} /> Take payment
           </Button>
         )}
+        {order.billId && order.balanceDue > 0 && !order.needsInvoiceReview && <Button variant="outline" className="h-11" disabled={busy} onClick={onCollect}>{t("furniture.collection.title")}</Button>}
         {order.isOpen && (
-          <button onClick={onEdit} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Edit ${order.orderNumber}`}><NotebookPen size={14} /></button>
+          <button disabled={busy} onClick={onEdit} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Edit ${order.orderNumber}`}><NotebookPen size={14} /></button>
         )}
         {order.canCancel && (
-          <button onClick={onCancel} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Cancel ${order.orderNumber}`}><Ban size={14} /></button>
+          <button disabled={busy} onClick={onCancel} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Cancel ${order.orderNumber}`}><Ban size={14} /></button>
         )}
-        <button onClick={onDelete} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label={`Delete ${order.orderNumber}`}><Trash2 size={14} /></button>
+        {order.payments.length === 0 && !order.billId && !["delivered", "installed"].includes(order.status) && <button disabled={busy} onClick={onDelete} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label={`Delete ${order.orderNumber}`}><Trash2 size={14} /></button>}
       </div>
 
       {open && (
@@ -400,7 +434,7 @@ function OrderRow({ order, busy, onAdvance, onPay, onEdit, onCancel, onDelete }:
                 <span className="min-w-0 flex-1 truncate text-[#344668]">
                   <span className="font-semibold">{item.qty}</span> × {item.name}
                   {item.variant && <span className="text-[#8492ac]"> · {item.variant}</span>}
-                  {item.reserveStock && <span className="ml-1 text-[10.5px] text-violet-600">held</span>}
+                  {item.reserveStock && ["confirmed", "in_production", "ready"].includes(order.status) && <span className="ml-1 text-[10.5px] text-violet-600">held</span>}
                 </span>
                 <span className="font-semibold text-[var(--brand-ink)]">{inr(item.amount)}</span>
               </li>
@@ -420,9 +454,14 @@ function OrderRow({ order, busy, onAdvance, onPay, onEdit, onCancel, onDelete }:
               <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8492ac]">Paid so far</p>
               <ul className="mt-1 space-y-0.5">
                 {order.payments.map((payment) => (
-                  <li key={payment.id} className="flex items-baseline justify-between text-[11.5px] text-[#52627e]">
+                  <li key={payment.id} className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-[#52627e]">
                     <span>{fmtDay(payment.paidOn.slice(0, 10))} · {payment.mode}{payment.reference ? ` · ${payment.reference}` : ""}</span>
                     <span className="font-semibold">{inr(payment.amount)}</span>
+                    {payment.reason && <span>{t(payment.kind === "refund" ? "furniture.refund.title" : "furniture.correction.title")}: {payment.reason}</span>}
+                    {order.isOpen && !order.billId && (payment.refundableAmount ?? 0) > 0 && <span className="flex gap-2">
+                      <Button variant="outline" className="h-11" disabled={busy} onClick={() => onAdjust(payment, "refund")}>{t("furniture.refund.title")}</Button>
+                      <Button variant="outline" className="h-11" disabled={busy} onClick={() => onAdjust(payment, "correction")}>{t("furniture.correction.title")}</Button>
+                    </span>}
                   </li>
                 ))}
               </ul>
@@ -447,18 +486,20 @@ function PaymentDialog({ order, saving, onClose, onConfirm }: {
   order: FurnitureOrder | null;
   saving: boolean;
   onClose: () => void;
-  onConfirm: (amount: number, mode: string) => void;
+  onConfirm: (amount: number, mode: string, clientRequestId: string) => void;
 }) {
+  const { t } = useAppLanguage();
   const [amount, setAmount] = useState("");
+  const [clientRequestId] = useState(() => crypto.randomUUID());
   const [mode, setMode] = useState("cash");
 
   return (
     <Dialog
       open={order !== null}
-      onOpenChange={(open) => { if (!open) { setAmount(""); setMode("cash"); onClose(); } }}
+      onOpenChange={(open) => { if (!open && !saving) { setAmount(""); setMode("cash"); onClose(); } }}
     >
       <DialogContent className="max-w-[400px]">
-        <DialogHeader><DialogTitle className="font-display text-[16px] font-black text-[var(--brand-ink)]">Take a payment</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="font-display text-[16px] font-black text-[var(--brand-ink)]">{t("furniture.payment.title")}</DialogTitle></DialogHeader>
         {order && (
           <div className="space-y-3">
             <div className="rounded-[10px] bg-[#f7f9fd] px-3.5 py-2.5 text-[12px] text-[#52627e]">
@@ -467,12 +508,12 @@ function PaymentDialog({ order, saving, onClose, onConfirm }: {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Amount (₹)</Label>
-                <Input className="h-10" type="number" min="0" step="0.01" placeholder={String(order.balanceDue)} value={amount} onChange={(e) => setAmount(e.target.value)} />
+                <Label htmlFor="furniture-payment-amount" className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("furniture.payment.amount")}</Label>
+                <Input id="furniture-payment-amount" className="h-11" type="number" max={order.balanceDue} min="0.01" step="0.01" placeholder={String(order.balanceDue)} value={amount} onChange={(e) => setAmount(e.target.value)} />
               </div>
               <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Mode</Label>
-                <select
+                <Label htmlFor="furniture-payment-mode" className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("furniture.payment.mode")}</Label>
+                <select id="furniture-payment-mode"
                   className="h-11 lg:mouse:h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
                   value={mode}
                   onChange={(e) => setMode(e.target.value)}
@@ -489,14 +530,14 @@ function PaymentDialog({ order, saving, onClose, onConfirm }: {
               Collect the whole balance ({inr(order.balanceDue)})
             </button>
             <p className="text-[11px] text-[#8492ac]">
-              This records money taken against the order. The bill itself is rung when the goods go out.
+              {t("furniture.payment.help")}
             </p>
             <div className="flex gap-2.5 pt-1">
-              <Button variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
+              <Button variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" disabled={saving} onClick={onClose}>Cancel</Button>
               <Button
                 className="h-11 flex-1 gap-2 rounded-[10px] bg-emerald-600 font-black text-white hover:bg-emerald-700"
-                disabled={saving || !(Number(amount) > 0)}
-                onClick={() => onConfirm(Number(amount) || 0, mode)}
+                disabled={saving || !(Number(amount) > 0) || Number(amount) > order.balanceDue}
+                onClick={() => onConfirm(Number(amount) || 0, mode, clientRequestId)}
               >
                 {saving ? <Loader2 size={15} className="animate-spin" /> : <Wallet size={15} />} Record
               </Button>
@@ -528,4 +569,27 @@ function Kpi({ icon, label, value, tone }: {
       <p className="mt-1.5 truncate font-display text-[24px] font-black leading-none text-[var(--brand-ink)]">{value}</p>
     </div>
   );
+}
+
+function DeliveryDialog({ order, saving, onClose, onConfirm, onCreate }: {
+  order: FurnitureOrder | null; saving: boolean; onClose: () => void; onConfirm: (billNumber: string) => void; onCreate: () => void;
+}) {
+  const { t } = useAppLanguage();
+  const [billNumber, setBillNumber] = useState("");
+  return <Dialog open={order !== null} onOpenChange={(open) => !open && !saving && onClose()}>
+    <DialogContent className="max-w-[440px]">
+      <DialogHeader><DialogTitle>{t("furniture.delivery.title")}</DialogTitle></DialogHeader>
+      <p className="text-sm text-slate-600">{t("furniture.delivery.help")}</p>
+      {order && <p className="text-sm font-semibold">{order.orderNumber} · {order.customerName} · {inr(order.grandTotal)}</p>}
+      <Button className="h-11" disabled={saving} onClick={onCreate}>{t("furniture.invoice.title")}</Button>
+      <Label htmlFor="furniture-delivery-bill">{t("furniture.delivery.bill")}</Label>
+      <Input id="furniture-delivery-bill" className="h-11" value={billNumber} onChange={(event) => setBillNumber(event.target.value)} autoComplete="off" />
+      <div className="flex gap-2">
+        <Button variant="outline" className="h-11 flex-1" disabled={saving} onClick={onClose}>{t("furniture.delivery.back")}</Button>
+        <Button className="h-11 flex-1" disabled={saving || !billNumber.trim()} onClick={() => onConfirm(billNumber.trim())}>
+          {saving && <Loader2 size={15} className="mr-2 animate-spin" />}{t("furniture.delivery.confirm")}
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>;
 }
