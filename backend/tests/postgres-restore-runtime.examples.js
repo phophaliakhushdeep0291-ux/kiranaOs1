@@ -46,6 +46,13 @@ for (const tenant of ["a", "b"]) {
   const shopId = `${id}-${tenant}`;
   fixture.push(insert("Shop", { id: shopId, name: "Synthetic restore shop", ownerName: "Restore fixture", city: "Test city", address: "Test only", updatedAt: "2026-09-02T00:00:00Z" }));
   fixture.push(insert("Product", { id: shopId + "-product", shopId, name: "Synthetic rice", stockBaseQty: 17.5, ...money({ costPerRateUnit: 4000, minPricePerRateUnit: 4000, defaultPricePerRateUnit: 8025 }), updatedAt: "2026-09-02T00:00:00Z" }));
+  // Normal movements omit money fields unrelated to their action. Their database
+  // defaults must reconcile in the untouched backup, without restore backfill.
+  fixture.push(insert("StockLedger", {
+    id: shopId + "-stock", shopId, productId: shopId + "-product", productName: "Synthetic rice",
+    action: "correction", changeBaseQty: 17.5, oldStockBaseQty: 0, newStockBaseQty: 17.5,
+    updatedAt: "2026-09-02T00:00:00Z",
+  }));
   fixture.push(insert("Customer", { id: shopId + "-customer", shopId, name: "Synthetic buyer", type: "udhar", ...money({ udharAmount: 14050 }), updatedAt: "2026-09-02T00:00:00Z" }));
   fixture.push(insert("Bill", {
     id: shopId + "-bill", shopId, billNo: "DR-001", customerId: shopId + "-customer", customerName: "Synthetic buyer",
@@ -128,7 +135,7 @@ try {
   await snapshot?.close();
   await restored?.close();
   if (seeded) {
-    const cleanup = ["BillItem", "Payment", "UdharLedger", "Bill", "Customer", "Product", "Shop"].map((table) => `DELETE FROM ${q(table)} WHERE id LIKE '${id}-%';`).join("\n");
+    const cleanup = ["BillItem", "Payment", "UdharLedger", "StockLedger", "Bill", "Customer", "Product", "Shop"].map((table) => `DELETE FROM ${q(table)} WHERE id LIKE '${id}-%';`).join("\n");
     sql(sourceUrl, `BEGIN;\n${cleanup}\nCOMMIT;`);
   }
 }

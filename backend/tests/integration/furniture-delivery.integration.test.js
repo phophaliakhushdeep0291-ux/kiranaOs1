@@ -87,6 +87,21 @@ else {
     for (const response of responses) assert.equal(assertSuccess(response, 201).paidTotal, 100);
     assert.equal(await ctx.db.furnitureOrderPayment.count({ where: { orderId: f.order.id } }), 1);
     assert.equal(await ctx.db.auditLog.count({ where: { entityId: f.order.id, action: "FURNITURE_ORDER_PAYMENT_ADDED" } }), 1);
+    assert.equal(await ctx.db.financialLedger.count({ where: { sourceId: f.order.id } }), 2);
+    assert.equal(await ctx.db.journalEntry.count({ where: { shopId: f.tenant.shop.id, sourceType: "furniture_order" } }), 1);
+  });
+  test("concurrent receipt retries with different contents reject the losing payload", async () => {
+    const f = await fixture();
+    const responses = await Promise.all([40, 41].map((amount) =>
+      ctx.post(f.path + "/payments", { ...f.receipt, amount }, f.options)));
+    const saved = assertSuccess(responses.find((response) => response.status === 201), 201);
+    assert.equal(assertFailure(responses.find((response) => response.status !== 201), 409).code, "ORDER_PAYMENT_REPLAY_MISMATCH");
+    const payments = await ctx.db.furnitureOrderPayment.findMany({ where: { orderId: f.order.id } });
+    assert.equal(payments.length, 1);
+    assert.equal(payments[0].amount, saved.paidTotal);
+    assert.equal(await ctx.db.auditLog.count({ where: { entityId: f.order.id, action: "FURNITURE_ORDER_PAYMENT_ADDED" } }), 1);
+    assert.equal(await ctx.db.financialLedger.count({ where: { sourceId: f.order.id } }), 2);
+    assert.equal(await ctx.db.journalEntry.count({ where: { shopId: f.tenant.shop.id, sourceType: "furniture_order" } }), 1);
   });
   test("receipt and delivery changes roll back if mandatory audit cannot be saved", async (t) => {
     if (!process.env.DATABASE_URL?.startsWith("file:")) return t.skip("SQLite fault injection");
@@ -162,6 +177,9 @@ else {
     assertFailure(await ctx.post(path, refund, { ...f.options, ownerPin: "0000" }), 403);
     const responses = await Promise.all([ctx.post(path, refund, f.options), ctx.post(path, refund, f.options)]);
     for (const response of responses) assert.equal(assertSuccess(response).paidTotal, 60);
+    assert.equal(await ctx.db.furnitureOrderPayment.count({ where: { orderId: f.order.id } }), 2);
+    assert.equal(await ctx.db.financialLedger.count({ where: { sourceId: f.order.id } }), 4);
+    assert.equal(await ctx.db.journalEntry.count({ where: { shopId: f.tenant.shop.id, sourceType: "furniture_order" } }), 2);
     assertFailure(await ctx.post(path, { ...refund, amount: 41 }, f.options), 409);
     assertFailure(await ctx.post(path, { ...refund, clientRequestId: "refund-002" }, f.options), 409);
     assertFailure(await ctx.post(path, { ...refund, clientRequestId: "refund-002", expectedPaidTotal: 60, amount: 61 }, f.options), 409);
@@ -184,10 +202,15 @@ else {
     const paid = await f.post("/payments", f.receipt, 201);
     const path = `${f.path}/payments/${paid.payments[0].id}/adjust`;
     const correction = { kind: "correction", amount: 100, expectedPaidTotal: 100, mode: "upi", reference: "UTR-001", reason: "Receipt was entered as cash by mistake", clientRequestId: "correction-001" };
-    const corrected = assertSuccess(await ctx.post(path, correction, f.options));
+    const responses = await Promise.all([ctx.post(path, correction, f.options), ctx.post(path, correction, f.options)]);
+    for (const response of responses) assert.equal(assertSuccess(response).paidTotal, 100);
+    const corrected = assertSuccess(responses[0]);
     assert.equal(corrected.paidTotal, 100);
     assert.equal(corrected.payments.length, 3);
     assert.equal(assertSuccess(await ctx.post(path, correction, f.options)).payments.length, 3);
+    assert.equal(await ctx.db.auditLog.count({ where: { entityId: f.order.id, action: "FURNITURE_ORDER_PAYMENT_CORRECTED" } }), 1);
+    assert.equal(await ctx.db.financialLedger.count({ where: { sourceId: f.order.id } }), 6);
+    assert.equal(await ctx.db.journalEntry.count({ where: { shopId: f.tenant.shop.id, sourceType: "furniture_order" } }), 3);
     assertFailure(await ctx.post(path, { ...correction, mode: "bank" }, f.options), 409);
     const closing = assertSuccess(await ctx.get("/api/reports/daily-closing?source=live", f.options));
     assert.equal(closing.cashReceivedPaise, 0);

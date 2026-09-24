@@ -61,6 +61,20 @@ if (ctx.skip) {
     assert.equal(assertSuccess(await ctx.get(`/api/products/${product.id}`, options)).stockBaseQty, 11);
     assert.equal(assertSuccess(await ctx.get(`/api/customers/${customer.id}/khata`, options)).customer.udharAmount, 0);
 
+    assertSuccess(await ctx.post("/api/inventory/damage", {
+      idempotencyKey: randomUUID(), productId: product.id, quantity: 1, enteredUnit: "piece", note: "Broken package",
+    }, options));
+    assertSuccess(await ctx.patch(`/api/products/${product.id}`, { stockBaseQty: 9 }, options));
+    const movements = await ctx.db.stockLedger.findMany({ where: { productId: product.id } });
+    for (const action of ["purchase", "sale", "damage", "correction"]) {
+      assert.ok(movements.some((row) => row.action === action), `${action} must be covered`);
+    }
+    for (const movement of movements) {
+      for (const field of ["purchaseBillAmount", "calculatedBuyRate", "purchasePaidAmount", "purchaseDueAmount", "damageLossValue"]) {
+        assert.equal(movement[`${field}Paise`], BigInt(Math.round(movement[field] * 100)), `${movement.action}.${field} must reconcile without backfill`);
+      }
+    }
+
     const foreign = await createTenant(ctx.db);
     const foreignAuth = await login(ctx, foreign.ownerMobile, foreign.ownerPassword);
     assertFailure(await ctx.get(`/api/bills/${bill.id}`, { token: foreignAuth.accessToken }), 404);

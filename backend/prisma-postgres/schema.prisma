@@ -1386,20 +1386,20 @@ model StockLedger {
   oldStockBaseQty         Float
   newStockBaseQty         Float
   purchaseBillAmount      Float     @default(0) // total bill amount if it's a purchase
-  purchaseBillAmountPaise BigInt?
+  purchaseBillAmountPaise BigInt?   @default(0)
   calculatedBuyRate       Float     @default(0) // per rateUnit cost computed from purchase
-  calculatedBuyRatePaise  BigInt?
+  calculatedBuyRatePaise  BigInt?   @default(0)
   invoiceNumber           String?
   purchasePaymentStatus   String    @default("paid") // paid | partial | due
   purchasePaymentMode     String?
   purchasePaidAmount      Float     @default(0)
-  purchasePaidAmountPaise BigInt?
+  purchasePaidAmountPaise BigInt?   @default(0)
   purchaseDueAmount       Float     @default(0)
-  purchaseDueAmountPaise  BigInt?
+  purchaseDueAmountPaise  BigInt?   @default(0)
   purchaseDueDate         DateTime?
   supplierName            String?
   damageLossValue         Float     @default(0) // cost value of damage, affects P&L
-  damageLossValuePaise    BigInt?
+  damageLossValuePaise    BigInt?   @default(0)
   billId                  String?
   clientMovementId        String?
   idempotencyKey          String?
