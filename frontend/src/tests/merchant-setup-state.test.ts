@@ -57,6 +57,17 @@ describe("a catalogue with nothing on the shelf is not a ready shop", () => {
 });
 
 describe("merchant setup readiness", () => {
+  it.each([
+    [0, 0, "/products?import=1", "Import products", false],
+    [560, 0, "/products", "Add opening stock", false],
+    [560, 1, "/products", "Manage products", true],
+  ])("offers the next product action for %i products with %i in stock", (productCount, productsInStockCount, href, actionLabel, complete) => {
+    const step = buildMerchantSetupProgress(
+      { ...EMPTY_FACTS, productCount, productsInStockCount }, createMerchantSetupState(), t,
+    ).steps.find((item) => item.id === "products");
+    expect(step).toMatchObject({ href, actionLabel, complete });
+  });
+
   it("does not mark confirmable production settings ready from defaults alone", () => {
     const progress = buildMerchantSetupProgress(
       { ...EMPTY_FACTS, storeProfileReady: true, productCount: 10 },

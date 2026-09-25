@@ -204,8 +204,12 @@ export function buildMerchantSetupProgress(
       id: "products",
       title: t("setup.step.products.title"),
       description: t("setup.step.products.description"),
-      href: "/products?import=1",
-      actionLabel: t("setup.step.products.action"),
+      href: facts.productCount === 0 ? "/products?import=1" : "/products",
+      actionLabel: facts.productCount === 0
+        ? t("setup.step.products.action")
+        : facts.productsInStockCount === 0
+          ? t("setup.step.products.addStock")
+          : t("setup.step.products.manage"),
       required: true,
       // Products alone are not a sellable shelf. The starter catalogue ships with
       // Opening Stock 0 on every row — correctly, since nobody but the shopkeeper
