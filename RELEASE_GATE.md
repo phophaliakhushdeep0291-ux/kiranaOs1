@@ -2,7 +2,7 @@
 
 Current decision: **NO-GO — candidate/external/manual evidence incomplete**
 Gate owner: Release owner  
-Last evaluated: 2026-09-23 (local furniture and restaurant follow-up; historical certification below retains its own dates)
+Last evaluated: 2026-09-23 (local furniture and restaurant follow-up; historical certification below retains its own dates). CI certification row re-verified against `gh` on 2026-09-25.
 
 No new feature should enter a release branch while the P0 production gate is red. This document records the decision; `PRODUCTION_CHECKLIST.md` contains the full operational checklist.
 
@@ -49,19 +49,65 @@ Run against a clean checkout with supported Node versions and frozen installs.
 
 | Gate | Command/evidence | Status |
 |---|---|---|
-| Frontend typecheck | `cd frontend && npm run typecheck` | Passed 2026-09-17 at commit `64850f99`, inside the full `prod:check` run recorded below. |
-| Frontend tests | `cd frontend && npm run test` | Passed 2026-09-17 at commit `64850f99`: 2,784 passed, 1 skipped across 373 passed files and 1 skipped file. The figure this row carried until now (1,597 across 251 files, 2026-08-20) predated 508 commits. |
+| Frontend typecheck | `cd frontend && npm run typecheck` | Passed 2026-09-25 at commit `4d82c917`, inside the full `prod:check` run recorded below. |
+| Frontend tests | `cd frontend && npm run test` | Passed 2026-09-25 at commit `4d82c917`: 2,966 passed, 1 skipped across 397 passed files and 1 skipped file. Supersedes 2,926/391 (2026-09-21 at `787af9ee`), 2,784/373 (2026-09-17), and 1,597/251 before that. The suite has grown by 1,369 tests in five weeks, which is why a figure quoted from this table is worth re-running rather than repeating. |
 | Hardware bridge software/installer contract | `cd hardware-bridge && npm test` plus PowerShell parser | Passed 2026-09-17 in a clean worktree at commit `e8a23d9a`: 32/32 software tests. Native .NET setup compilation, signed workflow artifact, clean-Windows install and physical printer runs remain external evidence. |
-| Frontend production build/security | `cd frontend && npm run prod:check` | Passed 2026-09-17 at commit `64850f99`: 6,105 translation keys across 18 modules; startup 858.8 kB raw / 259.2 kB gzip across 5 files against the fixed 300 kB gzip ceiling; product-wide JavaScript 5,304.5 kB raw / 1,472.6 kB gzip (reported, not budgeted); largest shop offline payload restaurant 4,447.3 kB raw / 1,251.7 kB gzip across 184 files against the 4.5 MB / 1.25 MB ceilings. Offline boot coverage verified 32 entries and 177 installed assets. **The offline payload now sits at 96.5% of its raw ceiling and 97.8% of its gzip ceiling, leaving 28.3 kB of gzip headroom.** The rise from the 2026-08-20 figure (1,011.6 kB gzip) is the 2026-09-16 measurement correction that folded in the lazy boot dependencies an offline restart needs, not feature growth; see the note in `frontend/scripts/check-bundle-size.mjs`. Startup gzip is flat (261.2 -> 259.2 kB) and its limit has not moved. |
-| Backend tests | `cd backend && npm test` | Passed 2026-09-17 in a clean `npm ci` worktree at commit `e8a23d9a`: 41 suite groups, 0 failures, including the guarded isolated-database pretest/posttest, billing, money, sync/source contracts, tenant, compliance, provider-contract, vertical, restaurant, packaging and reports groups. This is a cleaner run than the 2026-08-20 entry, which was a dirty working tree. |
-| Backend production check | `cd backend && npm run prod:check` | Passed 2026-09-17 in a clean `npm ci` worktree at commit `e8a23d9a`: application module graph OK, production readiness checks passed, dependency security regressions passed. |
+| Frontend production build/security | `cd frontend && npm run prod:check` | Passed 2026-09-25 at commit `4d82c917`: startup 867.7 kB raw / 262.0 kB gzip across 5 files against the fixed 300 kB gzip ceiling; largest shop offline payload restaurant 4,529.8 kB raw / **1,273.8 kB gzip** across 186 files against the 4.5 MB / 1.25 MB ceilings. **This row is now 6.2 kB from failing.** It is at 98.3% of its raw ceiling and **99.5% of its gzip ceiling**. The trend, all measured the same way: 1,251.7 kB (09-17) → 1,260.1 (09-21) → 1,273.8 (09-25), i.e. **13.7 kB consumed in the last four days against 6.2 kB remaining — under two days of headroom at that rate.** Unlike the 2026-09-16 movement this is not a measurement correction; the ceiling has not moved since, so these are real bytes. The next feature of any size fails the build, and it will fail for whichever change is in flight rather than for the one that spent the budget. `frontend/scripts/check-bundle-size.mjs` records roughly ten chunking approaches already measured and rejected; the lever it names is the service worker's asset groups and startup sequencing, not Rollup configuration. Restaurant is the trade that defines this ceiling — 186 files against 178 for most trades. Startup gzip is effectively flat (259.2 → 261.2 → 262.0 kB) and its limit has not moved. |
+| Backend tests | `cd backend && npm test` | Passed 2026-09-25 at commit `4d82c917`: 0 failures, including the guarded isolated-database pretest/posttest, billing, money, sync/source contracts, tenant, compliance, provider-contract, vertical, restaurant, packaging and reports groups. |
+| Backend production check | `cd backend && npm run prod:check` | Passed 2026-09-25 at commit `4d82c917`: application module graph OK, production readiness checks passed, dependency security regressions passed. |
 | Integration tests | Isolated DB run, including billing/sync/tenant paths | Passed 2026-09-17 at commit `52b2c04b` on Node 22.23.2: 42 files, 382 passed, 0 failed, 3 PostgreSQL-only skips. Evidence: `docs/evidence/deployment-readiness-2026-09-17/integration-summary.txt`. Supersedes the 28/28 run of 2026-08-10 this row previously cited. |
-| Migration safety | `cd backend && npm run migration:safety` | Passed 2026-09-17 in a clean `npm ci` worktree at commit `e8a23d9a` with 0 warnings. |
-| Existing release gate | `cd backend && npm run release:gate` | Passed 2026-09-17 in a clean `npm ci` worktree at commit `e8a23d9a`, version 1.0.0, 1 warning: `RELEASE_APPROVED` is not true, so this stays documentation/proof-only and is not a human approval record. |
-| CI certification | `.github/workflows/release-certification.yml` run URL | **Still the one automated gate with no evidence at all.** Candidate run URL not recorded. Run #316 (2026-08-09) was refused by GitHub before it started - "recent account payments have failed or your spending limit needs to be increased" - and no certification run has been recorded for any commit since; main has advanced 508 commits past the last evaluation. The workflow itself is correctly wired: it runs on every pull request into `main` as a required check and again after each merge, so nothing merges uncertified once the account can run it. Pull-request and merge runs defer the Docker image proof to the weekly and manual runs (`RELEASE_CERT_SKIP_IMAGE`), recorded as a skip with its reason; strict certification still requires the image. Clearing the billing block is the cheapest remaining unlock on this table. |
+| Migration safety | `cd backend && npm run migration:safety` | Passed 2026-09-25 at commit `4d82c917` with 0 warnings. |
+| Existing release gate | `cd backend && npm run release:gate` | Passed 2026-09-25 at commit `4d82c917`, version 1.0.0, 1 warning: `RELEASE_APPROVED` is not true, so this stays documentation/proof-only and is not a human approval record. |
+| CI certification | `.github/workflows/release-certification.yml` run URL | **Green. This row claimed the opposite for three weeks and was simply wrong.** The billing block it described ended on 2026-08-30; certification has run on `main` continuously since. Verified 2026-09-25 with `gh run list --workflow "KiranaOS Release Certification" --branch main`: 62 successful runs on `main`, the last 15 consecutively green from 2026-09-18 through 2026-09-24. **Full strict certification including the Docker image passed on 2026-09-21** — scheduled run [35580535971](https://github.com/phophaliakhushdeep0291-ux/kiranaOs1/actions/runs/35580535971) at commit `bf58444f`, `release-certification.js --mode=ci`, with real `postgres:16-alpine` and `redis:7-alpine`, logging `[PASS] Production Docker image build`, `[PASS] Source snapshot remained stable throughout certification` and `Certification status: ci-passed`; the 255,778-byte report is retained as artifact `release-certification-35580535971`. The commit this table otherwise records, `787af9ee`, has its own passing push run [35570859541](https://github.com/phophaliakhushdeep0291-ux/kiranaOs1/actions/runs/35570859541) — that one defers the image (`RELEASE_CERT_SKIP_IMAGE: true`), which is the documented behaviour for push and PR runs, so the scheduled run above is what carries the image proof. The 185 historical failures on `main` predate 2026-09-18 and are not the current state. **Re-check this row with `gh` before quoting it; do not quote it from memory.** |
 | Local certification (interim, not a substitute for CI) | `cd backend && npm run release:certify:local` | **`local-passed` on 2026-09-17 at commit `72af0226`: 17 passed, 0 failed, 0 blocked, 9 skipped in 344s.** This replaces two superseded claims: the 2026-08-20 pass, which was a dirty working tree, and the 2026-09-08 status file recording the 2026-09-02 run as failed on the required `source-snapshot-stability` stage. That stage passes here - the run was made against a single committed snapshot - which is the proof `docs/evidence/local-release-certification-status-2026-09-08.json` named as next required. Covered: both Prisma schemas, migration safety and sequence, release documentation and rollback, backend source and calculation tests, warehouse/replenishment workflows, the full isolated-SQLite regression and integration suite (198.9s), backend production readiness, AI hallucination-safety gates, the static API contract, the Razorpay signature fixture, hardware-bridge pairing/recovery/installer contracts, the complete frontend typecheck/test/build/security gate, and local object storage. **The 9 skips are exactly the proofs this machine cannot produce** and each names its own unblocking condition: PostgreSQL migrations/concurrency/reconciliation, Redis queue and worker execution, deployed worker heartbeat, live API contract smoke, live backend workflow smoke, production object-storage signed URLs, the PostgreSQL backup and isolated restore drill, and the production Docker image. Those skips are why this row is evidence and not a substitute for CI, and why it does not by itself move the decision. Evidence: `docs/evidence/local-release-certification-latest.json`. |
 
 Any failure is red. Skips require a written exception below; P0 financial, migration, tenant or offline safety checks cannot be waived.
+
+### What changed at the 2026-09-21 re-evaluation
+
+Every locally runnable row was re-run at `787af9ee` in a worktree built by frozen
+install, and all of them are green. Three things are worth carrying forward.
+
+- **The suite keeps growing faster than this table.** Frontend tests are 2,926,
+  not the 2,784 recorded four days ago; the catalogue is 6,185 keys, not 6,105.
+  Neither number was wrong when written. The lesson is that a figure here has a
+  shelf life of days, so a row that is being relied on should be re-run rather
+  than read.
+- **The offline bundle row is now the nearest thing to a failure on this table.**
+  19.9 kB of gzip headroom, down from 28.3 kB in four days. Unlike the last
+  movement this is not a measurement correction — the ceiling has not moved — so
+  it is 8.4 kB of real growth against a budget with under twenty left. On that
+  trend the row goes red inside a fortnight, and it will go red for whichever
+  change happens to be in flight at the time rather than for the change that
+  spent the budget.
+- **Nothing here moves the decision.** The still-missing proofs are external to
+  this machine: no physically certified printer, no automated daily backup in
+  production, and no named sign-off in the table at the foot of this document.
+
+> **Correction, 2026-09-25.** The bullet above originally also listed "no CI
+> certification run for any commit", and the pass that produced this section
+> named it the single biggest blocker. That was false, and it was false because
+> the CI row was read rather than re-run — the same mistake this section warns
+> about two bullets earlier, made in the same pass that warned about it.
+> Certification has been green on `main` since 2026-08-30, the exact commit
+> evaluated here is certified, and full strict certification including the
+> Docker image passed on 2026-09-21. See the CI row above. A stale row in this
+> document is not a harmless inaccuracy: it is quoted as the reason for NO-GO,
+> so a false blocker in it hides the real ones.
+
+`BUG_BACKLOG.md` was re-triaged on 2026-09-20 and no longer trails this document.
+It raises one question that belongs to the gate owner rather than to the backlog:
+BUG-047 and BUG-057 are **P0s in state `Fixed`, never promoted to `Verified`**, and
+the threshold below reads "Open P0: 0 required". Their automated evidence was
+re-run on 2026-09-21 and still passes — `bill-cost-basis`, `pack-cost-price`, and
+15 frontend tests across `sync-superseded-local-echo`, `sync-push-timeout` and
+`return-tender-reconciles-to-sales`. Note that re-running a regression is not
+verification: the measurement halves of BUG-047 (4.3s to 282ms) and BUG-051/054/055
+were taken by driving a real shop and cannot be reproduced from this document.
+What is missing is therefore a named verifier and, for
+BUG-057, the `backfill-default-pack-cost` run that repairs historical cost on
+shops that have already bought stock; the code fix alone only corrects a product
+at its next receipt.
 
 ### What changed at the 2026-09-17 re-evaluation
 

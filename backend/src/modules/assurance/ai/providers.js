@@ -9,8 +9,8 @@
 //
 // No provider is ever the authority on numbers. Providers receive already
 // redacted, already computed facts and return prose only.
-import OpenAI from "openai";
 import { env } from "../../../config/env.js";
+import { runChatCompletion, soleProvider } from "../../ai/provider-gateway.js";
 
 export class DisabledAuditAIProvider {
   name = "disabled";
@@ -105,31 +105,32 @@ export class MockAuditAIProvider {
  * validates against a zod schema before anything is stored.
  */
 export class ExternalAuditAIProvider {
-  constructor({ provider, apiKey, model, timeoutMs }) {
+  constructor({ provider, model, timeoutMs }) {
     this.name = provider;
-    this.available = Boolean(apiKey);
     this.model = model;
     this.timeoutMs = timeoutMs;
-    this.client = apiKey
-      ? new OpenAI({
-          apiKey,
-          ...(provider === "groq" ? { baseURL: "https://api.groq.com/openai/v1" } : {}),
-          timeout: timeoutMs,
-          maxRetries: 0, // retries are handled by the caller with its own budget
-        })
-      : null;
+    // Exactly one vendor, never a failover list: the shop consented to this
+    // provider by name, so a quiet retry against another one would send its
+    // data somewhere nobody agreed to. The gateway still owns the deadline,
+    // the retry budget, the breaker and the token accounting.
+    this.candidates = soleProvider(provider, model);
+    this.available = this.candidates.length > 0;
   }
 
-  async #chat(systemPrompt, userPayload) {
-    if (!this.client) throw new AiProviderUnavailable(`${this.name} provider has no API key configured`);
-    const completion = await this.client.chat.completions.create({
-      model: this.model,
-      temperature: 0,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: JSON.stringify(userPayload) },
-      ],
+  async #chat(purpose, systemPrompt, userPayload) {
+    if (!this.available) throw new AiProviderUnavailable(`${this.name} provider has no API key configured`);
+    const { completion } = await runChatCompletion({
+      purpose,
+      deadline: Date.now() + this.timeoutMs,
+      candidates: this.candidates,
+      body: {
+        temperature: 0,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: JSON.stringify(userPayload) },
+        ],
+      },
     });
     const raw = completion.choices?.[0]?.message?.content;
     if (!raw) throw new Error("Provider returned an empty response");
@@ -137,15 +138,15 @@ export class ExternalAuditAIProvider {
   }
 
   async explainFinding(input) {
-    return this.#chat(EXPLAIN_SYSTEM_PROMPT, input);
+    return this.#chat("assurance_explain_finding", EXPLAIN_SYSTEM_PROMPT, input);
   }
 
   async summarizeCase(input) {
-    return this.#chat(SUMMARIZE_SYSTEM_PROMPT, input);
+    return this.#chat("assurance_summarize_case", SUMMARIZE_SYSTEM_PROMPT, input);
   }
 
   async classifyEvidence(input) {
-    return this.#chat(CLASSIFY_SYSTEM_PROMPT, input);
+    return this.#chat("assurance_classify_evidence", CLASSIFY_SYSTEM_PROMPT, input);
   }
 }
 
@@ -196,7 +197,6 @@ export function getAuditAIProvider({ override = null } = {}) {
     const defaultModel = providerName === "groq" ? env.GROQ_MODEL : env.OPENAI_MODEL;
     provider = new ExternalAuditAIProvider({
       provider: providerName,
-      apiKey,
       model: env.AUDIT_AI_MODEL || defaultModel,
       timeoutMs: env.AUDIT_AI_TIMEOUT_MS,
     });

@@ -1921,12 +1921,30 @@ if (exists("package.json")) {
 
 
 // AI transcription must be operational, bounded, and clean up every upload.
+//
+// The provider half of this moved into provider-gateway.js on 2026-09-21, so
+// these snippets are asserted where the behavior now lives. Checking
+// ai.service.js for them would have forced the call site to keep a second
+// OpenAI client alive purely to satisfy a grep — which is the exact drift the
+// gateway exists to end.
 if (exists("src/modules/ai/ai.service.js") && exists("src/modules/ai/ai.controller.js")) {
   const aiService = read("src/modules/ai/ai.service.js");
   const aiController = read("src/modules/ai/ai.controller.js");
   const aiUpload = read("src/modules/ai/ai.upload.js");
-  for (const snippet of ["audio.transcriptions.create", "OPENAI_TRANSCRIBE_MODEL", "GROQ_TRANSCRIBE_MODEL", "MAX_AUDIO_BYTES", "response_format: \"json\""]) {
+  const aiGateway = read("src/modules/ai/provider-gateway.js");
+  for (const snippet of ["audio.transcriptions.create", "OPENAI_TRANSCRIBE_MODEL", "GROQ_TRANSCRIBE_MODEL", "response_format: \"json\""]) {
+    if (!aiGateway.includes(snippet)) errors.push(`provider-gateway.js missing operational transcription behavior: ${snippet}`);
+  }
+  for (const snippet of ["MAX_AUDIO_BYTES", "runTranscription"]) {
     if (!aiService.includes(snippet)) errors.push(`ai.service.js missing operational transcription behavior: ${snippet}`);
+  }
+  // Every model call goes through the one gateway. A second client anywhere
+  // else is how the timeout, retry, failover and token accounting drifted into
+  // seven different answers the first time.
+  for (const file of ["src/modules/ai/ai.service.js", "src/modules/ai/invoice-ocr.service.js", "src/modules/diagnostics/incident-report.service.js", "src/modules/assurance/ai/providers.js"]) {
+    if (exists(file) && read(file).includes("new OpenAI(")) {
+      errors.push(`${file} constructs its own OpenAI client; route the call through provider-gateway.js instead`);
+    }
   }
   for (const snippet of ["getUploadedAudioFile", "removeUploadedAudioFile", "finally", "svc.transcribeAudio(file)"]) {
     if (!aiController.includes(snippet)) errors.push(`ai.controller.js missing safe transcription lifecycle behavior: ${snippet}`);

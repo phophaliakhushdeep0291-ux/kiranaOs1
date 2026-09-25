@@ -27,6 +27,15 @@
  * tokens per model there is no answer to "what does the assistant cost per shop",
  * and without latency per provider there is no evidence for which one to make
  * primary. Both questions were previously unanswerable.
+ *
+ * All six call sites now come through here, including transcription — which
+ * matters more than it sounds, because transcription is the front door of the
+ * voice feature and the last one to be migrated. Failover in the parser is
+ * worth nothing if the audio never became a transcript to parse.
+ *
+ * Two of those callers deliberately pass a one-element list (see `soleProvider`):
+ * a shorter list is not the same thing as leaving the gateway, and they still
+ * get the deadline, the retry budget, the breaker and the accounting.
  */
 import OpenAI from "openai";
 import { env } from "../../config/env.js";
@@ -91,6 +100,76 @@ export function chatProviders() {
   return cachedProviders;
 }
 
+let cachedTranscribers = null;
+let cachedTranscriberKey = null;
+
+/**
+ * Provider order for audio, which is the same order for the same reasons — but
+ * a different list, because the transcription models are not the chat models
+ * and a whisper model cannot be substituted for a chat one or the other way
+ * round.
+ */
+export function transcriptionProviders() {
+  const key = `${env.GROQ_API_KEY ? "g" : ""}${env.GROQ_TRANSCRIBE_MODEL}|${env.OPENAI_API_KEY ? "o" : ""}${env.OPENAI_TRANSCRIBE_MODEL}`;
+  if (cachedTranscribers && cachedTranscriberKey === key) return cachedTranscribers;
+  const providers = [];
+  if (env.GROQ_API_KEY) {
+    providers.push({
+      provider: "groq",
+      model: env.GROQ_TRANSCRIBE_MODEL,
+      client: new OpenAI({ apiKey: env.GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1", maxRetries: 0 }),
+    });
+  }
+  if (env.OPENAI_API_KEY) {
+    providers.push({
+      provider: "openai",
+      model: env.OPENAI_TRANSCRIBE_MODEL,
+      client: new OpenAI({ apiKey: env.OPENAI_API_KEY, maxRetries: 0 }),
+    });
+  }
+  cachedTranscribers = providers;
+  cachedTranscriberKey = key;
+  return cachedTranscribers;
+}
+
+const soleProviders = new Map();
+
+/**
+ * One named vendor, on a caller-chosen model, as a one-element candidate list.
+ *
+ * Not every call may fail over, and for two quite different reasons:
+ *
+ *   invoice OCR reads an image, and the Groq text model above cannot see one;
+ *   the assurance explainer sends shop data to the vendor the shop consented
+ *     to by name, so silently retrying against a second vendor would send that
+ *     data somewhere nobody agreed to.
+ *
+ * Both are reasons to hand the gateway a shorter list, not reasons to leave it.
+ * Everything else this file centralizes — one deadline, one retry budget, a
+ * breaker, and tokens actually counted — applies to a single-vendor call
+ * exactly as it does to a failover one. Returns an empty list when that vendor
+ * has no key, so a caller can report "not configured" however its surface needs.
+ */
+export function soleProvider(name, model) {
+  const apiKey = name === "groq" ? env.GROQ_API_KEY : name === "openai" ? env.OPENAI_API_KEY : null;
+  const cacheKey = `${name}|${model}|${apiKey ? "keyed" : "nokey"}`;
+  const cached = soleProviders.get(cacheKey);
+  if (cached) return cached;
+  const built = apiKey
+    ? [{
+      provider: name,
+      model,
+      client: new OpenAI({
+        apiKey,
+        ...(name === "groq" ? { baseURL: "https://api.groq.com/openai/v1" } : {}),
+        maxRetries: 0,
+      }),
+    }]
+    : [];
+  soleProviders.set(cacheKey, built);
+  return built;
+}
+
 /** name -> { failures, openedAt }. Process-local on purpose; see note below. */
 const breakers = new Map();
 
@@ -146,6 +225,9 @@ export function __resetProviderGatewayForTests() {
   breakers.clear();
   cachedProviders = null;
   cachedKey = null;
+  cachedTranscribers = null;
+  cachedTranscriberKey = null;
+  soleProviders.clear();
 }
 
 function statusOf(error) {
@@ -190,13 +272,27 @@ function sleep(ms, signal) {
 }
 
 /**
+ * The request body, which may depend on who is about to answer it.
+ *
+ * Structured output is not portable. OpenAI can enforce a JSON *schema*; Groq
+ * only promises syntactically valid JSON. A caller that needs its schema
+ * honoured therefore has to word the request differently per vendor — and it
+ * cannot decide that up front, because which vendor answers is settled here,
+ * during failover. So a caller may pass a function instead of an object and be
+ * asked once per attempt, with the candidate that is about to be called.
+ */
+function resolveBody(body, candidate) {
+  return typeof body === "function" ? body(candidate) : body;
+}
+
+/**
  * One request, bounded by the caller's deadline.
  *
  * The deadline is the turn's, not this call's: a turn is several model requests
  * plus tool work, and each request may only spend what is left. That is why the
  * timeout is computed here rather than fixed on the client.
  */
-async function callOnce(candidate, body, deadline) {
+async function callOnce(candidate, deadline, invoke) {
   const remaining = deadline - Date.now();
   if (remaining <= 0) {
     throw new AppError("The assistant took too long to respond. Please try again.", 504, "AI_TURN_TIMEOUT");
@@ -205,10 +301,7 @@ async function callOnce(candidate, body, deadline) {
   let timer;
   try {
     return await Promise.race([
-      candidate.client.chat.completions.create(
-        { ...body, model: body.model ?? candidate.model },
-        { signal: controller.signal, timeout: remaining, maxRetries: 0 },
-      ),
+      invoke(candidate, { signal: controller.signal, timeout: remaining, maxRetries: 0 }),
       new Promise((_resolve, reject) => {
         timer = setTimeout(() => {
           controller.abort();
@@ -221,6 +314,39 @@ async function callOnce(candidate, body, deadline) {
   }
 }
 
+/** A chat completion, worded for whichever candidate is about to answer. */
+function chatInvoke(body) {
+  return (candidate, options) => {
+    const resolved = resolveBody(body, candidate);
+    return candidate.client.chat.completions.create(
+      { ...resolved, model: resolved.model ?? candidate.model },
+      options,
+    );
+  };
+}
+
+/**
+ * An audio transcription.
+ *
+ * `openAudio` is a factory, not a stream, and that is the whole point: a stream
+ * is consumed by the attempt that fails, so a retry or a failover handed the
+ * same one would upload nothing and be told, confusingly, that the audio was
+ * empty. Each attempt opens its own and closes it again.
+ */
+function transcriptionInvoke({ openAudio, prompt }) {
+  return async (candidate, options) => {
+    const audio = openAudio();
+    try {
+      return await candidate.client.audio.transcriptions.create(
+        { file: audio, model: candidate.model, response_format: "json", prompt },
+        options,
+      );
+    } finally {
+      audio.destroy?.();
+    }
+  };
+}
+
 /**
  * Tokens are recorded; rupees are not.
  *
@@ -230,35 +356,31 @@ async function callOnce(candidate, body, deadline) {
  * provider and model are the durable fact; whatever prices them today can do
  * that arithmetic where the rates are actually maintained.
  */
-function recordUsage(purpose, candidate, completion, latencyMs, attempts) {
+function recordUsage(purpose, candidate, result, latencyMs, attempts) {
   const labels = { provider: candidate.provider, model: candidate.model, purpose };
   incrementMetric("ai_provider_requests_total", { ...labels, outcome: "ok" });
   observeMetric("ai_provider_latency_ms", labels, latencyMs);
   observeMetric("ai_provider_attempts", labels, attempts);
-  const usage = completion?.usage;
+  const usage = result?.usage;
   if (!usage) return;
-  const prompt = Number(usage.prompt_tokens ?? 0);
-  const output = Number(usage.completion_tokens ?? 0);
+  const prompt = Number(usage.prompt_tokens ?? usage.input_tokens ?? 0);
+  const output = Number(usage.completion_tokens ?? usage.output_tokens ?? 0);
   if (prompt > 0) incrementMetric("ai_provider_tokens_total", { ...labels, kind: "prompt" }, prompt);
   if (output > 0) incrementMetric("ai_provider_tokens_total", { ...labels, kind: "completion" }, output);
 }
 
 /**
- * Ask a model, and keep asking somewhere until one answers or the clock runs out.
+ * Ask a provider, and keep asking somewhere until one answers or the clock runs
+ * out. The retry budget, the failover order, the breaker and the accounting all
+ * live here; `invoke` is the only part that knows which endpoint is being
+ * called, which is what lets transcription share every one of those decisions
+ * with chat instead of reinventing them.
  *
- * Returns the completion plus who produced it, because the caller has to record
+ * Returns the result plus who produced it, because the caller has to record
  * which model it is about to trust — a turn logged against "groq" that actually
  * came from the OpenAI fallback is a trace nobody can debug from.
- *
- * `candidates` exists for tests and for the injected-provider path the agent
- * loop already supports; production passes nothing and gets the env's list.
  */
-export async function runChatCompletion({ purpose = "chat", body, deadline, candidates = null } = {}) {
-  const available = candidates ?? chatProviders();
-  if (!available.length) {
-    throw new AppError("No AI API key configured. Add GROQ_API_KEY or OPENAI_API_KEY.", 503, "AI_KEY_MISSING");
-  }
-
+async function runWithFailover({ purpose, deadline, available, invoke }) {
   const startedAt = Date.now();
   let lastError = null;
   let outOfTime = false;
@@ -276,22 +398,22 @@ export async function runChatCompletion({ purpose = "chat", body, deadline, cand
     for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_PROVIDER; attempt += 1) {
       const attemptStartedAt = Date.now();
       try {
-        const completion = await callOnce(candidate, body, deadline);
+        const result = await callOnce(candidate, deadline, invoke);
         recordBreakerSuccess(candidate.provider);
-        recordUsage(purpose, candidate, completion, Date.now() - attemptStartedAt, attempt);
+        recordUsage(purpose, candidate, result, Date.now() - attemptStartedAt, attempt);
         if (index > 0) {
           incrementMetric("ai_provider_failovers_total", {
             from: available[0].provider, to: candidate.provider, purpose,
           });
         }
         return {
-          completion,
+          result,
           provider: candidate.provider,
           model: candidate.model,
           attempts: attempt,
           failedOver: index > 0,
           latencyMs: Date.now() - startedAt,
-          usage: completion?.usage ?? null,
+          usage: result?.usage ?? null,
         };
       } catch (error) {
         lastError = error;
@@ -328,6 +450,53 @@ export async function runChatCompletion({ purpose = "chat", body, deadline, cand
     throw new AppError("The assistant took too long to respond. Please try again.", 504, "AI_TURN_TIMEOUT");
   }
   throw new AppError("The assistant is temporarily unavailable. Try again shortly.", 503, "AI_PROVIDERS_UNAVAILABLE");
+}
+
+function requireProviders(available) {
+  if (!available.length) {
+    throw new AppError("No AI API key configured. Add GROQ_API_KEY or OPENAI_API_KEY.", 503, "AI_KEY_MISSING");
+  }
+  return available;
+}
+
+/**
+ * Ask a model for a chat completion.
+ *
+ * `body` is the request, or a function of the candidate about to answer it when
+ * the request has to be worded per vendor; see `resolveBody`.
+ *
+ * `candidates` exists for tests, for the injected-provider path the agent loop
+ * already supports, and for the calls that may not fail over at all; see
+ * `soleProvider`. Production chat passes nothing and gets the env's list.
+ */
+export async function runChatCompletion({ purpose = "chat", body, deadline, candidates = null } = {}) {
+  const available = requireProviders(candidates ?? chatProviders());
+  const answered = await runWithFailover({ purpose, deadline, available, invoke: chatInvoke(body) });
+  // Named `completion` rather than `result` because that is what a chat caller
+  // is holding, and every one of them already reads it by that name.
+  return { ...answered, completion: answered.result };
+}
+
+/**
+ * Transcribe audio, with the same failover the rest of the assistant gets.
+ *
+ * This is the front door of the voice feature: if transcription is down, no
+ * amount of failover further in saves the turn, because there is no transcript
+ * to parse. It used to be the one AI call with no timeout, no retry and no
+ * second vendor — so a Groq outage silenced voice entirely while a working
+ * OpenAI key sat in the same environment.
+ *
+ * `openAudio` must be a factory. See `transcriptionInvoke`.
+ */
+export async function runTranscription({ purpose = "transcription", openAudio, prompt, deadline, candidates = null } = {}) {
+  const available = requireProviders(candidates ?? transcriptionProviders());
+  const answered = await runWithFailover({
+    purpose,
+    deadline,
+    available,
+    invoke: transcriptionInvoke({ openAudio, prompt }),
+  });
+  return { ...answered, transcript: String(answered.result?.text ?? "").trim() };
 }
 
 /** What the gateway currently believes about each provider. For /health and support. */
