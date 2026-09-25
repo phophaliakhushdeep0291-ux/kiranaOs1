@@ -33,7 +33,7 @@ import { shouldWaitForBillingCatalogue } from "../catalogue-readiness";
 import { commitBillingWorkspace, prepareNewBillWorkspace, prepareResumeBillWorkspace } from "./billing-workspace";
 import { updateCustomerOrder } from "@/features/core/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
-import { applyRoundOff, billNeedsCustomer, billingDiscountApprovalSummary, billingSensitiveApprovalFingerprint, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, cartItemUnitRate, clampAmount, LARGE_DISCOUNT_MIN_AMOUNT, LARGE_DISCOUNT_MIN_PERCENT, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
+import { applyRoundOff, billNeedsCustomer, billingDiscountApprovalSummary, billingSensitiveApprovalFingerprint, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, cartItemUnitRate, clampAmount, LARGE_DISCOUNT_MIN_AMOUNT, LARGE_DISCOUNT_MIN_PERCENT, lineNeedsOwnerApproval, normalizeSearchText, productMatchRank, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
 import { parseQuantityQuery } from "./billing-quantity-input";
 import { resolveLinePrice } from "@/features/core/pricing/resolve-line-price";
 import { sellingUnitCostPrice, sellingUnitMaxPrice } from "@/features/core/products/pages/product-pricing";
@@ -762,9 +762,14 @@ export default function Billing() {
     const q = normalizeSearchText(typedQuantity.term);
     const categoryFiltered = selectedCategory === "all" ? productSearchIndex : productSearchIndex.filter((entry) => entry.category === selectedCategory);
     if (!q) return categoryFiltered.slice(0, 30).map((entry) => entry.product);
-    const starts = categoryFiltered.filter((entry) => entry.searchText.startsWith(q));
-    const contains = categoryFiltered.filter((entry) => !entry.searchText.startsWith(q) && entry.searchText.includes(q));
-    return [...starts, ...contains].slice(0, 30).map((entry) => entry.product);
+    // Ranked, best first; see `productMatchRank` for the tiers and why matching
+    // a contiguous run alone was not enough.
+    const byRank: [typeof categoryFiltered, typeof categoryFiltered, typeof categoryFiltered] = [[], [], []];
+    for (const entry of categoryFiltered) {
+      const rank = productMatchRank(entry.searchText, q);
+      if (rank > 0) byRank[3 - rank].push(entry);
+    }
+    return [...byRank[0], ...byRank[1], ...byRank[2]].slice(0, 30).map((entry) => entry.product);
   }, [typedQuantity.term, productSearchIndex, selectedCategory]);
 
 

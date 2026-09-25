@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Product } from "@/lib/api/client";
-import { billingDiscountApprovalSummary, billingSensitiveApprovalFingerprint, calculateCartSubtotal, calculateDiscount, calculateGrandTotal, cartItemProfit, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productCostPrice, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "@/features/core/billing/pages/billing-calculations";
+import { billingDiscountApprovalSummary, billingSensitiveApprovalFingerprint, calculateCartSubtotal, calculateDiscount, calculateGrandTotal, cartItemProfit, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productCostPrice, productMatchRank, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "@/features/core/billing/pages/billing-calculations";
 import type { CartItem } from "@/features/core/billing/pages/billing-types";
 
 function product(overrides: Partial<Product> = {}): Product {
@@ -110,5 +110,43 @@ describe("billing calculations", () => {
     expect(billingSensitiveApprovalFingerprint([{ ...line, quantity: 3 }], 100, 0)).not.toBe(approved);
     expect(billingSensitiveApprovalFingerprint([line], 110, 0)).not.toBe(approved);
     expect(billingSensitiveApprovalFingerprint([line], 100, 10)).not.toBe(approved);
+  });
+});
+
+describe("what the counter finds when a cashier types two words", () => {
+  const rank = (text: string, query: string) =>
+    productMatchRank(normalizeSearchText(text), normalizeSearchText(query));
+
+  it("finds a product whose words are not next to each other", () => {
+    // The whole reason this exists: each word alone found it, both together did not.
+    expect(rank("Aashirvaad Multigrain Atta 1kg", "aashirvaad atta")).toBeGreaterThan(0);
+    expect(rank("Colgate Strong Teeth 100g", "colgate teeth")).toBeGreaterThan(0);
+    expect(rank("Colgate Strong Teeth 100g", "colgate 100g")).toBeGreaterThan(0);
+  });
+
+  it("does not care what order the words come in", () => {
+    expect(rank("Amul Butter 100g", "butter amul")).toBeGreaterThan(0);
+    expect(rank("Colgate Strong Teeth 100g", "strong colgate")).toBeGreaterThan(0);
+  });
+
+  it("still requires every word, so it cannot turn into a catch-all", () => {
+    expect(rank("Amul Butter 100g", "amul rice")).toBe(0);
+    expect(rank("Tata Salt 1kg", "tata sugar")).toBe(0);
+  });
+
+  it("ranks a prefix above a mid-text hit, and both above a scattered-word hit", () => {
+    expect(rank("Amul Butter 100g", "amul but")).toBe(3);
+    expect(rank("Amul Butter 100g", "butter")).toBe(2);
+    expect(rank("Colgate Strong Teeth 100g", "colgate teeth")).toBe(1);
+  });
+
+  it("keeps single-word search exactly as it was", () => {
+    expect(rank("Amul Butter 100g", "amul")).toBe(3);
+    expect(rank("Amul Butter 100g", "utter")).toBe(2);
+    expect(rank("Amul Butter 100g", "ghee")).toBe(0);
+  });
+
+  it("treats an empty query as matching, so an unfiltered grid still paints", () => {
+    expect(rank("Amul Butter 100g", "")).toBe(3);
   });
 });

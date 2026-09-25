@@ -436,12 +436,12 @@ if (parsed.data.FLIPKART_SELLER_API_ENABLED) {
 }
 
 if (parsed.data.RETAIL_PAYMENT_CONFIRMATION_REQUIRED && parsed.data.RETAIL_PAYMENT_PROVIDER !== "razorpay") {
-  console.error("âŒ RETAIL_PAYMENT_PROVIDER=razorpay is required when retail payment confirmation is mandatory");
+  console.error("❌ RETAIL_PAYMENT_PROVIDER=razorpay is required when retail payment confirmation is mandatory");
   process.exit(1);
 }
 
 if (parsed.data.RETAIL_PAYMENT_PROVIDER === "razorpay" && !parsed.data.RAZORPAY_ENABLED) {
-  console.error("âŒ RAZORPAY_ENABLED=true is required when RETAIL_PAYMENT_PROVIDER=razorpay");
+  console.error("❌ RAZORPAY_ENABLED=true is required when RETAIL_PAYMENT_PROVIDER=razorpay");
   process.exit(1);
 }
 
@@ -495,15 +495,15 @@ if (parsed.data.GST_PROVIDER === "gsp_http") {
     ["GST_PROVIDER_LEGAL_NAME", parsed.data.GST_PROVIDER_LEGAL_NAME],
   ].filter(([, value]) => !value).map(([key]) => key);
   if (missing.length) {
-    console.error(`âŒ ${missing.join(", ")} required when GST_PROVIDER=gsp_http`);
+    console.error(`❌ ${missing.join(", ")} required when GST_PROVIDER=gsp_http`);
     process.exit(1);
   }
   if (parsed.data.NODE_ENV === "production" && !/^https:\/\//i.test(parsed.data.GST_PROVIDER_BASE_URL)) {
-    console.error("âŒ GST_PROVIDER_BASE_URL must use HTTPS in production");
+    console.error("❌ GST_PROVIDER_BASE_URL must use HTTPS in production");
     process.exit(1);
   }
   if (parsed.data.NODE_ENV === "production" && !parsed.data.GST_PROVIDER_CERTIFIED) {
-    console.error("âŒ GST_PROVIDER_CERTIFIED=true is required for production GSP submission");
+    console.error("❌ GST_PROVIDER_CERTIFIED=true is required for production GSP submission");
     process.exit(1);
   }
 }
