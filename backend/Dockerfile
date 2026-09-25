@@ -5,8 +5,21 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && apt-get install -y --no-install-recommends openssl ca-certificates curl \
+  && install -d /usr/share/postgresql-common/pgdg \
+  && curl --fail --silent --show-error https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+  && echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main' \
+    > /etc/apt/sources.list.d/pgdg.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends postgresql-client-16 \
   && rm -rf /var/lib/apt/lists/*
+
+# Scheduled backups and restore drills run inside this same image. Debian's
+# default client can be older than our PostgreSQL 16 server and refuse a dump.
+# Execute every required tool during the build so host-installed CI tools cannot
+# hide a missing binary or shared library in the deployed container.
+RUN pg_dump --version && pg_restore --version && psql --version
 
 COPY package*.json ./
 # NODE_ENV=production above makes npm omit devDependencies by default, but the
