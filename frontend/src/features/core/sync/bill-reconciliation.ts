@@ -650,6 +650,132 @@ function mergeChildRow(
   };
 }
 
+/**
+ * Keys for pairing a server child row with the local row it came from, most
+ * specific first.
+ *
+ * Both sides emit keys under every label they carry — product id AND name — so
+ * a pair still meets even when the local row still holds a local product id and
+ * the server's row holds the server's. Quantity and rate narrow it; the bare
+ * label is the last rung, which is enough to tell two different products apart
+ * on the same bill.
+ *
+ * Returns nothing for a row with no label. Such a row keeps the positional
+ * fallback, which is the best available for something this sparse.
+ */
+function childRowPairingKeys(row: MutableRow): string[] {
+  const labels = [
+    getStringFrom(row, ["productId", "product_id", "product_local_id"]),
+    getStringFrom(row, ["name", "productName", "product_name"]),
+    getStringFrom(row, ["mode", "method", "paymentMethod", "payment_method"]),
+    getStringFrom(row, ["entryType", "entry_type", "type"]),
+  ]
+    .map((value) => normalizeBillSignatureText(value))
+    .filter((value): value is string => Boolean(value));
+  if (labels.length === 0) return [];
+
+  const quantity = getNumberFrom(row, ["quantity", "qty"]);
+  const rate = getNumberFrom(row, [
+    "ratePerRateUnit",
+    "rate_per_rate_unit",
+    "rate",
+    "price",
+    "amount",
+  ]);
+  const keys: string[] = [];
+  for (const label of labels) {
+    if (quantity !== undefined && rate !== undefined) {
+      keys.push(`${label}|${quantity.toFixed(3)}|${rate.toFixed(2)}`);
+    }
+    if (quantity !== undefined) keys.push(`${label}|${quantity.toFixed(3)}`);
+    if (rate !== undefined) keys.push(`${label}|r${rate.toFixed(2)}`);
+    keys.push(label);
+  }
+  return [...new Set(keys)];
+}
+
+/**
+ * Decide which local row each server child row is an echo of.
+ *
+ * Returns one entry per server row, aligned by index; `undefined` means the
+ * server row is genuinely new and has no local twin.
+ *
+ * Three rungs, in order:
+ *
+ * 1. **Server id.** A local row already carrying this server id IS that row's
+ *    record. Unambiguous, so it wins.
+ * 2. **What the row is** — product (or name) plus quantity and rate. This is the
+ *    rung that was missing, and on a bill's FIRST sync it is the only one that
+ *    can fire: no local row has a server id yet, so every line used to drop
+ *    straight to position.
+ * 3. **Position**, last, for rows too sparse to key on. Two identical lines on
+ *    one bill also land here, where either pairing gives the same answer.
+ *
+ * Why position alone was wrong: the two lists are not in the same order.
+ * `getRowsByBillId` reads the local rows out of a Dexie index, so they come back
+ * ordered by primary key — a random `bill_item_<uuid>` — while the server echoes
+ * its rows in cart order. A two-line bill had an even chance of pairing each
+ * server item with the wrong local row. `mergeChildRow` then wrote the server's
+ * camelCase money over the other line's stale snake_case money, and every reader
+ * that prefers `line_total` — the printed receipt, the WhatsApp copy, the bill
+ * screen — showed one line's total against another line's product: three packets
+ * of butter at ₹60, one tube of toothpaste at ₹186. The bill total stayed right,
+ * which is what kept it hidden.
+ */
+export function pairServerChildRows(
+  serverRows: MutableRow[],
+  localRows: MutableRow[],
+): (MutableRow | undefined)[] {
+  const byServerId = new Map<string, MutableRow>();
+  for (const row of localRows) {
+    const id = getStringFrom(row, ["id"]);
+    if (id) byServerId.set(id, row);
+    const serverId = getStringFrom(row, ["server_id", "serverId"]);
+    if (serverId && !byServerId.has(serverId)) byServerId.set(serverId, row);
+  }
+
+  const unclaimedInOrder = localRows.filter((row) => {
+    const serverId = getStringFrom(row, ["server_id", "serverId"]);
+    const id = getStringFrom(row, ["id"]);
+    return !(serverId && serverId === id);
+  });
+  const byBusinessKey = new Map<string, MutableRow[]>();
+  for (const row of unclaimedInOrder) {
+    for (const key of childRowPairingKeys(row)) {
+      const bucket = byBusinessKey.get(key);
+      if (bucket) bucket.push(row);
+      else byBusinessKey.set(key, [row]);
+    }
+  }
+
+  const claimed = new Set<string>();
+  const isClaimed = (row: MutableRow | undefined) =>
+    Boolean(row) && claimed.has(getStringFrom(row!, ["id"]) ?? "");
+  const claimByBusinessKey = (serverRow: MutableRow): MutableRow | undefined => {
+    for (const key of childRowPairingKeys(serverRow)) {
+      const match = byBusinessKey.get(key)?.find((row) => !isClaimed(row));
+      if (match) return match;
+    }
+    return undefined;
+  };
+
+  let nextUnclaimed = 0;
+  return serverRows.map((serverRow) => {
+    const serverRowId = getStringFrom(serverRow, ["id", "server_id", "serverId"]);
+    let localRow = serverRowId ? byServerId.get(serverRowId) : undefined;
+    if (isClaimed(localRow)) localRow = undefined;
+    if (!localRow) localRow = claimByBusinessKey(serverRow);
+    while (!localRow && nextUnclaimed < unclaimedInOrder.length) {
+      const candidate = unclaimedInOrder[nextUnclaimed];
+      nextUnclaimed += 1;
+      if (!isClaimed(candidate)) localRow = candidate;
+    }
+    const localRowId = localRow ? getStringFrom(localRow, ["id"]) : undefined;
+    if (localRowId) claimed.add(localRowId);
+    return localRow;
+  });
+}
+
 async function reconcileChildRows(
   tableName:
     | "bill_items"
@@ -687,41 +813,14 @@ async function reconcileChildRows(
     return true;
   });
 
-  // A row that already carries a server id is that server row's own record, so
-  // pair it directly rather than by position — index pairing only holds while
-  // the local rows are still in their original order.
-  const byServerId = new Map<string, MutableRow>();
-  for (const row of localRows) {
-    const id = getStringFrom(row, ["id"]);
-    if (id) byServerId.set(id, row);
-    const serverId = getStringFrom(row, ["server_id", "serverId"]);
-    if (serverId && !byServerId.has(serverId)) byServerId.set(serverId, row);
-  }
-  const claimed = new Set<string>();
-  const unclaimedInOrder = localRows.filter((row) => {
-    const serverId = getStringFrom(row, ["server_id", "serverId"]);
-    const id = getStringFrom(row, ["id"]);
-    return !(serverId && serverId === id);
-  });
-  let nextUnclaimed = 0;
+  const pairedLocalRows = pairServerChildRows(serverRows, localRows);
   const usedLocalIds = new Set<string>();
 
   for (const [index, serverRow] of serverRows.entries()) {
-    const serverRowId = getStringFrom(serverRow, ["id", "server_id", "serverId"]);
-    let localRow = serverRowId ? byServerId.get(serverRowId) : undefined;
-    if (localRow && claimed.has(getStringFrom(localRow, ["id"]) ?? "")) localRow = undefined;
-    while (!localRow && nextUnclaimed < unclaimedInOrder.length) {
-      const candidate = unclaimedInOrder[nextUnclaimed];
-      nextUnclaimed += 1;
-      const candidateId = getStringFrom(candidate, ["id"]) ?? "";
-      if (!claimed.has(candidateId)) localRow = candidate;
-    }
+    const localRow = pairedLocalRows[index];
     if (localRow) {
       const localRowId = getStringFrom(localRow, ["id"]);
-      if (localRowId) {
-        usedLocalIds.add(localRowId);
-        claimed.add(localRowId);
-      }
+      if (localRowId) usedLocalIds.add(localRowId);
     }
     const fallbackId =
       getStringFrom(localRow, ["id"]) ??

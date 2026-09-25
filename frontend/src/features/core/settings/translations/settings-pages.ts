@@ -119,7 +119,12 @@ export const settingsPagesEn = {
   "settings.sync.failed": "Failed",
   "settings.sync.conflicts": "Conflicts",
   "settings.sync.retries": "Retries",
-  "settings.sync.lastSuccessful": "Last successful sync {when}",
+  // Says UPLOAD, not "sync": this figure comes from /sync/diagnostics, which is
+  // the SERVER's view and therefore only knows about pushes. The stale-pull
+  // warning below is the device's own view of the other direction. Both can be
+  // true at once — bills going out fine, changes not coming in — and calling
+  // this one "sync" made the pair read as a contradiction.
+  "settings.sync.lastSuccessful": "Last successful upload {when}",
   "settings.sync.deviceStoppedReceiving": "This device stopped receiving updates.",
   "settings.sync.deviceStoppedReceivingHelp": "Bills you make here are still being backed up, but changes from your other devices are not arriving — prices, stock and bills may be out of date.",
   "settings.sync.lastAttempt": "Last attempt {when}: {reason}",
