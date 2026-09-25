@@ -1603,6 +1603,8 @@ export interface FurnitureOrderPayment {
 }
 
 export interface FurnitureOrder {
+  needsHistoryReconciliation?: boolean;
+  unreconciledReceipts?: Array<{ id: string; amount: number; mode: string; paidOn: string; reference: string | null }>;
   creditCollected?: number;
   needsInvoiceReview?: boolean;
   id: string;

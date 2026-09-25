@@ -15,6 +15,7 @@ import {
   cancelOrderSchema,
   createOrderSchema,
   createOrderInvoiceSchema,
+  reconcileOrderHistorySchema,
   setStatusSchema,
   updateOrderSchema,
 } from "./orders.schema.js";
@@ -53,6 +54,9 @@ router.post("/:id/invoice", requireContinuityAction("complete_sale"), requireOwn
 router.post("/:id/cancel", validate(cancelOrderSchema), ctrl.cancel);
 router.post("/:id/payments", validate(addPaymentSchema), ctrl.addPayment);
 router.post("/:id/payments/:paymentId/adjust", requireOwnerPin, validate(adjustPaymentSchema), ctrl.adjustPayment);
+// Opening a legacy order's receipts changes what the accounts say happened, so
+// it carries the same owner PIN as a refund or a correction.
+router.post("/:id/reconcile-history", requireOwnerPin, validate(reconcileOrderHistorySchema), ctrl.reconcileHistory);
 router.post("/:id/collections/:ledgerId/link", requireOwnerPin, validate(linkCollectionSchema), ctrl.linkCollection);
 router.delete("/:id/payments/:paymentId", ctrl.removePayment);
 router.delete("/:id", ctrl.remove);

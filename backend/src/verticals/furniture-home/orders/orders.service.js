@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createAuditLog } from "../../../modules/audit/audit.service.js";
 import { requireDeliveryBill } from "./order-delivery.js";
-import { applyFurnitureReceiptsToBill, postFurnitureReceipt, requireFurnitureAccounting } from "./order-finance.js";
+import { applyFurnitureReceiptsToBill, postFurnitureReceipt, requireFurnitureAccounting, unreconciledFurnitureReceipts } from "./order-finance.js";
 import db from "../../../db.js";
 import { isWriteConflict, serializableTransaction } from "../../../lib/transactions.js";
 import { AppError } from "../../../middleware/error.js";
@@ -350,7 +350,21 @@ export async function getOrder(shopId, id) {
     include: { items: true, payments: { orderBy: { paidOn: "asc" } } },
   });
   if (!order) throw new AppError("Order not found", 404);
-  return (await ordersWithCollections([order]))[0];
+  const serialized = (await ordersWithCollections([order]))[0];
+  // Which receipts the accounts have no history for, named rather than counted.
+  // The reconcile workflow makes the owner restate each one's amount and tender,
+  // and it cannot do that against a flag — it needs the rows to put on screen.
+  // Only on the single-order read: the list screens show many orders and none of
+  // them asks the owner to confirm anything.
+  const pending = await unreconciledFurnitureReceipts(db, order);
+  return {
+    ...serialized,
+    needsHistoryReconciliation: pending.length > 0,
+    unreconciledReceipts: pending.map((payment) => ({
+      id: payment.id, amount: round2(Number(payment.amount)), mode: payment.mode,
+      paidOn: payment.paidOn, reference: payment.reference ?? null,
+    })),
+  };
 }
 
 async function collectionContext(tx, shopId, id) {
