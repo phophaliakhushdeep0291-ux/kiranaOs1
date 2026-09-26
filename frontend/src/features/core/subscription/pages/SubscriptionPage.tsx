@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getPlanForBusinessType, offeredPlanCodes, type PlanCode } from "@/features/core/subscription/plans";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
-import { formatFreeAccessDate } from "@/features/core/subscription/free-access";
+import { formatFreeAccessDate, isFreeAccessPresale } from "@/features/core/subscription/free-access";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { CancelSubscriptionDialog, PlanBadge, UpgradeModal } from "@/features/core/subscription/components";
 import { subscriptionRefreshLocalFirst } from "@/features/core/subscription/local-actions";
@@ -62,6 +62,9 @@ export default function SubscriptionPage() {
   // While the launch promotion runs there is nothing to buy or cancel: checkout is
   // refused, and a shop's own paid period carries on underneath untouched.
   const freeDate = snapshot.freeAccessUntil ? formatFreeAccessDate(snapshot.freeAccessUntil, language) : null;
+  // In the promotion's last month plans are on sale again, dated from the day the
+  // window shuts. Access itself does not change: it is free until then either way.
+  const presale = isFreeAccessPresale(snapshot.freeAccessUntil);
 
   // Only a paid, active plan can be cancelled (trials/expired/grace have nothing to cancel).
   const canCancel = !freeDate && snapshot.status === "active";
@@ -72,7 +75,9 @@ export default function SubscriptionPage() {
     : currentIndex < offeredPlans.length - 1 ? offeredPlans[currentIndex + 1] : null;
   const periodEndLabel = snapshot.currentPeriodEnd ? new Date(snapshot.currentPeriodEnd).toLocaleDateString("en-IN") : null;
   const planMessage = freeDate
-    ? t("plans.free.modalBody", { date: freeDate, plan: snapshot.plan.name })
+    ? presale
+      ? t("plans.free.presaleBody", { date: freeDate })
+      : t("plans.free.modalBody", { date: freeDate, plan: snapshot.plan.name })
     : snapshot.status === "active" && snapshot.cloudSyncAllowed
     ? `Your ${snapshot.plan.name} features are ready and this device is protected.`
     : snapshot.message;
@@ -121,7 +126,7 @@ export default function SubscriptionPage() {
       )}
 
       <div className="grid gap-2 sm:flex sm:flex-wrap">
-        {nextPlan && !freeDate && <Button className="h-11 rounded-xl px-5 font-bold shadow-[0_10px_24px_rgba(7,95,255,0.2)]" onClick={() => setTargetPlan(nextPlan)}>Compare and upgrade</Button>}
+        {nextPlan && (!freeDate || presale) && <Button className="h-11 rounded-xl px-5 font-bold shadow-[0_10px_24px_rgba(7,95,255,0.2)]" onClick={() => setTargetPlan(nextPlan)}>Compare and upgrade</Button>}
         {canCancel && (
           <Button variant="outline" className="h-11 rounded-xl text-destructive hover:text-destructive" onClick={() => setCancelOpen(true)}>
             Cancel plan
@@ -133,7 +138,7 @@ export default function SubscriptionPage() {
       <Card className="rounded-[18px] border-[#dce5f2]">
         <CardHeader>
           <CardTitle className="font-display text-xl font-black tracking-tight">Compare plans</CardTitle>
-          {freeDate
+          {freeDate && !presale
             ? <CardDescription>{t("plans.free.compareBody", { date: freeDate })}</CardDescription>
             : <CardDescription>Choose the capacity that matches how your store works.</CardDescription>}
         </CardHeader>
@@ -145,13 +150,15 @@ export default function SubscriptionPage() {
             // Clicking the plan you already have shouldn't try to sell it back to you:
             // if it's active, offer to cancel; otherwise start checkout to renew/switch.
             const handleClick = () => (isCurrent && canCancel ? setCancelOpen(true) : setTargetPlan(plan.code));
-            const hint = freeDate
-              ? t("plans.free.title", { date: freeDate })
-              : isCurrent
-                ? canCancel ? "Active - tap to cancel" : "Current plan - tap to renew"
-                : isHigher ? "Tap to upgrade" : "Tap to switch";
+            const hint = freeDate && presale
+              ? t("plans.free.startsOn", { date: freeDate })
+              : freeDate
+                ? t("plans.free.title", { date: freeDate })
+                : isCurrent
+                  ? canCancel ? "Active - tap to cancel" : "Current plan - tap to renew"
+                  : isHigher ? "Tap to upgrade" : "Tap to switch";
             return (
-              <button key={plan.code} onClick={handleClick} disabled={Boolean(freeDate)} className={`rounded-[14px] border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md disabled:pointer-events-none ${isCurrent ? "border-primary bg-[#f3f7ff] ring-1 ring-primary/15" : "border-[#e0e8f3] hover:bg-muted"}`}>
+              <button key={plan.code} onClick={handleClick} disabled={Boolean(freeDate && !presale)} className={`rounded-[14px] border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md disabled:pointer-events-none ${isCurrent ? "border-primary bg-[#f3f7ff] ring-1 ring-primary/15" : "border-[#e0e8f3] hover:bg-muted"}`}>
                 <div className="flex items-center justify-between"><p className="font-semibold">{plan.name}</p>{isCurrent && <Badge>Current</Badge>}</div>
                 <p className="mt-1 text-sm font-bold text-[var(--brand-ink)]">₹{plan.price}<span className="font-medium text-muted-foreground">/month</span></p>
                 <p className="mt-2 text-xs text-muted-foreground">{plan.maxStores} store · {plan.maxDevices} devices · {plan.maxStaff || "no"} staff</p>
