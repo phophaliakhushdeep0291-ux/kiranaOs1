@@ -70,6 +70,12 @@ export default function AssuranceReportPage() {
             engine <span className="font-mono">{report.engineVersion}</span> · {t("assurance.ruleSet")} <span className="font-mono">{report.rulesetVersion}</span>
           </p>
 
+          {(report.coverage.incompleteRuns ?? 0) > 0 ? (
+            <p role="status" className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">
+              {t("assurance.report.incomplete", { count: report.coverage.incompleteRuns ?? 0 })}
+            </p>
+          ) : null}
+
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label={t("assurance.report.reviewed")} value={report.coverage.transactionsReviewed} hint={`${report.coverage.auditRuns} run(s)`} />
             <StatCard label={t("assurance.report.raised")} value={report.findings.raised} hint={t("assurance.report.resolvedIn", { count: report.findings.resolved })} />

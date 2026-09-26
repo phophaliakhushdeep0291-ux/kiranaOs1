@@ -70,6 +70,14 @@ export async function runTransactionTriggeredAssurance(payload = {}) {
     [{ entityType, entityId }],
     { actorUserId },
   );
+  // BullMQ retries rejected jobs. Returning a FAILED outcome would acknowledge
+  // the job and permanently lose the post-commit check.
+  if (outcome.status !== "COMPLETED") {
+    const error = new Error(`Audit run ${outcome.runId} did not complete`);
+    error.code = "ASSURANCE_EVALUATION_INCOMPLETE";
+    error.runId = outcome.runId;
+    throw error;
+  }
   return {
     jobName: JOB_NAMES.RUN_TRANSACTION_ASSURANCE,
     runId: outcome.runId,

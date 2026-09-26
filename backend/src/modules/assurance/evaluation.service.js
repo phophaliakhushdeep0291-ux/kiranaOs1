@@ -5,6 +5,7 @@
 // write, and every entry point is safe to call again — evaluations are unique
 // per (run, entity) and findings are unique per (shop, entity).
 import crypto from "node:crypto";
+import { serializableTransaction } from "../../lib/transactions.js";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { rateUnitToBase } from "../../utils/units.js";
@@ -445,20 +446,27 @@ export async function evaluateEntity(shopId, entityType, entityId, options = {})
     inputHash: ctx.inputHash,
     events,
     rulesEvaluated: candidateRules.length,
+    evaluatedRuleCodes: candidateRules.map((rule) => rule.ruleCode),
     ruleErrors,
+    complete: ruleErrors.length === 0,
     triggered: triggeredRules.length > 0,
     ...score,
   };
 
-  const persisted = await persistEvaluation({
+  const persist = (transactionClient) => persistEvaluation({
     shopId,
     runId,
     ctx,
     result,
     triggeredRules,
     actorUserId,
-    client,
+    client: transactionClient,
   });
+  // A finding, its checks, evidence requirements and history must commit
+  // together. A retry must never encounter half of a prior assessment.
+  const persisted = typeof client.$transaction === "function"
+    ? await serializableTransaction(persist, { client })
+    : await persist(client);
 
   return { ...result, ...persisted };
 }
@@ -516,6 +524,16 @@ async function persistEvaluation({ shopId, runId, ctx, result, triggeredRules, a
     where: { shopId_dedupeKey: { shopId, dedupeKey } },
     include: { rules: true },
   });
+
+  // A failed check is not proof that an existing problem was corrected.
+  // Keep its last complete assessment intact; the failed attempt remains in
+  // AuditEvaluation and makes its run partial, so it can be retried.
+  const uncheckedActiveRules = existing?.rules.filter((rule) => rule.active
+    && !result.evaluatedRuleCodes.includes(rule.ruleCode)) ?? [];
+  if (existing && (result.ruleErrors.length || uncheckedActiveRules.length)) {
+    return { evaluationId, findingId: existing.id, findingCreated: false,
+      findingUpdated: false, findingStatus: existing.status, assessmentPreserved: true };
+  }
 
   if (!triggeredRules.length) {
     const cleared = await autoResolveClearedFinding({ existing, shopId, runId, evaluationId, client });
@@ -617,7 +635,8 @@ async function persistEvaluation({ shopId, runId, ctx, result, triggeredRules, a
   }
 
   const isActive = ACTIVE_FINDING_STATUSES.includes(existing.status);
-  const shouldReopen = !isActive && newRuleCodes.length > 0;
+  const recurred = existing.status === FINDING_STATUS.CORRECTED;
+  const shouldReopen = recurred || (!isActive && newRuleCodes.length > 0);
 
   const finding = await client.auditFinding.update({
     where: { id: existing.id },
@@ -645,7 +664,9 @@ async function persistEvaluation({ shopId, runId, ctx, result, triggeredRules, a
         newStatus: FINDING_STATUS.OPEN,
         changedByUserId: actorUserId,
         changedByRole: "system",
-        comment: `Reopened: new rule(s) triggered — ${newRuleCodes.join(", ")}.`,
+        comment: recurred
+          ? "Reopened: a previously corrected condition was detected again."
+          : `Reopened: new rule(s) triggered — ${newRuleCodes.join(", ")}.`,
       },
     });
   }
@@ -793,25 +814,25 @@ export async function collectEntitiesForPeriod(shopId, { from, to, entityTypes =
   const truncated = [];
 
   const push = (entityType, rows, idKey = "id") => {
-    if (rows.length >= MAX_RANGE_ENTITIES) truncated.push({ entityType, cap: MAX_RANGE_ENTITIES });
-    for (const row of rows) entities.push({ entityType, entityId: row[idKey] });
+    if (rows.length > MAX_RANGE_ENTITIES) truncated.push({ entityType, cap: MAX_RANGE_ENTITIES });
+    for (const row of rows.slice(0, MAX_RANGE_ENTITIES)) entities.push({ entityType, entityId: row[idKey] });
   };
 
   if (wanted.has(ENTITY_TYPES.BILL)) {
-    push(ENTITY_TYPES.BILL, await client.bill.findMany({ where: { shopId, createdAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES, orderBy: { createdAt: "asc" } }));
+    push(ENTITY_TYPES.BILL, await client.bill.findMany({ where: { shopId, createdAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
   }
   if (wanted.has(ENTITY_TYPES.EXPENSE)) {
-    push(ENTITY_TYPES.EXPENSE, await client.expense.findMany({ where: { shopId, deletedAt: null, spentAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES, orderBy: { spentAt: "asc" } }));
+    push(ENTITY_TYPES.EXPENSE, await client.expense.findMany({ where: { shopId, deletedAt: null, spentAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { spentAt: "asc" } }));
   }
   if (wanted.has(ENTITY_TYPES.PURCHASE)) {
-    push(ENTITY_TYPES.PURCHASE, await client.purchaseReceipt.findMany({ where: { shopId, createdAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES, orderBy: { createdAt: "asc" } }));
-    push(ENTITY_TYPES.PURCHASE, await client.purchaseHistory.findMany({ where: { shopId, createdAt: range, purchaseReceiptId: null }, select: { id: true }, take: MAX_RANGE_ENTITIES, orderBy: { createdAt: "asc" } }));
+    push(ENTITY_TYPES.PURCHASE, await client.purchaseReceipt.findMany({ where: { shopId, createdAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
+    push(ENTITY_TYPES.PURCHASE, await client.purchaseHistory.findMany({ where: { shopId, createdAt: range, purchaseReceiptId: null }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
   }
   if (wanted.has(ENTITY_TYPES.DAILY_CLOSING)) {
-    push(ENTITY_TYPES.DAILY_CLOSING, await client.dailyClosingSnapshot.findMany({ where: { shopId, date: range }, select: { id: true }, take: MAX_RANGE_ENTITIES, orderBy: { date: "asc" } }));
+    push(ENTITY_TYPES.DAILY_CLOSING, await client.dailyClosingSnapshot.findMany({ where: { shopId, date: range }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { date: "asc" } }));
   }
   if (wanted.has(ENTITY_TYPES.SYNC_EVENT)) {
-    push(ENTITY_TYPES.SYNC_EVENT, await client.offlineSyncEvent.findMany({ where: { shopId, createdAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES, orderBy: { createdAt: "asc" } }));
+    push(ENTITY_TYPES.SYNC_EVENT, await client.offlineSyncEvent.findMany({ where: { shopId, createdAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
   }
   // Customers and products are evaluated when they were touched in the period:
   // their state is a running balance, so the trigger is ledger/movement activity.
@@ -820,7 +841,7 @@ export async function collectEntitiesForPeriod(shopId, { from, to, entityTypes =
       where: { shopId, createdAt: range },
       select: { customerId: true },
       distinct: ["customerId"],
-      take: MAX_RANGE_ENTITIES,
+      take: MAX_RANGE_ENTITIES + 1,
     });
     push(ENTITY_TYPES.CUSTOMER, rows, "customerId");
   }
@@ -829,7 +850,7 @@ export async function collectEntitiesForPeriod(shopId, { from, to, entityTypes =
       where: { shopId, createdAt: range },
       select: { productId: true },
       distinct: ["productId"],
-      take: MAX_RANGE_ENTITIES,
+      take: MAX_RANGE_ENTITIES + 1,
     });
     push(ENTITY_TYPES.PRODUCT, rows, "productId");
   }
@@ -849,12 +870,25 @@ export async function collectEntitiesForPeriod(shopId, { from, to, entityTypes =
  * Run the engine over a set of entities inside one AuditRun. Individual entity
  * failures are recorded and the run continues (status PARTIAL).
  */
-export async function executeRun(shopId, run, entities, { client = db, actorUserId = null } = {}) {
-  const overrides = await loadRuleOverrides(shopId, client);
+export async function executeRun(shopId, run, entities, { client = db, actorUserId = null, rules = null } = {}) {
+  let overrides;
+  try {
+    overrides = await loadRuleOverrides(shopId, client);
+  } catch (error) {
+    await finishRun(run.id, { status: RUN_STATUS.FAILED, entitiesEvaluated: 0,
+      findingsCreated: 0, findingsUpdated: 0,
+      summary: { complete: false, requestedEntities: entities.length, evaluated: 0,
+        failureCount: entities.length, setupFailed: true },
+      error: "Audit rule configuration could not be loaded" }, client);
+    throw error;
+  }
   let findingsCreated = 0;
   let findingsUpdated = 0;
   let evaluated = 0;
   const failures = [];
+  const ruleFailures = [];
+  const scope = JSON.parse(run.scopeJson || "{}");
+  const truncated = Array.isArray(scope.truncated) ? scope.truncated : [];
   const byCategory = {};
   const byRiskLevel = {};
   const byRuleCode = {};
@@ -866,8 +900,12 @@ export async function executeRun(shopId, run, entities, { client = db, actorUser
         client,
         overrides,
         actorUserId,
+        rules,
       });
       evaluated += 1;
+      for (const failure of outcome.ruleErrors ?? []) {
+        ruleFailures.push({ entityType: entity.entityType, entityId: entity.entityId, ...failure });
+      }
       if (outcome.findingCreated) findingsCreated += 1;
       if (outcome.findingUpdated) findingsUpdated += 1;
       if (outcome.triggered) {
@@ -883,7 +921,9 @@ export async function executeRun(shopId, run, entities, { client = db, actorUser
     }
   }
 
-  const status = failures.length === 0 ? RUN_STATUS.COMPLETED : evaluated > 0 ? RUN_STATUS.PARTIAL : RUN_STATUS.FAILED;
+  const incomplete = failures.length > 0 || ruleFailures.length > 0 || truncated.length > 0;
+  const status = !incomplete ? RUN_STATUS.COMPLETED
+    : failures.length > 0 && evaluated === 0 ? RUN_STATUS.FAILED : RUN_STATUS.PARTIAL;
   await finishRun(
     run.id,
     {
@@ -892,6 +932,10 @@ export async function executeRun(shopId, run, entities, { client = db, actorUser
       findingsCreated,
       findingsUpdated,
       summary: {
+        complete: !incomplete,
+        truncated,
+        ruleFailureCount: ruleFailures.length,
+        ruleFailures: ruleFailures.slice(0, 50),
         requestedEntities: entities.length,
         evaluated,
         failures: failures.slice(0, 50),
@@ -905,5 +949,5 @@ export async function executeRun(shopId, run, entities, { client = db, actorUser
     client
   );
 
-  return { runId: run.id, status, evaluated, findingsCreated, findingsUpdated, failures };
+  return { runId: run.id, status, evaluated, findingsCreated, findingsUpdated, failures, ruleFailures, truncated, complete: !incomplete };
 }

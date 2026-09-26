@@ -49,7 +49,7 @@ export async function buildAssuranceReport(shopId, { from, to }) {
 
   const [
     runs,
-    evaluationCount,
+    evaluatedEntities,
     findingsRaised,
     findingsResolved,
     openCritical,
@@ -60,7 +60,11 @@ export async function buildAssuranceReport(shopId, { from, to }) {
     resolutionBreakdown,
   ] = await Promise.all([
     db.auditRun.findMany({ where: { shopId, createdAt: createdRange }, orderBy: { createdAt: "asc" } }),
-    db.auditEvaluation.count({ where: { shopId, createdAt: createdRange } }),
+    db.auditEvaluation.groupBy({
+      by: ["sourceEntityType", "sourceEntityId"],
+      where: { shopId, createdAt: createdRange },
+      _count: { _all: true },
+    }),
     db.auditFinding.findMany({
       where: { shopId, createdAt: createdRange },
       include: { rules: true },
@@ -125,11 +129,12 @@ export async function buildAssuranceReport(shopId, { from, to }) {
     coverage: {
       auditRuns: runs.length,
       runTypes: countBy(runs, (run) => run.runType),
-      transactionsReviewed: evaluationCount,
-      entitiesByType: countBy(
-        findingsRaised,
-        (finding) => finding.sourceEntityType
-      ),
+      // Rechecking the same record does not expand audit coverage.
+      transactionsReviewed: evaluatedEntities.length,
+      evaluationAttempts: evaluatedEntities.reduce((sum, row) => sum + row._count._all, 0),
+      entitiesByType: countBy(evaluatedEntities, (row) => row.sourceEntityType),
+      runsByStatus: countBy(runs, (run) => run.status),
+      incompleteRuns: runs.filter((run) => run.status !== "COMPLETED").length,
       lastRunAt: runs.length ? runs[runs.length - 1].createdAt : null,
     },
 
