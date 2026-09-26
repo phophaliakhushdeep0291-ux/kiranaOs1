@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import type { Product } from "@/lib/api/client";
+import { mergeCartProduct, type CartLinePricer } from "@/features/core/billing/cart-product";
+const product = { id: "rice", name: "Rice", rateUnit: "kg", defaultPricePerRateUnit: 50 } as Product;
+const price: CartLinePricer = () => ({ rate: 50, pricing: { explanation: "Regular price", originalUnitPrice: 50, appliedRuleType: "BASE", requiresApproval: false, confidence: 1 } });
 
 /**
  * The typed multiplier is parsed in one place and applied in another, and the
@@ -27,14 +31,14 @@ describe("a typed quantity reaches the cart", () => {
   });
 
   it("adds the typed quantity rather than one", () => {
-    expect(billingPage).toContain("const addedQuantity = options?.quantity && options.quantity > 0 ? options.quantity : 1");
-    expect(billingPage).toContain("quantity: addedQuantity");
+    expect(mergeCartProduct([], product, price, { quantity: 3 })[0].quantity).toBe(3);
   });
 
   it("accumulates onto a line that is already in the cart", () => {
     // Scanning the same packet twice counts twice; `3*rice` on a line holding
     // two makes five. Replacing instead of adding would silently lose a scan.
-    expect(billingPage).toContain("roundQuantity(existing.quantity + addedQuantity)");
+    const existing = mergeCartProduct([], product, price, { quantity: 2 });
+    expect(mergeCartProduct(existing, product, price, { quantity: 3 })[0].quantity).toBe(5);
   });
 
   it("does not carry a multiplier past a configurator sheet", () => {

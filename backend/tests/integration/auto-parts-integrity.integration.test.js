@@ -1,7 +1,7 @@
 import test, { after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertSuccess, assertFailure } from "./setup.js";
-import { createTenant, createProduct, login } from "./factories.js";
+import { createTenant, createProduct, createStaff, login } from "./factories.js";
 import { settingsForBusinessType } from "../../src/verticals/registry.js";
 
 const ctx = await createIntegrationContext();
@@ -91,4 +91,69 @@ else {
     assert.equal(summary.catalogueSize, 0);
     assert.equal(summary.fitments, 1);
   });
+  test("renames appear consistently and alternatives require real stock at the selected branch", async () => {
+    const f = await fixture();
+    await f.post("", f.fitment);
+    const alternate = await createProduct(ctx.db, f.tenant.shop.id, { stockBaseQty: 8 });
+    await f.post("/references", { ...f.reference, alternateProductId: alternate.id });
+    await ctx.db.product.update({ where: { id: f.product.id }, data: { name: "Renamed oil filter" } });
+    const branch = await ctx.db.storeLocation.create({ data: { shopId: f.tenant.shop.id, code: "PARTS", name: "Parts branch" } });
+    const get = (path) => ctx.get(path, { ...f.options, headers: { "x-location-id": branch.id } }).then((response) => assertSuccess(response));
+    const rows = await get("/api/fitment?search=renamed");
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].productName, "Renamed oil filter");
+    assert.equal(rows[0].inCatalogue, true);
+    let detail = await get(`/api/fitment/for-product/${f.product.id}`);
+    assert.equal(detail.fitments[0].productName, "Renamed oil filter");
+    assert.equal(detail.references[0].productName, "Renamed oil filter");
+    assert.equal(detail.references[0].isStocked, false, "global stock is not shelf stock at an empty branch");
+    assert.equal(detail.references[0].stockKnown, true);
+    await ctx.db.locationStock.create({ data: { shopId: f.tenant.shop.id, locationId: branch.id, productId: alternate.id, stockBaseQty: 2 } });
+    let found = await get("/api/fitment/part-number/OEM-42");
+    assert.equal(found.references[0].isStocked, true);
+    assert.equal(found.references[0].alternateStockQty, 2);
+    assert.equal(found.references[0].productName, "Renamed oil filter");
+    const matched = await get("/api/fitment/search?make=Maruti&model=Swift");
+    assert.equal(matched[0].fitments[0].productName, matched[0].productName);
+    await ctx.db.product.updateMany({ where: { id: { in: [f.product.id, alternate.id] } }, data: { deletedAt: new Date() } });
+    detail = await get(`/api/fitment/for-product/${f.product.id}`);
+    assert.equal(detail.references[0].isStocked, false);
+    assert.equal(detail.references[0].alternateInCatalogue, false);
+    assert.equal(detail.references[0].inCatalogue, false);
+    assert.equal(detail.fitments[0].inCatalogue, false);
+    found = await get("/api/fitment/part-number/OEM-42");
+    assert.equal(found.products.length, 0, "removed parts must not be billable lookup results");
+    assert.equal(found.references.length, 1, "historical references remain visible");
+  });
+  test("staff can look up parts at an assigned counter but cannot change the book without inventory access", async () => {
+    const f = await fixture();
+    const fit = await f.post("", f.fitment);
+    const ref = await f.post("/references", f.reference);
+    const staff = await createStaff(ctx.db, f.tenant.shop.id);
+    const auth = await login(ctx, staff.staffMobile, staff.staffPassword);
+    const primary = await ctx.db.storeLocation.findFirst({ where: { shopId: f.tenant.shop.id, isPrimary: true } });
+    const branch = await ctx.db.storeLocation.create({ data: { shopId: f.tenant.shop.id, code: "OTHER", name: "Other branch" } });
+    const access = await ctx.db.userLocationAccess.create({ data: { shopId: f.tenant.shop.id, userId: staff.staff.id, locationId: primary.id, canSell: true, canManageInventory: false, canPurchase: false, canTransfer: false } });
+    const options = { token: auth.accessToken, headers: { "x-location-id": primary.id } };
+    assert.equal(assertSuccess(await ctx.get("/api/fitment/summary", options)).canManage, false);
+    assert.equal(assertSuccess(await ctx.get("/api/fitment/summary", f.options)).canManage, true);
+    assert.equal(assertSuccess(await ctx.get("/api/fitment/summary?locationId=all", f.options)).canManage, false);
+    assertSuccess(await ctx.get("/api/fitment/search?make=Maruti", options));
+    assertSuccess(await ctx.get("/api/fitment/part-number/OEM-42", options));
+    for (const [method, path, body] of [
+      ["POST", "", { ...f.fitment, model: "Dzire" }],
+      ["POST", "/bulk", { productId: f.product.id, fitments: [f.fitment] }],
+      ["PATCH", `/${fit.id}`, { model: "Blocked" }], ["DELETE", `/${fit.id}`],
+      ["POST", "/references", { ...f.reference, partNumber: "BLOCKED" }],
+      ["PATCH", `/references/${ref.id}`, { brand: "Blocked" }], ["DELETE", `/references/${ref.id}`],
+    ]) assertFailure(await ctx.request(method, `/api/fitment${path}`, { ...options, body }), 403);
+    for (const path of ["", "/vehicles", "/summary", "/search?make=Maruti", "/part-number/OEM-42", `/for-product/${f.product.id}`]) {
+      assertFailure(await ctx.get(`/api/fitment${path}`, { token: auth.accessToken, headers: { "x-location-id": branch.id } }), 403);
+    }
+    assertFailure(await ctx.get("/api/fitment/search?make=Maruti&locationId=all", options), 403);
+    await ctx.db.userLocationAccess.update({ where: { id: access.id }, data: { canManageInventory: true } });
+    assert.equal(assertSuccess(await ctx.get("/api/fitment/summary", options)).canManage, true);
+    assertSuccess(await ctx.post("/api/fitment", { ...f.fitment, model: "Dzire" }, options), 201);
+  });
+
 }

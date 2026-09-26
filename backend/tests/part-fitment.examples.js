@@ -68,7 +68,10 @@ assert.equal(serializeFitment(null), null, "a missing row serialises to nothing,
 
 // Whether the shop can actually hand the alternative over is the difference
 // between "try this one" and "I can order it".
-assert.equal(serializeCrossReference({ alternateProductId: "p_1" }).isStocked, true);
+assert.equal(serializeCrossReference({ alternateProductId: "p_1" }).isStocked, false, "a linked id does not prove stock");
+assert.equal(serializeCrossReference({ alternateProductId: "p_1" }).stockKnown, false);
+assert.equal(serializeCrossReference({ alternateProductId: "p_1" }, new Map([["p_1", { stockBaseQty: 2 }]])).isStocked, true);
+assert.equal(serializeCrossReference({ alternateProductId: "p_1" }, new Map([["p_1", { stockBaseQty: 0 }]])).isStocked, false);
 assert.equal(serializeCrossReference({ alternateProductId: null }).isStocked, false, "an OEM number nobody stocks is not stocked");
 assert.equal(serializeCrossReference(null), null);
 

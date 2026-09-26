@@ -23,6 +23,32 @@ import type {
  */
 
 const FITMENTS_CACHE_KEY = "part-fitments:server-cache:v1";
+let cacheVersion = 0;
+let cacheValid = true;
+let cacheWrite: Promise<void> = Promise.resolve();
+
+// A successful removal must not reappear if the refresh loses its connection.
+// Serialise cache writes and reject reads started before a mutation completed.
+function writeCache(work: () => Promise<void>) {
+  cacheWrite = cacheWrite.then(work, work).catch(() => undefined);
+  return cacheWrite;
+}
+
+async function readFitmentCache() {
+  const version = cacheVersion;
+  if (!cacheValid) return undefined;
+  const rows = await offlineDB.getSetting<PartFitment[]>(FITMENTS_CACHE_KEY).catch(() => undefined);
+  return cacheValid && version === cacheVersion ? rows : undefined;
+}
+
+async function invalidateFitmentCache<T>(operation: Promise<T>): Promise<T> {
+  const result = await operation;
+  cacheVersion += 1;
+  cacheValid = false;
+  await writeCache(async () => { await offlineDB.setSetting(FITMENTS_CACHE_KEY, null); });
+  return result;
+}
+
 
 function isOfflineish(error: unknown) {
   // An auth or permission failure must never be hidden behind stale data.
@@ -40,13 +66,18 @@ export async function listFitments(filters: { make?: string; model?: string; sea
     if (value) params.set(key, String(value));
   }
   const qs = params.toString();
+  const version = cacheVersion;
   try {
     const rows = await apiRequest<PartFitment[]>(`/fitment${qs ? `?${qs}` : ""}`, { background: true });
-    if (!qs) await offlineDB.setSetting(FITMENTS_CACHE_KEY, rows).catch(() => undefined);
+    if (!qs) await writeCache(async () => {
+      if (version !== cacheVersion) return;
+      await offlineDB.setSetting(FITMENTS_CACHE_KEY, rows);
+      if (version === cacheVersion) cacheValid = true;
+    });
     return rows;
   } catch (error) {
     if (!isOfflineish(error)) throw error;
-    const cached = await offlineDB.getSetting<PartFitment[]>(FITMENTS_CACHE_KEY).catch(() => undefined);
+    const cached = await readFitmentCache();
     if (cached) return cached.filter((fitment) =>
       (!filters.make || matchKey(fitment.make) === matchKey(filters.make))
       && (!filters.model || matchKey(fitment.model) === matchKey(filters.model))
@@ -77,7 +108,7 @@ export async function findPartsForVehicle(query: { make: string; model?: string;
     return await apiRequest<FittingPart[]>(`/fitment/search?${params.toString()}`, { background: true });
   } catch (error) {
     if (!isOfflineish(error)) throw error;
-    const cached = await offlineDB.getSetting<PartFitment[]>(FITMENTS_CACHE_KEY).catch(() => undefined);
+    const cached = await readFitmentCache();
     if (!cached) throw error;
 
     const matched = cached.filter((fitment) => {
@@ -126,7 +157,7 @@ export async function getVehicleOptions(make?: string, model?: string) {
     return await apiRequest<VehicleOptions>(`/fitment/vehicles${qs}`, { background: true });
   } catch (error) {
     if (!isOfflineish(error)) throw error;
-    const cached = await offlineDB.getSetting<PartFitment[]>(FITMENTS_CACHE_KEY).catch(() => undefined);
+    const cached = await readFitmentCache();
     if (!cached) throw error;
 
     const makes = new Map<string, string>();
@@ -162,22 +193,22 @@ export function getFitmentForProduct(productId: string) {
 }
 
 export function createFitment(data: PartFitmentInput) {
-  return apiRequest<PartFitment>("/fitment", { method: "POST", body: JSON.stringify(data) });
+  return invalidateFitmentCache(apiRequest<PartFitment>("/fitment", { method: "POST", body: JSON.stringify(data) }));
 }
 
 export function createFitmentsBulk(data: BulkPartFitmentInput) {
-  return apiRequest<{ created: PartFitment[]; skipped: PartFitment[] }>("/fitment/bulk", {
+  return invalidateFitmentCache(apiRequest<{ created: PartFitment[]; skipped: PartFitment[] }>("/fitment/bulk", {
     method: "POST",
     body: JSON.stringify(data),
-  });
+  }));
 }
 
 export function updateFitment(id: string, data: Partial<Omit<PartFitmentInput, "productId">>) {
-  return apiRequest<PartFitment>(`/fitment/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  return invalidateFitmentCache(apiRequest<PartFitment>(`/fitment/${id}`, { method: "PATCH", body: JSON.stringify(data) }));
 }
 
 export function deleteFitment(id: string) {
-  return apiRequest<PartFitment>(`/fitment/${id}`, { method: "DELETE" });
+  return invalidateFitmentCache(apiRequest<PartFitment>(`/fitment/${id}`, { method: "DELETE" }));
 }
 
 export function createCrossReference(data: PartCrossReferenceInput) {

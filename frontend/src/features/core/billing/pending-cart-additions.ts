@@ -1,4 +1,6 @@
 import { offlineDB } from "@/lib/offline/db";
+import type { Product } from "@/lib/api/client";
+import type { BillingDraft, CartItem } from "./pages/billing-types";
 
 /**
  * Parts another screen has asked the till to ring up.
@@ -24,8 +26,8 @@ import { offlineDB } from "@/lib/offline/db";
  *   field on every save, which is exactly how a table's id used to be dropped; a
  *   queue that vanishes on the next keystroke is worse than no queue at all.
  *
- *   Read once and cleared. A part must land on the bill the counter walked over
- *   to, not on every bill after it.
+ *   Committed with the draft. A part must survive interrupted navigation and
+ *   must never be added twice after a reload.
  */
 export const PENDING_CART_KEY = "kirana-os:billing-pending-adds:v1";
 
@@ -49,21 +51,54 @@ function isAddition(value: unknown): value is PendingCartAddition {
 export async function queueProductsForBilling(additions: PendingCartAddition[]): Promise<void> {
   const wanted = additions.filter(isAddition);
   if (wanted.length === 0) return;
-  const existing = await offlineDB.getSetting<PendingCartAddition[]>(PENDING_CART_KEY).catch(() => null);
-  const queue = (Array.isArray(existing) ? existing.filter(isAddition) : []).concat(wanted);
-  await offlineDB.setSetting(PENDING_CART_KEY, queue).catch(() => undefined);
+  // Serialize concurrent handoffs. Read/write failures must reach the source
+  // screen, which must not navigate to an empty bill or overwrite an old queue.
+  await offlineDB.transaction(["settings"], async (tx) => {
+    const existing = await offlineDB.getSetting<PendingCartAddition[]>(PENDING_CART_KEY);
+    const queue = (Array.isArray(existing) ? existing.filter(isAddition) : []).concat(wanted);
+    await tx.setSetting(PENDING_CART_KEY, queue);
+  });
 }
 
-/**
- * Everything queued, cleared as it is handed over.
- *
- * Cleared even when billing cannot find one of the products: leaving it would
- * mean an unfindable part re-announcing itself on every bill for the rest of the
- * day. Billing says so once instead.
+export type QueuedProductMerger = (cart: CartItem[], product: Product, draft: BillingDraft) => CartItem[] | null;
+
+/** Save the receiving cart and consume its queue in one transaction.
+ * Billing supplies its ordinary line merge/pricing function. A lost UI
+ * acknowledgement recovers the committed draft; a failed write retains both
+ * the original cart and queue for the hydration retry screen.
  */
-export async function takeQueuedProducts(): Promise<PendingCartAddition[]> {
-  const stored = await offlineDB.getSetting<PendingCartAddition[]>(PENDING_CART_KEY).catch(() => null);
-  const queue = Array.isArray(stored) ? stored.filter(isAddition) : [];
-  if (queue.length > 0) await offlineDB.delete("settings", PENDING_CART_KEY).catch(() => undefined);
-  return queue;
+export async function recoverQueuedBillingDraft(
+  draftKey: string,
+  products: Map<string, Product>,
+  mergeProduct: QueuedProductMerger,
+  shouldRecover: () => boolean = () => true,
+) {
+  return offlineDB.transaction(["settings"], async (tx) => {
+    const draft = await offlineDB.getSetting<BillingDraft>(draftKey) ?? {};
+    const stored = await offlineDB.getSetting<PendingCartAddition[]>(PENDING_CART_KEY);
+    const queue = Array.isArray(stored) ? stored.filter(isAddition) : [];
+    if (!shouldRecover()) return null;
+    // An unavailable/empty catalogue cannot establish that a queued part was
+    // removed. Retain the request for the next successful billing load.
+    if (products.size === 0) return { draft, added: 0, missing: [], remaining: queue.length };
+    let cart = draft.cart ?? [];
+    let added = 0;
+    const missing: string[] = [];
+    const remaining: PendingCartAddition[] = [];
+    for (const entry of queue) {
+      const product = products.get(entry.productId);
+      if (product) {
+        const merged = mergeProduct(cart, product, draft);
+        if (merged) { cart = merged; added += 1; }
+        else remaining.push(entry);
+      } else missing.push(entry.name || entry.productId);
+    }
+    const next = added ? { ...draft, cart } : draft;
+    if (added || missing.length) {
+      await tx.setSetting(draftKey, next);
+      await tx.setSetting(PENDING_CART_KEY, remaining);
+      if (!shouldRecover()) throw new Error("Billing recovery cancelled");
+    }
+    return { draft: next, added, missing, remaining: remaining.length };
+  });
 }

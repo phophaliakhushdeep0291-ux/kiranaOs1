@@ -370,6 +370,8 @@ export const shopTypesEn = {
   // Sends the part it found to the till, so the counter does not search the
   // catalogue again for a name it was just looking at.
   "shopType.fitment.sell": "Bill this part",
+  "shopType.fitment.sellFailed": "Could not send this part to Billing",
+  "shopType.fitment.sellRetry": "Your selection could not be saved on this device. Try again before opening Billing.",
   "shopType.fitment.number.title": "Have a part number?",
   "shopType.fitment.number.help": "Check a SKU, barcode or recorded equivalent from the box.",
   "shopType.fitment.number.label": "Part number",
@@ -524,4 +526,8 @@ export const shopTypesEn = {
   "shopType.fitment.number.removeHelp": "This recorded reference will be removed. The catalogue part and its stock stay unchanged.",
   "shopType.fitment.number.remove": "Remove number",
   "shopType.fitment.number.removeNamed": "Remove {number}",
+  "shopType.fitment.catalogueRemoved": "Part removed from catalogue",
+  "shopType.fitment.readOnly": "You can look up parts here. Adding or removing records needs inventory access at the selected store.",
+  "shopType.fitment.accessUnavailable": "Could not confirm your access. Lookups are available; retry before changing part records.",
+  "shopType.fitment.editUnavailable": "Connect and confirm inventory access at this store before saving changes.",
 } as const;
