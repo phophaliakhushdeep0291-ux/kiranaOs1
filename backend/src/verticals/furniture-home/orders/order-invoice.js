@@ -1,3 +1,5 @@
+import { dateRangeForDateOnly, formatDateInTimeZone } from "../../../utils/dates.js";
+import { requireDeliveryBill } from "./order-delivery.js";
 import { createHash } from "node:crypto";
 import db from "../../../db.js";
 import { AppError } from "../../../middleware/error.js";
@@ -8,7 +10,7 @@ import { dispatchIntegrationDeliveries } from "../../../modules/integrations/int
 import { resolveOperationalLocation } from "../../../modules/stores/location-context.service.js";
 import { baseQtyToRateQty } from "../../../utils/units.js";
 import { multiplyMoney, round2, toPaise } from "../../../utils/money.js";
-import { requireFurnitureAccounting } from "./order-finance.js";
+import { applyFurnitureReceiptsToBill, requireFurnitureAccounting } from "./order-finance.js";
 import { createOrderInvoiceSchema } from "./orders.schema.js";
 import { assertOrderStock, getOrder, requiredOrderAudit, serializeOrder, setOrderStatusInTransaction } from "./orders.service.js";
 
@@ -18,8 +20,10 @@ const nameKey = (value) => String(value ?? "").trim().replace(/\s+/g, " ").toLow
 const phoneKey = (value) => String(value ?? "").replace(/\D/g, "").slice(-10);
 const fail = (message, code = "ORDER_INVOICE_REVIEW") => { throw new AppError(message, 409, code); };
 
+const isLegacyDelivery = (order) => ["delivered", "installed"].includes(order.status) && !order.billId;
+
 function requireOpen(order) {
-  if (order.status !== "ready" || order.billId) fail("Only a ready order without a bill can be invoiced here.");
+  if ((order.status !== "ready" && !isLegacyDelivery(order)) || order.billId) fail("Only a ready order or a completed legacy order without a bill can be invoiced here.");
 }
 
 function checkLocation(order, location) {
@@ -83,11 +87,11 @@ export async function previewOrderInvoice(shopId, id, actor = {}) {
   const lines = await invoiceLines(db, order);
   const customers = order.customerId ? [] : (await db.customer.findMany({ where: { shopId, deletedAt: null }, select: { id: true, name: true, mobile: true } }))
     .filter((customer) => matchesCustomer(order, customer));
-  return { order: serializeOrder(order), lines, customers, previewToken: previewToken(order, lines) };
+  return { order: serializeOrder(order), legacyDelivery: isLegacyDelivery(order), lines, customers, previewToken: previewToken(order, lines) };
 }
 
 function requestSignature(input) {
-  return hash({ taxMode: input.taxMode, customerId: input.customerId ?? null, reason: input.reason,
+  return hash({ ...(input.legacyStockConfirmed || input.businessDate ? { legacyStockConfirmed: input.legacyStockConfirmed, businessDate: input.businessDate } : {}), taxMode: input.taxMode, customerId: input.customerId ?? null, reason: input.reason,
     taxes: [...input.taxes].sort((a, b) => a.lineId.localeCompare(b.lineId)) });
 }
 
@@ -109,6 +113,15 @@ export async function createOrderInvoice(shopId, id, rawInput, actor = {}) {
       return { deliveries: [] };
     }
     requireOpen(order);
+    const legacyDelivery = isLegacyDelivery(order);
+    let businessDate;
+    if (legacyDelivery) {
+      if (input.legacyStockConfirmed !== true || !input.businessDate) fail("Confirm the invoice is missing, the goods remain in recorded stock, and the original sale date.", "ORDER_LEGACY_STOCK_REVIEW");
+      if (order.billNumber) fail("Review the existing bill reference before creating another invoice.", "ORDER_HISTORY_INVOICE_REVIEW");
+      const bounds = dateRangeForDateOnly(input.businessDate);
+      if (formatDateInTimeZone(bounds.start) !== input.businessDate || input.businessDate > formatDateInTimeZone(new Date())) fail("Choose a valid sale date that is not in the future.");
+      businessDate = bounds.start;
+    } else if (input.legacyStockConfirmed || input.businessDate) fail("Historical repair is only for an unlinked completed order.");
     await requireFurnitureAccounting(tx, order);
     const lines = await invoiceLines(tx, order);
     if (input.previewToken !== previewToken(order, lines)) fail("The order, receipts or catalogue changed. Reload the invoice review.", "ORDER_INVOICE_CHANGED");
@@ -152,9 +165,18 @@ export async function createOrderInvoice(shopId, id, rawInput, actor = {}) {
     // Claim the order row even for a cash-only sale. Receipt/correction writers
     // use serializable transactions too, so a race retries against fresh data.
     await tx.furnitureOrder.update({ where: { id }, data: { updatedAt: new Date(), ...(customerId ? { customerId } : {}) } });
-    const confirmed = await confirmBill(shopId, body, { ...actor, locationId: location.id, allowStockShortfall: false }, null, { tx });
-    const updated = await setOrderStatusInTransaction(tx, shopId, id, "delivered", { billId: confirmed.bill.id, ...actor });
+    const confirmed = await confirmBill(shopId, body, { ...actor, locationId: location.id, allowStockShortfall: false }, null, { tx, businessDate });
+    let updated;
+    if (legacyDelivery) {
+      const bill = await requireDeliveryBill(tx, order, { billId: confirmed.bill.id });
+      await applyFurnitureReceiptsToBill(tx, order, bill);
+      updated = await tx.furnitureOrder.update({ where: { id }, data: { billId: bill.id, billNumber: bill.billNo } });
+    } else {
+      updated = await setOrderStatusInTransaction(tx, shopId, id, "delivered", { billId: confirmed.bill.id, ...actor });
+    }
     await requiredOrderAudit(tx, updated, "FURNITURE_ORDER_INVOICED", actor, {
+      legacyDelivery, businessDate: businessDate?.toISOString(), legacyStockConfirmed: input.legacyStockConfirmed,
+      previousStatus: order.status, deliveredAt: order.deliveredAt, installedAt: order.installedAt,
       requestSignature: signature, billId: confirmed.bill.id, taxMode: input.taxMode, reason: input.reason, previousCustomerId: order.customerId,
     });
     return { deliveries: confirmed.deliveries };

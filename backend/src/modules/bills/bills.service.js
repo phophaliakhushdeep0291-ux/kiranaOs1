@@ -159,8 +159,17 @@ async function writeRequiredBillAudit(entry, client) {
   return audit;
 }
 
-function resolveBillBusinessDate(actor = {}) {
+function resolveBillBusinessDate(actor = {}, historicalDate = null) {
   const receivedAt = new Date();
+  // A reviewed repair supplies this through server-side transaction composition,
+  // never through the bill request body or the offline replay permission path.
+  if (historicalDate !== null) {
+    const candidate = new Date(historicalDate);
+    if (!Number.isFinite(candidate.getTime()) || candidate > receivedAt) {
+      throw new AppError("Historical sale date is invalid or in the future", 400, "HISTORICAL_BILL_DATE_INVALID");
+    }
+    return candidate;
+  }
   if (actor?.isOfflineReplay !== true) return receivedAt;
 
   const candidate = actor?.businessDate instanceof Date
@@ -426,7 +435,8 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null, t
   // never from frontend/offline payload attribution fields.
   const createdByUserId = actor?.userId ?? null;
   const deviceId = actor?.deviceId ?? null;
-  const businessDate = resolveBillBusinessDate(actor);
+  // Only trusted server composition may supply a reviewed historical date.
+  const businessDate = resolveBillBusinessDate(actor, transactionContext?.businessDate ?? null);
   // Offline-origin bills (replayed from a device's sync queue) represent sales that
   // already physically happened, so they must never be dropped for being stock-short.
   // The online counter path leaves this false and still rejects overselling live.

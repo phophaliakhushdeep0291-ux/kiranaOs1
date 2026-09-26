@@ -1,5 +1,6 @@
 import * as svc from "./orders.service.js";
 import { createOrderInvoice, previewOrderInvoice } from "./order-invoice.js";
+import { reconcileOrderHistory } from "./order-history-reconcile.js";
 import { createAuditLog } from "../../../modules/audit/audit.service.js";
 import { requestLocationId } from "../../../modules/stores/location-context.service.js";
 
@@ -75,6 +76,16 @@ export async function createInvoice(req, res, next) {
       ownerPinVerified: req.ownerPinVerified === true, req,
     });
     res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function reconcileHistory(req, res, next) {
+  try {
+    const order = await reconcileOrderHistory(req.shopId, req.params.id, req.body, {
+      locationId: requestLocationId(req), userId: req.user?.userId, deviceId: req.deviceId,
+      ownerPinVerified: req.ownerPinVerified === true, req,
+    });
+    res.json({ success: true, message: "Historical receipts opened", data: order });
   } catch (error) { next(error); }
 }
 

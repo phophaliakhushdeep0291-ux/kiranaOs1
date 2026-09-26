@@ -13,6 +13,19 @@
 // read back by `businessTypeFromLabel`, so it stays English on both sides of the
 // network. `shopType.<key>.label` below is what a shopkeeper actually reads.
 export const shopTypesEn = {
+  "furniture.history.repairInvoice": "Repair missing invoice",
+  "furniture.history.saleDate": "Original sale date",
+  "furniture.history.invoiceHelp": "Use this only after reviewing the original delivery and stock records. It creates the missing invoice and deducts the goods once, preserving the recorded delivery and installation dates. Reconcile historical receipts first.",
+  "furniture.history.stockConfirmation": "I checked that no invoice exists for this sale and these delivered goods are still included in recorded stock.",
+
+  "furniture.history.title": "Review historical receipts",
+  "furniture.history.help": "Confirm each receipt against your records. This records its accounting history on the original payment date; it does not collect money again.",
+  "furniture.history.confirm": "Confirm receipt history",
+  "furniture.history.checked": "I checked these amounts and payment methods against the original receipts.",
+  "furniture.history.empty": "All recorded receipts already have accounting history.",
+  "furniture.history.loading": "Loading receipt history…",
+  "furniture.history.delivered": "This records receipt history only. An already delivered order still needs its invoice and stock movements reviewed separately.",
+
   "furniture.invoice.title": "Create invoice and deliver",
   "furniture.invoice.loading": "Loading invoice review…",
   "furniture.invoice.reload": "Reload review",

@@ -1,3 +1,4 @@
+import { HistoryReconciliationDialog } from "../components/HistoryReconciliationDialog";
 import { CollectionLinkDialog } from "../components/CollectionLinkDialog";
 import { InvoiceDeliveryDialog } from "../components/InvoiceDeliveryDialog";
 import { PaymentAdjustmentDialog } from "../components/PaymentAdjustmentDialog";
@@ -72,11 +73,12 @@ export default function FurnitureOrdersPage() {
 
   const [locationId, setLocationId] = useState(getActiveLocationId);
   useEffect(() => {
-    const changed = () => { setLocationId(getActiveLocationId()); setPaying(null); setDelivering(null); setInvoicing(null); setAdjusting(null); setCollecting(null); setPanelOpen(false); };
+    const changed = () => { setLocationId(getActiveLocationId()); setPaying(null); setDelivering(null); setInvoicing(null); setReconciling(null); setAdjusting(null); setCollecting(null); setPanelOpen(false); };
     window.addEventListener(LOCATION_CHANGED_EVENT, changed);
     return () => window.removeEventListener(LOCATION_CHANGED_EVENT, changed);
   }, []);
   const [collecting, setCollecting] = useState<FurnitureOrder | null>(null);
+  const [reconciling, setReconciling] = useState<FurnitureOrder | null>(null);
   const [adjusting, setAdjusting] = useState<{ order: FurnitureOrder; payment: FurnitureOrderPayment; kind: "refund" | "correction" } | null>(null);
   const [filter, setFilter] = useState("open");
   const [search, setSearch] = useState("");
@@ -280,6 +282,8 @@ export default function FurnitureOrdersPage() {
                   onAdvance={(status) => status === "delivered" ? setDelivering(order) : statusMut.mutate({ id: order.id, status })}
                   onPay={() => setPaying(order)}
                   onCollect={() => setCollecting(order)}
+                  onReconcile={() => setReconciling(order)}
+                  onRepairInvoice={() => setInvoicing(order)}
                   onAdjust={(payment, kind) => setAdjusting({ order, payment, kind })}
                   onEdit={() => { setEditing(order); setPanelOpen(true); }}
                   onCancel={() => cancelMut.mutate(order.id)}
@@ -305,6 +309,7 @@ export default function FurnitureOrdersPage() {
       {invoicing && <InvoiceDeliveryDialog key={invoicing.id} order={invoicing} onClose={() => setInvoicing(null)} onSaved={() => { invalidate(); setInvoicing(null); void queryClient.invalidateQueries({ queryKey: ["bills"] }); void queryClient.invalidateQueries({ queryKey: ["customers"] }); }} />}
 
       {collecting && <CollectionLinkDialog key={collecting.id} order={collecting} onClose={() => setCollecting(null)} onSaved={() => { invalidate(); setCollecting(null); }} />}
+      {reconciling && <HistoryReconciliationDialog key={reconciling.id} order={reconciling} onClose={() => setReconciling(null)} onSaved={() => { invalidate(); setReconciling(null); }} />}
       {adjusting && <PaymentAdjustmentDialog key={`${adjusting.payment.id}:${adjusting.kind}`} {...adjusting} onClose={() => setAdjusting(null)} onSaved={() => { invalidate(); setAdjusting(null); }} />}
 
       <PaymentDialog
@@ -336,12 +341,14 @@ export default function FurnitureOrdersPage() {
   );
 }
 
-function OrderRow({ order, busy, onAdvance, onPay, onAdjust, onCollect, onEdit, onCancel, onDelete }: {
+function OrderRow({ order, busy, onAdvance, onPay, onAdjust, onCollect, onReconcile, onRepairInvoice, onEdit, onCancel, onDelete }: {
   order: FurnitureOrder;
   busy: boolean;
   onAdvance: (status: FurnitureOrderStatus) => void;
   onPay: () => void;
   onCollect: () => void;
+  onReconcile: () => void;
+  onRepairInvoice: () => void;
   onAdjust: (payment: FurnitureOrderPayment, kind: "refund" | "correction") => void;
   onEdit: () => void;
   onCancel: () => void;
@@ -394,6 +401,7 @@ function OrderRow({ order, busy, onAdvance, onPay, onAdjust, onCollect, onEdit, 
       {order.needsInvoiceReview && <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm">{t("furniture.invoice.review")}</p>}
       {order.billNumber && <p className="mt-2 text-sm text-slate-600">{t("furniture.delivery.linked")}: {order.billNumber}</p>}
       <div className="mt-2 flex flex-wrap items-center gap-2 lg:mouse:gap-1.5">
+        {needsReview && <Button variant="outline" className="h-11" disabled={busy} onClick={onRepairInvoice}>{t("furniture.history.repairInvoice")}</Button>}
         {forward.map((status) => (
           <Button
             key={status}
@@ -417,6 +425,7 @@ function OrderRow({ order, busy, onAdvance, onPay, onAdjust, onCollect, onEdit, 
           </Button>
         )}
         {order.billId && order.balanceDue > 0 && !order.needsInvoiceReview && <Button variant="outline" className="h-11" disabled={busy} onClick={onCollect}>{t("furniture.collection.title")}</Button>}
+        {!order.billId && order.payments.length > 0 && <Button variant="outline" className="h-11" disabled={busy} onClick={onReconcile}>{t("furniture.history.title")}</Button>}
         {order.isOpen && (
           <button disabled={busy} onClick={onEdit} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Edit ${order.orderNumber}`}><NotebookPen size={14} /></button>
         )}

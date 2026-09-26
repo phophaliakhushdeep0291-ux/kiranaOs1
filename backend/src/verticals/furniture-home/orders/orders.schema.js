@@ -100,6 +100,8 @@ export const linkCollectionSchema = z.object({
 });
 
 export const createOrderInvoiceSchema = z.object({
+  legacyStockConfirmed: z.boolean().optional(),
+  businessDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   previewToken: z.string().regex(/^[a-f0-9]{64}$/),
   taxMode: z.enum(["none", "inclusive"]),
   customerId: z.string().trim().min(1).optional(),
@@ -109,6 +111,23 @@ export const createOrderInvoiceSchema = z.object({
     gstRate: z.number().finite().min(0).max(100),
     hsn: z.string().trim().regex(/^\d{4}(?:\d{2})?(?:\d{2})?$/).optional(),
   })).min(1).max(102),
+});
+
+/**
+ * Opening the historical receipts on a legacy order.
+ *
+ * Each receipt is restated rather than merely listed: the amount and tender come
+ * back from the client and are compared against what the order holds. A bare
+ * list of ids would let an owner approve figures nobody had read, which is the
+ * one thing this workflow exists to prevent.
+ */
+export const reconcileOrderHistorySchema = z.object({
+  receipts: z.array(z.object({
+    paymentId: z.string().trim().min(1),
+    amount: z.coerce.number().finite().nonnegative().max(100_000_000),
+    mode: z.enum(PAYMENT_MODES),
+  })).min(1, "Confirm the receipts being opened").max(500),
+  reason: z.string().trim().min(3).max(500),
 });
 
 export const adjustPaymentSchema = z.object({

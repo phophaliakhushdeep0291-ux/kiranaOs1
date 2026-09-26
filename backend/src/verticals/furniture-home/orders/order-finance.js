@@ -2,22 +2,37 @@ import { postFinancialLedgerRows } from "../../../modules/finance/general-ledger
 import { AppError } from "../../../middleware/error.js";
 import { toPaise } from "../../../utils/money.js";
 
-// Old child receipts are not proof that cash ever reached the ledger. Refuse
-// to apply or reverse them until their history has been explicitly reconciled.
-export async function requireFurnitureAccounting(tx, order) {
-  if (!order.payments.length) return;
+/**
+ * Receipts on this order that the ledger has no matching history for.
+ *
+ * Detection and repair read this same function on purpose. When the guard
+ * decided for itself which receipts were unbacked and the repair decided
+ * separately, the two could disagree — and the failure mode of that
+ * disagreement is a repair that reports success while the order stays frozen,
+ * or one that posts history for a receipt the guard never doubted.
+ *
+ * A receipt counts as backed only when BOTH its rows exist AND carry its exact
+ * amount. A row whose amount has drifted is not partial history; it is history
+ * that disagrees with the receipt, which is the case most worth stopping on.
+ */
+export async function unreconciledFurnitureReceipts(tx, order) {
+  if (!order.payments.length) return [];
   const rows = await tx.financialLedger.findMany({ where: {
     shopId: order.shopId, sourceType: "furniture_order", sourceId: order.id,
     idempotencyKey: { startsWith: `furniture:${order.id}:receipt:` },
   } });
   const byKey = new Map(rows.map((entry) => [entry.idempotencyKey, entry]));
-  for (const payment of order.payments) {
-    for (const entryType of [furnitureTender(payment.mode), "furniture_advance"]) {
-      const entry = byKey.get(`furniture:${order.id}:receipt:${payment.id}:${entryType}`);
-      if (!entry || entry.amountPaise !== BigInt(toPaise(payment.amount))) {
-        throw new AppError("This order has older payments that need accounting reconciliation before further financial changes.", 409, "ORDER_LEGACY_FINANCE_REVIEW");
-      }
-    }
+  return order.payments.filter((payment) => [furnitureTender(payment.mode), "furniture_advance"].some((entryType) => {
+    const entry = byKey.get(`furniture:${order.id}:receipt:${payment.id}:${entryType}`);
+    return !entry || entry.amountPaise !== BigInt(toPaise(payment.amount));
+  }));
+}
+
+// Old child receipts are not proof that cash ever reached the ledger. Refuse
+// to apply or reverse them until their history has been explicitly reconciled.
+export async function requireFurnitureAccounting(tx, order) {
+  if ((await unreconciledFurnitureReceipts(tx, order)).length > 0) {
+    throw new AppError("This order has older payments that need accounting reconciliation before further financial changes.", 409, "ORDER_LEGACY_FINANCE_REVIEW");
   }
 }
 

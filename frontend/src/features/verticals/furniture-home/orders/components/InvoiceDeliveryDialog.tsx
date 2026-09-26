@@ -15,7 +15,7 @@ export function InvoiceDeliveryDialog({ order, onClose, onSaved }: { order: Furn
     staleTime: 0, refetchOnWindowFocus: false, retry: false });
   return <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
     <DialogContent className="max-h-[90dvh] max-w-2xl overflow-y-auto">
-      <DialogHeader><DialogTitle>{t("furniture.invoice.title")}</DialogTitle></DialogHeader>
+      <DialogHeader><DialogTitle>{t(["delivered", "installed"].includes(order.status) ? "furniture.history.repairInvoice" : "furniture.invoice.title")}</DialogTitle></DialogHeader>
       {preview.isPending && <p role="status">{t("furniture.invoice.loading")}</p>}
       {preview.error && <p role="alert" className="text-destructive">{preview.error.message}</p>}
       {preview.data && <InvoiceReview key={preview.data.previewToken} preview={preview.data} onBusy={setBusy} onSaved={onSaved} />}
@@ -29,6 +29,8 @@ export function InvoiceDeliveryDialog({ order, onClose, onSaved }: { order: Furn
 
 function InvoiceReview({ preview, onBusy, onSaved }: { preview: FurnitureInvoicePreview; onBusy: (busy: boolean) => void; onSaved: () => void }) {
   const { t } = useAppLanguage();
+  const [legacyStockConfirmed, setLegacyStockConfirmed] = useState(false);
+  const [businessDate, setBusinessDate] = useState(preview.order.deliveredAtKey ?? "");
   const [taxMode, setTaxMode] = useState<FurnitureInvoiceInput["taxMode"] | "">("");
   const [taxes, setTaxes] = useState(() => preview.lines.map(({ lineId, gstRate, hsn }) => ({ lineId, gstRate, hsn: hsn ?? "" })));
   const [customerId, setCustomerId] = useState(preview.order.customerId ?? "");
@@ -37,6 +39,7 @@ function InvoiceReview({ preview, onBusy, onSaved }: { preview: FurnitureInvoice
   const save = useMutation({ mutationFn: async () => {
     if (!taxMode) throw new Error(t("furniture.invoice.chooseTax"));
     return createFurnitureInvoice(preview.order.id, {
+      ...(preview.legacyDelivery ? { legacyStockConfirmed, businessDate } : {}),
       previewToken: preview.previewToken, taxMode, customerId: customerId || undefined, reason,
       taxes: taxes.map((tax) => ({ ...tax, hsn: tax.hsn.trim() || undefined })),
     }, pin);
@@ -45,6 +48,12 @@ function InvoiceReview({ preview, onBusy, onSaved }: { preview: FurnitureInvoice
   return <>
     <p className="font-semibold">{preview.order.orderNumber} · {preview.order.customerName}</p>
     <p className="text-sm text-muted-foreground">{t("furniture.invoice.help")}</p>
+    {preview.legacyDelivery && <div className="space-y-3 rounded-lg border border-amber-300 p-3">
+      <p className="text-sm">{t("furniture.history.invoiceHelp")}</p>
+      <Label htmlFor="legacy-sale-date">{t("furniture.history.saleDate")}</Label>
+      <Input id="legacy-sale-date" type="date" value={businessDate} disabled={save.isPending} onChange={(event) => setBusinessDate(event.target.value)} />
+      <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={legacyStockConfirmed} disabled={save.isPending} onChange={(event) => setLegacyStockConfirmed(event.target.checked)} />{t("furniture.history.stockConfirmation")}</label>
+    </div>}
     <dl className="grid grid-cols-3 gap-3 rounded-lg bg-muted p-3 text-sm">
       <div><dt>{t("furniture.invoice.total")}</dt><dd className="font-bold">₹{preview.order.grandTotal}</dd></div>
       <div><dt>{t("furniture.invoice.received")}</dt><dd className="font-bold">₹{preview.order.paidTotal}</dd></div>
@@ -83,7 +92,7 @@ function InvoiceReview({ preview, onBusy, onSaved }: { preview: FurnitureInvoice
     <Label htmlFor="invoice-pin">{t("rental.refund.pin")}</Label>
     <Input id="invoice-pin" className="h-11" type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={pin} disabled={save.isPending} onChange={(event) => setPin(event.target.value)} />
     {save.error && <p role="alert" className="text-sm text-destructive">{save.error.message}</p>}
-    <Button className="h-11" disabled={save.isPending || !taxMode || needsCustomer || !/^\d{4}$/.test(pin) || reason.trim().length < 3}
-      onClick={() => save.mutate()}>{t(save.isPending ? "rental.collection.saving" : "furniture.invoice.confirm")}</Button>
+    <Button className="h-11" disabled={save.isPending || (preview.legacyDelivery && (!businessDate || !legacyStockConfirmed)) || !taxMode || needsCustomer || !/^\d{4}$/.test(pin) || reason.trim().length < 3}
+      onClick={() => save.mutate()}>{t(save.isPending ? "rental.collection.saving" : preview.legacyDelivery ? "furniture.history.repairInvoice" : "furniture.invoice.confirm")}</Button>
   </>;
 }
