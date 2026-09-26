@@ -61,10 +61,12 @@ export interface FurnitureInvoiceLine {
   lineId: string; name: string; quantity: number; enteredUnit: string; amount: number; gstRate: number; hsn?: string; productId?: string;
 }
 export interface FurnitureInvoicePreview {
+  legacyDelivery?: boolean;
   order: FurnitureOrder; previewToken: string; lines: FurnitureInvoiceLine[];
   customers: { id: string; name: string; mobile: string | null }[];
 }
 export interface FurnitureInvoiceInput {
+  legacyStockConfirmed?: boolean; businessDate?: string;
   previewToken: string; taxMode: "none" | "inclusive"; customerId?: string; reason: string;
   taxes: { lineId: string; gstRate: number; hsn?: string }[];
 }
@@ -140,4 +142,8 @@ export interface FurniturePaymentAdjustment {
 
 export function adjustFurniturePayment(id: string, paymentId: string, data: FurniturePaymentAdjustment, ownerPin: string) {
   return apiRequest<FurnitureOrder>(`/furniture-orders/${id}/payments/${paymentId}/adjust`, { method: "POST", body: JSON.stringify(data), ownerPin });
+}
+
+export function reconcileFurnitureHistory(id: string, input: { reason: string; receipts: Array<{ paymentId: string; amount: number; mode: string }> }, ownerPin: string) {
+  return apiRequest<FurnitureOrder>(`/furniture-orders/${id}/reconcile-history`, { method: "POST", body: JSON.stringify(input), ownerPin });
 }

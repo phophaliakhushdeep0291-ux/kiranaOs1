@@ -10,6 +10,19 @@
 import type { shopTypesEn } from "./shop-types";
 
 export const shopTypesHi: Record<keyof typeof shopTypesEn, string> = {
+  "furniture.history.repairInvoice": "छूटा हुआ बिल बनाएँ",
+  "furniture.history.saleDate": "मूल बिक्री की तारीख",
+  "furniture.history.invoiceHelp": "मूल डिलीवरी और स्टॉक रिकॉर्ड की समीक्षा के बाद ही उपयोग करें। इससे छूटा हुआ बिल बनेगा और माल एक बार स्टॉक से घटेगा। दर्ज डिलीवरी और इंस्टॉलेशन की तारीखें बनी रहेंगी। पहले पुरानी रसीदों का मिलान करें।",
+  "furniture.history.stockConfirmation": "मैंने जाँचा है कि इस बिक्री का बिल नहीं बना है और डिलीवर किया गया यह माल अभी भी दर्ज स्टॉक में शामिल है।",
+
+  "furniture.history.title": "पुरानी रसीदों की समीक्षा",
+  "furniture.history.help": "हर रसीद को अपने रिकॉर्ड से मिलाएँ। इसका लेखा मूल भुगतान की तारीख पर दर्ज होगा; दोबारा पैसे नहीं लिए जाएँगे।",
+  "furniture.history.confirm": "रसीदों का इतिहास दर्ज करें",
+  "furniture.history.checked": "मैंने मूल रसीदों से इन रकमों और भुगतान के तरीकों का मिलान किया है।",
+  "furniture.history.empty": "सभी दर्ज रसीदों का लेखा इतिहास मौजूद है।",
+  "furniture.history.loading": "रसीदों का इतिहास लोड हो रहा है…",
+  "furniture.history.delivered": "इससे केवल रसीदों का इतिहास दर्ज होगा। पहले से डिलीवर किए गए ऑर्डर के बिल और स्टॉक की अलग समीक्षा ज़रूरी है।",
+
   "furniture.invoice.title": "बिल बनाकर डिलीवरी करें",
   "furniture.invoice.loading": "बिल की समीक्षा लोड हो रही है…",
   "furniture.invoice.reload": "समीक्षा फिर लोड करें",
@@ -22,7 +35,8 @@ export const shopTypesHi: Record<keyof typeof shopTypesEn, string> = {
   "furniture.invoice.noGst": "बिना GST का बिक्री बिल",
   "furniture.invoice.inclusive": "GST बिल — कीमत में टैक्स शामिल",
   "furniture.invoice.gstRate": "GST दर (%)",
-  "furniture.invoice.hsn": "HSN / SAC",
+  "furniture.invoice.hsn": "HSN / SAC कोड",
+  "furniture.invoice.reason": "डिलीवरी की पुष्टि का विवरण",
   "furniture.invoice.customer": "बाकी रकम के लिए ग्राहक खाता",
   "furniture.invoice.chooseCustomer": "मिलता हुआ ग्राहक चुनें",
   "furniture.invoice.noCustomer": "ग्राहक पेज में इसी नाम और मोबाइल का खाता जोड़ें, फिर समीक्षा दोबारा लोड करें। बिल बनाने से पहले मिली पूरी बाकी रकम भी दर्ज कर सकते हैं।",

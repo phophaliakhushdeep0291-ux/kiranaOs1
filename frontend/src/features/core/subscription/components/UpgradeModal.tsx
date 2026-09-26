@@ -19,7 +19,7 @@ import {
   writeSubscriptionRequest,
   writeSubscriptionSnapshot,
 } from "@/features/core/subscription/access";
-import { formatFreeAccessDate } from "@/features/core/subscription/free-access";
+import { formatFreeAccessDate, isFreeAccessPresale } from "@/features/core/subscription/free-access";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import {
   requestSubscriptionUpgrade,
@@ -156,6 +156,9 @@ export function UpgradeModal({
   const { language, t } = useAppLanguage();
   const { snapshot } = useSubscriptionSnapshot();
   const freeUntil = snapshot?.freeAccessUntil ?? null;
+  // The promotion's last month sells the period that starts when the window shuts.
+  const presale = isFreeAccessPresale(freeUntil);
+  const paidFrom = presale && freeUntil ? formatFreeAccessDate(freeUntil, language) : null;
 
   useEffect(() => {
     setSelectedCycle(billingCycle);
@@ -263,7 +266,7 @@ export function UpgradeModal({
     }
   }
 
-  if (freeUntil) {
+  if (freeUntil && !presale) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-md">
@@ -302,6 +305,7 @@ export function UpgradeModal({
                 {selectedCycle === "yearly" ? `Rs ${target.annualPrice}/year` : `Rs ${target.price}/month`}
               </p>
               {selectedCycle === "yearly" && <p className="text-xs font-medium text-emerald-700">Rs {Math.round(target.annualPrice / 12)}/month, billed annually</p>}
+              {paidFrom && <p className="text-xs font-bold text-emerald-700">{t("plans.free.startsOn", { date: paidFrom })}</p>}
               <p className="text-sm text-muted-foreground">{target.headline}</p>
             </div>
             <Badge variant="secondary">

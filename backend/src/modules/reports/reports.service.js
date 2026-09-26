@@ -10,7 +10,7 @@ import { getReportRangeLimit } from "../feature-gates/featureGate.service.js";
 import { getLocationQuantitiesByProduct, resolveOperationalLocation } from "../stores/location-context.service.js";
 import { validateGstin } from "../../utils/gst.js";
 import { summarizeFinancialLedger } from "../finance/financial-ledger.service.js";
-import { baseQtyToRateQty } from "../../utils/units.js";
+import { rateUnitFactorsFor } from "../inventory/rate-unit-factor.js";
 
 // Estimates (kacha bills) are full sales — stock, tender, udhar — so they count in every
 // sales/cash/P&L report. The one exception is GST: an estimate is not a tax document, so the
@@ -1024,8 +1024,14 @@ export async function getInventoryHealth(shopId, { includeCost = false, windowDa
     // rate unit (kg, l, piece). Multiplying the two directly values a 40 kg sack
     // of atta as if it were 40,000 kg — on a real kirana catalogue that
     // overstated closing stock by ~85x. Convert before valuing.
+    //
+    // And convert through the product's PACK when its rate unit is a pack word.
+    // The starter catalogue quotes 7Up per "bottle", which the unit table does not
+    // know, so this map threw on the first such product and the whole valuation
+    // failed — for every shop that had loaded the starter catalogue.
+    const factors = await rateUnitFactorsFor(db, shopId, activeProducts);
     const valuation = activeProducts.map((p) => {
-      const rateQty = baseQtyToRateQty(Number(branchStockByProduct.get(p.id) || 0), p.rateUnit, p.baseUnit);
+      const rateQty = Number(branchStockByProduct.get(p.id) || 0) / factors.get(p.id);
       return {
         category: p.category || "general",
         costValue: rateQty * Number(p.costPerRateUnit || 0),

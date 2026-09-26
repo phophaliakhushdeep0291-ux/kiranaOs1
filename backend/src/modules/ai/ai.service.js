@@ -1,7 +1,5 @@
 import fs from "fs";
 import { createHash } from "node:crypto";
-import OpenAI from "openai";
-import { env } from "../../config/env.js";
 import db from "../../db.js";
 import { recordAiCommand } from "../../lib/metrics.js";
 import {
@@ -15,11 +13,27 @@ import {
   normalizeGroundingCatalog,
 } from "./ai.grounding.js";
 import { checkPermission } from "./ai.permissions.js";
-
-let cachedCommandProvider = null;
-let cachedTranscriptionProvider = null;
+import { runChatCompletion, runTranscription } from "./provider-gateway.js";
 
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Transcription gets a longer budget than the parse that follows it, because
+ * it is uploading audio rather than sending a sentence — but it is still the
+ * shopkeeper's wait, so it is bounded. It previously had no timeout at all.
+ */
+const TRANSCRIPTION_TIMEOUT_MS = 30_000;
+
+/**
+ * How long one command parse may take, end to end and across every provider.
+ *
+ * This used to be unbounded: the client was built with no `timeout`, so a
+ * wedged provider held the request open for the SDK's 10-minute default while
+ * the shopkeeper stood at the counter watching a spinner. A voice command is a
+ * single short completion — if it has not come back in this long, no answer is
+ * coming, and the manual path is faster than continuing to wait.
+ */
+const COMMAND_TIMEOUT_MS = 20_000;
 const TRANSCRIPTION_PROMPT = [
   "Indian kirana retail voice command in Hindi, Hinglish, or English.",
   "Preserve product names, quantities, units, customer names, mobile numbers, bill numbers, UPI, cash, and udhar accurately.",
@@ -51,66 +65,6 @@ export const AI_COMMAND_PROMPT_FINGERPRINT = createHash("sha256")
   .digest("hex")
   .slice(0, 16);
 
-function getCommandProvider() {
-  if (cachedCommandProvider) return cachedCommandProvider;
-
-  if (env.GROQ_API_KEY) {
-    cachedCommandProvider = {
-      client: new OpenAI({
-        apiKey: env.GROQ_API_KEY,
-        baseURL: "https://api.groq.com/openai/v1",
-      }),
-      model: env.GROQ_MODEL || "openai/gpt-oss-20b",
-      provider: "groq",
-    };
-    return cachedCommandProvider;
-  }
-
-  if (env.OPENAI_API_KEY) {
-    cachedCommandProvider = {
-      client: new OpenAI({ apiKey: env.OPENAI_API_KEY }),
-      model: env.OPENAI_MODEL || "gpt-4o-mini",
-      provider: "openai",
-    };
-    return cachedCommandProvider;
-  }
-
-  const error = new Error("No AI API key configured. Add GROQ_API_KEY or OPENAI_API_KEY.");
-  error.code = "AI_KEY_MISSING";
-  error.status = 503;
-  throw error;
-}
-
-function getTranscriptionProvider() {
-  if (cachedTranscriptionProvider) return cachedTranscriptionProvider;
-
-  if (env.GROQ_API_KEY) {
-    cachedTranscriptionProvider = {
-      client: new OpenAI({
-        apiKey: env.GROQ_API_KEY,
-        baseURL: "https://api.groq.com/openai/v1",
-      }),
-      model: env.GROQ_TRANSCRIBE_MODEL,
-      provider: "groq",
-    };
-    return cachedTranscriptionProvider;
-  }
-
-  if (env.OPENAI_API_KEY) {
-    cachedTranscriptionProvider = {
-      client: new OpenAI({ apiKey: env.OPENAI_API_KEY }),
-      model: env.OPENAI_TRANSCRIBE_MODEL,
-      provider: "openai",
-    };
-    return cachedTranscriptionProvider;
-  }
-
-  const error = new Error("No AI API key configured for audio transcription");
-  error.code = "AI_KEY_MISSING";
-  error.status = 503;
-  throw error;
-}
-
 export async function transcribeAudio(file, { providerOverride } = {}) {
   if (!file?.path) {
     const error = new Error("Audio file is required");
@@ -133,31 +87,28 @@ export async function transcribeAudio(file, { providerOverride } = {}) {
     throw error;
   }
 
-  const selected = providerOverride ?? getTranscriptionProvider();
-  const audioStream = fs.createReadStream(file.path);
-  try {
-    const response = await selected.client.audio.transcriptions.create({
-      file: audioStream,
-      model: selected.model,
-      response_format: "json",
-      prompt: TRANSCRIPTION_PROMPT,
-    });
-    const transcript = String(response?.text ?? "").trim();
-    if (!transcript) {
-      const error = new Error("The transcription provider returned no speech text");
-      error.code = "AI_TRANSCRIPTION_EMPTY";
-      error.status = 502;
-      throw error;
-    }
+  const answered = await runTranscription({
+    purpose: "transcription",
+    deadline: Date.now() + TRANSCRIPTION_TIMEOUT_MS,
+    candidates: providerOverride ? [providerOverride] : null,
+    prompt: TRANSCRIPTION_PROMPT,
+    // A factory, not a stream: the gateway may retry or fail over, and each
+    // attempt has to upload the audio from the beginning.
+    openAudio: () => fs.createReadStream(file.path),
+  });
 
-    return {
-      transcript,
-      model: selected.model,
-      provider: selected.provider,
-    };
-  } finally {
-    audioStream.destroy();
+  if (!answered.transcript) {
+    const error = new Error("The transcription provider returned no speech text");
+    error.code = "AI_TRANSCRIPTION_EMPTY";
+    error.status = 502;
+    throw error;
   }
+
+  return {
+    transcript: answered.transcript,
+    model: answered.model,
+    provider: answered.provider,
+  };
 }
 
 async function loadGroundingCatalog(database, shopId) {
@@ -225,8 +176,6 @@ export async function parseCommand(
   { transcript, context },
   { providerOverride, database = db } = {},
 ) {
-  const selected = providerOverride ?? getCommandProvider();
-  const provider = selected.provider ?? "unknown";
   const { catalog, available: catalogAvailable } = await loadGroundingCatalog(database, shopId);
   const userMessage = JSON.stringify({
     transcript,
@@ -234,17 +183,28 @@ export async function parseCommand(
     catalogCandidates: selectRelevantCatalog(catalog, transcript),
   });
 
-  const completion = await selected.client.chat.completions.create({
-    model: selected.model,
-    ...(provider === "openai"
-      ? { response_format: { type: "json_schema", json_schema: AI_COMMAND_JSON_SCHEMA } }
-      : {}),
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: userMessage },
-    ],
-    temperature: 0,
+  const answered = await runChatCompletion({
+    purpose: "command_parse",
+    deadline: Date.now() + COMMAND_TIMEOUT_MS,
+    candidates: providerOverride ? [providerOverride] : null,
+    // Worded per vendor: only OpenAI enforces the schema, and which vendor
+    // answers is not known until the gateway has finished failing over.
+    body: (candidate) => ({
+      ...(candidate.provider === "openai"
+        ? { response_format: { type: "json_schema", json_schema: AI_COMMAND_JSON_SCHEMA } }
+        : {}),
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userMessage },
+      ],
+      temperature: 0,
+    }),
   });
+  const completion = answered.completion;
+  // Who actually answered, not who was asked first. A command logged against
+  // "groq" that came from the OpenAI fallback is a trace nobody can debug from.
+  const provider = answered.provider ?? "unknown";
+  const model = answered.model;
 
   const content = completion?.choices?.[0]?.message?.content;
   let validation = invalidProviderOutput();
@@ -284,7 +244,7 @@ export async function parseCommand(
       ...grounded.safety,
       catalogAvailable,
       provider,
-      model: selected.model,
+      model,
       policyVersion: AI_COMMAND_POLICY_VERSION,
       promptFingerprint: AI_COMMAND_PROMPT_FINGERPRINT,
     },
@@ -308,7 +268,7 @@ export async function parseCommand(
     status: permissionAllowed ? "accepted" : "blocked",
     intent: parsed.intent,
     confidence: parsed.safety.effectiveConfidence,
-    model: selected.model,
+    model,
     policyVersion: AI_COMMAND_POLICY_VERSION,
     reasonCodes: parsed.safety.reasons,
   });

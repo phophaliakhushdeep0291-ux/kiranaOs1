@@ -3,7 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { confirmBill } from "../../modules/bills/bills.service.js";
 import { calculateInvoiceGst, GST_EXPORT_STATE_CODE } from "../../utils/gst.js";
 import { multiplyMoney, round2, subtractMoney } from "../../utils/money.js";
-import { baseQtyToRateQty } from "../../utils/units.js";
+import { rateUnitFactorsFor } from "../../modules/inventory/rate-unit-factor.js";
 import { createTradeInvoiceSchema } from "./manufacturing.schemas.js";
 
 const include = { items: { include: { allocations: true } }, dispatches: { orderBy: [{ dispatchDate: "asc" }, { createdAt: "asc" }, { id: "asc" }] } };
@@ -47,6 +47,9 @@ async function priceTradeInvoice(order, dispatch, input) {
     fail("A domestic order must be priced in INR at an exchange rate of 1", "TRADE_ORDER_CURRENCY_INVALID");
   }
   const products = await db.product.findMany({ where: { shopId: order.shopId, id: { in: order.items.map(row => row.productId) }, deletedAt: null }, include: { sellingUnits: true } });
+  // Only a line without packaging converts through the rate unit, which for a
+  // packaged product is its pack's word ("jar") — so its size comes from the pack.
+  const factors = await rateUnitFactorsFor(db, order.shopId, billable.filter((row) => !row.sellingUnitId).map((row) => products.find(candidate => candidate.id === row.productId)));
   // An export is always invoiced as a tax invoice: the zero-rating declaration is
   // part of the document, not an optional extra.
   const billType = isExport ? "gst_invoice" : input.billType;
@@ -61,10 +64,10 @@ async function priceTradeInvoice(order, dispatch, input) {
     if (!product || (row.sellingUnitId && !unit)) fail("An ordered product or pack is unavailable; review its catalogue entry");
     // Non-pack trade quantities are base units. Convert the stored price to the
     // catalogue rate unit so billing cannot multiply it a second time.
-    const rate = round2(Number(row.unitPrice) * fx / (unit ? 1 : baseQtyToRateQty(1, product.rateUnit, product.baseUnit)));
+    const rate = round2(Number(row.unitPrice) * fx / (unit ? 1 : 1 / factors.get(product.id)));
     // This consignment's share of the line, in the line's own selling unit.
     const shippedQty = round2(shippedBase.get(row.id) / (Number(row.quantityBaseQty) / Number(row.quantity)));
-    const qtyInRateUnit = unit ? shippedQty : baseQtyToRateQty(shippedBase.get(row.id), product.rateUnit, product.baseUnit);
+    const qtyInRateUnit = unit ? shippedQty : shippedBase.get(row.id) / factors.get(product.id);
     const gross = multiplyMoney(rate, qtyInRateUnit);
     // A line discount belongs to the whole line, so each consignment carries the
     // share matching the quantity it ships.

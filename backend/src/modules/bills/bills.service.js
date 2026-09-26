@@ -28,6 +28,7 @@ import { createAuditLog } from "../audit/audit.service.js";
 import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
 import { assertSensitiveBillReason, deriveSensitiveBillActions } from "./bill-sensitive-approval.js";
 import { stockLedgerProvenance } from "../inventory/stock-ledger-provenance.js";
+import { rateUnitFactor } from "../inventory/rate-unit-factor.js";
 
 const OFFLINE_BILL_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
 const OFFLINE_BILL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
@@ -158,8 +159,17 @@ async function writeRequiredBillAudit(entry, client) {
   return audit;
 }
 
-function resolveBillBusinessDate(actor = {}) {
+function resolveBillBusinessDate(actor = {}, historicalDate = null) {
   const receivedAt = new Date();
+  // A reviewed repair supplies this through server-side transaction composition,
+  // never through the bill request body or the offline replay permission path.
+  if (historicalDate !== null) {
+    const candidate = new Date(historicalDate);
+    if (!Number.isFinite(candidate.getTime()) || candidate > receivedAt) {
+      throw new AppError("Historical sale date is invalid or in the future", 400, "HISTORICAL_BILL_DATE_INVALID");
+    }
+    return candidate;
+  }
   if (actor?.isOfflineReplay !== true) return receivedAt;
 
   const candidate = actor?.businessDate instanceof Date
@@ -425,7 +435,8 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null, t
   // never from frontend/offline payload attribution fields.
   const createdByUserId = actor?.userId ?? null;
   const deviceId = actor?.deviceId ?? null;
-  const businessDate = resolveBillBusinessDate(actor);
+  // Only trusted server composition may supply a reviewed historical date.
+  const businessDate = resolveBillBusinessDate(actor, transactionContext?.businessDate ?? null);
   // Offline-origin bills (replayed from a device's sync queue) represent sales that
   // already physically happened, so they must never be dropped for being stock-short.
   // The online counter path leaves this false and still rejects overselling live.
@@ -636,10 +647,14 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null, t
 
       // Line totals must use quantity converted into the product's rate unit.
       // Example: rate ₹46/kg and quantity 500g => qtyInRateUnit 0.5 => lineTotal ₹23.
+      // A line gets here with no packaging when there was none to default to, or on
+      // a wholesale invoice for goods already dispatched in base units — and for a
+      // packaged product the rate unit is its pack's word ("jar"), which only the
+      // pack can size. The unit table still decides for kg and friends.
       const qtyInRateUnit = sellingUnit
         ? item.quantity
         : product
-          ? baseQtyToRateQty(qtyInBase, product.rateUnit, product.baseUnit)
+          ? qtyInBase / await rateUnitFactor(tx, shopId, product)
         : item.quantity;
 
       // Each packaging is measured against ITS OWN ceiling: the pack's MRP when it

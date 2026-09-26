@@ -187,6 +187,7 @@ export const shellEn = {
   "setup.step.products.description": "Import or add sellable products with price, unit, pack size, and stock.",
   "setup.step.products.action": "Import products",
   "setup.step.products.todo": "No products added yet",
+  "setup.step.products.noStock": "{count} products, none in stock yet — add opening stock before billing",
   "setup.step.customers.title": "Customers and udhar",
   "setup.step.customers.description": "Add frequent customers before using credit, reminders, and statements.",
   "setup.step.customers.action": "Open customers",
@@ -257,6 +258,12 @@ export const shellEn = {
   "plans.free.modalBody": "Everything is free until {date}. {plan} and every other feature are already unlocked for your shop.",
   "plans.free.close": "Close",
   "plans.free.refusedBody": "Every feature is already unlocked for your shop, so nothing was charged.",
+  "plans.free.presaleTitle": "Free until {date} — plans start then",
+  "plans.free.presaleBody": "There is nothing to pay before then. Choose a plan now and it starts on {date}, so none of your free days come out of it.",
+  "plans.free.startsOn": "Starts on {date}",
+  "chrome.freeAccess.ending": "Free access ends on {date}. Choose a plan now and it starts that day, so your billing carries on without a break.",
+  "chrome.freeAccess.endingShort": "Free access ends {date} — choose a plan",
+  "chrome.freeAccess.seePlans": "See plans",
 
   // Dashboard prose passed as props rather than written between tags.
   "dashboard.step.addProducts": "Add products",

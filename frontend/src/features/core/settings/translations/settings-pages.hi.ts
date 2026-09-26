@@ -115,7 +115,7 @@ export const settingsPagesHi: Record<keyof typeof settingsPagesEn, string> = {
   "settings.sync.failed": "असफल",
   "settings.sync.conflicts": "टकराव",
   "settings.sync.retries": "दोबारा कोशिश",
-  "settings.sync.lastSuccessful": "पिछला सफल सिंक {when}",
+  "settings.sync.lastSuccessful": "पिछला सफल अपलोड {when}",
   "settings.sync.deviceStoppedReceiving": "इस डिवाइस पर अपडेट आना बंद हो गया है।",
   "settings.sync.deviceStoppedReceivingHelp": "यहां बनाए गए बिल अभी भी बैकअप हो रहे हैं, लेकिन दूसरे डिवाइस के बदलाव नहीं आ रहे — कीमत, स्टॉक और बिल पुराने हो सकते हैं।",
   "settings.sync.lastAttempt": "पिछली कोशिश {when}: {reason}",

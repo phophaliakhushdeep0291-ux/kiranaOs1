@@ -41,6 +41,20 @@ describe("offline route capability contract", () => {
     }
   });
 
+  it("pairs every cloudPage() import with an onlineOnly route", () => {
+    // cloudPage() loads the translation tier that is deliberately NOT precached
+    // (see english-cloud.ts). The safety of leaving it out rests entirely on the
+    // page being unreachable offline, which is what onlineOnly enforces — so a
+    // page wrapped here and not marked there would render raw keys on an offline
+    // till, and nothing else in the suite would notice.
+    const wrapped = [...routes.matchAll(/const (\w+) = lazy\(cloudPage\(/g)].map((match) => match[1]);
+    expect(wrapped.length).toBeGreaterThan(0);
+    for (const page of wrapped) {
+      expect(routes, `${page} is a cloudPage but not onlineOnly`)
+        .toMatch(new RegExp(`ProtectedRoute component=\\{${page}\\}[^>]*onlineOnly`));
+    }
+  });
+
   it("precaches the background refresh bridge needed for reload-free offline updates", () => {
     expect(criticalEntries).toContain("src/features/core/sync/BackgroundRuntime.tsx");
   });

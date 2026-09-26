@@ -1,0 +1,28 @@
+{
+  "verifiedAt": "2026-09-23T19:10:18.419Z",
+  "scope": "Disposable SQLite QA fixture; actual browser confirmation",
+  "order": {
+    "id": "cmueh2ndw000r11jbjy5buqjg",
+    "status": "delivered",
+    "billId": "cmueh7wd1004k11jbttqu1dlg",
+    "grandTotal": 100,
+    "locationId": "cmueh2nds000o11jb71kh37nd"
+  },
+  "bill": {
+    "id": "cmueh7wd1004k11jbttqu1dlg",
+    "billNo": "KOS-2026-000001",
+    "grandTotal": 100,
+    "creditAmount": 0
+  },
+  "product": {
+    "name": "QA Oak Chair",
+    "stockBaseQty": 9
+  },
+  "invoices": 1,
+  "movements": 1,
+  "receipts": 1,
+  "today": {
+    "expectedCashPaise": 0,
+    "totalSalesPaise": 10000
+  }
+}

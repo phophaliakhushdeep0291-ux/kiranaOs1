@@ -1,0 +1,60 @@
+{
+  "type": "postgres_restore_runtime_tests",
+  "status": "passed",
+  "cases": 6,
+  "syntheticTenants": 2,
+  "tests": [
+    "populated multi-tenant restore",
+    "concurrent source writes use exported snapshot",
+    "same-count one-paise corruption rejected",
+    "checksum rejection preserves target",
+    "fresh restore content and read-only money verification",
+    "cafe wrapper executes fresh snapshot proof without npm-specific environment"
+  ],
+  "reportPath": "/Users/shivanimaheshwari/Documents/KIRANAOS/ci-certification-wt/backend/release-artifacts/restore-runtime-dr-fixture-b04f043b-59f1-4070-82f4-05eae00e26ca/fresh-restore-passed.json",
+  "fidelity": {
+    "tableCount": 147,
+    "totalRows": "173",
+    "migrationRows": "141",
+    "exactMatch": true,
+    "contentHashesMatched": true,
+    "businessWorkloadVerified": true
+  },
+  "cafeReport": {
+    "type": "cafe_restore_drill",
+    "status": "passed",
+    "reportPath": "/Users/shivanimaheshwari/Documents/KIRANAOS/ci-certification-wt/backend/release-artifacts/cafe-restore-drill-481cf3c6-3d84-44fa-869e-d198e1645c8b/proof.json",
+    "passed": true,
+    "fidelityVerified": true,
+    "recoveryPoint": {
+      "known": true,
+      "ageHours": 0,
+      "objectiveHours": 24,
+      "withinObjective": true,
+      "summary": "0 minutes of trade at risk",
+      "basis": "fresh-drill-start",
+      "productionBackupCadenceVerified": false
+    },
+    "backup": {
+      "format": "custom",
+      "filename": "kiranaos-dr-0d31dfb0-91c6-4845-94b7-29d47ae9c9cd.dump",
+      "bytes": 583784,
+      "sha256": "b30d69dd6b18394504d974f82f383bb3f4d3878de6b22cb9815929b9b98ae6a8",
+      "generatedByThisProof": true,
+      "retainedAfterProof": false
+    },
+    "fidelity": {
+      "tableCount": 147,
+      "totalRows": "173",
+      "migrationRows": "141",
+      "exactMatch": true,
+      "contentHashesMatched": true,
+      "businessWorkloadVerified": true
+    },
+    "limitations": [
+      "This tests a fresh snapshot; it does not verify scheduled production backup frequency, retention, or offsite durability.",
+      "Public-table content is checked; sequence state, roles, permissions, indexes, and non-public schemas are not independently compared."
+    ],
+    "finishedAt": "2026-09-24T09:10:34.576Z"
+  }
+}

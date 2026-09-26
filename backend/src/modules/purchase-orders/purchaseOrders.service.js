@@ -2,7 +2,7 @@ import crypto from "crypto";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { moneyShadows, multiplyMoney, round2, weightedAvgCost } from "../../utils/money.js";
-import { rateUnitToBase } from "../../utils/units.js";
+import { rateUnitFactorsFor } from "../inventory/rate-unit-factor.js";
 import { getLocationQuantity, incrementLocationInventory, resolveOperationalLocation } from "../stores/location-context.service.js";
 import { recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
 import { postPurchaseReceiptLedger } from "../finance/financial-ledger.service.js";
@@ -235,9 +235,10 @@ export async function createPurchaseOrder(shopId, data, actor = {}) {
       );
     }
     const byId = new Map(products.map((product) => [product.id, product]));
+    const factors = await rateUnitFactorsFor(tx, shopId, products);
     const items = data.items.map((item) => {
       const product = byId.get(item.productId);
-      const factor = rateUnitToBase(product.rateUnit, product.baseUnit);
+      const factor = factors.get(product.id);
       const expectedAmount = multiplyMoney(item.expectedRate, item.orderedBaseQty / factor);
       return {
         productId: product.id,
@@ -367,6 +368,7 @@ export async function receivePurchaseOrder(shopId, id, data, actor = {}) {
       if (!["sent", "partially_received"].includes(order.status)) throw new AppError("Only a sent purchase order can receive stock", 409, "PURCHASE_ORDER_NOT_RECEIVABLE");
       if (!order.location.active) throw new AppError("The purchase-order location is inactive", 409, "STORE_LOCATION_UNAVAILABLE");
       const byId = new Map(order.items.map((item) => [item.id, item]));
+      const factors = await rateUnitFactorsFor(tx, shopId, order.items.map((item) => ({ id: item.productId, rateUnit: item.rateUnit, baseUnit: item.baseUnit })));
       const lines = data.items.map((input) => {
         const item = byId.get(input.purchaseOrderItemId);
         if (!item) throw new AppError("A receipt line is not part of this purchase order", 422, "PURCHASE_ORDER_ITEM_INVALID");
@@ -376,7 +378,7 @@ export async function receivePurchaseOrder(shopId, id, data, actor = {}) {
           error.publicData = { purchaseOrderItemId: item.id, remainingBaseQty: remaining };
           throw error;
         }
-        const factor = rateUnitToBase(item.rateUnit, item.baseUnit);
+        const factor = factors.get(item.productId);
         return {
           input,
           item,
@@ -603,8 +605,9 @@ export async function reconcilePurchaseReceipt(shopId, purchaseOrderId, receiptI
       include: { items: { include: { purchaseOrderItem: true } } },
     });
     if (!receipt) throw new AppError("Purchase receipt not found", 404, "PURCHASE_RECEIPT_NOT_FOUND");
+    const factors = await rateUnitFactorsFor(tx, shopId, receipt.items.map((item) => ({ id: item.purchaseOrderItem.productId, rateUnit: item.purchaseOrderItem.rateUnit, baseUnit: item.purchaseOrderItem.baseUnit })));
     const expectedAmounts = receipt.items.map((item) => {
-      const factor = rateUnitToBase(item.purchaseOrderItem.rateUnit, item.purchaseOrderItem.baseUnit);
+      const factor = factors.get(item.purchaseOrderItem.productId);
       return multiplyMoney(item.purchaseOrderItem.expectedRate, item.quantityBaseQty / factor);
     });
     const reconciliation = calculateReceiptReconciliation({

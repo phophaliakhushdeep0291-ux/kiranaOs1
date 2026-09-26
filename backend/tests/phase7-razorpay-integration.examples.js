@@ -102,7 +102,32 @@ for (const action of [
 }
 
 assert(subscriptionService.includes("activateSubscriptionAfterPayment"), "shared subscription activation function must exist");
-assert(subscriptionService.includes("addPeriod(startsAt, billingCycle)"), "activation must use documented billing-cycle period policy");
+// The billing-cycle period policy, by its shape rather than by one spelling.
+//
+// This used to pin the literal `addPeriod(startsAt, billingCycle)`, which says
+// only that a line did not change. It broke the moment the start was
+// legitimately renamed — and it would have said nothing at all had the period
+// been computed from one date and RECORDED as another. That second case is the
+// one that costs money: a subscription claiming a period it was never sold.
+//
+// So: the end is still computed by addPeriod from some start and the billing
+// cycle, and every currentPeriodStart this activation writes is that same
+// start. Whatever the start is called, the two cannot drift apart.
+const activation = subscriptionService.match(
+  /export async function activateSubscriptionAfterPayment[\s\S]*?\n\}\n/,
+)?.[0];
+assert(activation, "shared subscription activation function must be readable");
+
+const periodEnd = activation.match(/addPeriod\(\s*([A-Za-z_$][\w$]*)\s*,\s*billingCycle\s*\)/);
+assert(periodEnd, "activation must use documented billing-cycle period policy: addPeriod(<start>, billingCycle)");
+const periodStartName = periodEnd[1];
+
+const recordedStarts = [...activation.matchAll(/currentPeriodStart:\s*([A-Za-z_$][\w$]*)/g)].map((match) => match[1]);
+assert(recordedStarts.length > 0, "activation must record a currentPeriodStart");
+for (const recorded of recordedStarts) {
+  assert.equal(recorded, periodStartName,
+    `activation records currentPeriodStart: ${recorded} but computes its end from ${periodStartName} — the period sold and the period stored must be the same`);
+}
 assert(subscriptionService.includes("samePlan") && subscriptionService.includes("renewed") && subscriptionService.includes("plan_changed"), "renew/change policy must be implemented");
 
 assert(packageJson.scripts.test.includes("phase7-razorpay-integration.examples.js") || packageJson.scripts["test:billing"].includes("phase7-razorpay-integration.examples.js"), "Phase 7 tests must be wired into npm test");

@@ -124,13 +124,54 @@ else {
     assert.equal(review.lines[0].quantity, 0.5);
     const input = f.input(review);
     await ctx.db.product.update({ where: { id: f.product.id }, data: { stockBaseQty: 0 } });
-    assertFailure(await ctx.post(f.path + "/invoice", input, f.options), 400);
+    assertFailure(await ctx.post(f.path + "/invoice", input, f.options), 409);
     assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
     await ctx.db.product.update({ where: { id: f.product.id }, data: { stockBaseQty: 10 } });
     const delivered = await f.post("/invoice", input, 201);
     const line = await ctx.db.billItem.findFirst({ where: { billId: delivered.billId } });
     assert.equal(line.quantityInBaseUnit, 1);
     assert.equal(line.lineTotal, 100);
+  });
+
+  test("delivery cannot consume stock held for another order, including made-to-order lines", async () => {
+    const f = await fixture();
+    await ctx.db.furnitureOrderItem.updateMany({ where: { orderId: f.order.id }, data: { reserveStock: false } });
+    const held = assertSuccess(await ctx.post("/api/furniture-orders", { customerName: "Other Buyer", status: "confirmed",
+      items: [{ productId: f.product.id, name: f.product.name, qty: 10, rate: 100 }],
+    }, f.options), 201);
+    await f.pay(); await f.ready();
+    const input = f.input(await f.preview());
+    const error = assertFailure(await ctx.post(f.path + "/invoice", input, f.options), 409);
+    assert.equal(error.code, "ORDER_NOT_AVAILABLE");
+    assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
+    assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: f.product.id } })).stockBaseQty, 10);
+    assertSuccess(await ctx.post(`/api/furniture-orders/${held.id}/status`, { status: "cancelled" }, f.options));
+    assert.equal((await f.post("/invoice", input, 201)).status, "delivered");
+  });
+
+  test("invoicing never guesses a counted variant from the catalogue default", async () => {
+    const f = await fixture();
+    await ctx.db.product.update({ where: { id: f.product.id }, data: { packagingMode: "per_pack" } });
+    for (const [name, unitCode, isDefault] of [["Blue", "blue", true], ["Red", "red", false]]) {
+      await ctx.db.productSellingUnit.create({ data: { shopId: f.shopId, productId: f.product.id, name, unitCode, isDefault,
+        unitType: "pack", conversionToBase: 1, defaultPrice: 100, onHandQty: 5 } });
+    }
+    await f.pay(); await f.ready();
+    const error = assertFailure(await ctx.get(f.path + "/invoice-preview", f.options), 409);
+    assert.equal(error.code, "ORDER_INVOICE_VARIANT_REQUIRED");
+    assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
+    assert.equal(await ctx.db.stockLedger.count({ where: { shopId: f.shopId, action: "sale" } }), 0);
+  });
+
+  test("tax review rejects missing lines and cannot silently replace a catalogue HSN", async () => {
+    const f = await fixture();
+    await ctx.db.product.update({ where: { id: f.product.id }, data: { hsn: "9403", gstRate: 18 } });
+    await f.pay(); await f.ready();
+    const input = f.input(await f.preview());
+    assertFailure(await ctx.post(f.path + "/invoice", { ...input, taxes: [{ ...input.taxes[0], lineId: "different-line" }] }, f.options), 409);
+    assertFailure(await ctx.post(f.path + "/invoice", { ...input, taxes: [{ ...input.taxes[0], hsn: "9404" }] }, f.options), 409);
+    assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
+    assert.equal((await f.post("/invoice", input, 201)).status, "delivered");
   });
 
   test("branch-only staff and foreign tenants cannot invoice another order", async () => {

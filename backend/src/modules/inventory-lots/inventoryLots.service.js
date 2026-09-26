@@ -1,7 +1,7 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { moneyShadows, round2 } from "../../utils/money.js";
-import { baseQtyToRateQty } from "../../utils/units.js";
+import { rateUnitFactorsFor } from "../inventory/rate-unit-factor.js";
 import { requireFeatureAccess } from "../feature-gates/featureGate.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { NEAR_EXPIRY_CRITICAL_DAYS, NEAR_EXPIRY_WARNING_DAYS, summariseNearExpiry } from "./nearExpiryAlert.js";
@@ -57,6 +57,9 @@ export async function listInventoryLots(shopId, { locationId, productId, status 
  * Value is costed, not priced. What the shop stands to lose when a batch is
  * written off is what it paid, and `costPerRateUnit` is per rate unit while
  * stock is held in base units — hence the conversion rather than a raw multiply.
+ * The conversion goes through the product's pack when its rate unit is a pack
+ * word ("bottle"): through the unit table alone, one packaged batch threw and
+ * took the whole list down with it.
  */
 export async function nearExpiryAlerts(shopId, { locationId, criticalDays = NEAR_EXPIRY_CRITICAL_DAYS, warningDays = NEAR_EXPIRY_WARNING_DAYS } = {}) {
   const horizon = new Date(Date.now() + Number(warningDays) * 86_400_000);
@@ -76,6 +79,7 @@ export async function nearExpiryAlerts(shopId, { locationId, criticalDays = NEAR
     take: 500,
   });
 
+  const factors = await rateUnitFactorsFor(db, shopId, lots.map((lot) => lot.product));
   const priced = lots.map((lot) => ({
     id: lot.id,
     batchNumber: lot.batchNumber,
@@ -84,7 +88,7 @@ export async function nearExpiryAlerts(shopId, { locationId, criticalDays = NEAR
     mrp: lot.mrp === null || lot.mrp === undefined ? null : Number(lot.mrp),
     product: lot.product,
     location: lot.location,
-    valueAtRisk: round2(baseQtyToRateQty(Number(lot.availableBaseQty), lot.product.rateUnit, lot.product.baseUnit) * Number(lot.costPerRateUnit || 0)),
+    valueAtRisk: round2(Number(lot.availableBaseQty) / factors.get(lot.product.id) * Number(lot.costPerRateUnit || 0)),
   }));
 
   return summariseNearExpiry(priced, { criticalDays: Number(criticalDays), warningDays: Number(warningDays) });

@@ -39,6 +39,13 @@ So on Railway **every deploy migrates before the API starts**. You do not run
 `deploy:migrate` by hand; the manual steps in the launch runbook are for
 non-Docker hosts.
 
+The backend image also installs PostgreSQL 16 client tools from the signed
+[PostgreSQL APT repository](https://www.postgresql.org/download/linux/debian/).
+The image build executes `pg_dump`, `pg_restore`, and `psql` to check that the
+backup worker and scheduled backup service can use them inside the container.
+Keep this client major aligned with the deployed database: `pg_dump` cannot dump
+a server running a newer major version than itself.
+
 Two consequences:
 
 - **A failed migration fails the deploy.** That is correct — the old container

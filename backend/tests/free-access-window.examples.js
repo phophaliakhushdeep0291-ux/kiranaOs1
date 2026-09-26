@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { hasSubscriptionAccess, isSubscriptionActive } from "../src/modules/subscription/subscription.service.js";
-import { FREE_ACCESS_UNTIL, freeAccessPlan, isFreeAccessActive, freeAccessUntilIso } from "../src/modules/subscription/freeAccess.js";
+import {
+  FREE_ACCESS_PRESALE_DAYS,
+  FREE_ACCESS_PRESALE_FROM,
+  FREE_ACCESS_UNTIL,
+  freeAccessPlan,
+  freeAccessPresaleFromIso,
+  freeAccessUntilIso,
+  isFreeAccessActive,
+  isFreeAccessPresale,
+  paidPeriodStart,
+} from "../src/modules/subscription/freeAccess.js";
 import { BUSINESS_TYPE_PLAN_PRICING, PLAN_CODES, getPlanConfigForBusinessType } from "../src/modules/subscription/planConfig.js";
 import { FEATURE_REGISTRY } from "../src/modules/feature-gates/featureRegistry.js";
 import { licenseValidity } from "../src/modules/devices/license.service.js";
@@ -101,10 +111,52 @@ for (const [path, minimum] of Object.entries(gates)) {
   );
 }
 
-// Nobody is charged for something that is currently free.
+// Nobody is charged for something that is currently free — until the last month,
+// when plans go back on sale so that a shop's first bill and its first lockout are
+// not the same midnight, with no way to have paid beforehand.
 const checkout = readFileSync(new URL("../src/modules/payment-provider/paymentProvider.service.js", import.meta.url), "utf8");
-assert.ok(checkout.includes("isFreeAccessActive()"), "checkout must refuse while the product is free");
+assert.ok(
+  checkout.includes("isFreeAccessActive() && !isFreeAccessPresale()"),
+  "checkout must refuse while the product is free, except in the presale month",
+);
 assert.ok(checkout.includes("FREE_ACCESS_ACTIVE"), "the refusal must be identifiable by code");
+
+// The presale month: open 31 days before the window shuts, shut when it shuts.
+const dayBeforePresale = new Date(FREE_ACCESS_PRESALE_FROM.getTime() - 1);
+const presale = new Date(FREE_ACCESS_UNTIL.getTime() - 10 * DAY);
+assert.equal(FREE_ACCESS_PRESALE_DAYS, 31, "31 days puts the sale on 1 December for a 1 January window");
+assert.equal(
+  FREE_ACCESS_UNTIL.getTime() - FREE_ACCESS_PRESALE_FROM.getTime(),
+  FREE_ACCESS_PRESALE_DAYS * DAY,
+  "and the sale date follows the window if that date moves",
+);
+assert.equal(freeAccessPresaleFromIso(), FREE_ACCESS_PRESALE_FROM.toISOString());
+assert.equal(isFreeAccessPresale(dayBeforePresale), false, "a day early is still nothing to pay");
+assert.equal(isFreeAccessPresale(new Date(FREE_ACCESS_PRESALE_FROM)), true, "the sale opens on the boundary itself");
+assert.equal(isFreeAccessPresale(presale), true, "and stays open to the end of the window");
+assert.equal(isFreeAccessPresale(after), false, "after the window it is an ordinary sale, not a presale");
+// Access itself is unchanged by the sale: the product is free for the whole window.
+assert.equal(isFreeAccessActive(presale), true, "buying ahead does not end anyone's free access");
+assert.equal(hasSubscriptionAccess(rows.expired, presale), true, "including a lapsed shop that has not bought");
+
+// What a shop buys in that month starts when the window shuts, so it is not sold
+// days it was getting for nothing.
+const boughtInPresale = paidPeriodStart(presale, presale);
+assert.equal(boughtInPresale.getTime(), FREE_ACCESS_UNTIL.getTime(), "a plan bought early starts when the window shuts");
+const boughtAfter = paidPeriodStart(after, after);
+assert.equal(boughtAfter.getTime(), after.getTime(), "once the window has shut a plan starts when it is bought");
+const renewalBeyondWindow = new Date(FREE_ACCESS_UNTIL.getTime() + 90 * DAY);
+assert.equal(
+  paidPeriodStart(renewalBeyondWindow, presale).getTime(),
+  renewalBeyondWindow.getTime(),
+  "a renewal that already runs past the window keeps its own later start",
+);
+const service2 = readFileSync(new URL("../src/modules/subscription/subscription.service.js", import.meta.url), "utf8");
+assert.ok(
+  /const paidFrom = paidPeriodStart\(startsAt, now\);/.test(service2)
+  && !/currentPeriodStart: startsAt/.test(service2),
+  "activateSubscriptionAfterPayment must date the paid period from paidPeriodStart",
+);
 
 // The renewal-period maths must keep reading the row, or a renewal bought the day the
 // window closes would stack onto a period the promotion only appeared to grant.

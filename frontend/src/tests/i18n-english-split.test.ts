@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { EN_CRITICAL_MODULES, englishCriticalTranslations } from "@/features/core/settings/translations/english-critical";
 import { EN_DEFERRED_MODULES, englishDeferredTranslations } from "@/features/core/settings/translations/english-deferred";
+import { EN_CLOUD_MODULES, englishCloudTranslations } from "@/features/core/settings/translations/english-cloud";
 import { EN_MODULES, englishTranslations } from "@/features/core/settings/translations/english";
 import { SHOP_CREDIT_WORD, SHOP_TENDER_WORD } from "@/features/core/settings/shop-credit";
 
@@ -25,9 +26,13 @@ describe("English critical/deferred split", () => {
     // a plain `import` is not.
     expect(i18nSource).toContain('import type { englishDeferredTranslations } from "./translations/english-deferred";');
     expect(i18nSource).not.toMatch(/^import \{[^}]*englishDeferredTranslations/m);
-    // translations/english.ts composes both halves, so importing it here would be
-    // the same mistake wearing a different name.
+    // translations/english.ts composes all three tiers, so importing it here would
+    // be the same mistake wearing a different name.
     expect(i18nSource).not.toContain('from "./translations/english"');
+    // The cloud tier is held to the same rule, and to a stricter one below: a value
+    // import would put it in the shell AND back into the offline precache.
+    expect(i18nSource).toContain('import type { englishCloudTranslations } from "./translations/english-cloud";');
+    expect(i18nSource).not.toMatch(/^import \{[^}]*englishCloudTranslations/m);
   });
 
   it("covers the boot path with the half that ships in the shell", () => {
@@ -36,15 +41,38 @@ describe("English critical/deferred split", () => {
     expect(Object.keys(EN_CRITICAL_MODULES).sort()).toEqual(["billing", "shell"]);
   });
 
-  it("puts every registered module in exactly one half", () => {
+  it("puts every registered module in exactly one tier", () => {
     const critical = Object.keys(EN_CRITICAL_MODULES);
     const deferred = Object.keys(EN_DEFERRED_MODULES);
-    expect(critical.filter((name) => deferred.includes(name))).toEqual([]);
-    expect([...critical, ...deferred].sort()).toEqual(Object.keys(EN_MODULES).sort());
+    const cloud = Object.keys(EN_CLOUD_MODULES);
+    const tiers = [critical, deferred, cloud];
+    for (const [at, tier] of tiers.entries()) {
+      const others = tiers.filter((_, index) => index !== at).flat();
+      expect(tier.filter((name) => others.includes(name))).toEqual([]);
+    }
+    expect([...critical, ...deferred, ...cloud].sort()).toEqual(Object.keys(EN_MODULES).sort());
+  });
+
+  it("admits a table to the cloud tier only if no offline screen reads its keys", () => {
+    // This is the whole safety argument for not precaching that tier, and it is
+    // the one thing a human gets wrong: the test is not "does this feature need
+    // the cloud" but "can any offline screen read one of these keys". accounting
+    // and assistant both look cloud-only and are NOT — Layout.tsx reads
+    // accounting.* for the nav, BillingAssistantStrip reads assistant.* on the
+    // billing screen — so each would render a raw key on an offline till.
+    const source = (path: string) => readFileSync(path, "utf8");
+    const reach = ["src/components/layout/Layout.tsx", "src/components/layout/MobileAppChrome.tsx", "src/app/routes.tsx"];
+    for (const table of Object.keys(EN_CLOUD_MODULES)) {
+      for (const path of reach) {
+        // routes.tsx may only name the prefix inside a cloudPage() lazy import.
+        const offending = new RegExp(`["'\`]${table}\\.[A-Za-z0-9_.]+["'\`]`);
+        expect(offending.test(source(path)), `${path} reads ${table}.* copy`).toBe(false);
+      }
+    }
   });
 
   it("recombines into the same dictionary the app used to hold in one object", () => {
-    expect(englishTranslations).toEqual({ ...englishCriticalTranslations, ...englishDeferredTranslations });
+    expect(englishTranslations).toEqual({ ...englishCriticalTranslations, ...englishDeferredTranslations, ...englishCloudTranslations });
   });
 
   it("keeps the credit word in the half the till can reach", () => {

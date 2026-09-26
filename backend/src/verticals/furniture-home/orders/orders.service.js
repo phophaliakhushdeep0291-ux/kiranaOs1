@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createAuditLog } from "../../../modules/audit/audit.service.js";
 import { requireDeliveryBill } from "./order-delivery.js";
-import { applyFurnitureReceiptsToBill, postFurnitureReceipt, requireFurnitureAccounting } from "./order-finance.js";
+import { applyFurnitureReceiptsToBill, postFurnitureReceipt, requireFurnitureAccounting, unreconciledFurnitureReceipts } from "./order-finance.js";
 import db from "../../../db.js";
 import { isWriteConflict, serializableTransaction } from "../../../lib/transactions.js";
 import { AppError } from "../../../middleware/error.js";
@@ -20,8 +20,9 @@ import { getLocationQuantitiesByProduct, resolveOperationalLocation } from "../.
  * say so.
  *
  * An order is therefore NOT a bill. It settles nothing and carries no tax
- * treatment; when the wardrobe finally goes out the shop rings an ordinary bill
- * and links it here by `billId`. What this holds is the promise — what was
+ * treatment; when the wardrobe finally goes out, invoice creation, advance
+ * application and delivery can commit together through order-invoice.js.
+ * A matching existing sale can also be linked by `billId`. This holds what was
  * agreed, what has been paid against it, and when it was said to arrive.
  */
 
@@ -261,7 +262,25 @@ async function withOrderTransaction(operation) {
   }
 }
 
-async function assertOrderStock(client, shopId, items, status, excludeOrderId = null, locationId = null) {
+async function withPaymentTransaction(shopId, orderId, paymentId, operation) {
+  try {
+    return await withOrderTransaction(operation);
+  } catch (error) {
+    // PostgreSQL can report a unique-key collision instead of a serialization
+    // conflict when another request commits this receipt first. The failed
+    // transaction is already rolled back; only replay a committed identity on
+    // this tenant's order, and re-run the normal content checks in a fresh one.
+    if (error?.code !== "P2002") throw error;
+    const committed = await db.furnitureOrderPayment.findFirst({
+      where: { id: paymentId, orderId, order: { shopId, deletedAt: null } },
+      select: { id: true },
+    });
+    if (!committed) throw error;
+    return withOrderTransaction(operation);
+  }
+}
+
+export async function assertOrderStock(client, shopId, items, status, excludeOrderId = null, locationId = null) {
   const ids = [...new Set(items.map((item) => item.productId).filter(Boolean))];
   if (!ids.length) return;
   const products = await client.product.findMany({
@@ -280,7 +299,7 @@ async function assertOrderStock(client, shopId, items, status, excludeOrderId = 
   for (const product of products) {
     const available = Math.max(0, Number(quantities.get(product.id) ?? 0) - (held.get(product.id) ?? 0));
     if ((wanted.get(product.id) ?? 0) > available) {
-      throw new AppError(`"${product.name}" has only ${round2(available)} available for this order. Check stock or mark the line as made to order.`, 409, "ORDER_NOT_AVAILABLE");
+      throw new AppError(`"${product.name}" has only ${round2(available)} available for this order. Check its stock and other reserved orders.`, 409, "ORDER_NOT_AVAILABLE");
     }
   }
 }
@@ -331,7 +350,21 @@ export async function getOrder(shopId, id) {
     include: { items: true, payments: { orderBy: { paidOn: "asc" } } },
   });
   if (!order) throw new AppError("Order not found", 404);
-  return (await ordersWithCollections([order]))[0];
+  const serialized = (await ordersWithCollections([order]))[0];
+  // Which receipts the accounts have no history for, named rather than counted.
+  // The reconcile workflow makes the owner restate each one's amount and tender,
+  // and it cannot do that against a flag — it needs the rows to put on screen.
+  // Only on the single-order read: the list screens show many orders and none of
+  // them asks the owner to confirm anything.
+  const pending = await unreconciledFurnitureReceipts(db, order);
+  return {
+    ...serialized,
+    needsHistoryReconciliation: pending.length > 0,
+    unreconciledReceipts: pending.map((payment) => ({
+      id: payment.id, amount: round2(Number(payment.amount)), mode: payment.mode,
+      paidOn: payment.paidOn, reference: payment.reference ?? null,
+    })),
+  };
 }
 
 async function collectionContext(tx, shopId, id) {
@@ -550,7 +583,7 @@ export async function addPayment(shopId, id, data, context = {}) {
   if (!Number.isFinite(amount) || toPaise(amount) <= 0 || !["cash", "upi", "bank", "card", "other"].includes(mode)) throw new AppError("Enter a valid payment amount and method", 400);
   const paidOn = data.paidOn ? dayBounds(data.paidOn, "paidOn").start : new Date();
   if (formatDateInTimeZone(paidOn) > todayKey()) throw new AppError("A received payment cannot have a future date", 400);
-  return withOrderTransaction(async (tx) => {
+  return withPaymentTransaction(shopId, id, paymentId, async (tx) => {
     const order = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { payments: true, items: true } });
     if (!order) throw new AppError("Order not found", 404);
     const existing = order.payments.find((p) => p.id === paymentId);
@@ -584,7 +617,7 @@ export async function removePayment(shopId, id, paymentId) {
 // receipt, a reason, a stable request identity and a current balance snapshot.
 export async function adjustPayment(shopId, id, paymentId, data, context = {}) {
   const adjustmentId = `foa_${createHash("sha256").update(`${shopId}:${id}:${data.clientRequestId}`).digest("hex")}`;
-  return withOrderTransaction(async (tx) => {
+  return withPaymentTransaction(shopId, id, adjustmentId, async (tx) => {
     const order = await tx.furnitureOrder.findFirst({ where: { id, shopId, deletedAt: null }, include: { items: true, payments: true } });
     if (!order) throw new AppError("Order not found", 404);
     const original = order.payments.find((payment) => payment.id === paymentId && payment.amount > 0);

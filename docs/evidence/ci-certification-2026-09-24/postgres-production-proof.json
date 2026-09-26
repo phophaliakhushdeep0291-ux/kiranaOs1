@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "type": "kiranaos_postgres_production_proof",
+  "status": "passed",
+  "startedAt": "2026-09-24T09:09:18.324Z",
+  "completedAt": "2026-09-24T09:14:19.932Z",
+  "durationMs": 301608,
+  "repository": {
+    "commit": "ea71a1db92e0115b170af959861b08bf0703f39f",
+    "branch": null,
+    "dirty": true
+  },
+  "runtime": {
+    "node": "v22.23.2",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "database": {
+    "protocol": "postgresql",
+    "host": "127.0.0.1",
+    "port": "55436",
+    "database": "kirana_ci_fix_test",
+    "schema": "public",
+    "maskedUrl": "postgresql://postgres:***@127.0.0.1:55436/kirana_ci_fix_test"
+  },
+  "migrations": {
+    "directoryCount": 141,
+    "first": "000001_init",
+    "last": "000140_stock_ledger_money_defaults"
+  },
+  "staticChecksAlreadyRan": false,
+  "results": [
+    {
+      "id": "prisma-client",
+      "label": "Generate Prisma client from PostgreSQL schema",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 2791
+    },
+    {
+      "id": "schema-validation",
+      "label": "Validate PostgreSQL Prisma schema",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 422
+    },
+    {
+      "id": "database-reset",
+      "label": "Reset isolated PostgreSQL test database",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4302
+    },
+    {
+      "id": "integration-concurrency",
+      "label": "Run DB-backed integration and concurrency tests",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 288399
+    },
+    {
+      "id": "payment-provider-connections",
+      "label": "Prove tenant-owned payment credentials and audit rollback on PostgreSQL",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1714
+    },
+    {
+      "id": "money-paise-reconciliation",
+      "label": "Reconcile rupee Float columns with paise shadow columns",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 434
+    },
+    {
+      "id": "api-contract",
+      "label": "Check API contract",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 138
+    },
+    {
+      "id": "production-static",
+      "label": "Run production static checks",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1918
+    }
+  ],
+  "failure": null,
+  "limitations": [
+    "This proves an isolated PostgreSQL runtime; it is not evidence of a deployed production environment.",
+    "Redis worker, cloud object storage, disaster recovery, Docker image, and live payment-provider traffic require separate proofs."
+  ]
+}

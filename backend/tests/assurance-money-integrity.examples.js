@@ -210,6 +210,37 @@ assert.match(contextSource, /startOfZonedDay\(new Date\(date\), env\.DAILY_CLOSI
 
 const reportsSource = fs.readFileSync("src/modules/reports/reports.service.js", "utf8");
 assert.match(reportsSource, /payment\.status === "confirmed"/, "financial reports must count only confirmed tenders");
-assert.match(reportsSource, /subtractMoney\(addMoney\(cashReceived, cashPurchaseRefunds\), supplierCashPaid, cashExpensesPaid\)/, "daily closing must include recorded drawer inflows and outflows");
+// The drawer formula, term by term rather than as one literal string.
+//
+// Pinning the whole expression said only "this line did not change", which is
+// weaker than it looks: it cannot say WHICH term went missing, and it holds just
+// as firmly when a term keeps its name and changes its meaning. That is not
+// hypothetical — `cashReceived` gained rental and furniture tenders without this
+// assertion moving a character, because the change was inside the term rather
+// than in the line quoted here.
+//
+// So both levels are pinned. The outer expression must still add its inflows
+// before subtracting its outflows, and `cashReceived` must still be built from
+// every category of money that reaches the till. Dropping any one of them fails
+// with the name of the money that would have gone missing from the day's cash.
+const expectedCashExpression = reportsSource.match(/const expectedCash = subtractMoney\([\s\S]*?\);/)?.[0] ?? "";
+assert.ok(expectedCashExpression, "daily closing must still compute expectedCash with subtractMoney");
+assert.match(expectedCashExpression, /subtractMoney\(\s*addMoney\(/, "expected cash must add its inflows before subtracting its outflows");
+for (const term of ["cashReceived", "cashPurchaseRefunds", "supplierCashPaid", "cashExpensesPaid"]) {
+  assert.match(expectedCashExpression, new RegExp(`\\b${term}\\b`), `daily closing's expected cash must still carry ${term}`);
+}
+
+const cashReceivedExpression = reportsSource.match(/const cashReceived = addMoney\([^;]*\);/)?.[0] ?? "";
+assert.ok(cashReceivedExpression, "daily closing must still compose cashReceived with addMoney");
+for (const term of [
+  "billCash",
+  "oldUdharCash",
+  // Rentals and furniture orders take money without ever raising a Bill, so they
+  // reach the till by no other route than this line.
+  "rentalTenders\\.cash",
+  "furnitureTenders\\.cash",
+]) {
+  assert.match(cashReceivedExpression, new RegExp(term), `cash received must still carry ${term.replace("\\", "")}`);
+}
 
 console.log("Financial assurance money integrity checks passed.");
