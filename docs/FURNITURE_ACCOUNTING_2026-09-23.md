@@ -1,8 +1,10 @@
 # Furniture accounting verification — 23 September 2026
 
-26 September status: invoice and legacy-reconciliation implementations are now
-merged. See [the branch audit](BRANCH_AUDIT_2026-09-26.md) for current verification
-and remaining release conditions. The report below describes the earlier snapshot.
+Update, 27 September: the atomic furniture invoice and legacy repair gaps below
+have been implemented and merged. See [the branch audit](BRANCH_AUDIT_2026-09-26.md)
+and [the legacy reconciliation follow-up](FURNITURE_LEGACY_RECONCILIATION_2026-09-27.md)
+for local verification and remaining release and production review requirements.
+The rest of this document records the 23 September candidate.
 
 Release decision: **NO-GO**. This is local verification of the working candidate, not deployment approval.
 

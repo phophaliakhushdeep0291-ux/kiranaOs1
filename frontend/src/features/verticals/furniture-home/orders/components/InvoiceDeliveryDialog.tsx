@@ -87,7 +87,7 @@ function InvoiceReview({ preview, onBusy, onSaved }: { preview: FurnitureInvoice
       </select>
       {preview.customers.length === 0 && <p className="text-sm text-amber-800">{t("furniture.invoice.noCustomer")}</p>}
     </>}
-    <Label htmlFor="invoice-reason">{t("furniture.invoice.reason")}</Label>
+    <Label htmlFor="invoice-reason">{t(preview.legacyDelivery ? "furniture.history.reason" : "furniture.invoice.reason")}</Label>
     <Input id="invoice-reason" className="h-11" value={reason} disabled={save.isPending} maxLength={500} onChange={(event) => setReason(event.target.value)} />
     <Label htmlFor="invoice-pin">{t("rental.refund.pin")}</Label>
     <Input id="invoice-pin" className="h-11" type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={pin} disabled={save.isPending} onChange={(event) => setPin(event.target.value)} />

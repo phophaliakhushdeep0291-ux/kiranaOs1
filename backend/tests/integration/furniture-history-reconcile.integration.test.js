@@ -247,4 +247,99 @@ else {
     assert.equal(saleDay.totalSalesPaise, 12000);
   });
 
+  const receiptReview = (f) => ({
+    receipts: [{ paymentId: f.payment.id, amount: f.amount, mode: "cash" }], reason: "Original receipt book reviewed",
+  });
+
+  async function reviewedDelivery() {
+    const f = await legacyOrder();
+    await ctx.db.furnitureOrder.update({ where: { id: f.order.id }, data: {
+      status: "installed", deliveredAt: new Date("2026-06-03T08:00:00Z"), installedAt: new Date("2026-06-04T08:00:00Z"),
+    } });
+    assertSuccess(await ctx.post(`${f.path}/reconcile-history`, receiptReview(f), f.options));
+    const review = assertSuccess(await ctx.get(`${f.path}/invoice-preview`, f.options));
+    const input = { previewToken: review.previewToken, taxMode: "none", reason: "Invoice and recorded stock checked",
+      legacyStockConfirmed: true, businessDate: "2026-06-03", taxes: review.lines.map(({ lineId, gstRate }) => ({ lineId, gstRate })) };
+    return { ...f, input };
+  }
+
+  test("simultaneous receipt repairs create one journal and one audit", async () => {
+    const f = await legacyOrder();
+    const results = await Promise.all([1, 2].map(() => ctx.post(`${f.path}/reconcile-history`, receiptReview(f), f.options)));
+    results.forEach((result) => assertSuccess(result));
+    assert.equal(await ctx.db.financialLedger.count({ where: { shopId: f.shopId } }), 2);
+    assert.equal(await ctx.db.journalEntry.count({ where: { shopId: f.shopId, sourceType: "furniture_order" } }), 1);
+    assert.equal(await ctx.db.auditLog.count({ where: { shopId: f.shopId, action: "FURNITURE_ORDER_HISTORY_RECONCILED" } }), 1);
+  });
+
+  test("an orphaned journal is refused instead of posting the receipt twice", async () => {
+    const f = await legacyOrder();
+    assertSuccess(await ctx.post(`${f.path}/reconcile-history`, receiptReview(f), f.options));
+    await ctx.db.financialLedger.deleteMany({ where: { shopId: f.shopId } });
+    assert.equal(assertFailure(await ctx.post(`${f.path}/reconcile-history`, receiptReview(f), f.options), 409).code, "ORDER_HISTORY_PARTIAL");
+    assert.equal(await ctx.db.financialLedger.count({ where: { shopId: f.shopId } }), 0);
+    assert.equal(await ctx.db.journalEntry.count({ where: { shopId: f.shopId, sourceType: "furniture_order" } }), 1);
+  });
+
+  test("receipt repair is scoped to the order's tenant and branch", async () => {
+    const f = await legacyOrder();
+    const branch = await ctx.db.storeLocation.create({ data: { shopId: f.shopId, code: "SECOND", name: "Second branch" } });
+    assertFailure(await ctx.post(`${f.path}/reconcile-history`, receiptReview(f), { ...f.options, headers: { "x-location-id": branch.id } }), 403);
+    const foreign = await legacyOrder();
+    assertFailure(await ctx.post(`${f.path}/reconcile-history`, receiptReview(f), foreign.options), 404);
+    assert.equal(await ctx.db.financialLedger.count({ where: { shopId: f.shopId } }), 0);
+  });
+
+  test("receipt audit failure rolls back all accounting and a retry recovers", async (t) => {
+    if (!process.env.DATABASE_URL?.startsWith("file:")) return t.skip("SQLite fault injection");
+    const f = await legacyOrder();
+    await ctx.db.$executeRawUnsafe("CREATE TRIGGER qa_history_audit BEFORE INSERT ON AuditLog WHEN NEW.action = 'FURNITURE_ORDER_HISTORY_RECONCILED' BEGIN SELECT RAISE(ABORT, 'forced receipt audit failure'); END");
+    try { assertFailure(await ctx.post(`${f.path}/reconcile-history`, receiptReview(f), f.options), 503); }
+    finally { await ctx.db.$executeRawUnsafe("DROP TRIGGER qa_history_audit"); }
+    assert.equal(await ctx.db.financialLedger.count({ where: { shopId: f.shopId } }), 0);
+    assert.equal(await ctx.db.journalEntry.count({ where: { shopId: f.shopId, sourceType: "furniture_order" } }), 0);
+    assert.equal(assertSuccess(await ctx.get(f.path, f.options)).needsHistoryReconciliation, true);
+    assertSuccess(await ctx.post(`${f.path}/reconcile-history`, receiptReview(f), f.options));
+  });
+
+  test("invalid or closed historical sale dates leave the invoice and stock untouched", async () => {
+    const f = await reviewedDelivery();
+    for (const businessDate of ["2026-02-30", "9999-01-01", "2026-05-31"]) {
+      assertFailure(await ctx.post(`${f.path}/invoice`, { ...f.input, businessDate }, f.options), 409);
+    }
+    await ctx.db.accountingPeriod.create({ data: { shopId: f.shopId, name: "Closed delivery day", startsAt: new Date("2026-06-02T18:30:00Z"), endsAt: new Date("2026-06-03T18:29:59Z"), status: "closed" } });
+    assert.equal(assertFailure(await ctx.post(`${f.path}/invoice`, f.input, f.options), 409).code, "ACCOUNTING_PERIOD_CLOSED");
+    assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
+    assert.equal(await ctx.db.stockLedger.count({ where: { shopId: f.shopId, action: "sale" } }), 0);
+    assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: f.product.id } })).stockBaseQty, 10);
+    assert.equal(await ctx.db.financialLedger.count({ where: { shopId: f.shopId } }), 2);
+  });
+
+  test("historical invoice audit failure preserves the installed order and its stock", async (t) => {
+    if (!process.env.DATABASE_URL?.startsWith("file:")) return t.skip("SQLite fault injection");
+    const f = await reviewedDelivery();
+    const before = await ctx.db.furnitureOrder.findUniqueOrThrow({ where: { id: f.order.id } });
+    await ctx.db.$executeRawUnsafe("CREATE TRIGGER qa_legacy_invoice_audit BEFORE INSERT ON AuditLog WHEN NEW.action = 'FURNITURE_ORDER_INVOICED' BEGIN SELECT RAISE(ABORT, 'forced legacy invoice audit failure'); END");
+    try { assertFailure(await ctx.post(`${f.path}/invoice`, f.input, f.options), 503); }
+    finally { await ctx.db.$executeRawUnsafe("DROP TRIGGER qa_legacy_invoice_audit"); }
+    assert.deepEqual(await ctx.db.furnitureOrder.findUniqueOrThrow({ where: { id: f.order.id } }), before);
+    assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
+    assert.equal(await ctx.db.financialLedger.count({ where: { shopId: f.shopId } }), 2);
+    assert.equal(await ctx.db.stockLedger.count({ where: { shopId: f.shopId, action: "sale" } }), 0);
+    assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: f.product.id } })).stockBaseQty, 10);
+    const results = await Promise.all([1, 2].map(() => ctx.post(`${f.path}/invoice`, f.input, f.options)));
+    const invoices = results.map((result) => assertSuccess(result, 201));
+    assert.equal(invoices[0].billId, invoices[1].billId);
+    assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 1);
+    assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: f.product.id } })).stockBaseQty, 9);
+    assertFailure(await ctx.post(`${f.path}/invoice`, { ...f.input, businessDate: "2026-06-04" }, f.options), 409);
+  });
+
+  test("a legacy order with an existing bill reference cannot create a duplicate", async () => {
+    const f = await reviewedDelivery();
+    await ctx.db.furnitureOrder.update({ where: { id: f.order.id }, data: { billNumber: "EXISTING-BILL" } });
+    assert.equal(assertFailure(await ctx.post(`${f.path}/invoice`, f.input, f.options), 409).code, "ORDER_HISTORY_INVOICE_REVIEW");
+    assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
+  });
+
 }

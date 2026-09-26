@@ -38,7 +38,7 @@ export function HistoryReconciliationDialog({ order, onClose, onSaved }: {
         </li>)}</ul>
         {["delivered", "installed"].includes(order.status) && <p role="alert" className="text-sm">{t("furniture.history.delivered")}</p>}
         <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={checked} disabled={save.isPending} onChange={(event) => setChecked(event.target.checked)} />{t("furniture.history.checked")}</label>
-        <Label htmlFor="history-reason">{t("rental.refund.reason")}</Label>
+        <Label htmlFor="history-reason">{t("furniture.history.reason")}</Label>
         <Input id="history-reason" maxLength={500} value={reason} disabled={save.isPending} onChange={(event) => setReason(event.target.value)} />
         <Label htmlFor="history-pin">{t("rental.refund.pin")}</Label>
         <Input id="history-pin" type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={pin} disabled={save.isPending} onChange={(event) => setPin(event.target.value)} />

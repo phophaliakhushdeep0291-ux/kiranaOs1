@@ -16,6 +16,7 @@ export const shopTypesHi: Record<keyof typeof shopTypesEn, string> = {
   "furniture.history.stockConfirmation": "मैंने जाँचा है कि इस बिक्री का बिल नहीं बना है और डिलीवर किया गया यह माल अभी भी दर्ज स्टॉक में शामिल है।",
 
   "furniture.history.title": "पुरानी रसीदों की समीक्षा",
+  "furniture.history.reason": "समीक्षा का विवरण",
   "furniture.history.help": "हर रसीद को अपने रिकॉर्ड से मिलाएँ। इसका लेखा मूल भुगतान की तारीख पर दर्ज होगा; दोबारा पैसे नहीं लिए जाएँगे।",
   "furniture.history.confirm": "रसीदों का इतिहास दर्ज करें",
   "furniture.history.checked": "मैंने मूल रसीदों से इन रकमों और भुगतान के तरीकों का मिलान किया है।",
