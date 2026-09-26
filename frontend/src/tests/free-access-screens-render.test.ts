@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Router } from "wouter";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { shellEn } from "@/features/core/settings/translations/shell";
 import type { SubscriptionSnapshot } from "@/features/core/subscription/access";
 import { getPlanForBusinessType } from "@/features/core/subscription/plans";
@@ -26,6 +26,7 @@ vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 import PlansPage from "@/features/core/subscription/pages/PlansPage";
 import SubscriptionPage from "@/features/core/subscription/pages/SubscriptionPage";
+import { SubscriptionStatusBanner } from "@/features/core/subscription/components/SubscriptionStatusBanner";
 
 const WINDOW_END = "2026-12-31T18:30:00.000Z";
 
@@ -59,6 +60,10 @@ function render(page: () => ReturnType<typeof createElement> | null, snapshot: S
   return renderToStaticMarkup(createElement(Router, { ssrPath: "/plans" }, createElement(page)));
 }
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("screens during the launch promotion", () => {
   it("the plans page says the product is free and offers nothing to buy", () => {
     const html = render(PlansPage, snapshotFor(WINDOW_END));
@@ -82,6 +87,44 @@ describe("screens during the launch promotion", () => {
     expect(html).not.toContain('text-[#66758d]">/month');
     // The comparison grid is still shown, as the prices that apply afterwards, but cannot start a checkout.
     expect(html.match(/<button[^>]*disabled=""[^>]*>/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+  });
+
+  it("sells plans again in the last month, dated from the day the window shuts", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-12-10T10:00:00.000Z"));
+
+    const plans = render(PlansPage, snapshotFor(WINDOW_END));
+    const subscription = render(SubscriptionPage, snapshotFor(WINDOW_END));
+
+    // Still free, and it says so — but now there is something to buy for January.
+    expect(plans).toContain("Free until 1 January 2027 — plans start then");
+    expect(plans).toContain("none of your free days come out of it");
+    expect(plans).toContain("Upgrade to ");
+    // The subscription page has no "upgrade" button to show — the free plan is already
+    // the top one — so its comparison grid is what picks January's plan: live again,
+    // and each card says when what it sells begins.
+    expect(subscription).toContain("Starts on 1 January 2027");
+    expect(subscription).not.toMatch(/<button[^>]*disabled=""/);
+    expect(subscription).toContain("Choose a plan now and it starts on 1 January 2027");
+  });
+
+  it("warns that free access is ending while there is still time to act", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-12-10T10:00:00.000Z"));
+
+    const banner = render(SubscriptionStatusBanner, snapshotFor(WINDOW_END));
+
+    expect(banner).toContain("Free access ends on 1 January 2027");
+    expect(banner).toContain("See plans");
+    expect(banner).toContain('href="/plans"');
+  });
+
+  it("stays quiet earlier in the window, when there is nothing to do about it", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-25T10:00:00.000Z"));
+
+    expect(render(SubscriptionStatusBanner, snapshotFor(WINDOW_END))).toBe("");
+    expect(render(PlansPage, snapshotFor(WINDOW_END))).not.toContain("Upgrade to ");
   });
 
   it("both pages sell plans as before once the window has shut", () => {

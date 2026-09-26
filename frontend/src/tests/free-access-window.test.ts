@@ -38,7 +38,12 @@ vi.mock("@/lib/offline/context", () => ({
 vi.mock("@/lib/offline/instant-cache", () => ({ emitLocalDataChanged: vi.fn() }));
 
 import { decideFeature, getCurrentSubscriptionSnapshot } from "@/features/core/subscription/access";
-import { formatFreeAccessDate, freeAccessUntil } from "@/features/core/subscription/free-access";
+import {
+  formatFreeAccessDate,
+  freeAccessPresaleFrom,
+  freeAccessUntil,
+  isFreeAccessPresale,
+} from "@/features/core/subscription/free-access";
 import { FEATURE_LABELS, PLAN_ORDER, getPlanForBusinessType, type FeatureName } from "@/features/core/subscription/plans";
 import { BUSINESS_TYPE_IDS } from "@/features/core/settings/business-type-store";
 
@@ -113,6 +118,36 @@ describe("launch promotion window", () => {
     it("can be moved at build time", () => {
       vi.stubEnv("VITE_FREE_ACCESS_UNTIL", "2020-01-01T00:00:00+05:30");
       expect(freeAccessUntil(null)).toBeNull();
+    });
+  });
+
+  describe("the last month, when plans go back on sale", () => {
+    // Without it a shop would meet its first bill and its first lockout at the same
+    // midnight, with no way to have paid beforehand.
+    const PRESALE_FROM = "2026-11-30T18:30:00.000Z"; // 1 December 2026, midnight IST
+
+    it("opens 31 days before the window shuts, and not a moment earlier", () => {
+      expect(freeAccessPresaleFrom(WINDOW_END)).toBe(PRESALE_FROM);
+      expect(isFreeAccessPresale(WINDOW_END, Date.parse(PRESALE_FROM) - 1)).toBe(false);
+      expect(isFreeAccessPresale(WINDOW_END, Date.parse(PRESALE_FROM))).toBe(true);
+      expect(isFreeAccessPresale(WINDOW_END, Date.parse("2026-12-31T17:30:00.000Z"))).toBe(true);
+    });
+
+    it("is over once the window shuts, and never runs without one", () => {
+      expect(isFreeAccessPresale(WINDOW_END, Date.parse(WINDOW_END))).toBe(false);
+      expect(isFreeAccessPresale(WINDOW_END, Date.parse(AFTER))).toBe(false);
+      expect(isFreeAccessPresale(null)).toBe(false);
+    });
+
+    it("changes nothing about access: the product is still free until the window shuts", async () => {
+      mockState.subscriptionRows = [lapsedStarter];
+      vi.setSystemTime(new Date("2026-12-10T10:00:00.000Z"));
+
+      const current = await getCurrentSubscriptionSnapshot();
+
+      expect(current.freeAccessUntil).toBe(WINDOW_END);
+      expect(current.isExpired).toBe(false);
+      expect(decideFeature(current, "whatsapp_reminders").allowed).toBe(true);
     });
   });
 

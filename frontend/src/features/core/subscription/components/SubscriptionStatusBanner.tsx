@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { AlertTriangle, ChevronRight, Clock, CloudOff, CreditCard, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
+import { formatFreeAccessDate, isFreeAccessPresale } from "@/features/core/subscription/free-access";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -15,9 +16,29 @@ function trialDaysLeft(trialEndsAt: string | null): number | null {
 }
 
 export function SubscriptionStatusBanner() {
-  const { t } = useAppLanguage();
+  const { language, t } = useAppLanguage();
   const { snapshot, loading } = useSubscriptionSnapshot();
   if (loading || !snapshot) return null;
+
+  // The product is free and nothing is wrong, so no banner — until the last month,
+  // when the shop needs to know this ends and that it can already act on it. The
+  // alternative is silence until the morning everything locks.
+  if (snapshot.freeAccessUntil && isFreeAccessPresale(snapshot.freeAccessUntil)) {
+    const date = formatFreeAccessDate(snapshot.freeAccessUntil, language);
+    return (
+      <div className="border-b bg-emerald-50 px-3 py-1.5 text-emerald-900 sm:px-4">
+        <div className="flex min-h-11 items-center gap-2 text-xs sm:text-sm">
+          <Clock size={16} className="shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1 leading-snug sm:hidden">{t("chrome.freeAccess.endingShort", { date })}</span>
+          <span className="hidden min-w-0 flex-1 sm:inline">{t("chrome.freeAccess.ending", { date })}</span>
+          <Link href="/plans" className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 font-black text-current hover:bg-black/5">
+            {t("chrome.freeAccess.seePlans")}
+            <ChevronRight size={14} aria-hidden="true" />
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const daysLeft = snapshot.isTrial ? trialDaysLeft(snapshot.trialEndsAt) : null;
   if (snapshot.foundingCustomer && snapshot.foundingEndsAt && daysLeft !== null) {

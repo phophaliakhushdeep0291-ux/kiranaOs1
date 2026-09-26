@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { getPlanForBusinessType, offeredPlanCodes, type BillingCycle, type PlanCode } from "@/features/core/subscription/plans";
 import { BUSINESS_TYPE_DEFS, useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
-import { formatFreeAccessDate } from "@/features/core/subscription/free-access";
+import { formatFreeAccessDate, isFreeAccessPresale } from "@/features/core/subscription/free-access";
 import { PlanBadge, UpgradeModal } from "@/features/core/subscription/components";
 import { useState } from "react";
 import { PageHeader, PageShell } from "@/components/shared";
@@ -26,6 +26,10 @@ export default function PlansPage() {
   // While the launch promotion runs every plan is already unlocked and checkout is
   // refused, so the prices below are what applies afterwards, not an offer to buy.
   const freeDate = snapshot?.freeAccessUntil ? formatFreeAccessDate(snapshot.freeAccessUntil, language) : null;
+  // The promotion's last month: plans are on sale again, and what is bought starts
+  // the day the window shuts, so nobody meets their first bill and their first
+  // lockout at the same midnight.
+  const presale = isFreeAccessPresale(snapshot?.freeAccessUntil ?? null);
 
   return (
     <PageShell className="space-y-5">
@@ -42,8 +46,8 @@ export default function PlansPage() {
           <CardContent className="flex gap-3 p-5 text-emerald-950">
             <Gift className="h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
             <div>
-              <p className="font-bold">{t("plans.free.title", { date: freeDate })}</p>
-              <p className="mt-1 text-sm">{t("plans.free.body")}</p>
+              <p className="font-bold">{presale ? t("plans.free.presaleTitle", { date: freeDate }) : t("plans.free.title", { date: freeDate })}</p>
+              <p className="mt-1 text-sm">{presale ? t("plans.free.presaleBody", { date: freeDate }) : t("plans.free.body")}</p>
             </div>
           </CardContent>
         </Card>
@@ -105,7 +109,7 @@ export default function PlansPage() {
                 {plan.bullets.length > 4 && (
                   <p className="text-xs text-muted-foreground">+{plan.bullets.length - 4} more included</p>
                 )}
-                {freeDate && !isCurrent
+                {freeDate && !presale && !isCurrent
                   ? <Button className="w-full" variant="outline" disabled>{t("plans.free.title", { date: freeDate })}</Button>
                   : <Button className="w-full" variant={isCurrent ? "outline" : "default"} onClick={() => isCurrent ? navigate("/subscription") : setTargetPlan(plan.code)}>{isCurrent ? "Manage current plan" : `Upgrade to ${plan.name}`}</Button>}
               </CardContent>

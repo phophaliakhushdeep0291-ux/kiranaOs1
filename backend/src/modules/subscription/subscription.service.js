@@ -20,6 +20,7 @@ import {
   freeAccessPlan,
   freeAccessUntilIso,
   isFreeAccessActive,
+  paidPeriodStart,
 } from "./freeAccess.js";
 import { businessTypeFromSettings, parseShopSettings } from "../shops/businessProfiles.js";
 import { isPlanCatalogueVerified, markPlanCatalogueVerified } from "./plan-catalogue-memo.js";
@@ -298,7 +299,9 @@ export async function activateSubscriptionAfterPayment({
   const startsAt = currentActive && samePlan && current.currentPeriodEnd && current.currentPeriodEnd > now
     ? new Date(current.currentPeriodEnd)
     : now;
-  const endsAt = addPeriod(startsAt, billingCycle);
+  // A plan bought in the promotion's last month starts when the window shuts.
+  const paidFrom = paidPeriodStart(startsAt, now);
+  const endsAt = addPeriod(paidFrom, billingCycle);
   const action = currentActive && samePlan ? "renewed" : current && current.planCode !== planCode ? "plan_changed" : "activated";
 
   const subscription = await tx.subscription.upsert({
@@ -308,7 +311,7 @@ export async function activateSubscriptionAfterPayment({
       status: "active",
       provider,
       providerSubscriptionId: providerPaymentId,
-      currentPeriodStart: startsAt,
+      currentPeriodStart: paidFrom,
       currentPeriodEnd: endsAt,
       trialEndsAt: null,
       graceEndsAt: addDays(endsAt, DEFAULT_GRACE_DAYS),
@@ -324,7 +327,7 @@ export async function activateSubscriptionAfterPayment({
       status: "active",
       provider,
       providerSubscriptionId: providerPaymentId,
-      currentPeriodStart: startsAt,
+      currentPeriodStart: paidFrom,
       currentPeriodEnd: endsAt,
       graceEndsAt: addDays(endsAt, DEFAULT_GRACE_DAYS),
       lockedPriceMonthlyPaise: paidPlan.priceMonthlyPaise,
@@ -350,7 +353,7 @@ export async function activateSubscriptionAfterPayment({
     req,
     before: current,
     after: subscription,
-    metadata: { provider, providerPaymentId, transactionId, planCode, billingCycle, currentPeriodStart: startsAt, currentPeriodEnd: endsAt },
+    metadata: { provider, providerPaymentId, transactionId, planCode, billingCycle, currentPeriodStart: paidFrom, currentPeriodEnd: endsAt },
   });
 
   return { subscription: normalizeSubscriptionDates(subscription), action };

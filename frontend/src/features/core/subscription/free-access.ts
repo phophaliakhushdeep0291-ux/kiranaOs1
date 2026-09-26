@@ -74,6 +74,27 @@ export function freeAccessUntil(
   return Number.isFinite(endMs) && now < endMs ? new Date(endMs).toISOString() : null;
 }
 
+/**
+ * Days before the window shuts that plans go back on sale, as on the server.
+ *
+ * Until then checkout is refused, because the shop already has everything. In this
+ * last month it can buy ahead, and what it buys starts when the window shuts — so
+ * its first bill and its first lockout are not the same midnight.
+ */
+export const FREE_ACCESS_PRESALE_DAYS = 31;
+
+/** When buying ahead opens, for a window that shuts at `until`. */
+export function freeAccessPresaleFrom(until: string): string {
+  return new Date(Date.parse(until) - FREE_ACCESS_PRESALE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/** Inside the window, and close enough to its end that plans are on sale again. */
+export function isFreeAccessPresale(until: string | null, now: number = Date.now()): boolean {
+  if (!until) return false;
+  const end = Date.parse(until);
+  return Number.isFinite(end) && now >= Date.parse(freeAccessPresaleFrom(until)) && now < end;
+}
+
 /** "1 January 2027". The window shuts at midnight IST, so the day is named in IST. */
 export function formatFreeAccessDate(iso: string, language: "en" | "hi" = "en"): string {
   return new Date(iso).toLocaleDateString(language === "hi" ? "hi-IN" : "en-IN", {
