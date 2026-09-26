@@ -1286,6 +1286,8 @@ export interface ProductUnitSummary {
 export type PartCrossReferenceKind = "oem" | "alternative" | "supersedes" | "superseded_by";
 
 export interface PartFitment {
+  /** Current catalogue availability, when read from the server. */
+  inCatalogue?: boolean;
   id: string;
   productId: string;
   productName: string;
@@ -1338,6 +1340,10 @@ export interface FittingPart {
 }
 
 export interface PartCrossReference {
+  inCatalogue?: boolean;
+  stockKnown?: boolean;
+  alternateInCatalogue?: boolean | null;
+  alternateStockQty?: number | null;
   id: string;
   productId: string;
   productName: string;
@@ -1383,6 +1389,8 @@ export interface PartNumberLookup {
 }
 
 export interface FitmentSummary {
+  /** Inventory access at the selected store, confirmed by the server. */
+  canManage?: boolean;
   fitments: number;
   references: number;
   mappedParts: number;

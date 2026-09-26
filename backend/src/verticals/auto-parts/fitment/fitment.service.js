@@ -68,13 +68,31 @@ export function serializeFitment(fitment) {
   };
 }
 
-export function serializeCrossReference(reference) {
+export function serializeCrossReference(reference, catalogue = null) {
   if (!reference) return reference;
+  const product = catalogue?.get(reference.productId);
+  const alternate = catalogue?.get(reference.alternateProductId);
   return {
     ...reference,
-    /** Whether the alternative is something this shop can actually hand over. */
-    isStocked: Boolean(reference.alternateProductId),
+    productName: product?.name ?? reference.productName,
+    ...(catalogue ? { inCatalogue: Boolean(product) } : {}),
+    // A linked id proves only a reference. Stock is known only after reading
+    // the current catalogue at the requested location.
+    stockKnown: catalogue !== null,
+    isStocked: Boolean(alternate && Number(alternate.stockBaseQty) > 0),
+    alternateInCatalogue: catalogue ? Boolean(alternate) : null,
+    alternateStockQty: catalogue ? Number(alternate?.stockBaseQty ?? 0) : null,
   };
+}
+
+async function withCurrentPartNames(shopId, rows) {
+  if (!rows.length) return rows;
+  const products = await db.product.findMany({
+    where: { shopId, deletedAt: null }, select: { id: true, name: true },
+  });
+  const byId = new Map(products.map((product) => [product.id, product]));
+  return rows.map((row) => ({ ...row, productName: byId.get(row.productId)?.name ?? row.productName,
+    inCatalogue: byId.has(row.productId) }));
 }
 
 async function requireProduct(shopId, productId, client = db) {
@@ -167,6 +185,7 @@ export async function findPartsForVehicle(shopId, { make, model, variant, year, 
       // once stocked something that fits, so it is reported rather than hidden.
       inCatalogue: Boolean(product),
       productName: product?.name ?? entry.productName,
+      fitments: entry.fitments.map((row) => ({ ...row, productName: product?.name ?? row.productName, inCatalogue: Boolean(product) })),
       sku: product?.sku ?? null,
       brand: product?.brand ?? null,
       stockQty: product ? Number(product.stockBaseQty) || 0 : 0,
@@ -212,7 +231,7 @@ export async function listFitmentsForProduct(shopId, productId) {
     where: { shopId, productId, deletedAt: null },
     orderBy: [{ make: "asc" }, { model: "asc" }, { yearFrom: "asc" }],
   });
-  return rows.map(serializeFitment);
+  return (await withCurrentPartNames(shopId, rows)).map(serializeFitment);
 }
 
 export async function listFitments(shopId, { make, model, search } = {}) {
@@ -223,7 +242,7 @@ export async function listFitments(shopId, { make, model, search } = {}) {
   });
   const wantedMake = matchKey(make);
   const wantedModel = matchKey(model);
-  return rows
+  return (await withCurrentPartNames(shopId, rows))
     .filter((fitment) => (!wantedMake || matchKey(fitment.make) === wantedMake))
     .filter((fitment) => (!wantedModel || matchKey(fitment.model) === wantedModel))
     .filter((fitment) => (!term
@@ -356,12 +375,13 @@ export async function deleteFitment(shopId, id, context = {}) {
 
 /* ── Cross-references ─────────────────────────────────────────────────────── */
 
-export async function listCrossReferences(shopId, productId) {
+export async function listCrossReferences(shopId, productId, { locationId } = {}) {
   const rows = await db.partCrossReference.findMany({
     where: { shopId, productId, deletedAt: null },
     orderBy: [{ kind: "asc" }, { partNumber: "asc" }],
   });
-  return rows.map(serializeCrossReference);
+  const catalogue = new Map((await listProducts(shopId, { locationId })).map((product) => [product.id, product]));
+  return rows.map((row) => serializeCrossReference(row, catalogue));
 }
 
 /**
@@ -389,6 +409,7 @@ export async function findByPartNumber(shopId, partNumber, { locationId } = {}) 
     || matchKey(product.barcode) === wanted
     || referencedProductIds.has(product.id));
 
+  const catalogueById = new Map(catalogue.map((product) => [product.id, product]));
   return {
     partNumber: String(partNumber).trim(),
     products: products.map((product) => ({
@@ -399,7 +420,7 @@ export async function findByPartNumber(shopId, partNumber, { locationId } = {}) 
       stockQty: Number(product.stockBaseQty) || 0,
       price: Number(product.defaultPricePerRateUnit) || 0,
     })),
-    references: matchedReferences.map(serializeCrossReference),
+    references: matchedReferences.map((row) => serializeCrossReference(row, catalogueById)),
   };
 }
 

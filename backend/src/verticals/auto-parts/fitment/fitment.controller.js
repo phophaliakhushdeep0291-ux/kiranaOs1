@@ -1,5 +1,6 @@
 import * as svc from "./fitment.service.js";
 import { requestLocationId } from "../../../modules/stores/location-context.service.js";
+import { assertLocationCapability } from "../../../modules/stores/location-access.service.js";
 
 export async function findForVehicle(req, res, next) {
   try {
@@ -28,7 +29,19 @@ export async function byPartNumber(req, res, next) {
 }
 
 export async function summary(req, res, next) {
-  try { res.json({ success: true, data: await svc.getFitmentSummary(req.shopId) }); }
+  try {
+    let canManage = !req.locationScopeAll;
+    if (canManage) {
+      try {
+        await assertLocationCapability({ shopId: req.shopId, userId: req.user?.userId,
+          role: req.user?.role, locationId: req.operationalLocation?.id, capability: "inventory" });
+      } catch (error) {
+        if (error.code !== "LOCATION_ACCESS_DENIED") throw error;
+        canManage = false;
+      }
+    }
+    res.json({ success: true, data: { ...await svc.getFitmentSummary(req.shopId), canManage } });
+  }
   catch (err) { next(err); }
 }
 
@@ -47,7 +60,7 @@ export async function forProduct(req, res, next) {
   try {
     const [fitments, references] = await Promise.all([
       svc.listFitmentsForProduct(req.shopId, String(req.params.productId)),
-      svc.listCrossReferences(req.shopId, String(req.params.productId)),
+      svc.listCrossReferences(req.shopId, String(req.params.productId), { locationId: requestLocationId(req) }),
     ]);
     res.json({ success: true, data: { fitments, references } });
   } catch (err) { next(err); }

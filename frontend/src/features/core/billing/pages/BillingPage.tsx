@@ -51,7 +51,8 @@ import { toInventoryBaseQty } from "@/features/core/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 import { billingSlotsFor } from "@/features/core/billing/billing-slots";
-import { takeQueuedProducts } from "@/features/core/billing/pending-cart-additions";
+import { recoverQueuedBillingDraft, type QueuedProductMerger } from "@/features/core/billing/pending-cart-additions";
+import { activeSellingUnits, defaultSellingUnit, mergeCartProduct, type CartProductOptions } from "../cart-product";
 import { productConfiguratorFor, type ProductConfigurator } from "@/features/core/billing/product-configurators";
 import { SPLIT_PAYMENT, addonUnitPrice, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceNewProductLine, type VoiceParsedDraft } from "./billing-types";
 import { createRetailPaymentQr, getRetailPaymentReadiness, verifyRetailPayment, type RetailQrCheckout } from "../retail-payment";
@@ -124,25 +125,19 @@ function cartItemBaseQuantity(item: CartItem) {
   return toInventoryBaseQty(item.quantity, item.unit, item.product.baseUnit ?? item.product.unit ?? item.unit);
 }
 
-function activeSellingUnits(product: Product): ProductSellingUnit[] {
-  return (product.sellingUnits ?? []).filter((unit) => unit.isActive !== false);
-}
-
-function defaultSellingUnit(product: Product): ProductSellingUnit | undefined {
-  const units = activeSellingUnits(product);
-  return units.find((unit) => unit.isDefault) ?? units[0];
-}
-
 let billingDraftCache: BillingDraft = {};
 
 function readBillingDraft(): BillingDraft {
   return billingDraftCache;
 }
 
-async function loadBillingDraft(products: Map<string, Product>, shouldRecover: () => boolean) {
-  const result = await recoverAssistantBillingDraft(BILLING_DRAFT_KEY, products, shouldRecover);
-  if (result && shouldRecover()) billingDraftCache = result.draft;
-  return result;
+async function loadBillingDraft(products: Map<string, Product>, mergeProduct: QueuedProductMerger, shouldRecover: () => boolean) {
+  const assistant = await recoverAssistantBillingDraft(BILLING_DRAFT_KEY, products, shouldRecover);
+  if (!assistant || !shouldRecover()) return null;
+  const pending = await recoverQueuedBillingDraft(BILLING_DRAFT_KEY, products, mergeProduct, shouldRecover);
+  if (!pending || !shouldRecover()) return null;
+  billingDraftCache = pending.draft;
+  return { ...assistant, draft: pending.draft, added: assistant.added + pending.added, missing: pending.missing, remaining: assistant.remaining + pending.remaining };
 }
 
 function writeBillingDraft(draft: BillingDraft) {
@@ -777,7 +772,8 @@ export default function Billing() {
     if (draftHydrated || shouldWaitForBillingCatalogue(products, productById.size)) return;
     let active = true;
     setDraftLoadError(false);
-    void Promise.all([loadBillingDraft(productById, () => active), loadSettingList<HeldBill>(HELD_BILLS_KEY, [])])
+    void Promise.all([loadBillingDraft(productById, (cart, product, draft) =>
+      productConfiguratorFor(product) ? null : mergeCartProduct(cart, product, (item, quantity, unit) => resolveLine(item, quantity, unit, draft)), () => active), loadSettingList<HeldBill>(HELD_BILLS_KEY, [])])
       .then(([recovery, held]) => {
         if (!active || !recovery) return;
         const { draft } = recovery;
@@ -820,6 +816,9 @@ export default function Billing() {
         }
         if (recovery.added > 0) toast({ title: t("billing.page.addedToCart"), description: t("billing.page.addedToCartDetail") });
         if (recovery.remaining > 0) toast({ title: t("billing.assistant.itemsPending"), description: t("billing.assistant.itemsPendingDetail"), variant: "destructive" });
+        if (recovery.missing.length > 0) {
+          toast({ title: t("billing.pending.notFound"), description: t("billing.pending.notFoundDetail", { names: recovery.missing.join(", ") }), variant: "destructive" });
+        }
         setDraftHydrated(true);
       })
       .catch(() => {
@@ -829,42 +828,6 @@ export default function Billing() {
     // Hydration owns the cart until its queue and draft commit together.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftHydrated, productById, products.isLoading, products.isPlaceholderData, products.isFetching, draftLoadAttempt]);
-
-  /**
-   * Ring up whatever another screen sent over.
-   *
-   * The parts trade's fitment book hands a part to the till this way, so a
-   * counter that has just found the right box does not have to search the
-   * catalogue again from memory. Billing does not learn what a fitment is: it
-   * is handed product ids and rings them up the ordinary way, which is what
-   * keeps pricing, packs and batches in one place.
-   *
-   * Waits for the draft, or the line lands on the workspace a moment before the
-   * restored cart overwrites it. Waits for the catalogue too, because addToCart
-   * needs the real product to price it.
-   */
-  useEffect(() => {
-    if (!draftHydrated || productById.size === 0) return;
-    let active = true;
-    void takeQueuedProducts().then((queued) => {
-      if (!active || queued.length === 0) return;
-      const missing: string[] = [];
-      for (const entry of queued) {
-        const product = productById.get(entry.productId);
-        if (product) addToCart(product);
-        else missing.push(entry.name || entry.productId);
-      }
-      // Say so once. The queue is already cleared, so an unfindable part cannot
-      // re-announce itself on every bill for the rest of the day.
-      if (missing.length > 0) {
-        toast({ title: t("billing.pending.notFound"), description: t("billing.pending.notFoundDetail", { names: missing.join(", ") }), variant: "destructive" });
-      }
-    });
-    return () => { active = false; };
-    // addToCart is redeclared every render and deliberately left out: the queue
-    // is cleared as it is read, so a re-run finds nothing and cannot double-add.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftHydrated, productById]);
 
   useEffect(() => {
     if (!draftHydrated) return;
@@ -1131,7 +1094,15 @@ export default function Billing() {
   // owner rules + this bill's customer/group/payment. With no rules it returns
   // exactly productSellingPrice(), so behaviour is unchanged until rules exist.
   // Returns the rate + the metadata the cart chip shows (why this price).
-  function resolveLine(product: Product, quantity: number, selectedUnit = defaultSellingUnit(product)): { rate: number; pricing: LinePricingMeta } {
+  function resolveLine(product: Product, quantity: number, selectedUnit = defaultSellingUnit(product), draft?: BillingDraft): { rate: number; pricing: LinePricingMeta } {
+    // Hydration prices against the saved bill before its fields enter React state.
+    const draftCustomer = draft ? customers.data?.find((customer: Customer) =>
+      draft.selectedCustomerId && draft.selectedCustomerId !== "walk_in"
+        ? customer.id === draft.selectedCustomerId
+        : Boolean(draft.customerMobile?.replace(/\D/g, "")) && customer.mobile?.replace(/\D/g, "") === draft.customerMobile?.replace(/\D/g, "")) : undefined;
+    const priceCustomerId = draft ? (draft.selectedCustomerId !== "walk_in" && draft.selectedCustomerId) || draftCustomer?.id : resolvedCustomerId;
+    const priceCustomer = draft ? (draft.selectedCustomerId && draft.selectedCustomerId !== "walk_in" ? draftCustomer : undefined) : selectedCustomer;
+    const pricePayment = draft ? draft.paymentMode ?? BillPaymentMode.cash : paymentMode;
     const result = resolveLinePrice(product, {
       shopId: shop?.id,
       quantity,
@@ -1148,9 +1119,9 @@ export default function Billing() {
       productCost: sellingUnitCostPrice(selectedUnit, product, defaultSellingUnit(product)) || undefined,
       useLegacyProductRules: selectedUnit?.isDefault !== false,
       shopRules: shopPricingRules,
-      customerId: resolvedCustomerId || undefined,
-      customerGroup: (selectedCustomer as { customerGroup?: string } | undefined)?.customerGroup || undefined,
-      paymentMethod: paymentMode !== SPLIT_PAYMENT ? String(paymentMode) : undefined,
+      customerId: priceCustomerId || undefined,
+      customerGroup: (priceCustomer as { customerGroup?: string } | undefined)?.customerGroup || undefined,
+      paymentMethod: pricePayment !== SPLIT_PAYMENT ? String(pricePayment) : undefined,
       source: "BILLING",
     });
     return {
@@ -1169,36 +1140,8 @@ export default function Billing() {
     };
   }
 
-  function commitAddToCart(product: Product, options?: { custom?: boolean; addons?: CartItem["addons"]; sellingUnit?: ProductSellingUnit; quantity?: number }) {
-    // A quantity typed in the search box (`3*rice`) arrives here. Everything
-    // else adds one, which is what every existing caller expects.
-    const addedQuantity = options?.quantity && options.quantity > 0 ? options.quantity : 1;
-    setCart((previous) => {
-      const sellingUnit = options?.sellingUnit ?? defaultSellingUnit(product);
-      const candidate: CartItem = {
-        product,
-        quantity: addedQuantity,
-        rate: product.defaultPricePerRateUnit,
-        unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece",
-        sellingUnit,
-        isCustom: options?.custom,
-        addons: options?.addons,
-      };
-      const candidateKey = cartItemKey(candidate);
-      const existing = previous.find((item) => cartItemKey(item) === candidateKey);
-      if (existing && !options?.custom) {
-        // Adding the same item twice accumulates, so `3*rice` on a line that
-        // already holds two makes five rather than three. A cashier correcting
-        // themselves types the difference; one who scanned the packet again
-        // expects it to count.
-        const quantity = roundQuantity(existing.quantity + addedQuantity);
-        const priced = resolveLine(product, quantity, existing.sellingUnit);
-        return previous.map((item) => cartItemKey(item) === candidateKey ? { ...item, quantity, rate: item.manualRate ? item.rate : priced.rate, pricing: item.manualRate ? item.pricing : priced.pricing } : item);
-      }
-      const quantity = roundQuantity(addedQuantity);
-      const priced = resolveLine(product, quantity, sellingUnit);
-      return [...previous, { product, quantity, rate: options?.custom ? product.defaultPricePerRateUnit : priced.rate, unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece", sellingUnit, isCustom: options?.custom, manualRate: options?.custom, pricing: options?.custom ? undefined : priced.pricing, addons: options?.addons }];
-    });
+  function commitAddToCart(product: Product, options?: CartProductOptions) {
+    setCart((previous) => mergeCartProduct(previous, product, resolveLine, options));
     rememberRecentProduct(product.id);
     if (billingStartedAtRef.current === null) billingStartedAtRef.current = Date.now();
     if (!options?.custom) {

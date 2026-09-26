@@ -364,6 +364,8 @@ export const shopTypesHi: Record<keyof typeof shopTypesEn, string> = {
   "shopType.nav.fitment": "पार्ट खोजें",
   // Sends the found part to the till.
   "shopType.fitment.sell": "बिल में डालें",
+  "shopType.fitment.sellFailed": "यह पार्ट बिलिंग में नहीं भेज पाए",
+  "shopType.fitment.sellRetry": "आपका चयन इस डिवाइस पर सहेजा नहीं जा सका। बिलिंग खोलने से पहले फिर कोशिश करें।",
   "shopType.fitment.number.title": "पार्ट नंबर है?",
   "shopType.fitment.number.help": "डिब्बे पर लिखा SKU, बारकोड या दर्ज विकल्प जांचें।",
   "shopType.fitment.number.label": "पार्ट नंबर",
@@ -511,4 +513,8 @@ export const shopTypesHi: Record<keyof typeof shopTypesEn, string> = {
   "shopType.fitment.number.removeHelp": "यह दर्ज संदर्भ हट जाएगा। कैटलॉग का पार्ट और उसका स्टॉक नहीं बदलेंगे।",
   "shopType.fitment.number.remove": "नंबर हटाएँ",
   "shopType.fitment.number.removeNamed": "{number} हटाएँ",
+  "shopType.fitment.catalogueRemoved": "पार्ट कैटलॉग से हटा दिया गया है",
+  "shopType.fitment.readOnly": "आप यहाँ पार्ट खोज सकते हैं। रिकॉर्ड जोड़ने या हटाने के लिए चुने हुए स्टोर में इन्वेंटरी की अनुमति चाहिए।",
+  "shopType.fitment.accessUnavailable": "आपकी अनुमति की पुष्टि नहीं हो सकी। पार्ट खोज सकते हैं; रिकॉर्ड बदलने से पहले फिर कोशिश करें।",
+  "shopType.fitment.editUnavailable": "बदलाव सहेजने से पहले कनेक्ट करें और इस स्टोर में इन्वेंटरी की अनुमति की पुष्टि करें।",
 };

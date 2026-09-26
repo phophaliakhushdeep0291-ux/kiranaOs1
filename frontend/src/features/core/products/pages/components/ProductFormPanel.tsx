@@ -810,8 +810,12 @@ export function ProductFormPanel({
     ? [...categories, currentCategory]
     : categories;
   const CategoryField = (
-    <Field label={t("products.col.category")} required>
-      <Select value={currentCategory} onValueChange={(v) => form.setValue("category", v, { shouldDirty: true })}>
+    <Field label={t("products.col.category")} required error={err.category?.message}>
+      <Select value={currentCategory} onValueChange={(v) => {
+        // The native select can emit an empty value while a saved category is
+        // being added to its options. There is no empty category to choose.
+        if (v) form.setValue("category", v, { shouldDirty: true });
+      }}>
         <SelectTrigger className="h-11"><SelectValue placeholder="Select" /></SelectTrigger>
         <SelectContent>
           {categoryOptions.map((c) => <SelectItem key={c} value={c} className="capitalize">{translateCategory(c, t)}</SelectItem>)}

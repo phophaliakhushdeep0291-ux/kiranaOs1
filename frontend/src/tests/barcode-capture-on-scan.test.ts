@@ -223,7 +223,8 @@ describe("the sheet is wired to the scan path", () => {
 
   it("carries an exact pack scan all the way into the cart", () => {
     expect(source).toContain("addProduct(outcome.product, outcome.sellingUnit)");
-    expect(billingPageSource).toContain("const sellingUnit = options?.sellingUnit ?? defaultSellingUnit(product)");
+    expect(billingPageSource).toContain("mergeCartProduct(previous, product, resolveLine, options)");
+    expect(readFileSync("src/features/core/billing/cart-product.ts", "utf8")).toContain("const sellingUnit = options?.sellingUnit ?? defaultSellingUnit(product)");
     expect(billingPageSource).toContain("sellingUnit: pendingProductConfiguration.sellingUnit");
   });
 
