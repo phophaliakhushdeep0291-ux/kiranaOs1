@@ -3,7 +3,7 @@
 // only ever write to the Audit* tables. Bump ENGINE_VERSION when scoring or
 // evaluation semantics change so historical findings stay traceable.
 
-export const ENGINE_VERSION = "assurance-engine-1.1.0";
+export const ENGINE_VERSION = "assurance-engine-1.2.0";
 
 export const RUN_TYPES = Object.freeze({
   TRANSACTION_TRIGGERED: "TRANSACTION_TRIGGERED",

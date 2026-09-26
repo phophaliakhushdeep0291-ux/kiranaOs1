@@ -67,7 +67,6 @@ export const I18N_HARDCODED_ALLOWLIST: Record<string, number> = {
   "features/core/assurance/pages/AssuranceDashboardPage.tsx": 4,
   "features/core/assurance/pages/AssuranceReportPage.tsx": 6,
   "features/core/assurance/pages/AuditRulesPage.tsx": 6,
-  "features/core/assurance/pages/AuditRunsPage.tsx": 4,
   "features/core/assurance/pages/CasesPage.tsx": 7,
   "features/core/assurance/pages/FindingDetailPage.tsx": 10,
   "features/core/assurance/pages/FindingsPage.tsx": 5,

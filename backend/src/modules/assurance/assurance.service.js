@@ -661,7 +661,7 @@ export async function getRun(shopId, runId) {
   if (!run) throw new AppError("Audit run not found", 404, "AUDIT_RUN_NOT_FOUND");
   const evaluations = await db.auditEvaluation.findMany({
     where: { auditRunId: run.id, shopId },
-    select: { id: true, sourceEntityType: true, sourceEntityId: true, riskScore: true, triggeredRuleCodesJson: true, inputHash: true, createdAt: true },
+    select: { id: true, sourceEntityType: true, sourceEntityId: true, riskScore: true, triggeredRuleCodesJson: true, inputHash: true, resultJson: true, createdAt: true },
     orderBy: { riskScore: "desc" },
     take: 200,
   });
@@ -669,6 +669,7 @@ export async function getRun(shopId, runId) {
     ...serializeRun(run),
     evaluations: evaluations.map((row) => ({
       evaluationId: row.id,
+      complete: parseJson(row.resultJson, {}).complete ?? (parseJson(row.resultJson, {}).ruleErrors ?? []).length === 0,
       sourceEntityType: row.sourceEntityType,
       sourceEntityId: row.sourceEntityId,
       riskScore: row.riskScore,
