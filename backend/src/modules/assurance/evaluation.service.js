@@ -5,6 +5,7 @@
 // write, and every entry point is safe to call again — evaluations are unique
 // per (run, entity) and findings are unique per (shop, entity).
 import crypto from "node:crypto";
+import { scheduledActivity } from "./scheduled-activity.js";
 import { serializableTransaction } from "../../lib/transactions.js";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
@@ -807,8 +808,9 @@ export async function finishRun(runId, { status, entitiesEvaluated, findingsCrea
  * type so a long period cannot exhaust memory; the truncation is reported in
  * the run summary rather than hidden.
  */
-export async function collectEntitiesForPeriod(shopId, { from, to, entityTypes = null, client = db }) {
+export async function collectEntitiesForPeriod(shopId, { from, to, entityTypes = null, includeRecentChanges = false, client = db }) {
   const range = { gte: new Date(from), lte: new Date(to) };
+  const activity = includeRecentChanges ? scheduledActivity(range) : null;
   const wanted = new Set(entityTypes && entityTypes.length ? entityTypes : Object.values(ENTITY_TYPES));
   const entities = [];
   const truncated = [];
@@ -819,24 +821,27 @@ export async function collectEntitiesForPeriod(shopId, { from, to, entityTypes =
   };
 
   if (wanted.has(ENTITY_TYPES.BILL)) {
-    push(ENTITY_TYPES.BILL, await client.bill.findMany({ where: { shopId, createdAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
+    push(ENTITY_TYPES.BILL, await client.bill.findMany({ where: { shopId, ...(activity?.bills ?? { createdAt: range }) }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
   }
   if (wanted.has(ENTITY_TYPES.EXPENSE)) {
-    push(ENTITY_TYPES.EXPENSE, await client.expense.findMany({ where: { shopId, deletedAt: null, spentAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { spentAt: "asc" } }));
+    push(ENTITY_TYPES.EXPENSE, await client.expense.findMany({ where: { shopId, ...(activity?.expenses ?? { deletedAt: null, spentAt: range }) }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { spentAt: "asc" } }));
   }
   if (wanted.has(ENTITY_TYPES.PURCHASE)) {
-    push(ENTITY_TYPES.PURCHASE, await client.purchaseReceipt.findMany({ where: { shopId, createdAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
-    push(ENTITY_TYPES.PURCHASE, await client.purchaseHistory.findMany({ where: { shopId, createdAt: range, purchaseReceiptId: null }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
+    push(ENTITY_TYPES.PURCHASE, await client.purchaseReceipt.findMany({ where: { shopId, ...(activity?.purchaseReceipts ?? { createdAt: range }) }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
+    push(ENTITY_TYPES.PURCHASE, await client.purchaseHistory.findMany({ where: { shopId, ...(activity?.purchaseHistory ?? { createdAt: range, purchaseReceiptId: null }) }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
   }
   if (wanted.has(ENTITY_TYPES.DAILY_CLOSING)) {
-    push(ENTITY_TYPES.DAILY_CLOSING, await client.dailyClosingSnapshot.findMany({ where: { shopId, date: range }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { date: "asc" } }));
+    push(ENTITY_TYPES.DAILY_CLOSING, await client.dailyClosingSnapshot.findMany({ where: { shopId, ...(activity?.dailyClosingSnapshots ?? { date: range }) }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { date: "asc" } }));
   }
   if (wanted.has(ENTITY_TYPES.SYNC_EVENT)) {
-    push(ENTITY_TYPES.SYNC_EVENT, await client.offlineSyncEvent.findMany({ where: { shopId, createdAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
+    push(ENTITY_TYPES.SYNC_EVENT, await client.offlineSyncEvent.findMany({ where: { shopId, ...(activity?.offlineSyncEvents ?? { createdAt: range }) }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
   }
   // Customers and products are evaluated when they were touched in the period:
   // their state is a running balance, so the trigger is ledger/movement activity.
-  if (wanted.has(ENTITY_TYPES.CUSTOMER)) {
+  if (wanted.has(ENTITY_TYPES.CUSTOMER) && activity) {
+    push(ENTITY_TYPES.CUSTOMER, await client.customer.findMany({ where: { shopId, ...activity.customers },
+      select: { id: true }, orderBy: { id: "asc" }, take: MAX_RANGE_ENTITIES + 1 }));
+  } else if (wanted.has(ENTITY_TYPES.CUSTOMER)) {
     const rows = await client.udharLedger.findMany({
       where: { shopId, createdAt: range },
       select: { customerId: true },
@@ -845,7 +850,10 @@ export async function collectEntitiesForPeriod(shopId, { from, to, entityTypes =
     });
     push(ENTITY_TYPES.CUSTOMER, rows, "customerId");
   }
-  if (wanted.has(ENTITY_TYPES.PRODUCT)) {
+  if (wanted.has(ENTITY_TYPES.PRODUCT) && activity) {
+    push(ENTITY_TYPES.PRODUCT, await client.product.findMany({ where: { shopId, ...activity.products },
+      select: { id: true }, orderBy: { id: "asc" }, take: MAX_RANGE_ENTITIES + 1 }));
+  } else if (wanted.has(ENTITY_TYPES.PRODUCT)) {
     const rows = await client.stockLedger.findMany({
       where: { shopId, createdAt: range },
       select: { productId: true },

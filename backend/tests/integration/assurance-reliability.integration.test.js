@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { createIntegrationContext, resetDatabase } from "./setup.js";
-import { createTenant } from "./factories.js";
+import { createTenant, createProduct } from "./factories.js";
 import { evaluateEntity, createRun, executeRun, collectEntitiesForPeriod } from "../../src/modules/assurance/evaluation.service.js";
 import { RULES_BY_CODE } from "../../src/modules/assurance/rules/index.js";
-import { runTransactionTriggeredAssurance } from "../../src/workers/assurance.worker.js";
+import { runTransactionTriggeredAssurance, runScheduledAssurance, recomputeBaselinesForShops, handleAssuranceJob } from "../../src/workers/assurance.worker.js";
 import { buildAssuranceReport } from "../../src/modules/assurance/report.service.js";
 import { moneyShadows } from "../../src/utils/money.js";
 
@@ -136,6 +136,65 @@ if (ctx.skip) {
     const foreign = await createTenant(ctx.db);
     const empty = await buildAssuranceReport(foreign.shop.id, { from: new Date(0), to: new Date() });
     assert.equal(empty.coverage.transactionsReviewed, 0);
+  });
+
+  test("scheduled runs page every active tenant and catch late expenses and sync-only activity", async () => {
+    await resetDatabase(ctx.db);
+    const first = await createTenant(ctx.db);
+    const second = await createTenant(ctx.db);
+    const third = await createTenant(ctx.db);
+    const idle = await createTenant(ctx.db);
+    const old = new Date(Date.now() - 10 * 86400000);
+    const expense = await ctx.db.expense.create({ data: { shopId: first.shop.id,
+      title: "Late receipt", category: "transport", amount: 120, spentAt: old } });
+    const sync = await ctx.db.offlineSyncEvent.create({ data: { shopId: second.shop.id,
+      eventId: "sync-only", type: "PRODUCT_CREATE", status: "failed", error: "Retry required" } });
+    const product = await createProduct(ctx.db, third.shop.id, { createdAt: old, updatedAt: old });
+    const purchase = await ctx.db.purchaseHistory.create({ data: { shopId: third.shop.id,
+      productId: product.id, supplierName: "QA supplier", qtyBase: 1, pricePerRateUnit: 100,
+      totalCost: 100, billAmount: 100 } });
+    const result = await runScheduledAssurance({ shopLimit: 1, lookbackHours: 24 });
+    assert.equal(result.shopsConsidered, 3);
+    assert.equal(result.shopsEvaluated, 3);
+    assert.equal(result.complete, true);
+    const rows = await ctx.db.auditEvaluation.findMany({ select: { sourceEntityId: true, sourceEntityType: true } });
+    for (const id of [expense.id, sync.id, purchase.id]) assert.ok(rows.some(row => row.sourceEntityId === id), id);
+    assert.equal(await ctx.db.auditRun.count({ where: { shopId: idle.shop.id } }), 0);
+    const refresh = await recomputeBaselinesForShops({ shopLimit: 1 });
+    assert.equal(refresh.shopsProcessed, 3);
+    const scoped = await runScheduledAssurance({ shopLimit: 1, shopIds: [second.shop.id, first.shop.id, first.shop.id] });
+    assert.equal(scoped.shopsConsidered, 2);
+    assert.equal(new Set(scoped.results.map(row => row.shopId)).size, 2);
+  });
+
+  test("scheduled coverage includes a new payment on an old bill while manual date scope stays unchanged", async () => {
+    const { shop, bill } = await fixture();
+    const old = new Date(Date.now() - 10 * 86400000);
+    await ctx.db.bill.update({ where: { id: bill.id }, data: { createdAt: old, updatedAt: old } });
+    await ctx.db.payment.create({ data: { shopId: shop.id, billId: bill.id, mode: "cash", amount: 100 } });
+    const scope = { from: new Date(Date.now() - 86400000), to: new Date(), entityTypes: ["BILL"] };
+    assert.equal((await collectEntitiesForPeriod(shop.id, scope)).entities.length, 0);
+    assert.deepEqual((await collectEntitiesForPeriod(shop.id, { ...scope, includeRecentChanges: true })).entities,
+      [{ entityType: "BILL", entityId: bill.id }]);
+  });
+
+  test("a scheduled tenant failure does not prevent another tenant's check and rejects the queue job", async () => {
+    const { shop: broken } = await fixture();
+    const healthy = await createTenant(ctx.db);
+    await ctx.db.expense.create({ data: { shopId: healthy.shop.id, title: "Transport", category: "transport", amount: 100 } });
+    const delegate = ctx.db.auditRule;
+    const original = delegate.findMany;
+    delegate.findMany = query => {
+      if (query.where.shopId === broken.id) throw Error("Tenant configuration unavailable");
+      return original(query);
+    };
+    try {
+      await assert.rejects(handleAssuranceJob({ name: "RUN_SCHEDULED_ASSURANCE", timestamp: Date.now(),
+        data: { shopLimit: 1, shopIds: [broken.id, healthy.shop.id] } }),
+        error => error.code === "ASSURANCE_SWEEP_INCOMPLETE");
+      assert.equal((await ctx.db.auditRun.findFirst({ where: { shopId: broken.id } })).status, "FAILED");
+      assert.equal((await ctx.db.auditRun.findFirst({ where: { shopId: healthy.shop.id } })).status, "COMPLETED");
+    } finally { delegate.findMany = original; }
   });
 
   test("configuration failures finish the run instead of leaving it running forever", async () => {

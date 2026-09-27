@@ -127,6 +127,7 @@ export const assuranceEn = {
   "assurance.report.reviewed": "Entries checked",
   "assurance.report.raised": "Problems found",
   "assurance.report.resolvedIn": "{count} settled in this period",
+  "assurance.report.duplicates": "Possible duplicates",
   "assurance.report.areas": "By area",
   "assurance.report.areasHint": "Where the problems came from",
   "assurance.report.frequent": "Happens most often",

@@ -108,6 +108,7 @@ export const assuranceHi: Record<keyof typeof assuranceEn, string> = {
   "assurance.report.reviewed": "जाँची गई एंट्री",
   "assurance.report.raised": "मिली गड़बड़",
   "assurance.report.resolvedIn": "इस अवधि में {count} निपटीं",
+  "assurance.report.duplicates": "संभावित दोहरी एंट्री",
   "assurance.report.areas": "हिस्से के हिसाब से",
   "assurance.report.areasHint": "गड़बड़ कहाँ-कहाँ से आई",
   "assurance.report.frequent": "सबसे ज़्यादा बार",

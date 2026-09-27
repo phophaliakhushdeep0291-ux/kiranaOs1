@@ -6,8 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAssuranceReport } from "../api";
-import { Chip, EmptyState, RiskChip, SectionCard, StatCard, fmtDate, fmtDateTime, humanize, inr } from "../ui";
+import { Chip, EmptyState, RiskChip, SectionCard, StatCard, fmtDate, fmtDateTime, humanize, inr, useAssuranceWords } from "../ui";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+
+const REPORT_AREA_CATEGORIES: Record<string, string> = {
+  reconciliationMismatches: "RECONCILIATION", billingAnomalies: "BILLING",
+  customerCreditInconsistencies: "CUSTOMER_CREDIT", inventoryInconsistencies: "INVENTORY",
+  purchaseRisks: "PURCHASE", expenseRisks: "EXPENSE", dailyClosingDifferences: "CASH_CLOSING",
+  syncIntegrityIssues: "SYNC_INTEGRITY", authorizationGaps: "AUTHORIZATION",
+};
 
 function isoDate(daysAgo = 0) {
   return new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -15,6 +22,7 @@ function isoDate(daysAgo = 0) {
 
 export default function AssuranceReportPage() {
   const { t } = useAppLanguage();
+  const words = useAssuranceWords();
   const [from, setFrom] = useState(isoDate(30));
   const [to, setTo] = useState(isoDate(0));
   const [range, setRange] = useState({ from: isoDate(30), to: isoDate(0) });
@@ -95,7 +103,7 @@ export default function AssuranceReportPage() {
             <dl className="grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
               {Object.entries(report.byArea).map(([area, count]) => (
                 <div key={area} className="flex items-baseline justify-between gap-2 border-b border-dashed border-border/60 py-1">
-                  <dt className="text-xs text-muted-foreground">{humanize(area)}</dt>
+                  <dt className="text-xs text-muted-foreground">{area === "duplicateRisks" ? t("assurance.report.duplicates") : words.area(REPORT_AREA_CATEGORIES[area] ?? area)}</dt>
                   <dd className="text-sm font-semibold tabular-nums">{count}</dd>
                 </div>
               ))}
