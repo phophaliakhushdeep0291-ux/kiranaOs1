@@ -1061,7 +1061,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   const [supplierId, setSupplierId] = useState("");
   const [newSupplierName, setNewSupplierName] = useState("");
   const [mobile, setMobile] = useState("");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [purchaseNo, setPurchaseNo] = useState("");
   const [payMode, setPayMode] = useState("upi");
   const [payStatus, setPayStatus] = useState<"paid" | "partial" | "due">("due");
@@ -1105,7 +1105,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
 
   function reset() {
     setSupplierId(""); setNewSupplierName(""); setMobile("");
-    setDate(new Date().toISOString().slice(0, 10)); setPurchaseNo(""); setPayMode("upi"); setPayStatus("due");
+    setDate(format(new Date(), "yyyy-MM-dd")); setPurchaseNo(""); setPayMode("upi"); setPayStatus("due");
     setPaidInput(""); setLines([emptyPurchaseLine(keyRef.current++)]); setNotes("");
     setOcrDraft(null); setOcrImage("");
     if (ocrImageRef.current) URL.revokeObjectURL(ocrImageRef.current);

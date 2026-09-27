@@ -433,10 +433,9 @@ export default function InventoryPage() {
     const rows = allInventoryRows;
     const tracked = rows.filter((item) => (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false);
     const stockValue = tracked.reduce((sum, item) => sum + inventoryStockValue(item), 0);
-    const totalQuantity = tracked.reduce((sum, item) => sum + inventoryDisplayQuantity(item), 0);
-    const soldLast30Days = movementRows
-      .filter((row) => (row.action ?? row.type) === "sale" && safeDate(row.createdAt ?? row.created_at).getTime() >= Date.now() - 30 * 86_400_000)
-      .reduce((sum, row) => sum + Math.abs(Number(row.quantityDelta ?? row.quantity_delta ?? 0)), 0);
+    // Quantities belong to each product's unit. Adding grams, packets and pieces
+    // cannot produce a shop total or a turnover ratio. The limited movement
+    // preview also cannot establish a full month's inventory turnover.
     // A product sitting at zero belongs to "Out of Stock", not to both cards.
     // `isLowStock` is `qty <= threshold`, so zero satisfies it — and the panel and
     // the Low Stock table filter those rows out while this count did not. The
@@ -452,11 +451,9 @@ export default function InventoryPage() {
       products: tracked.length,
       lowStock: (remoteLowStock.length > 0 ? remoteLowStock : localLowStock).length,
       outOfStock: tracked.filter((item) => Number(item.stockBaseQty ?? 0) <= 0).length,
-      totalQuantity: roundInventoryValue(totalQuantity),
       stockValue: roundInventoryValue(stockValue),
-      turnover30: totalQuantity > 0 ? Math.round((soldLast30Days / totalQuantity) * 10) / 10 : 0,
     };
-  }, [allInventoryRows, lowStock.data, movementRows]);
+  }, [allInventoryRows, lowStock.data]);
 
   useEffect(() => {
     setStockPage(1);
@@ -824,12 +821,11 @@ export default function InventoryPage() {
     <PageShell className="space-y-4 bg-white pb-8">
       <TradeFocusStrip titleKey="inventory.trade.title" focusKey={tradeProfile.focusKey} links={tradeProfile.links} />
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <InventoryMetricCard label={t("inventory.page.totalStockValue")} value={fmtMoney(stockStats.stockValue)} detail={t("inventory.page.atCurrentCost")} tone="blue" icon={<IndianRupee size={19} />} />
-        <InventoryMetricCard label={t(tradeProfile.itemsLabelKey)} value={stockStats.products.toLocaleString("en-IN")} detail={t("inventory.page.unitsTracked", { count: stockStats.totalQuantity.toLocaleString("en-IN") })} tone="violet" icon={<Tags size={19} />} />
+        <InventoryMetricCard label={t(tradeProfile.itemsLabelKey)} value={stockStats.products.toLocaleString("en-IN")} detail={t("inventory.page.stockTrackedProducts")} tone="violet" icon={<Tags size={19} />} />
         <InventoryMetricCard label={t("dashboard.kpi.lowStockItems")} value={stockStats.lowStock.toLocaleString("en-IN")} detail={t("inventory.page.requireAttention")} tone="amber" icon={<AlertTriangle size={19} />} />
         <InventoryMetricCard label={t("inventory.page.outOfStockItems")} value={stockStats.outOfStock.toLocaleString("en-IN")} detail={t("inventory.page.takeImmediateAction")} tone="rose" icon={<PackageX size={19} />} />
-        <div className="col-span-2 xl:col-span-1"><InventoryMetricCard label={t("inventory.page.stockTurnover")} value={`${stockStats.turnover30}x`} detail={stockStats.turnover30 > 0 ? t("inventory.page.basedOnSold") : t("inventory.page.noSalesMovement")} tone="green" icon={<TrendingUp size={19} />} /></div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
