@@ -362,6 +362,51 @@ not the freshness or retention of scheduled Railway backups. See the
 [recovery runbook](../../backend/docs/DISASTER_RECOVERY.md) for verifying a
 particular retained dump.
 
+### Restoring a stored nightly backup
+
+`npm run drill:restore:offsite` restores a backup the
+[scheduled backup service](#scheduled-off-site-backups) actually stored. It is
+the only drill that proves those copies are usable. It never connects to the
+production database, and it needs no production secrets: only the bucket and the
+drill database.
+
+```bash
+cd backend
+export STORAGE_PROVIDER=r2 STORAGE_BUCKET=<bucket>
+export STORAGE_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com   # omit for AWS S3
+export STORAGE_ACCESS_KEY_ID=<key> STORAGE_SECRET_ACCESS_KEY=<secret>
+export RESTORE_TEST_DATABASE_URL="<postgres-drill public URL>"
+export ALLOW_RESTORE_TEST_DB=true
+npm run drill:restore:offsite
+```
+
+It takes the newest dump under `backups/database/`. If more than one database
+has backups there, set `BACKUP_SOURCE_DATABASE` (Railway's default is
+`railway`). To restore an older copy, set `BACKUP_KEY` to its full key. It then:
+
+1. **Refuses a stale copy.** The backup must be at most
+   `OFFSITE_BACKUP_MAX_AGE_HOURS` old (default 26: one nightly run plus slack).
+   An older newest copy means the schedule has missed a night.
+2. **Checks the download** against the size and SHA-256 recorded at upload,
+   **before** touching the drill database. A corrupt copy leaves the target
+   as it was.
+3. **Resets and restores** the drill database, under the same name guard as
+   above: its name must contain `drill` or `restore`, and must differ from the
+   backup's source database.
+4. **Checks the result.** A migration ledger and rows in the sales, stock,
+   payment and customer-balance tables must be present, and the read-only money
+   reconciliation must pass. It records the newest `createdAt`/`updatedAt` in
+   the copy: how much trade a restore would bring back.
+
+The dump is production data. It is written to a private temporary directory
+and deleted when the drill ends, pass or fail. The report,
+`backend/release-artifacts/offsite-restore-drill-latest.json`, holds the
+backup's key, age and checksum, row counts per table, and the stage results.
+It holds no rows. Exit code 0 means every stage passed.
+
+Run it after the first nightly backup, then monthly. A green nightly run proves
+a copy was stored; only this proves it can be restored.
+
 ---
 
 ## What Railway does not give you
