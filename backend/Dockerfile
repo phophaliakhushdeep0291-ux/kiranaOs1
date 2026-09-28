@@ -12,11 +12,12 @@ RUN apt-get update \
   && echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main' \
     > /etc/apt/sources.list.d/pgdg.list \
   && apt-get update \
-  && apt-get install -y --no-install-recommends postgresql-client-16 \
+  && apt-get install -y --no-install-recommends postgresql-client-18 \
   && rm -rf /var/lib/apt/lists/*
 
 # Scheduled backups and restore drills run inside this same image. Debian's
-# default client can be older than our PostgreSQL 16 server and refuse a dump.
+# default client can be older than the deployed PostgreSQL 18 server and refuse
+# a dump. PostgreSQL 18 clients also support the PostgreSQL 16 CI database.
 # Execute every required tool during the build so host-installed CI tools cannot
 # hide a missing binary or shared library in the deployed container.
 RUN pg_dump --version && pg_restore --version && psql --version

@@ -32,19 +32,23 @@ launch runbook possible at all.
 `backend/Dockerfile` ends with:
 
 ```
-prisma:deploy:postgres && prisma:generate:postgres && verify-product-schema && npm start
+npm run deploy:migrate:postgres && npm run start:runtime
 ```
 
 So on Railway **every deploy migrates before the API starts**. You do not run
 `deploy:migrate` by hand; the manual steps in the launch runbook are for
 non-Docker hosts.
 
-The backend image also installs PostgreSQL 16 client tools from the signed
+The backend image also installs PostgreSQL 18 client tools from the signed
 [PostgreSQL APT repository](https://www.postgresql.org/download/linux/debian/).
 The image build executes `pg_dump`, `pg_restore`, and `psql` to check that the
 backup worker and scheduled backup service can use them inside the container.
 Keep this client major aligned with the deployed database: `pg_dump` cannot dump
-a server running a newer major version than itself.
+a server running a newer major version than itself. The deployed server was
+verified as PostgreSQL 18.6 on 27 September 2026; testing only against CI's
+PostgreSQL 16 database did not establish that the previous version-16 client
+could back up production. Version 18 supports both server versions. Check the
+actual server version before a PostgreSQL upgrade.
 
 Two consequences:
 
@@ -202,6 +206,23 @@ Mount a Railway **volume** on the `backup` service at `/data` and point
 `BACKUP_DIR` at `/data/backups`. Better still, once there is a bucket, copy each
 dump off-box: a volume attached to the same project does not protect against
 losing the project.
+
+The API's local object storage uses `/app/storage` in the Docker image. A volume
+attached to the API at `/var/lib/postgresql/data` does **not** persist those
+exports or its default `/app/backups` directory. The application service is
+separate from the Postgres service; each has its own volume and mount path.
+For local storage on the API, mount its volume at `/app/storage` and set
+`BACKUP_DIR=/app/storage/database-backups`. Before changing an existing mount,
+preserve and verify any current `/app/storage` and `/app/backups` contents;
+remounting does not move files out of the old container. Never change the
+Postgres service's data mount as part of this application-storage correction.
+
+A persistent directory is not an automatic backup schedule. The built-in
+database-backup schedule requires `DATABASE_BACKUP_ENABLED=true`, a healthy
+Redis worker, and configured S3-compatible object storage. If relying on
+Railway-managed backups instead, verify the project's plan supports them and
+that a schedule and retained restore points exist; volume attachment alone
+does not establish backup coverage.
 
 Set `BACKUP_RETENTION_DAYS=30` and size the volume for thirty dumps of a café's
 database, which is small.
