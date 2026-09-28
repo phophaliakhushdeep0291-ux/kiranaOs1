@@ -1,4 +1,5 @@
 import { env } from "../src/config/env.js";
+import { assessStorageVolume } from "../src/lib/storageVolume.js";
 
 const errors = [];
 const warnings = [];
@@ -106,6 +107,10 @@ if (env.WHATSAPP_PROVIDER !== "disabled") {
     if (!value || isPlaceholder(value)) fail(`${key} must be configured when WhatsApp provider is enabled`);
   }
 }
+
+const storageVolume = assessStorageVolume();
+for (const message of storageVolume.errors) fail(message);
+for (const message of storageVolume.warnings) warn(message);
 
 for (const message of warnings) {
   console.warn(JSON.stringify({ type: "production_preflight_warning", message }));
