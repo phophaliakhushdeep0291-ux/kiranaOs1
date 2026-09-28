@@ -290,6 +290,39 @@ preserve and verify any current `/app/storage` and `/app/backups` contents;
 remounting does not move files out of the old container. Never change the
 Postgres service's data mount as part of this application-storage correction.
 
+### Checking and correcting the API mount
+
+The API reads `RAILWAY_VOLUME_MOUNT_PATH` from Railway and compares it with
+where local storage writes
+([`backend/src/lib/storageVolume.js`](../../backend/src/lib/storageVolume.js)).
+When `STORAGE_PROVIDER=local` in production:
+
+- `npm run prod:preflight` **fails** if the volume is missing, sits on a
+  PostgreSQL data path, or does not contain `/app/storage`. It warns when
+  `BACKUP_DIR` is outside the volume.
+- On startup the API logs the same finding as a `startup_error` line and keeps
+  serving. Refusing to boot would take the API down over a mount it has already
+  been serving with. Search the deploy logs for `startup_error` after every
+  change here.
+
+To correct it, on the **`backend`** service only:
+
+1. **Preserve what is there.** From the service shell (`railway ssh --service
+   backend`), run `ls -laR /app/storage /app/backups`. Anything listed exists only
+   in the running container and will be gone after the next step. Copy it
+   somewhere else first, and check the copy opens.
+2. **Settings → Volumes → the API's volume → mount path `/app/storage`.** Railway
+   redeploys the service.
+3. **Set `BACKUP_DIR=/app/storage/database-backups`** on `backend`.
+4. **Confirm.** The new deploy's logs contain no `startup_error` about storage.
+   `railway ssh --service backend` then `npm run prod:preflight` passes with no
+   volume error. Put back anything preserved in step 1 under `/app/storage`.
+
+Using object storage instead (`STORAGE_PROVIDER=r2` or `s3`, the same bucket as
+the [scheduled backups](#scheduled-off-site-backups)) removes the need for the
+API volume entirely. The check then reports a leftover PostgreSQL-path mount only
+as a warning.
+
 A persistent directory is not an automatic backup schedule. The built-in
 database-backup schedule requires `DATABASE_BACKUP_ENABLED=true`, a healthy
 Redis worker, and configured S3-compatible object storage. If relying on
