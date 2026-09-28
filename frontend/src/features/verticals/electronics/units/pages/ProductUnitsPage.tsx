@@ -92,7 +92,7 @@ export default function ProductUnitsPage() {
           variant: "destructive",
         });
       }
-      toast({ title, description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+      toast({ title, description: err instanceof Error ? err.message : t("workflow.register.tryAgain"), variant: "destructive" });
     };
   }
 

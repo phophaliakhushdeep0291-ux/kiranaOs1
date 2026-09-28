@@ -1,0 +1,33 @@
+{
+  "products": [
+    {
+      "name": "QA Handset",
+      "stockBaseQty": 10.0
+    },
+    {
+      "name": "QA Rose Lipstick",
+      "stockBaseQty": 8.0
+    }
+  ],
+  "recoveredTester": [
+    {
+      "productName": "QA Rose Lipstick",
+      "variant": "QA Lock Recovery",
+      "notes": "Keep this note after PIN unlock"
+    }
+  ],
+  "registeredSerials": [
+    {
+      "serialNumber": "QA-SERIAL-001",
+      "status": "in_stock"
+    },
+    {
+      "serialNumber": "QA-DRAFT-002",
+      "status": "in_stock"
+    },
+    {
+      "serialNumber": "QA-DRAFT-003",
+      "status": "in_stock"
+    }
+  ]
+}

@@ -45,6 +45,7 @@ const testerDraft = createCounterDraft(() => ({
 }));
 
 export default function TestersPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isOnline } = useOfflineStatus();
@@ -78,7 +79,7 @@ export default function TestersPage() {
           variant: "destructive",
         });
       }
-      toast({ title, description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+      toast({ title, description: err instanceof Error ? err.message : t("workflow.register.tryAgain"), variant: "destructive" });
     };
   }
 

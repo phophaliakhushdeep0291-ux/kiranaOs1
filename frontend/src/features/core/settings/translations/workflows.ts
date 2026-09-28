@@ -12,6 +12,7 @@
 export const workflowsEn = {
   "workflow.register.draftHint": "Your entries stay here while the counter is locked. Cancel discards them.",
   "workflow.electronics.register.saved": "{count} units registered",
+  "workflow.register.tryAgain": "Try again",
   "workflow.register.actions": "Actions",
 
   // -- manufacturing --
