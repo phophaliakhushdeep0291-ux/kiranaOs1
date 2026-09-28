@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PanelResizeHandle } from "@/hooks/use-panel-resize";
+import { useCounterDraft } from "@/hooks/use-counter-draft";
+import { receiveUnitsDraft, emptyUnit, type DraftUnit } from "../receive-draft";
 import { useListProducts } from "@/features/core/products/queries";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import type { ProductUnitCondition, ReceiveProductUnitsInput } from "@/types/api";
@@ -14,17 +16,6 @@ export const CONDITIONS: Array<{ key: ProductUnitCondition; label: string }> = [
   { key: "open_box", label: "Open box" },
   { key: "refurbished", label: "Refurbished" },
 ];
-
-interface DraftUnit {
-  imei: string;
-  imei2: string;
-  serialNumber: string;
-  condition: ProductUnitCondition;
-}
-
-function emptyUnit(overrides: Partial<DraftUnit> = {}): DraftUnit {
-  return { imei: "", imei2: "", serialNumber: "", condition: "new", ...overrides };
-}
 
 function hasIdentity(unit: DraftUnit) {
   return Boolean(unit.imei.trim() || unit.serialNumber.trim());
@@ -39,26 +30,17 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
   onSubmit: (data: ReceiveProductUnitsInput) => void;
 }) {
   const { t } = useAppLanguage();
-  const [productId, setProductId] = useState("");
-  const [productSearch, setProductSearch] = useState("");
-  const [costPrice, setCostPrice] = useState("0");
-  const [warrantyMonths, setWarrantyMonths] = useState("12");
-  const [purchaseBillId, setPurchaseBillId] = useState("");
-  const [units, setUnits] = useState<DraftUnit[]>([emptyUnit()]);
-  const [bulk, setBulk] = useState("");
+  const draft = useCounterDraft(receiveUnitsDraft);
+  const { productId, productSearch, costPrice, warrantyMonths, purchaseBillId, units, bulk } = draft.value;
+  const setProductId = (value: string) => draft.update({ productId: value });
+  const setProductSearch = (value: string) => draft.update({ productSearch: value });
+  const setCostPrice = (value: string) => draft.update({ costPrice: value });
+  const setWarrantyMonths = (value: string) => draft.update({ warrantyMonths: value });
+  const setPurchaseBillId = (value: string) => draft.update({ purchaseBillId: value });
+  const setBulk = (value: string) => draft.update({ bulk: value });
+  const setUnits = (update: (previous: DraftUnit[]) => DraftUnit[]) => draft.update((current) => ({ ...current, units: update(current.units) }));
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setError(null);
-    setProductId("");
-    setProductSearch("");
-    setCostPrice("0");
-    setWarrantyMonths("12");
-    setPurchaseBillId("");
-    setUnits([emptyUnit()]);
-    setBulk("");
-  }, [open]);
+  useEffect(() => { setError(null); }, [open]);
 
   const productsQ = useListProducts({ limit: 500 }, { query: { enabled: open } });
   const catalogue = productsQ.data ?? [];
@@ -153,11 +135,12 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
           <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{t("workflow.electronics.register.title")}</h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">{t("workflow.electronics.register.stockHint")}</p>
         </div>
-        <button onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
+        <button disabled={saving} onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
       </div>
 
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+        <fieldset disabled={saving} className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <p className="text-[12px] text-[#6d7c98]">{t("workflow.register.draftHint")}</p>
           {/* ── Which product ── */}
           <section className="space-y-3">
             <SectionTitle>Which product</SectionTitle>
@@ -281,11 +264,11 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
           </section>
 
           {error && <p role="alert" className="rounded-[10px] bg-rose-50 px-3.5 py-2.5 text-[12px] font-semibold text-rose-700">{error}</p>}
-        </div>
+        </fieldset>
 
         <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
           <div className="grid grid-cols-2 gap-2.5">
-            <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" disabled={saving} onClick={onClose}>Cancel</Button>
             <Button
               type="submit"
               disabled={saving}

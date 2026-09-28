@@ -7,7 +7,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useCounterDraft } from "@/hooks/use-counter-draft";
+import { receiveUnitsDraft, unitSaleDraft } from "../receive-draft";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { usePanelResize } from "@/hooks/use-panel-resize";
 import { cn } from "@/lib/utils";
@@ -59,8 +62,16 @@ export default function ProductUnitsPage() {
   const [search, setSearch] = useState("");
   const [lookupCode, setLookupCode] = useState("");
   const [lookedUp, setLookedUp] = useState<{ code: string; unit: ProductUnit | null } | null>(null);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [selling, setSelling] = useState<ProductUnit | null>(null);
+  const { t } = useAppLanguage();
+  const registration = useCounterDraft(receiveUnitsDraft);
+  const panelOpen = registration.value.open;
+  const setPanelOpen = (open: boolean) => open ? registration.update({ open }) : registration.discard();
+  const saleDraft = useCounterDraft(unitSaleDraft);
+  const selling = saleDraft.value.unit;
+  const setSelling = (unit: ProductUnit | null) => {
+    saleDraft.discard();
+    if (unit) saleDraft.update({ unit });
+  };
   const [deleting, setDeleting] = useState<ProductUnit | null>(null);
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:units-panel-width", { defaultWidth: 500 });
 
@@ -81,7 +92,7 @@ export default function ProductUnitsPage() {
           variant: "destructive",
         });
       }
-      toast({ title, description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+      toast({ title, description: err instanceof Error ? err.message : t("workflow.register.tryAgain"), variant: "destructive" });
     };
   }
 
@@ -92,22 +103,20 @@ export default function ProductUnitsPage() {
   });
 
   const receiveMut = useMutation({
-    mutationFn: (data: ReceiveProductUnitsInput) => receiveProductUnits(data),
+    mutationFn: (data: ReceiveProductUnitsInput) => registration.submit(() => receiveProductUnits(data)),
     onSuccess: (units) => {
       invalidate();
       setLookedUp(null);
-      setPanelOpen(false);
-      toast({ title: `${units.length} unit${units.length === 1 ? "" : "s"} added to stock` });
+      toast({ title: t("workflow.electronics.register.saved", { count: units.length }) });
     },
     onError: failure("Could not add these units"),
   });
 
   const sellMut = useMutation({
     mutationFn: (vars: { id: string; billNumber: string; customerName: string; customerPhone: string; sellingPrice: number }) =>
-      sellProductUnit(vars.id, vars),
+      saleDraft.submit(() => sellProductUnit(vars.id, vars)),
     onSuccess: (unit) => {
       invalidate(unit);
-      setSelling(null);
       toast({
         title: `${unit.productName} recorded as sold`,
         description: unit.warrantyUntilKey ? `Warranty runs to ${fmtDay(unit.warrantyUntilKey)}.` : undefined,
@@ -359,8 +368,9 @@ export default function ProductUnitsPage() {
       </div>
 
       <ReceiveUnitsPanel
+        key={registration.scope}
         open={panelOpen}
-        saving={receiveMut.isPending}
+        saving={registration.pending || receiveMut.isPending}
         width={panelWidth}
         onResizeStart={onResizeStart}
         onClose={() => setPanelOpen(false)}
@@ -368,8 +378,9 @@ export default function ProductUnitsPage() {
       />
 
       <SellDialog
+        key={saleDraft.scope}
         unit={selling}
-        saving={sellMut.isPending}
+        saving={saleDraft.pending || sellMut.isPending}
         onClose={() => setSelling(null)}
         onConfirm={(vars) => selling && sellMut.mutate({ id: selling.id, ...vars })}
       />
@@ -471,24 +482,27 @@ function SellDialog({ unit, saving, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (vars: { billNumber: string; customerName: string; customerPhone: string; sellingPrice: number }) => void;
 }) {
-  const [billNumber, setBillNumber] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [sellingPrice, setSellingPrice] = useState("0");
+  const { t } = useAppLanguage();
+  const draft = useCounterDraft(unitSaleDraft);
+  const { billNumber, customerName, customerPhone, sellingPrice } = draft.value;
+  const setBillNumber = (value: string) => draft.update({ billNumber: value });
+  const setCustomerName = (value: string) => draft.update({ customerName: value });
+  const setCustomerPhone = (value: string) => draft.update({ customerPhone: value });
+  const setSellingPrice = (value: string) => draft.update({ sellingPrice: value });
 
   return (
     <Dialog
       open={unit !== null}
       onOpenChange={(open) => {
         if (open) return;
-        setBillNumber(""); setCustomerName(""); setCustomerPhone(""); setSellingPrice("0");
         onClose();
       }}
     >
       <DialogContent className="max-w-[420px]">
         <DialogHeader><DialogTitle className="font-display text-[16px] font-black text-[var(--brand-ink)]">Record this unit as sold</DialogTitle></DialogHeader>
         {unit && (
-          <div className="space-y-3">
+          <fieldset disabled={saving} className="min-w-0 space-y-3">
+            <DialogDescription className="text-[12px] text-[#6d7c98]">{t("workflow.register.draftHint")}</DialogDescription>
             <div className="rounded-[10px] bg-[#f7f9fd] px-3.5 py-2.5 text-[12px] text-[#52627e]">
               <p className="font-bold text-[var(--brand-ink)]">{unit.productName}</p>
               <p className="mt-0.5 font-mono text-[11px]">{unit.imei || unit.serialNumber}</p>
@@ -531,7 +545,7 @@ function SellDialog({ unit, saving, onClose, onConfirm }: {
                 {saving ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} Mark sold
               </Button>
             </div>
-          </div>
+          </fieldset>
         )}
       </DialogContent>
     </Dialog>

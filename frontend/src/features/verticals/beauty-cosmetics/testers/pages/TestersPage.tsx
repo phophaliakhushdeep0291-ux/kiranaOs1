@@ -8,7 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { createCounterDraft } from "@/lib/counter-draft";
+import { useCounterDraft } from "@/hooks/use-counter-draft";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
@@ -37,7 +40,12 @@ const FILTERS: Array<{ key: string; label: string }> = [
   { key: "all", label: "Everything" },
 ];
 
+const testerDraft = createCounterDraft(() => ({
+  open: false, productId: "", pick: "", variant: "", expectedDays: "90", moveStock: true, notes: "",
+}));
+
 export default function TestersPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isOnline } = useOfflineStatus();
@@ -45,7 +53,9 @@ export default function TestersPage() {
   const [filter, setFilter] = useState("in_use");
   const [search, setSearch] = useState("");
   const [dueOnly, setDueOnly] = useState(false);
-  const [opening, setOpening] = useState(false);
+  const draft = useCounterDraft(testerDraft);
+  const opening = draft.value.open;
+  const setOpening = (open: boolean) => open ? draft.update({ open }) : draft.discard();
   const [deleting, setDeleting] = useState<TesterUnit | null>(null);
   const [showCost, setShowCost] = useState(false);
 
@@ -69,15 +79,14 @@ export default function TestersPage() {
           variant: "destructive",
         });
       }
-      toast({ title, description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+      toast({ title, description: err instanceof Error ? err.message : t("workflow.register.tryAgain"), variant: "destructive" });
     };
   }
 
   const openMut = useMutation({
-    mutationFn: (data: OpenTesterInput) => openTester(data),
+    mutationFn: (data: OpenTesterInput) => draft.submit(() => openTester(data)),
     onSuccess: (tester) => {
       invalidate();
-      setOpening(false);
       toast({
         title: `${tester.productName} tester opened`,
         description: tester.stockLedgerId ? "One unit taken out of sellable stock." : "Recorded without moving stock.",
@@ -293,8 +302,9 @@ export default function TestersPage() {
       </div>
 
       <OpenTesterDialog
+        key={draft.scope}
         open={opening}
-        saving={openMut.isPending}
+        saving={draft.pending || openMut.isPending}
         onClose={() => setOpening(false)}
         onSubmit={(data) => openMut.mutate(data)}
       />
@@ -357,12 +367,15 @@ function OpenTesterDialog({ open, saving, onClose, onSubmit }: {
   onClose: () => void;
   onSubmit: (data: OpenTesterInput) => void;
 }) {
-  const [productId, setProductId] = useState("");
-  const [pick, setPick] = useState("");
-  const [variant, setVariant] = useState("");
-  const [expectedDays, setExpectedDays] = useState("90");
-  const [moveStock, setMoveStock] = useState(true);
-  const [notes, setNotes] = useState("");
+  const { t } = useAppLanguage();
+  const draft = useCounterDraft(testerDraft);
+  const { productId, pick, variant, expectedDays, moveStock, notes } = draft.value;
+  const setProductId = (value: string) => draft.update({ productId: value });
+  const setPick = (value: string) => draft.update({ pick: value });
+  const setVariant = (value: string) => draft.update({ variant: value });
+  const setExpectedDays = (value: string) => draft.update({ expectedDays: value });
+  const setMoveStock = (value: boolean) => draft.update({ moveStock: value });
+  const setNotes = (value: string) => draft.update({ notes: value });
   const [error, setError] = useState<string | null>(null);
 
   const productsQ = useListProducts({ limit: 500 }, { query: { enabled: open } });
@@ -378,8 +391,9 @@ function OpenTesterDialog({ open, saving, onClose, onSubmit }: {
   }, [catalogue, pick]);
 
   function reset() {
-    setProductId(""); setPick(""); setVariant(""); setExpectedDays("90");
-    setMoveStock(true); setNotes(""); setError(null);
+    if (saving) return;
+    draft.discard();
+    setError(null);
   }
 
   function submit() {
@@ -398,7 +412,8 @@ function OpenTesterDialog({ open, saving, onClose, onSubmit }: {
     <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
       <DialogContent className="max-w-[440px]">
         <DialogHeader><DialogTitle className="font-display text-[16px] font-black text-[var(--brand-ink)]">Open a tester</DialogTitle></DialogHeader>
-        <div className="space-y-3">
+        <fieldset disabled={saving} className="min-w-0 space-y-3">
+          <DialogDescription className="text-[12px] text-[#6d7c98]">{t("workflow.register.draftHint")}</DialogDescription>
           {chosen ? (
             <div className="flex items-center gap-2.5 rounded-[10px] border border-[#e7edf7] bg-[#f7f9fd] px-3.5 py-2.5">
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[var(--brand)]"><Sparkles size={16} /></span>
@@ -478,7 +493,7 @@ function OpenTesterDialog({ open, saving, onClose, onSubmit }: {
               {saving ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Open
             </Button>
           </div>
-        </div>
+        </fieldset>
       </DialogContent>
     </Dialog>
   );

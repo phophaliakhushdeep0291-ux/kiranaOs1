@@ -1,0 +1,98 @@
+- link:
+  - /url: "#main-content"
+  - text: Skip to main content
+- banner:
+  - link:
+    - /url: /dashboard
+  - heading [level=1]: Testers
+  - generic: QA Beauty · Synced
+  - button:
+  - link:
+    - /url: /sync-status
+- main:
+  - status: Testers page loaded
+  - paragraph: Testers on the counter
+  - paragraph: "1"
+  - paragraph: Need replacing
+  - paragraph: "0"
+  - paragraph: Value on the counter
+  - paragraph: ₹30
+  - paragraph: Testers cost this month
+  - paragraph: ₹30
+  - button:
+    - generic: What are testers costing you?
+    - generic: A counter full of shades is real money in stock that will never be sold. Tap to see which shades are eating it.
+  - heading [level=3]: Tester register
+  - paragraph: Opening a tester takes the unit out of sellable stock, so the shelf count stays honest.
+  - button:
+    - text: Open a Tester
+  - button: On the counter
+  - button: Replaced
+  - button: Discarded
+  - button: Everything
+  - button: Due only
+  - textbox:
+    - /placeholder: Product or shade
+  - table:
+    - rowgroup:
+      - row:
+        - columnheader: Tester
+        - columnheader: Opened
+        - columnheader: Replace by
+        - columnheader: Cost
+        - columnheader: Actions
+    - rowgroup:
+      - row:
+        - cell:
+          - text: Tester
+          - paragraph: QA Rose Lipstick
+          - paragraph: Rose 05
+        - cell:
+          - text: Opened
+          - paragraph: 28 Sept 26
+          - paragraph: 0 days ago
+        - cell: Replace by 27 Dec 26
+        - cell: Cost ₹30
+        - cell:
+          - text: Actions
+          - button:
+            - text: Replaced
+          - button:
+          - button:
+- navigation:
+  - link:
+    - /url: /dashboard
+    - generic: Home
+  - link:
+    - /url: /billing
+    - generic: Sell
+  - link:
+    - /url: /inventory
+    - generic: Stock
+  - link:
+    - /url: /customers
+    - generic: Customers
+  - button:
+    - generic: More
+- button:
+- list
+- dialog "Open a tester":
+  - heading "Open a tester" [level=2]
+  - paragraph: Your entries stay here while the counter is locked. Cancel discards them.
+  - paragraph: QA Rose Lipstick
+  - paragraph: 9 in stock · costs ₹30
+  - button "Change"
+  - generic: Shade
+  - textbox "Rose 05": QA Lock Recovery
+  - generic: Lasts about (days)
+  - spinbutton: "60"
+  - checkbox "Take one out of stock now Leave this on unless you already took the unit off the shelf by hand — otherwise it would come off twice." [checked]
+  - generic: Take one out of stock now
+  - generic: Leave this on unless you already took the unit off the shelf by hand — otherwise it would come off twice.
+  - generic: Notes (optional)
+  - textbox "Where it sits, who opened it…" [active]: Keep this note after PIN unlock
+  - button "Cancel"
+  - button "Open":
+    - text: Open
+  - button "Close":
+    - generic: Close
