@@ -75,9 +75,11 @@ none, which is worse than knowing you have none.
 
 Two honest options:
 
-- **Café scale — a scheduled job outside the app.** Run `npm run backup:postgres`
-  on a nightly schedule, writing to storage that survives a redeploy. This is
-  the Railway path; see [`railway.md`](./railway.md).
+- **Café scale — a scheduled job outside the app.** Run
+  `npm run backup:postgres:offsite` nightly. It dumps, uploads the dump to an
+  S3-compatible bucket, reads the copy back to verify it, and fails the run if
+  any of that cannot happen. Needs a bucket, but no Redis and no worker. This
+  is the Railway path; see [`railway.md`](./railway.md#scheduled-off-site-backups).
 - **Full scale — Redis and a bucket.** Set `QUEUES_ENABLED=true`, `REDIS_URL`,
   `STORAGE_PROVIDER` and its credentials, then `DATABASE_BACKUP_ENABLED=true`.
 

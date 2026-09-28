@@ -189,23 +189,96 @@ configured". At café scale that is three extra moving parts — Redis, a bucket
 worker — for one nightly dump.
 
 Use a Railway **scheduled service** instead, matching the convention already in
-[`backend/docs/SCHEDULING.md`](../../backend/docs/SCHEDULING.md):
+[`backend/docs/SCHEDULING.md`](../../backend/docs/SCHEDULING.md).
 
-- Service: `backup`, root directory `backend`, no public domain
-- Command: `npm run backup:postgres`
-- Schedule: `0 2 * * *`
-- Variables: `DATABASE_URL=${{postgres.DATABASE_URL}}`, `BACKUP_DIR=/data/backups`
+### Scheduled off-site backups
+
+The `backup` service runs `npm run backup:postgres:offsite` once a night. That
+command dumps the database with the image's PostgreSQL 18 `pg_dump`, uploads the
+dump to an S3-compatible bucket, reads it back and compares the SHA-256, prunes
+copies older than `BACKUP_RETENTION_DAYS` (never fewer than
+`DATABASE_BACKUP_MIN_RETAINED`), and deletes the local file. If any step fails,
+the process exits non-zero and Railway marks that run failed. It refuses to
+start without a bucket, before it dumps anything. Without that check, a
+misconfigured run would exit 0 after writing a dump to a disk that is discarded
+with the container.
+
+**1. Make the bucket outside Railway.** A bucket in the same Railway project
+does not survive losing the project, which is one of the things an off-site copy
+is for. Cloudflare R2 or AWS S3 both work. Create one private bucket and a key
+scoped to that bucket with read, write, list and delete permissions. Delete is
+needed for retention.
+
+**2. Create the service.**
+
+- New service from this repo, root directory `backend`, no public domain.
+- **Settings → Config-as-code → config file path: `/backend/railway.backup.json`.**
+  Do not skip this step. Without it the service reads `backend/railway.json`,
+  which is the API's config: it has no schedule, and its health check waits for
+  an HTTP server that a backup job never starts.
+
+[`backend/railway.backup.json`](../../backend/railway.backup.json) sets the
+start command, `restartPolicyType: NEVER` (a failed run should stay failed, not
+turn into a second dump), and the schedule `30 20 * * *`. Railway cron runs in
+UTC, so that is **02:00 Asia/Kolkata**, after closing. The earlier `0 2 * * *`
+here meant 07:30 IST.
+
+**3. Variables.** The job loads the backend's production configuration check,
+so it needs the same secrets the API does, or it exits before dumping. Use
+references so a rotated secret reaches both services:
+
+```ini
+# backup
+DATABASE_URL=${{postgres.DATABASE_URL}}
+JWT_SECRET=${{backend.JWT_SECRET}}
+LICENSE_SIGNING_SECRET=${{backend.LICENSE_SIGNING_SECRET}}
+INTEGRATION_SIGNING_SECRET=${{backend.INTEGRATION_SIGNING_SECRET}}
+METRICS_REQUIRE_TOKEN=true
+METRICS_TOKEN=${{backend.METRICS_TOKEN}}
+ALLOWED_ORIGINS=${{backend.ALLOWED_ORIGINS}}
+
+STORAGE_PROVIDER=r2                      # or s3
+STORAGE_BUCKET=<bucket>
+STORAGE_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com   # omit for AWS S3
+STORAGE_REGION=                          # R2 defaults to auto; set it for AWS S3
+STORAGE_ACCESS_KEY_ID=<bucket-scoped key>
+STORAGE_SECRET_ACCESS_KEY=<bucket-scoped secret>
+
+BACKUP_RETENTION_DAYS=30
+DATABASE_BACKUP_MIN_RETAINED=3
+```
+
+Any other production-only toggle turned on for the backend, such as
+`RAZORPAY_ENABLED` or `WHATSAPP_PROVIDER`, carries its own required variables.
+Either reference those too or leave the toggle unset on `backup`. Do **not** set
+`DATABASE_BACKUP_ENABLED` on the backend as well unless Redis and the worker
+are running. The npm script turns it on for this job alone.
+
+**4. Prove it before trusting the schedule.** Check the configuration from the
+service shell (`railway ssh --service backup`, or a one-off run) with
+`BACKUP_DRY_RUN=true npm run backup:postgres:offsite`. It exits non-zero on a
+missing bucket and connects to nothing. Then trigger one real run from the
+service's cron panel and confirm the last log line:
+
+```json
+{"type":"postgres_backup_offsite","status":"passed","verified":true, ...}
+```
+
+The object lands at `backups/database/<database>/kiranaos-<database>-<UTC timestamp>-<uuid>.dump`.
+
+**5. Know when it stops.** A failed cron run is visible only in the service's
+run history. Check it weekly, or have your bucket provider alert on no new
+object under `backups/database/` for 36 hours. An off-site copy that nobody has
+restored is still unproven. Pull one down and restore it with the
+[restore drill](#the-restore-drill-on-railway) before counting on it.
 
 ### The ephemeral filesystem
 
 **A container's disk does not survive a redeploy.** `BACKUP_DIR` defaults to
-`./backups`, so a nightly dump written there is gone the next time you ship —
-and gone entirely when the container that holds it is the one that died.
-
-Mount a Railway **volume** on the `backup` service at `/data` and point
-`BACKUP_DIR` at `/data/backups`. Better still, once there is a bucket, copy each
-dump off-box: a volume attached to the same project does not protect against
-losing the project.
+`./backups`, so a dump written there is gone the next time you ship, and gone
+entirely when the container that holds it is the one that died. The scheduled
+service above never relies on it: its copy is the one in the bucket. A volume
+attached to the same project does not protect against losing the project.
 
 The API's local object storage uses `/app/storage` in the Docker image. A volume
 attached to the API at `/var/lib/postgresql/data` does **not** persist those
