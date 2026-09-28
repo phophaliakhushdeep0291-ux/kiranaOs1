@@ -128,6 +128,8 @@ export const workflowsEn = {
   "workflow.auto_parts.entry.batchNote": "Useful for lubricants, adhesives, paint, and other dated chemicals.",
 
   // -- electronics --
+  "workflow.electronics.register.title": "Register serial numbers",
+  "workflow.electronics.register.stockHint": "Record the codes on your existing stock. To add product quantities, record a purchase or use Stock In separately.",
   "workflow.electronics.title": "Electronics retail workflow",
   "workflow.electronics.subtitle": "Keep model-wise stock clear, capture warranty context, and make bill-linked returns easy.",
   "workflow.electronics.action.1": "Model catalogue",
