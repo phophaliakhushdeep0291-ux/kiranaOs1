@@ -138,7 +138,7 @@ export const I18N_HARDCODED_ALLOWLIST: Record<string, number> = {
   "features/verticals/beauty-cosmetics/testers/pages/TestersPage.tsx": 52,
   "features/verticals/clothing/rentals/components/RentalBookingPanel.tsx": 44,
   "features/verticals/clothing/rentals/pages/RentalsPage.tsx": 46,
-  "features/verticals/electronics/units/components/ReceiveUnitsPanel.tsx": 27,
+  "features/verticals/electronics/units/components/ReceiveUnitsPanel.tsx": 25,
   "features/verticals/electronics/units/pages/ProductUnitsPage.tsx": 58,
   "features/verticals/footwear/sizes/pages/SizeRunsPage.tsx": 51,
   "features/verticals/furniture-home/orders/components/OrderPanel.tsx": 36,

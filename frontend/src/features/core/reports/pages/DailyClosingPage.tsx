@@ -110,6 +110,7 @@ export default function DailyClosingPage() {
   const reportRef = useRef<DailyClosingReport | null>(null);
   const refreshTimer = useRef<number | null>(null);
   const countedDraftDirty = useRef(false);
+  const floatDraftDirty = useRef(false);
 
   useEffect(() => {
     reportRef.current = report;
@@ -175,10 +176,19 @@ export default function DailyClosingPage() {
 
   // Re-prime the float box when the date changes; typing must not be overwritten.
   useEffect(() => {
+    floatDraftDirty.current = false;
     const declared = openingFloats.find((row) => row.date === date);
     setFloatDraft(declared ? String(declared.amount) : "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
+
+  // Saved floats load asynchronously. Fill the field when they arrive, but keep
+  // any unsaved amount the shopkeeper is already entering during a refresh.
+  useEffect(() => {
+    if (floatDraftDirty.current) return;
+    const declared = openingFloats.find((row) => row.date === date);
+    setFloatDraft(declared ? String(declared.amount) : "");
+  }, [date, openingFloats]);
 
   const declaredFloat = openingFloatFor(openingFloats, date);
   const movementsForDate = cashMovements.filter((row) => row.date === date);
@@ -403,7 +413,7 @@ export default function DailyClosingPage() {
                 inputMode="decimal"
                 placeholder="0"
                 value={floatDraft}
-                onChange={(event) => setFloatDraft(event.target.value)}
+                onChange={(event) => { floatDraftDirty.current = true; setFloatDraft(event.target.value); }}
                 className="h-11 text-lg font-bold tabular-nums"
               />
               <Button onClick={() => void saveFloatForDate()} className="h-11 shrink-0">Save</Button>

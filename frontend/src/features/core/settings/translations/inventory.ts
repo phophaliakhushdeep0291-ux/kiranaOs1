@@ -466,6 +466,8 @@ export const inventoryEn = {
   "inventory.page.inventoryItem": "Inventory item",
   "inventory.page.pinRequiredNote": "{movement} requires owner PIN and creates a pending sync adjustment.",
   "inventory.page.unitsTracked": "{count} units tracked",
+  "inventory.page.stockTrackedProducts": "Products counted as stock",
+  "returns.findOriginalBill": "Find original bill",
   "inventory.page.skuLabel": "SKU: {value}",
   "inventory.page.categoryLabel": "Category: {value}",
   "inventory.page.valueLabel": "Value: {value}",

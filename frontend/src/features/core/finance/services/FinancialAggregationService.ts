@@ -1,7 +1,9 @@
 import { roundMoney } from "@/lib/money";
 import { mergeSupplierPaymentHistory, supplierPurchaseKeys } from "./supplier-payment-history";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
-import type { Bill, Customer, Product, Supplier } from "@/types/api";
+import type { Bill, Customer, Expense, Product, Supplier } from "@/types/api";
+import { reportCalendarDay } from "@/features/core/reports/report-calendar";
+import { loadDrawerAdjustments } from "@/features/core/reports/cash-drawer";
 import {
   calculateLedgerBalance,
   dedupeLedgerEntries,
@@ -36,6 +38,7 @@ export interface FinancialAggregationInput {
   suppliers?: Supplier[];
   inventoryMovements?: LocalInventoryMovement[];
   purchaseBills?: LocalPurchaseBill[];
+  expenses?: (Expense & RecordLike)[];
   date?: string;
   range?: { from: string; to: string };
   generatedAt?: string;
@@ -43,7 +46,7 @@ export interface FinancialAggregationInput {
    * Till adjustments that do not flow through sales. Without these the expected drawer
    * only reflects money that moved through bills, so the over/short at closing is wrong
    * for any shop that keeps a float or pays anything out of the till.
-   * Expenses are server-backed (no offline table), so the caller supplies the cash total.
+   * A caller with an authoritative cash-expense total may override the cached rows.
    */
   openingCash?: number;
   cashIn?: number;
@@ -1061,14 +1064,25 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
   const openingCashToday = roundMoney(Math.max(0, Number(input.openingCash) || 0));
   const cashInToday = roundMoney(Math.max(0, Number(input.cashIn) || 0));
   const cashOutToday = roundMoney(Math.max(0, Number(input.cashOut) || 0));
-  const expensesToday = roundMoney(Math.max(0, Number(input.cashExpenses) || 0));
+  const expenses = (input.expenses ?? []).filter((row) => {
+    const day = reportCalendarDay(row.spentAt);
+    return !isDeleted(row) && day !== null && day >= range.from && day <= range.to;
+  });
+  const expenseAmount = (row: Expense) => Math.max(0, readNumber(row.amount));
+  const cachedCashExpenses = expenses
+    .filter((row) => row.status === "paid" && row.paymentMode === "cash")
+    .reduce((sum, row) => sum + expenseAmount(row), 0);
+  const cashExpensesToday = roundMoney(Math.max(0, Number(input.cashExpenses ?? cachedCashExpenses) || 0));
+  const expensesToday = input.expenses === undefined
+    ? cashExpensesToday
+    : roundMoney(expenses.reduce((sum, row) => sum + expenseAmount(row), 0));
   const ownerWithdrawalToday = 0;
   const cashDrawer: CashDrawerSummary = {
     openingCash: openingCashToday,
     cashSales: cashSalesToday,
     cashUdharRecovery: oldUdhar.cash,
     supplierCashPaid: supplierCashPaidToday,
-    expenses: expensesToday,
+    expenses: cashExpensesToday,
     ownerWithdrawals: ownerWithdrawalToday,
     cashIn: cashInToday,
     cashOut: cashOutToday,
@@ -1077,7 +1091,7 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
       + totalCashCollectedToday
       + cashInToday
       - supplierCashPaidToday
-      - expensesToday
+      - cashExpensesToday
       - cashOutToday
       - ownerWithdrawalToday,
     ),
@@ -1132,6 +1146,7 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
       ledger.length > 0 ||
       products.length > 0 ||
       customers.length > 0 ||
+      expenses.length > 0 ||
       supplierDueRows.length > 0,
     dataSourceLabel: "FinancialAggregationService",
   };
@@ -1155,6 +1170,8 @@ export async function buildFinancialAggregationSnapshot(date = todayInputValue()
     suppliers,
     inventoryMovements,
     purchaseBills,
+    expenses,
+    drawer,
   ] = await Promise.all([
     loadScopedRows<LocalBill>("bills"),
     loadScopedRows<LocalBillItem>("bill_items"),
@@ -1165,6 +1182,8 @@ export async function buildFinancialAggregationSnapshot(date = todayInputValue()
     loadScopedRows<Supplier>("suppliers"),
     loadScopedRows<LocalInventoryMovement>("inventory_movements"),
     loadScopedRows<LocalPurchaseBill>("purchase_bills"),
+    loadScopedRows<Expense & RecordLike>("expenses"),
+    loadDrawerAdjustments(date),
   ]);
 
   return aggregateFinancialRows({
@@ -1177,6 +1196,8 @@ export async function buildFinancialAggregationSnapshot(date = todayInputValue()
     suppliers,
     inventoryMovements,
     purchaseBills,
+    expenses,
+    ...drawer,
     date,
   });
 }

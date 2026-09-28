@@ -19,6 +19,7 @@ export const shopTypesEn = {
   "furniture.history.stockConfirmation": "I checked that no invoice exists for this sale and these delivered goods are still included in recorded stock.",
 
   "furniture.history.title": "Review historical receipts",
+  "furniture.history.reason": "Review note",
   "furniture.history.help": "Confirm each receipt against your records. This records its accounting history on the original payment date; it does not collect money again.",
   "furniture.history.confirm": "Confirm receipt history",
   "furniture.history.checked": "I checked these amounts and payment methods against the original receipts.",

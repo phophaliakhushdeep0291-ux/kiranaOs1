@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { useListProducts } from "@/features/core/products/queries";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import type { ProductUnitCondition, ReceiveProductUnitsInput } from "@/types/api";
 
 export const CONDITIONS: Array<{ key: ProductUnitCondition; label: string }> = [
@@ -37,6 +38,7 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
   onClose: () => void;
   onSubmit: (data: ReceiveProductUnitsInput) => void;
 }) {
+  const { t } = useAppLanguage();
   const [productId, setProductId] = useState("");
   const [productSearch, setProductSearch] = useState("");
   const [costPrice, setCostPrice] = useState("0");
@@ -142,14 +144,14 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
       style={{ width }}
       className={`app-slide-panel fixed right-0 top-0 z-[80] flex h-[100dvh] w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog"
-      aria-label="Add units to stock"
+      aria-label={t("workflow.electronics.register.title")}
       aria-hidden={!open}
     >
       <PanelResizeHandle onResizeStart={onResizeStart} />
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
-          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">Add units to stock</h2>
-          <p className="mt-0.5 text-[12px] text-[#6d7c98]">Scan each IMEI or serial as you open the box</p>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{t("workflow.electronics.register.title")}</h2>
+          <p className="mt-0.5 text-[12px] text-[#6d7c98]">{t("workflow.electronics.register.stockHint")}</p>
         </div>
         <button onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
       </div>
