@@ -3,7 +3,8 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { AUTH_SESSION_EXPIRED_EVENT, DEVICE_SESSION_REVOKED_EVENT, ApiClientError, getMe, logoutSession, refreshAccessToken, setAuthTokenGetter, type AuthResponse, type Shop, type User } from "@/lib/api/client";
 import { resetDeviceAfterCloudRestore } from "@/features/core/backups/restore-local-reset";
-import { AUTH_SESSION_STORAGE_KEY, clearAuthStorage, getAuthValue, loadAuthSession, migrateAuthFromLocalStorage, saveAuthSession } from "@/lib/storage/auth-storage";
+import { AUTH_SESSION_STORAGE_KEY, authSessionInstance, clearAuthStorage, getAuthValue, loadAuthSession, migrateAuthFromLocalStorage, saveAuthSession } from "@/lib/storage/auth-storage";
+import { clearCounterDrafts } from "@/lib/counter-draft";
 import { writeAuditLog } from "@/features/core/audit-logs/local-actions";
 import { activateDevice, heartbeatDevice, reportDeviceHealth } from "@/features/core/devices/api";
 import { collectDeviceHealth } from "@/lib/device-health/collectDeviceHealth";
@@ -192,6 +193,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event.key !== AUTH_SESSION_STORAGE_KEY) return;
       authGenerationRef.current += 1;
       const session = loadAuthSession();
+      // Another tab may sign out or start a new login for the same user.
+      // Rotating only the token secret still belongs to the current session.
+      try {
+        if (authSessionInstance(JSON.parse(event.oldValue || "{}")) !== authSessionInstance(session)) clearCounterDrafts();
+      } catch { clearCounterDrafts(); }
       const nextUser = session.user ?? null;
       const nextShop = session.shop ?? null;
       const nextToken = session.accessToken ?? null;
