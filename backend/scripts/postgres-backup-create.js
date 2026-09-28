@@ -46,6 +46,20 @@ const dryRun = boolEnv("BACKUP_DRY_RUN");
 
 const db = parsePostgresUrl(databaseUrl, "DATABASE_URL");
 const databaseCliUrl = postgresCliUrl(databaseUrl);
+
+// The scheduled service sets this. Without it, a missing upload flag or a
+// bucket-less STORAGE_PROVIDER still exits 0 after writing the dump to a disk
+// that is discarded with the container: a green cron run with no backup behind
+// it. Refuse before dumping, so a dry run proves the configuration too.
+if (boolEnv("BACKUP_REQUIRE_OFFSITE")) {
+  if (!boolEnv("DATABASE_BACKUP_ENABLED")) {
+    throw new Error("BACKUP_REQUIRE_OFFSITE=true requires DATABASE_BACKUP_ENABLED=true; this run would never leave the container");
+  }
+  const storageProvider = process.env.STORAGE_PROVIDER || "local";
+  if (!["s3", "r2", "minio"].includes(storageProvider)) {
+    throw new Error(`BACKUP_REQUIRE_OFFSITE=true requires STORAGE_PROVIDER s3, r2 or minio, not ${storageProvider}`);
+  }
+}
 if (!commandExists("pg_dump")) {
   throw new Error("pg_dump was not found. Install PostgreSQL client tools before running backup proof.");
 }
