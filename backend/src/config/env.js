@@ -116,6 +116,15 @@ const envSchema = z.object({
     .refine((value) => Number.isFinite(Date.parse(value)), {
       message: "FREE_ACCESS_UNTIL must be a parseable date",
     }),
+  // When the promotion began serving shops: the day PR #354 reached production.
+  // Only the credit for shops that were paying through the window reads it, to
+  // work out how much of their paid time the promotion gave away.
+  FREE_ACCESS_FROM: z
+    .string()
+    .default("2026-09-21T00:00:00+05:30")
+    .refine((value) => Number.isFinite(Date.parse(value)), {
+      message: "FREE_ACCESS_FROM must be a parseable date",
+    }),
   REDIS_URL: z.string().optional(),
   QUEUES_ENABLED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   // auto keeps one-service deployments affordable: API + worker when queues

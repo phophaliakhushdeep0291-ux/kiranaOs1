@@ -149,7 +149,7 @@
     "test:sync-feed": "node tests/sync-feed-compaction.examples.js && node scripts/run-db-example-tests.js tests/change-feed-retention.examples.js",
     "index-audit:local": "node scripts/run-index-audit-stack.js",
     "index-audit:postgres": "node scripts/run-index-audit-stack.js --postgres",
-    "test:entitlements-db": "node scripts/run-db-example-tests.js tests/free-access-window.examples.js",
+    "test:entitlements-db": "node scripts/run-db-example-tests.js tests/free-access-window.examples.js tests/free-window-credit.examples.js",
     "eval:agent": "node scripts/agent-eval.js",
     "eval:agent:live": "node scripts/agent-eval.js --live"
   },
