@@ -85,7 +85,25 @@ node scripts/repair-udhar-balances.js --shopId=<id>
 
 ---
 
-## 5. Verification
+## 5. Backups — a separate service, not a flag on this one
+
+Setting `DATABASE_BACKUP_ENABLED=true` on the backend does **not** give you a nightly dump. It schedules a BullMQ job, which does nothing without Redis, a running worker and object storage — so it reads as enabled while taking no backup at all.
+
+The path that works is a Railway **scheduled service** running `npm run backup:postgres:offsite` once a night against a bucket held outside Railway. `backend/railway.backup.json` is its config, and [`docs/deploy/railway.md`](docs/deploy/railway.md#backups-what-actually-works-here) has the rest: the bucket and its scoped key, the config-as-code path the service must be pointed at, every variable it needs, and the dry run that proves the configuration before you trust the schedule.
+
+Then prove a restore, because a backup nobody has restored is not a backup:
+
+```bash
+cd backend && npm run drill:restore:offsite
+```
+
+It takes the newest dump from the bucket, refuses one older than `OFFSITE_BACKUP_MAX_AGE_HOURS`, checks its size and SHA-256 against what the upload recorded, and restores it into the drill database — never production.
+
+Until that schedule exists and one real dump has been restored from it, `RELEASE_GATE.md` counts "no automated daily backup in production" as an open blocker.
+
+---
+
+## 6. Verification
 
 ```bash
 # Backend
@@ -100,6 +118,6 @@ Smoke test on the live site: log in on 2 devices → 3rd device shows the device
 
 ---
 
-## 6. Rollback
+## 7. Rollback
 
 Both Railway and Vercel support one-click rollback to the previous deployment. Because migrations are additive (old code ignores the new columns/tables), **roll back code only — you do not need to roll back the database.**
