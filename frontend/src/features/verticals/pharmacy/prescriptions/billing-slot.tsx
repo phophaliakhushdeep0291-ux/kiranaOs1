@@ -29,7 +29,7 @@ export function registerPrescriptionBillingSlot() {
   registerBillingSlot({
     id: "prescriptionId",
     Component: PrescriptionSlot,
-    appliesTo: ({ products }) => products.some((product) => RESTRICTED.includes(String(product?.drugSchedule ?? ""))),
+    appliesTo: ({ products, values }) => Boolean(values?.prescriptionId) || products.some((product) => RESTRICTED.includes(String(product?.drugSchedule ?? ""))),
   });
 }
 

@@ -5,7 +5,7 @@ import { createBillLocalFirst } from "@/features/core/billing/local-actions";
 import { createBill } from "@/features/core/billing/api";
 import type { Bill, BillInput } from "@/types/api";
 
-export interface ConfirmBillVariables { data: BillInput }
+export interface ConfirmBillVariables { data: BillInput; requiresOnline?: boolean }
 
 export function useConfirmBill(options?: MutationHookOptions<Bill, ConfirmBillVariables>) {
   return useMutation<Bill, ApiClientError, ConfirmBillVariables>({
@@ -14,7 +14,11 @@ export function useConfirmBill(options?: MutationHookOptions<Bill, ConfirmBillVa
     // mode pauses it before mutationFn when navigator.onLine is false, leaving
     // the billing UI stuck on Saving and never creating the outbox record.
     networkMode: "always",
-    mutationFn: ({ data }) => {
+    mutationFn: ({ data, requiresOnline }) => {
+      if (requiresOnline || data.prescriptionId || (data.items ?? []).some((item) => item.trackedUnitId)) {
+        if (typeof navigator !== "undefined" && !navigator.onLine) throw new ApiClientError("Reconnect to save this register-linked bill. Your draft is still open.", 0, { code: "REGISTER_BILL_OFFLINE" });
+        return createBill(data);
+      }
       // Guest snapshots are a server-owned contract. Do not announce a local
       // sale or clear its table before that contract and settlement commit.
       if ((data.items ?? []).some((item) => item.guestOrderId || item.guestOrderLineId)) {

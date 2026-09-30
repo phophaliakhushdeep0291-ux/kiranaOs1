@@ -1,3 +1,4 @@
+import "./units.guard.js";
 import { Router } from "express";
 import { requireAuth } from "../../../middleware/auth.js";
 import { requireDeviceActivated } from "../../../modules/devices/device.middleware.js";

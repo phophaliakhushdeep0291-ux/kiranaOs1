@@ -381,6 +381,9 @@ export async function returnUnit(shopId, id, { condition = "open_box", reason } 
   const unit = await db.productUnit.findFirst({ where: { id, shopId, deletedAt: null } });
   if (!unit) throw new AppError("Unit not found", 404);
   if (unit.status !== "sold") throw new AppError("Only a sold unit can be taken back", 409, "UNIT_BAD_STATUS");
+  if (unit.billId && await db.billItem.findFirst({ where: { billId: unit.billId, trackedUnitId: unit.id } })) {
+    throw new AppError("Return this unit from its bill so the refund and stock are recorded together.", 409, "UNIT_RETURN_FROM_BILL");
+  }
 
   const updated = await db.productUnit.update({
     where: { id: unit.id },

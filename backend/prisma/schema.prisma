@@ -821,6 +821,7 @@ model Bill {
 model BillItem {
   id                        String  @id @default(cuid())
   billId                    String
+  trackedUnitId             String?
   productId                 String?
   sellingUnitId             String?
   sellingUnitCode           String?

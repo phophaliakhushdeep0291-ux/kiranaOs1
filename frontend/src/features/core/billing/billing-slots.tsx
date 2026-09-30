@@ -1,3 +1,5 @@
+import type { BillInputItem } from "@/types/api";
+import type { CartItem } from "./pages/billing-types";
 import type { ComponentType } from "react";
 
 /**
@@ -20,6 +22,7 @@ import type { ComponentType } from "react";
 export interface BillingSlotProps {
   /** Product ids currently in the cart, so a slot can decide if it applies. */
   productIds: string[];
+  cart?: CartItem[];
   /** Opaque per-slot value held on the bill draft, keyed by slot id. */
   value: unknown;
   onChange: (value: unknown) => void;
@@ -29,11 +32,12 @@ export interface BillingSlot {
   /** Stable key. Also the key its value is stored under on the draft. */
   id: string;
   Component: ComponentType<BillingSlotProps>;
+  prepareItems?: (items: BillInputItem[], value: unknown) => BillInputItem[];
   /**
    * Whether this slot applies to the current cart. Returning false is the normal
    * case — an OTC basket must not sprout a prescription control.
    */
-  appliesTo: (context: { productIds: string[]; products: Array<Record<string, unknown>> }) => boolean;
+  appliesTo: (context: { productIds: string[]; products: Array<Record<string, unknown>>; businessType?: string; values?: Record<string, unknown> }) => boolean;
 }
 
 const slots: BillingSlot[] = [];
@@ -45,7 +49,7 @@ export function registerBillingSlot(slot: BillingSlot) {
 }
 
 /** Slots that apply to this cart. Empty for every shop that registered none. */
-export function billingSlotsFor(context: { productIds: string[]; products: Array<Record<string, unknown>> }): BillingSlot[] {
+export function billingSlotsFor(context: { productIds: string[]; products: Array<Record<string, unknown>>; businessType?: string; values?: Record<string, unknown> }): BillingSlot[] {
   if (slots.length === 0) return [];
   return slots.filter((slot) => slot.appliesTo(context));
 }
@@ -53,4 +57,8 @@ export function billingSlotsFor(context: { productIds: string[]; products: Array
 /** Test seam: drop every registration so one suite cannot leak into the next. */
 export function resetBillingSlots() {
   slots.length = 0;
+}
+
+export function prepareBillingItems(active: BillingSlot[], values: Record<string, unknown>, items: BillInputItem[]) {
+  return active.reduce((result, slot) => slot.prepareItems?.(result, values[slot.id]) ?? result, items);
 }

@@ -245,6 +245,8 @@ export default function BillDetailPage() {
     const returnBalance = data?.returnBalances.get(billItemId);
     return {
     billItemId: billItemId || undefined,
+    trackedUnitId: item.trackedUnitId as string | undefined,
+    note: item.note as string | undefined,
     productId: (item.productId ?? item.product_id) as string | undefined,
     sellingUnitId: String(item.sellingUnitId ?? item.selling_unit_id ?? "") || undefined,
     sellingUnitCode: String(item.sellingUnitCode ?? item.selling_unit_code ?? "") || undefined,

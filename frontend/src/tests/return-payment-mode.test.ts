@@ -24,3 +24,10 @@ describe("return payment display", () => {
     expect(isSalesReturnBill({ billType: "normal_sale" })).toBe(false);
   });
 });
+
+it("keeps distinct serials when duplicate server echoes exceed the bill total", () => {
+  const first = { id: "first", productId: "phone", name: "Phone", quantity: 1, ratePerRateUnit: 50, lineTotal: 50, trackedUnitId: "serial-1" };
+  const second = { ...first, id: "second", trackedUnitId: "serial-2" };
+  const echo = { ...first, id: "echo", server_id: "first", sync_status: "synced" };
+  expect(dedupeBillItemsForDisplay([first, second, echo], 100).map(item => item.trackedUnitId).sort()).toEqual(["serial-1", "serial-2"]);
+});

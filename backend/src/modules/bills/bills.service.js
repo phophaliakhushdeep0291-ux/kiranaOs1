@@ -1,3 +1,5 @@
+import { runBillLifecycle } from "../../shared/bill-lifecycle.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { addMoney, moneyEquals, moneyShadows, multiplyMoney, round2, subtractMoney, sumMoney } from "../../utils/money.js";
@@ -91,7 +93,7 @@ export const BILL_REPLICA_ITEM_COLUMNS = {
   sellingUnitId: true, sellingUnitCode: true, sellingUnitLabel: true, conversionToBase: true,
   name: true, quantity: true, enteredUnit: true, baseUnit: true, quantityInBaseUnit: true,
   rateUnit: true, ratePerRateUnit: true, costPerRateUnit: true, gstRate: true, hsn: true,
-  originalBillItemId: true, note: true,
+  originalBillItemId: true, trackedUnitId: true, note: true,
   lineDiscount: true, lineTotal: true, lineCost: true, lineProfit: true, originalUnitPrice: true,
   appliedPricingRuleId: true, appliedPricingRuleType: true, pricingExplanation: true,
   pricingConfidence: true, pricingCalculationVersion: true,
@@ -479,7 +481,7 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null, t
   let bill;
   let integrationDeliveries = [];
   try {
-    const runTransaction = transactionContext ? (work) => work(transactionContext.tx) : (work) => db.$transaction(work);
+    const runTransaction = transactionContext ? (work) => work(transactionContext.tx) : (work) => serializableTransaction(work);
     const transactionResult = await runTransaction(async (tx) => {
     const existingBill = await findExistingBillByIdentity(tx, shopId, billIdentity);
     if (existingBill) return { bill: existingBill, deliveries: [] };
@@ -1220,7 +1222,7 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
     throw err;
   }
 
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     // Atomic claim: only one concurrent request can transition active -> cancelled, so two
     // simultaneous cancels can't both restore stock / reverse udhar. The conditional update
     // locks the row until commit; a read-then-act status check (the outer guard above) does not.
@@ -1239,6 +1241,8 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
       err.code = "BILL_NOT_CANCELLABLE";
       throw err;
     }
+
+    await runBillLifecycle("cancel", { tx, shopId, bill });
 
     // ── 1. Restore stock for every item ───────────────────────
     // Only bills that actually deducted stock (they have "sale" stock-ledger rows) restore it.
@@ -1393,7 +1397,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
   try {
     const runTransaction = transactionContext
       ? (work) => work(transactionContext.tx)
-      : (work) => db.$transaction(work);
+      : (work) => serializableTransaction(work);
     const transactionResult = await runTransaction(async (tx) => {
       const existing = await findExistingBillByIdentity(tx, shopId, billIdentity);
       if (existing) return { bill: existing, deliveries: [] };
@@ -1663,6 +1667,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
         billItems.push({
           productId: effectiveProductId,
           originalBillItemId: originalItem?.id ?? null,
+          trackedUnitId: originalItem?.trackedUnitId ?? null,
           name: originalItem?.name ?? product?.name ?? item.name ?? "Item",
           quantity: -Math.abs(item.quantity),
           enteredUnit,
@@ -1780,6 +1785,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
         },
         include: { items: true, payments: true },
       });
+      await runBillLifecycle("return", { tx, shopId, bill: returnBill, original, requests: items });
       // Only the resellable part of the return goes back into its batch. The
       // damaged part is written off just below and never reaches the shelf, so
       // the batch ledger must not take it back either.
@@ -1987,7 +1993,7 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
   if (!bill) throw new AppError("Bill not found", 404);
   if (bill.status !== "cancelled") throw new AppError("Bill is already restored or not cancelled", 409);
 
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const location = await resolveOperationalLocation(shopId, bill.locationId, tx, { allowInactive: true });
     // Atomic claim: cancelled -> active, so only one concurrent restore wins (mirrors cancel).
     const restoredAt = new Date();
@@ -2000,6 +2006,8 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
       err.code = "BILL_NOT_RESTORABLE";
       throw err;
     }
+
+    await runBillLifecycle("restore", { tx, shopId, bill });
 
     // Re-deduct only stock the cancellation actually restored ("cancel_reversal" rows exist);
     // legacy quote-era estimates never moved stock in either direction.

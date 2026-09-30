@@ -10,8 +10,21 @@
 // chemist should see a medicine they stock and a parts shop a part number it
 // would actually type, in either language.
 export const workflowsEn = {
-  "workflow.register.draftHint": "Your entries stay here while the counter is locked. Cancel discards them.",
+  "workflow.register.returnSeparately": "Return this serial first, then create a bill for its replacement.",
+  "workflow.register.returnOnline": "Reconnect to return this serial and record the refund together.",
+  "workflow.register.returnSaved": "Return and serial register updated",
+  "workflow.register.createBill": "Create bill",
+  "workflow.register.billingFailed": "Could not open billing",
+  "workflow.electronics.billing.title": "Choose IMEI / serial numbers",
+  "workflow.electronics.billing.hint": "Choose one serial for each piece. Saving the bill records the sale and starts its warranty.",
+  "workflow.electronics.billing.loadFailed": "Could not load serials. Reconnect before saving this bill.",
+  "workflow.register.interrupted": "The app closed during a save. Check the register before creating another entry to avoid recording it twice.",
+  "workflow.register.reviewRecords": "Close draft and check register",
+  "workflow.register.storageFailed": "This device could not save your draft. Keep this screen open until you finish.",
+  "workflow.register.draftHint": "Your draft stays on this device for up to 7 days, including after a restart. Cancel or sign out to discard it.",
   "workflow.electronics.register.saved": "{count} units registered",
+  "workflow.register.billAfterRecording": "Continue to billing",
+  "workflow.register.billAfterRecordingHint": "Record the slip, then collect payment. Leave this off for collection later.",
   "workflow.register.tryAgain": "Try again",
   "workflow.register.actions": "Actions",
 

@@ -14,9 +14,8 @@ import type { VerticalPack } from "../types";
  * and reports still read `stockBaseQty`; this answers "which one, and where did
  * it go", which a count cannot.
  *
- * Still to come here: repair tickets as documents of their own rather than a
- * unit parked in `rma`, and picking the specific unit from the billing screen so
- * a sale and its register entry happen in one action instead of two.
+ * Billing selects and reserves each unit with its stock and money transaction.
+ * Repair tickets remain a future document workflow beyond a unit parked in `rma`.
  */
 export const electronicsPack: VerticalPack = {
   id: "electronics",
@@ -35,6 +34,7 @@ export const electronicsPack: VerticalPack = {
       mobile: { group: "Sell", helper: "shopType.nav.serialUnits.helper" },
     },
   ],
+  billingSlots: ["electronics/units"],
   capabilities: [
     "BASIC_INVENTORY", "SERIAL_TRACKING", "IMEI_TRACKING", "WARRANTY_TRACKING",
     "REPAIR_TICKETS", "OPEN_BOX_STOCK",

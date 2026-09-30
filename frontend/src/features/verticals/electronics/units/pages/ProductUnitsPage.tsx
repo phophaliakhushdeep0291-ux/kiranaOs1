@@ -1,3 +1,5 @@
+import { useLocation } from "wouter";
+import { queueSpecialistBill } from "@/features/core/billing/specialist-handoff";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -7,9 +9,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCounterDraft } from "@/hooks/use-counter-draft";
-import { receiveUnitsDraft, unitSaleDraft } from "../receive-draft";
+import { receiveUnitsDraft } from "../receive-draft";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { usePanelResize } from "@/hooks/use-panel-resize";
@@ -19,7 +21,7 @@ import { useOfflineStatus } from "@/features/core/sync";
 import {
   deleteProductUnit, getProductUnitSummary, listProductUnits, lookupProductUnit,
   receiveProductUnits, returnProductUnit, returnProductUnitFromService,
-  sellProductUnit, sendProductUnitToService, writeOffProductUnit,
+  sendProductUnitToService, writeOffProductUnit,
 } from "@/features/verticals/electronics/units/api";
 import { CONDITIONS, ReceiveUnitsPanel } from "@/features/verticals/electronics/units/components/ReceiveUnitsPanel";
 import type { ProductUnit, ProductUnitStatus, ReceiveProductUnitsInput } from "@/types/api";
@@ -66,12 +68,7 @@ export default function ProductUnitsPage() {
   const registration = useCounterDraft(receiveUnitsDraft);
   const panelOpen = registration.value.open;
   const setPanelOpen = (open: boolean) => open ? registration.update({ open }) : registration.discard();
-  const saleDraft = useCounterDraft(unitSaleDraft);
-  const selling = saleDraft.value.unit;
-  const setSelling = (unit: ProductUnit | null) => {
-    saleDraft.discard();
-    if (unit) saleDraft.update({ unit });
-  };
+  const [, navigate] = useLocation();
   const [deleting, setDeleting] = useState<ProductUnit | null>(null);
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:units-panel-width", { defaultWidth: 500 });
 
@@ -112,17 +109,13 @@ export default function ProductUnitsPage() {
     onError: failure("Could not add these units"),
   });
 
-  const sellMut = useMutation({
-    mutationFn: (vars: { id: string; billNumber: string; customerName: string; customerPhone: string; sellingPrice: number }) =>
-      saleDraft.submit(() => sellProductUnit(vars.id, vars)),
-    onSuccess: (unit) => {
-      invalidate(unit);
-      toast({
-        title: `${unit.productName} recorded as sold`,
-        description: unit.warrantyUntilKey ? `Warranty runs to ${fmtDay(unit.warrantyUntilKey)}.` : undefined,
-      });
-    },
-    onError: failure("Could not record the sale"),
+  const billMut = useMutation({
+    mutationFn: (unit: ProductUnit) => queueSpecialistBill({
+      source: `unit:${unit.id}`, items: [{ productId: unit.productId, quantity: 1 }],
+      billingSlotValues: { trackedUnits: [{ id: unit.id, productId: unit.productId, label: unit.imei || unit.serialNumber || unit.id }] },
+    }),
+    onSuccess: () => navigate("/billing"),
+    onError: failure(t("workflow.register.billingFailed")),
   });
 
   const returnMut = useMutation({
@@ -335,12 +328,12 @@ export default function ProductUnitsPage() {
                         <td data-label="Actions" className="px-5 py-3 align-top">
                           <div className="flex flex-wrap items-center justify-end gap-2 lg:mouse:gap-1.5">
                             {unit.canSell && (
-                              <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" onClick={() => setSelling(unit)}>
-                                <CheckCircle2 size={13} /> Sell
+                              <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" disabled={billMut.isPending} onClick={() => billMut.mutate(unit)}>
+                                <CheckCircle2 size={13} /> {t("workflow.register.createBill")}
                               </Button>
                             )}
                             {unit.status === "sold" && (
-                              <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] border-violet-200 px-2.5 text-[11.5px] font-bold text-violet-700 hover:bg-violet-50" disabled={returnMut.isPending} onClick={() => returnMut.mutate(unit.id)}>
+                              <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] border-violet-200 px-2.5 text-[11.5px] font-bold text-violet-700 hover:bg-violet-50" disabled={returnMut.isPending} onClick={() => unit.billId ? navigate(`/bills/${unit.billId}`) : returnMut.mutate(unit.id)}>
                                 <Undo2 size={13} /> Take back
                               </Button>
                             )}
@@ -377,13 +370,7 @@ export default function ProductUnitsPage() {
         onSubmit={(data) => receiveMut.mutate(data)}
       />
 
-      <SellDialog
-        key={saleDraft.scope}
-        unit={selling}
-        saving={saleDraft.pending || sellMut.isPending}
-        onClose={() => setSelling(null)}
-        onConfirm={(vars) => selling && sellMut.mutate({ id: selling.id, ...vars })}
-      />
+
 
       <Dialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <DialogContent className="max-w-[400px]">
@@ -473,82 +460,6 @@ function WarrantyCell({ unit, large = false }: { unit: ProductUnit; large?: bool
         <span className="ml-1 font-normal text-[#64748b]">({days} day{days === 1 ? "" : "s"} left)</span>
       </span>
     </div>
-  );
-}
-
-function SellDialog({ unit, saving, onClose, onConfirm }: {
-  unit: ProductUnit | null;
-  saving: boolean;
-  onClose: () => void;
-  onConfirm: (vars: { billNumber: string; customerName: string; customerPhone: string; sellingPrice: number }) => void;
-}) {
-  const { t } = useAppLanguage();
-  const draft = useCounterDraft(unitSaleDraft);
-  const { billNumber, customerName, customerPhone, sellingPrice } = draft.value;
-  const setBillNumber = (value: string) => draft.update({ billNumber: value });
-  const setCustomerName = (value: string) => draft.update({ customerName: value });
-  const setCustomerPhone = (value: string) => draft.update({ customerPhone: value });
-  const setSellingPrice = (value: string) => draft.update({ sellingPrice: value });
-
-  return (
-    <Dialog
-      open={unit !== null}
-      onOpenChange={(open) => {
-        if (open) return;
-        onClose();
-      }}
-    >
-      <DialogContent className="max-w-[420px]">
-        <DialogHeader><DialogTitle className="font-display text-[16px] font-black text-[var(--brand-ink)]">Record this unit as sold</DialogTitle></DialogHeader>
-        {unit && (
-          <fieldset disabled={saving} className="min-w-0 space-y-3">
-            <DialogDescription className="text-[12px] text-[#6d7c98]">{t("workflow.register.draftHint")}</DialogDescription>
-            <div className="rounded-[10px] bg-[#f7f9fd] px-3.5 py-2.5 text-[12px] text-[#52627e]">
-              <p className="font-bold text-[var(--brand-ink)]">{unit.productName}</p>
-              <p className="mt-0.5 font-mono text-[11px]">{unit.imei || unit.serialNumber}</p>
-              <p className="mt-1">
-                {unit.warrantyMonths > 0
-                  ? `${unit.warrantyMonths} months of cover start today.`
-                  : "No warranty is recorded for this unit."}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Bill number</Label>
-                <Input className="h-10" placeholder="INV-0042" value={billNumber} onChange={(e) => setBillNumber(e.target.value)} />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Price (₹)</Label>
-                <Input className="h-10" type="number" min="0" step="0.01" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Buyer's name</Label>
-                <Input className="h-10" placeholder="Optional" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Mobile</Label>
-                <Input className="h-10" type="tel" inputMode="numeric" placeholder="Optional" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
-              </div>
-            </div>
-            <p className="text-[11px] text-[#8492ac]">
-              This records which handset went out. The sale itself is an ordinary bill — put its number here so the two can be read together.
-            </p>
-            <div className="flex gap-2.5 pt-1">
-              <Button variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
-              <Button
-                className="h-11 flex-1 gap-2 rounded-[10px] bg-emerald-600 font-black text-white hover:bg-emerald-700"
-                disabled={saving}
-                onClick={() => onConfirm({ billNumber, customerName, customerPhone, sellingPrice: Number(sellingPrice) || 0 })}
-              >
-                {saving ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} Mark sold
-              </Button>
-            </div>
-          </fieldset>
-        )}
-      </DialogContent>
-    </Dialog>
   );
 }
 

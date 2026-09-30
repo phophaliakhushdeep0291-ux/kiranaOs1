@@ -1447,6 +1447,7 @@ function billItemBusinessSignature(item: Record<string, unknown>): string | null
   if (quantity === undefined && rate === undefined && total <= 0) return null;
   return [
     product || name,
+    getStringFrom(item, ["trackedUnitId", "tracked_unit_id"]) ?? "",
     (quantity ?? 0).toFixed(3),
     (rate ?? 0).toFixed(2),
     total.toFixed(2),

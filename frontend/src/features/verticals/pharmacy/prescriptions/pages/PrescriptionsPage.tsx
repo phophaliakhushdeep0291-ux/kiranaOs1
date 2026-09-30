@@ -1,8 +1,11 @@
+import { useLocation } from "wouter";
+import { queueSpecialistBill } from "@/features/core/billing/specialist-handoff";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarClock, CheckCircle2, ClipboardList, FileWarning, HandCoins, Loader2,
-  Pencil, Phone, Plus, RefreshCw, Search, Stethoscope, Trash2, X,
+  Pencil, Phone, Plus, Search, Stethoscope, Trash2, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { useOfflineStatus } from "@/features/core/sync";
 import {
-  cancelPrescription, createPrescription, deletePrescription, dispensePrescription,
+  cancelPrescription, createPrescription, deletePrescription,
   getPrescriptionSummary, listPrescriptions, updatePrescription,
 } from "@/features/verticals/pharmacy/prescriptions/api";
 import { PrescriptionPanel, SCHEDULES } from "@/features/verticals/pharmacy/prescriptions/components/PrescriptionPanel";
@@ -43,6 +46,8 @@ const FILTERS: Array<{ key: string; label: string }> = [
 
 export default function PrescriptionsPage() {
   const { toast } = useToast();
+  const { t } = useAppLanguage();
+  const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { isOnline } = useOfflineStatus();
   const [filter, setFilter] = useState("pending");
@@ -67,31 +72,31 @@ export default function PrescriptionsPage() {
           variant: "destructive",
         });
       }
-      toast({ title, description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+      toast({ title, description: err instanceof Error ? err.message : t("workflow.register.tryAgain"), variant: "destructive" });
     };
   }
 
   const saveMut = useMutation({
-    mutationFn: (vars: { id?: string; data: PrescriptionInput }) => (vars.id ? updatePrescription(vars.id, vars.data) : createPrescription(vars.data)),
-    onSuccess: (prescription) => {
+    mutationFn: (vars: { id?: string; data: PrescriptionInput }) => (vars.id ? updatePrescription(vars.id, vars.data) : createPrescription({ ...vars.data, dispenseNow: false })),
+    onSuccess: (prescription, vars) => {
       invalidate();
       setPanelOpen(false);
       setEditing(null);
       toast({ title: editing ? `${prescription.registerNumber} corrected` : `Recorded as ${prescription.registerNumber}` });
+      if (!vars.id && vars.data.dispenseNow) billMut.mutate(prescription);
     },
     onError: failure("Could not save the entry"),
   });
 
-  const dispenseMut = useMutation({
-    mutationFn: (id: string) => dispensePrescription(id),
-    onSuccess: (prescription) => {
-      invalidate();
-      toast({
-        title: prescription.refillsUsed > 0 ? "Repeat dispensed" : "Dispensed",
-        description: prescription.refillsLeft > 0 ? `${prescription.refillsLeft} repeat${prescription.refillsLeft === 1 ? "" : "s"} left on this prescription.` : undefined,
-      });
-    },
-    onError: failure("Could not dispense"),
+  const billMut = useMutation({
+    mutationFn: (prescription: Prescription) => queueSpecialistBill({
+      source: `prescription:${prescription.id}:${prescription.status}:${prescription.refillsUsed}`,
+      items: prescription.items.map((item) => ({ productId: item.productId ?? "", quantity: item.qty, unit: item.unit })),
+      billingSlotValues: { prescriptionId: prescription },
+      customerName: prescription.patientName, customerMobile: prescription.patientPhone ?? undefined,
+    }),
+    onSuccess: () => navigate("/billing"),
+    onError: failure(t("workflow.register.billingFailed")),
   });
 
   const cancelMut = useMutation({
@@ -284,10 +289,10 @@ export default function PrescriptionsPage() {
                               <Button
                                 variant="outline"
                                 className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] border-emerald-200 px-2.5 text-[11.5px] font-bold text-emerald-700 hover:bg-emerald-50"
-                                disabled={dispenseMut.isPending}
-                                onClick={() => dispenseMut.mutate(entry.id)}
+                                disabled={billMut.isPending}
+                                onClick={() => billMut.mutate(entry)}
                               >
-                                {entry.status === "dispensed" ? <><RefreshCw size={13} /> Repeat</> : <><CheckCircle2 size={13} /> Dispense</>}
+                                <CheckCircle2 size={13} /> {t("workflow.register.createBill")}
                               </Button>
                             )}
                             {open && (

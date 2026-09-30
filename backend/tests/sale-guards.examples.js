@@ -95,7 +95,7 @@ function fakeTx(prescription) {
     updates,
     prescription: {
       findFirst: async () => prescription,
-      update: async (args) => { updates.push(args); return args; },
+      updateMany: async (args) => { updates.push(args); return { count: 1 }; },
     },
   };
 }

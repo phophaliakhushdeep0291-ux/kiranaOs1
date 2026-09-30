@@ -31,12 +31,12 @@ export function PrescriptionAttach({
 
   const query = useQuery({
     queryKey: ["prescriptions", "attachable", search],
-    queryFn: () => listPrescriptions({ status: "pending", search: search.trim() || undefined }),
+    queryFn: () => listPrescriptions({ search: search.trim() || undefined }),
     enabled: open,
     staleTime: 15_000,
   });
 
-  const rows = query.data ?? [];
+  const rows = (query.data ?? []).filter((row) => row.canDispense);
 
   if (selected) {
     return (

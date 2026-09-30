@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { ClipboardPlus, Loader2, Pill, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
   onClose: () => void;
   onSubmit: (data: PrescriptionInput) => void;
 }) {
+  const { t } = useAppLanguage();
   const [doctorName, setDoctorName] = useState("");
   const [doctorRegNo, setDoctorRegNo] = useState("");
   const [doctorClinic, setDoctorClinic] = useState("");
@@ -404,9 +406,9 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
                   onChange={(e) => setDispenseNow(e.target.checked)}
                 />
                 <span>
-                  <span className="block text-[12.5px] font-bold text-[var(--brand-ink)]">Handing it over now</span>
+                  <span className="block text-[12.5px] font-bold text-[var(--brand-ink)]">{t("workflow.register.billAfterRecording")}</span>
                   <span className="mt-0.5 block text-[11px] text-[#8492ac]">
-                    Leave this off to record a slip the patient has left for collection later.
+                    {t("workflow.register.billAfterRecordingHint")}
                   </span>
                 </span>
               </label>

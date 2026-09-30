@@ -502,6 +502,7 @@ export interface BillPayment {
 }
 
 export interface BillInputItem {
+  trackedUnitId?: string;
   guestOrderId?: string;
   guestOrderLineId?: string;
   productId?: string;

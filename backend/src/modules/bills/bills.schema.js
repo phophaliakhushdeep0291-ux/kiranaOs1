@@ -10,6 +10,7 @@ export const whatsappBillSchema = z.object({
 });
 
 const billItemSchema = z.object({
+  trackedUnitId: z.string().trim().min(1).max(100).optional(),
   guestOrderId: z.string().min(1).max(120).optional(),
   guestOrderLineId: z.string().min(1).max(160).optional(),
   productId: z.string().optional(),
@@ -84,6 +85,7 @@ export const confirmBillSchema = z.object({
   gstMode: z.enum(["inclusive", "exclusive", "none"]).default("inclusive"),
   customerId: z.string().optional(),
   customerName: z.string().default("Walk-in"),
+  customerMobile: z.string().trim().max(20).regex(/^[0-9+\-\s()]*$/).optional(),
   // The register entry authorising this sale. Required only when the bill holds a
   // Schedule H, H1 or X medicine; every other sale ignores it entirely.
   prescriptionId: z.string().optional(),

@@ -1,5 +1,5 @@
 import { registerSaleGuard } from "../../../shared/sale-guards.js";
-import { evaluateSale } from "./scheduleEnforcement.js";
+import { evaluateSale, prescriptionBlockers } from "./scheduleEnforcement.js";
 
 /**
  * The pharmacy's own condition on a sale: Schedule H, H1 and X do not leave the
@@ -26,10 +26,10 @@ export function registerPrescriptionSaleGuard() {
         name: productMap[item.productId].name,
         schedule: productMap[item.productId].drugSchedule,
       }));
-    if (lines.length === 0) return null;
+    if (lines.length === 0 && !body.prescriptionId) return null;
 
     const prescription = body.prescriptionId
-      ? await tx.prescription.findFirst({ where: { id: body.prescriptionId, shopId } })
+      ? await tx.prescription.findFirst({ where: { id: body.prescriptionId, shopId }, include: { items: true } })
       : null;
     const decision = evaluateSale({ lines, prescription });
 
@@ -49,13 +49,17 @@ export function registerPrescriptionSaleGuard() {
       };
     }
 
-    // Nothing restricted on this bill means there is no register entry to close.
+    if (body.prescriptionId && prescriptionBlockers(prescription).length) {
+      return { code: "PRESCRIPTION_NOT_AVAILABLE", status: 409, message: "This prescription is no longer available to dispense. Refresh the register and check its status." };
+    }
+
+    // An ordinary OTC basket needs no entry; an explicitly attached OTC slip does.
     //
     // An OTC line still gets this far: it carries a drugSchedule, so it survives
     // the filter above, and only evaluateSale decides it is unrestricted. Handing
     // back an onConfirmed anyway is what made an ordinary sale in a classified
     // pharmacy dereference a null prescription the moment the bill was confirmed.
-    if (!decision.requiresPrescription || !prescription) return null;
+    if (!prescription) return null;
 
     // Allowed — and once the bill exists, close the register entry against it.
     //
@@ -63,6 +67,21 @@ export function registerPrescriptionSaleGuard() {
     // slip as it stood when the decision was made. By the time onConfirmed runs
     // the row is being written to.
     const isRefill = prescription.status === "dispensed";
+    if (prescription.items) {
+      const allocated = new Map();
+      for (const item of items) {
+        const prescribed = prescription.items.filter((line) => line.productId === item.productId || (!line.productId && line.name.trim().toLowerCase() === productMap[item.productId]?.name?.trim().toLowerCase()));
+        const restricted = decision.restrictedLines.some((line) => line.productId === item.productId);
+        if (!prescribed.length && !restricted) continue;
+        const matching = prescribed.filter((line) => line.unit.toLowerCase() === item.enteredUnit?.toLowerCase());
+        const qty = (allocated.get(item.productId) ?? 0) + Number(item.quantity);
+        if (!matching.length || qty > matching.reduce((total, line) => total + Number(line.qty), 0)) {
+          return { code: "PRESCRIPTION_ITEMS_MISMATCH", status: 409, message: "The medicine, quantity or selling unit does not match the attached prescription. Check the register before dispensing." };
+        }
+        allocated.set(item.productId, qty);
+      }
+      if (!allocated.size) return { code: "PRESCRIPTION_ITEMS_MISMATCH", status: 409, message: "Add a medicine from the attached prescription before saving its bill." };
+    }
     return {
       onConfirmed: async ({ tx: confirmTx, bill, billNo }) => {
         // billNumber is copied alongside the id on purpose, matching the model's
@@ -74,8 +93,8 @@ export function registerPrescriptionSaleGuard() {
         // use. Incrementing on the first dispense too put this one path on its
         // own scale, and a slip dispensed at the register then billed here was
         // read as having a hand-over left when it did not.
-        await confirmTx.prescription.update({
-          where: { id: prescription.id },
+        const claimed = await confirmTx.prescription.updateMany({
+          where: { id: prescription.id, shopId, status: prescription.status, refillsUsed: prescription.refillsUsed, deletedAt: null },
           data: {
             status: "dispensed",
             dispensedAt: new Date(),
@@ -84,6 +103,7 @@ export function registerPrescriptionSaleGuard() {
             ...(isRefill ? { refillsUsed: { increment: 1 } } : {}),
           },
         });
+        if (claimed.count !== 1) throw Object.assign(new Error("This prescription was dispensed at another counter. Refresh the register."), { statusCode: 409, code: "PRESCRIPTION_ALREADY_DISPENSED" });
       },
     };
   });
