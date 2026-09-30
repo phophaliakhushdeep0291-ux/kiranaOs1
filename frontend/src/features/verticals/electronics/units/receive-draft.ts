@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createCounterDraft } from "@/lib/counter-draft";
-import type { ProductUnitCondition } from "@/types/api";
+import type { ProductUnit, ProductUnitCondition } from "@/types/api";
 
 export interface DraftUnit {
   imei: string;
@@ -24,3 +24,14 @@ export const receiveUnitsDraft = createCounterDraft(() => ({
   open: false, productId: "", productSearch: "", costPrice: "0", warrantyMonths: "12",
   purchaseBillId: "", units: [emptyUnit()], bulk: "",
 }), { key: "receive-units", parse: (value) => receiveDraftSchema.parse(value) });
+
+/**
+ * Catching the register up with a sale that was billed without its serial.
+ *
+ * Survives the counter locking, like the form above, but is deliberately NOT
+ * written to disk: it holds a buyer's name and phone number, and a shared shop
+ * device is not somewhere to leave those for a week.
+ */
+export const unitSaleDraft = createCounterDraft(() => ({
+  unit: null as ProductUnit | null, billNumber: "", soldOn: "", customerName: "", customerPhone: "", sellingPrice: "0",
+}));

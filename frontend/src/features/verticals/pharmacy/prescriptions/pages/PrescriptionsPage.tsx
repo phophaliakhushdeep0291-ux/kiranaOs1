@@ -1,11 +1,9 @@
-import { useLocation } from "wouter";
-import { queueSpecialistBill } from "@/features/core/billing/specialist-handoff";
-import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import {
   CalendarClock, CheckCircle2, ClipboardList, FileWarning, HandCoins, Loader2,
-  Pencil, Phone, Plus, Search, Stethoscope, Trash2, X,
+  Pencil, Phone, Plus, RefreshCw, Search, Stethoscope, Trash2, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,9 +12,11 @@ import { useToast } from "@/hooks/use-toast";
 import { usePanelResize } from "@/hooks/use-panel-resize";
 import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
+import { SpecialistHandoffError, queueSpecialistBill } from "@/features/core/billing/specialist-handoff";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useOfflineStatus } from "@/features/core/sync";
 import {
-  cancelPrescription, createPrescription, deletePrescription,
+  cancelPrescription, createPrescription, deletePrescription, dispensePrescription,
   getPrescriptionSummary, listPrescriptions, updatePrescription,
 } from "@/features/verticals/pharmacy/prescriptions/api";
 import { PrescriptionPanel, SCHEDULES } from "@/features/verticals/pharmacy/prescriptions/components/PrescriptionPanel";
@@ -43,6 +43,15 @@ const FILTERS: Array<{ key: string; label: string }> = [
   { key: "cancelled", label: "Cancelled" },
   { key: "all", label: "Whole register" },
 ];
+
+/**
+ * The part of an entry the till can ring up.
+ *
+ * The register does not need a medicine to be in the catalogue — a name typed
+ * by hand is a perfectly good record of what was handed over. But a bill is
+ * made of products, so only the lines picked from the catalogue can go on one.
+ */
+const catalogueLines = (entry: Prescription) => entry.items.filter((item) => Boolean(item.productId));
 
 export default function PrescriptionsPage() {
   const { toast } = useToast();
@@ -72,31 +81,63 @@ export default function PrescriptionsPage() {
           variant: "destructive",
         });
       }
-      toast({ title, description: err instanceof Error ? err.message : t("workflow.register.tryAgain"), variant: "destructive" });
+      // A hand-off refusal arrives as a key, because it was raised outside React
+      // and had no language to say it in.
+      const description = err instanceof SpecialistHandoffError
+        ? t(err.notice.key, err.notice.vars)
+        : err instanceof Error ? err.message : t("workflow.register.tryAgain");
+      toast({ title, description, variant: "destructive" });
     };
   }
 
   const saveMut = useMutation({
+    // Always recorded as still to dispense. Handing over is what the bill does,
+    // so the entry and the sale cannot disagree about whether it happened.
     mutationFn: (vars: { id?: string; data: PrescriptionInput }) => (vars.id ? updatePrescription(vars.id, vars.data) : createPrescription({ ...vars.data, dispenseNow: false })),
     onSuccess: (prescription, vars) => {
       invalidate();
       setPanelOpen(false);
       setEditing(null);
       toast({ title: editing ? `${prescription.registerNumber} corrected` : `Recorded as ${prescription.registerNumber}` });
-      if (!vars.id && vars.data.dispenseNow) billMut.mutate(prescription);
+      if (vars.id || !vars.data.dispenseNow) return;
+      // "Handing it over now": through a bill when there is something to bill,
+      // and straight from the register when every medicine was typed by hand.
+      if (catalogueLines(prescription).length > 0) billMut.mutate(prescription);
+      else dispenseMut.mutate(prescription.id);
     },
     onError: failure("Could not save the entry"),
   });
 
+  // The ordinary way a slip is dispensed: billing opens with its medicines on a
+  // bill for this patient and the slip attached, and saving the bill closes the
+  // entry. Lines typed by hand are named there for the chemist to add.
   const billMut = useMutation({
     mutationFn: (prescription: Prescription) => queueSpecialistBill({
+      // Status and repeats are part of the identity: a repeat is a new bill,
+      // not the one the first hand-over was made on.
       source: `prescription:${prescription.id}:${prescription.status}:${prescription.refillsUsed}`,
-      items: prescription.items.map((item) => ({ productId: item.productId ?? "", quantity: item.qty, unit: item.unit })),
+      items: catalogueLines(prescription).map((item) => ({ productId: item.productId ?? "", quantity: item.qty, unit: item.unit, name: item.name })),
+      unlisted: prescription.items.filter((item) => !item.productId).map((item) => item.name),
       billingSlotValues: { prescriptionId: prescription },
       customerName: prescription.patientName, customerMobile: prescription.patientPhone ?? undefined,
     }),
     onSuccess: () => navigate("/billing"),
     onError: failure(t("workflow.register.billingFailed")),
+  });
+
+  // The exception: a slip with nothing the catalogue can ring up. There is no
+  // bill to make, so the register records the hand-over itself — which is all
+  // it ever did before billing could.
+  const dispenseMut = useMutation({
+    mutationFn: (id: string) => dispensePrescription(id),
+    onSuccess: (prescription) => {
+      invalidate();
+      toast({
+        title: t(prescription.refillsUsed > 0 ? "workflow.pharmacy.repeatDispensed" : "workflow.pharmacy.dispensed"),
+        description: prescription.refillsLeft > 0 ? t("workflow.pharmacy.repeatsLeft", { count: prescription.refillsLeft }) : undefined,
+      });
+    },
+    onError: failure(t("workflow.pharmacy.dispenseFailed")),
   });
 
   const cancelMut = useMutation({
@@ -285,7 +326,7 @@ export default function PrescriptionsPage() {
                         </td>
                         <td data-label="Actions" className="px-5 py-3 align-top">
                           <div className="flex flex-wrap items-center justify-end gap-2 lg:mouse:gap-1.5">
-                            {entry.canDispense && (
+                            {entry.canDispense && (catalogueLines(entry).length > 0 ? (
                               <Button
                                 variant="outline"
                                 className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] border-emerald-200 px-2.5 text-[11.5px] font-bold text-emerald-700 hover:bg-emerald-50"
@@ -294,7 +335,19 @@ export default function PrescriptionsPage() {
                               >
                                 <CheckCircle2 size={13} /> {t("workflow.register.createBill")}
                               </Button>
-                            )}
+                            ) : (
+                              <Button
+                                variant="outline"
+                                className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] border-emerald-200 px-2.5 text-[11.5px] font-bold text-emerald-700 hover:bg-emerald-50"
+                                disabled={dispenseMut.isPending}
+                                title={t("workflow.pharmacy.dispenseWithoutBill")}
+                                onClick={() => dispenseMut.mutate(entry.id)}
+                              >
+                                {entry.status === "dispensed"
+                                  ? <><RefreshCw size={13} /> {t("workflow.pharmacy.repeat")}</>
+                                  : <><CheckCircle2 size={13} /> {t("workflow.pharmacy.dispense")}</>}
+                              </Button>
+                            ))}
                             {open && (
                               <button onClick={() => { setEditing(entry); setPanelOpen(true); }} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Correct ${entry.registerNumber}`}><Pencil size={14} /></button>
                             )}

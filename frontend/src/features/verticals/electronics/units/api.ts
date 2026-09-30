@@ -5,6 +5,7 @@ import type {
   ProductUnitSummary,
   ReceiveProductUnitsInput,
   SellProductUnitInput,
+  UnitBillingOption,
 } from "@/types/api";
 
 /**
@@ -82,6 +83,77 @@ export async function lookupProductUnit(code: string) {
 /** Every serialised unit of one product — "which of these do we actually still have?" */
 export function getUnitsForProduct(productId: string, status = "held") {
   return apiRequest<ProductUnit[]>(`/product-units/for-product/${productId}?status=${status}`, { background: true });
+}
+
+const TRACKED_PRODUCTS_CACHE_KEY = "product-units:tracked-products:v1";
+
+export interface UnitBillingAnswer {
+  /** One entry per product on the bill that this shop sells by serial. Products it does not are left out. */
+  options: UnitBillingOption[];
+  /**
+   * False when the server could not be asked and `options` is what this device
+   * remembers: which products are tracked, with no units to offer. A serial
+   * cannot be reserved from memory, so there is nothing to pick from.
+   */
+  live: boolean;
+}
+
+/**
+ * What billing needs to know about the products on a bill: which of them are
+ * sold by serial, and which units of each are on the shelf.
+ *
+ * Asked for the bill's own products rather than read out of the register list.
+ * That list is the newest 500 units of every product and every status, so after
+ * a few months' trading the handset on the counter — received in an older box —
+ * is not in it, and a picker built on it has nothing to pick.
+ *
+ * Which products are tracked is remembered per device, so an offline till still
+ * knows to tell the cashier that this sale is going out without its serial.
+ *
+ * A shop whose plan has no serial register is answered with nothing to do.
+ */
+export async function getUnitBillingOptions(productIds: string[]): Promise<UnitBillingAnswer> {
+  const ids = [...new Set(productIds.filter(Boolean))].sort();
+  if (ids.length === 0) return { options: [], live: true };
+  try {
+    const options = await apiRequest<UnitBillingOption[]>(`/product-units/billing-options?productIds=${ids.map(encodeURIComponent).join(",")}`, { background: true });
+    const tracked = new Set(options.map((option) => option.productId));
+    const remembered = await rememberedTrackedProducts();
+    await offlineDB.setSetting(TRACKED_PRODUCTS_CACHE_KEY, { ...(remembered ?? {}), ...Object.fromEntries(ids.map((id) => [id, tracked.has(id)])) }).catch(() => undefined);
+    return { options, live: true };
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 403) return { options: [], live: true };
+    // Never hide an auth error behind stale data.
+    if (error instanceof ApiClientError && error.status > 0 && error.status < 500 && ![408, 429].includes(error.status)) throw error;
+    const remembered = await rememberedTrackedProducts();
+    if (!remembered) throw error;
+    return {
+      options: ids.filter((id) => remembered[id]).map((productId) => ({ productId, registered: 0, sellableCount: 0, units: [] })),
+      live: false,
+    };
+  }
+}
+
+function rememberedTrackedProducts() {
+  return offlineDB.getSetting<Record<string, boolean>>(TRACKED_PRODUCTS_CACHE_KEY).catch(() => undefined);
+}
+
+/**
+ * Which of these products are sold by serial — from memory when the device
+ * already knows, from the server only for a product it has never asked about.
+ *
+ * For the question asked as a bill is saved. The control on the bill has
+ * already asked the server about this cart, so this is normally a local read,
+ * and a sale is not held up behind a second request for the same answer.
+ */
+export async function trackedProductIds(productIds: string[]): Promise<{ tracked: Set<string>; live: boolean }> {
+  const ids = [...new Set(productIds.filter(Boolean))];
+  const remembered = await rememberedTrackedProducts();
+  if (remembered && ids.every((id) => typeof remembered[id] === "boolean")) {
+    return { tracked: new Set(ids.filter((id) => remembered[id])), live: true };
+  }
+  const answer = await getUnitBillingOptions(ids);
+  return { tracked: new Set(answer.options.map((option) => option.productId)), live: answer.live };
 }
 
 export function receiveProductUnits(data: ReceiveProductUnitsInput) {

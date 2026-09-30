@@ -1,17 +1,17 @@
-import { useLocation } from "wouter";
-import { queueSpecialistBill } from "@/features/core/billing/specialist-handoff";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import {
-  BadgeCheck, Boxes, CheckCircle2, Loader2, PackageCheck, Plus, ScanLine,
+  AlertTriangle, BadgeCheck, Boxes, CheckCircle2, ClipboardCheck, Loader2, PackageCheck, Plus, ScanLine,
   Search, ShieldAlert, ShieldCheck, Smartphone, Trash2, Undo2, Wrench, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCounterDraft } from "@/hooks/use-counter-draft";
-import { receiveUnitsDraft } from "../receive-draft";
+import { receiveUnitsDraft, unitSaleDraft } from "../receive-draft";
+import { SpecialistHandoffError, queueSpecialistBill } from "@/features/core/billing/specialist-handoff";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { usePanelResize } from "@/hooks/use-panel-resize";
@@ -21,10 +21,17 @@ import { useOfflineStatus } from "@/features/core/sync";
 import {
   deleteProductUnit, getProductUnitSummary, listProductUnits, lookupProductUnit,
   receiveProductUnits, returnProductUnit, returnProductUnitFromService,
-  sendProductUnitToService, writeOffProductUnit,
+  sellProductUnit, sendProductUnitToService, writeOffProductUnit,
 } from "@/features/verticals/electronics/units/api";
+import { TRACKED_UNITS_SLOT } from "@/features/verticals/electronics/units/billing-selection";
 import { CONDITIONS, ReceiveUnitsPanel } from "@/features/verticals/electronics/units/components/ReceiveUnitsPanel";
 import type { ProductUnit, ProductUnitStatus, ReceiveProductUnitsInput } from "@/types/api";
+
+/** Local YYYY-MM-DD — never toISOString(), which shifts the day backwards east of UTC. */
+function todayKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
 
 function inr(n: number) {
   return `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -68,6 +75,12 @@ export default function ProductUnitsPage() {
   const registration = useCounterDraft(receiveUnitsDraft);
   const panelOpen = registration.value.open;
   const setPanelOpen = (open: boolean) => open ? registration.update({ open }) : registration.discard();
+  const saleDraft = useCounterDraft(unitSaleDraft);
+  const recording = saleDraft.value.unit;
+  const setRecording = (unit: ProductUnit | null) => {
+    saleDraft.discard();
+    if (unit) saleDraft.update({ unit, soldOn: todayKey() });
+  };
   const [, navigate] = useLocation();
   const [deleting, setDeleting] = useState<ProductUnit | null>(null);
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:units-panel-width", { defaultWidth: 500 });
@@ -89,7 +102,12 @@ export default function ProductUnitsPage() {
           variant: "destructive",
         });
       }
-      toast({ title, description: err instanceof Error ? err.message : t("workflow.register.tryAgain"), variant: "destructive" });
+      // A hand-off refusal arrives as a key, because it was raised outside React
+      // and had no language to say it in.
+      const description = err instanceof SpecialistHandoffError
+        ? t(err.notice.key, err.notice.vars)
+        : err instanceof Error ? err.message : t("workflow.register.tryAgain");
+      toast({ title, description, variant: "destructive" });
     };
   }
 
@@ -109,13 +127,34 @@ export default function ProductUnitsPage() {
     onError: failure("Could not add these units"),
   });
 
+  // The ordinary way a unit is sold: billing opens with this handset on the
+  // bill and its serial already chosen, and the bill records the sale.
   const billMut = useMutation({
     mutationFn: (unit: ProductUnit) => queueSpecialistBill({
-      source: `unit:${unit.id}`, items: [{ productId: unit.productId, quantity: 1 }],
-      billingSlotValues: { trackedUnits: [{ id: unit.id, productId: unit.productId, label: unit.imei || unit.serialNumber || unit.id }] },
+      source: `unit:${unit.id}`,
+      items: [{ productId: unit.productId, quantity: 1, name: unit.productName }],
+      billingSlotValues: {
+        [TRACKED_UNITS_SLOT]: [{ id: unit.id, productId: unit.productId, label: unit.imei || unit.serialNumber || unit.id }],
+      },
     }),
     onSuccess: () => navigate("/billing"),
     onError: failure(t("workflow.register.billingFailed")),
+  });
+
+  // The exception: a handset that already left on a bill saved without its
+  // serial. Nothing is billed here; the register is only being caught up.
+  const recordMut = useMutation({
+    mutationFn: ({ id, soldOn, ...sale }: { id: string; billNumber: string; soldOn: string; customerName: string; customerPhone: string; sellingPrice: number }) =>
+      // An empty date is left out, so the server falls back to today rather than refusing it.
+      saleDraft.submit(() => sellProductUnit(id, { ...sale, ...(soldOn ? { soldOn } : {}) })),
+    onSuccess: (unit) => {
+      invalidate(unit);
+      toast({
+        title: t("workflow.electronics.sold.saved", { name: unit.productName }),
+        description: unit.warrantyUntilKey ? t("workflow.electronics.sold.savedCover", { date: fmtDay(unit.warrantyUntilKey) }) : undefined,
+      });
+    },
+    onError: failure(t("workflow.electronics.sold.failed")),
   });
 
   const returnMut = useMutation({
@@ -237,6 +276,26 @@ export default function ProductUnitsPage() {
           />
         </div>
 
+        {/* A bill can be saved with no serial chosen — offline, or for a box not yet
+            scanned. Stock moves and the register does not know which handset went;
+            this is where that shows up afterwards, without anyone having to remember. */}
+        {summary?.shelfMismatches && summary.shelfMismatches.length > 0 && (
+          <div role="status" className="flex items-start gap-2.5 rounded-[12px] border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="text-[12.5px] font-bold">{t("workflow.electronics.mismatch.title")}</p>
+              <p className="mt-0.5 text-[12px] leading-5">
+                {t("workflow.electronics.mismatch.body", {
+                  items: [
+                    ...summary.shelfMismatches.slice(0, 3).map((row) => t("workflow.electronics.mismatch.item", { name: row.productName, registered: row.registered, stock: row.stock })),
+                    ...(summary.shelfMismatches.length > 3 ? [t("workflow.electronics.mismatch.more", { count: summary.shelfMismatches.length - 3 })] : []),
+                  ].join("; "),
+                })}
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eef2f8] px-5 py-3.5">
             <div>
@@ -332,6 +391,11 @@ export default function ProductUnitsPage() {
                                 <CheckCircle2 size={13} /> {t("workflow.register.createBill")}
                               </Button>
                             )}
+                            {unit.canSell && (
+                              <Button variant="ghost" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold text-[#536583]" onClick={() => setRecording(unit)}>
+                                <ClipboardCheck size={13} /> {t("workflow.electronics.sold.action")}
+                              </Button>
+                            )}
                             {unit.status === "sold" && (
                               <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] border-violet-200 px-2.5 text-[11.5px] font-bold text-violet-700 hover:bg-violet-50" disabled={returnMut.isPending} onClick={() => unit.billId ? navigate(`/bills/${unit.billId}`) : returnMut.mutate(unit.id)}>
                                 <Undo2 size={13} /> Take back
@@ -370,7 +434,13 @@ export default function ProductUnitsPage() {
         onSubmit={(data) => receiveMut.mutate(data)}
       />
 
-
+      <RecordSaleDialog
+        key={saleDraft.scope}
+        unit={recording}
+        saving={saleDraft.pending || recordMut.isPending}
+        onClose={() => setRecording(null)}
+        onConfirm={(sale) => recording && recordMut.mutate({ id: recording.id, ...sale })}
+      />
 
       <Dialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <DialogContent className="max-w-[400px]">
@@ -460,6 +530,82 @@ function WarrantyCell({ unit, large = false }: { unit: ProductUnit; large?: bool
         <span className="ml-1 font-normal text-[#64748b]">({days} day{days === 1 ? "" : "s"} left)</span>
       </span>
     </div>
+  );
+}
+
+/**
+ * Catching the register up with a handset that already went out.
+ *
+ * Selling a unit is "Create bill": the bill reserves the serial and records the
+ * sale itself. This is for the bill that was saved without one — the till was
+ * offline, or the box had not been scanned — so the register can still say who
+ * has that IMEI and when its cover began. It records; it does not bill, move
+ * stock or take money, and the sale date can be set back to the day of the bill
+ * so the warranty runs from when the customer actually took it home.
+ */
+function RecordSaleDialog({ unit, saving, onClose, onConfirm }: {
+  unit: ProductUnit | null;
+  saving: boolean;
+  onClose: () => void;
+  onConfirm: (sale: { billNumber: string; soldOn: string; customerName: string; customerPhone: string; sellingPrice: number }) => void;
+}) {
+  const { t } = useAppLanguage();
+  const draft = useCounterDraft(unitSaleDraft);
+  const { billNumber, soldOn, customerName, customerPhone, sellingPrice } = draft.value;
+
+  return (
+    <Dialog open={unit !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-[420px]">
+        <DialogHeader><DialogTitle className="font-display text-[16px] font-black text-[var(--brand-ink)]">{t("workflow.electronics.sold.title")}</DialogTitle></DialogHeader>
+        {unit && (
+          <fieldset disabled={saving} className="min-w-0 space-y-3">
+            <DialogDescription className="text-[12px] leading-5 text-[#6d7c98]">{t("workflow.electronics.sold.hint")}</DialogDescription>
+            <div className="rounded-[10px] bg-[#f7f9fd] px-3.5 py-2.5 text-[12px] text-[#52627e]">
+              <p className="font-bold text-[var(--brand-ink)]">{unit.productName}</p>
+              <p className="mt-0.5 font-mono text-[11px]">{unit.imei || unit.serialNumber}</p>
+              <p className="mt-1">
+                {unit.warrantyMonths > 0 ? t("workflow.electronics.sold.cover", { months: unit.warrantyMonths }) : t("workflow.electronics.sold.noCover")}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.billNumber")}</Label>
+                <Input className="h-10" value={billNumber} onChange={(e) => draft.update({ billNumber: e.target.value })} />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.soldOn")}</Label>
+                <Input className="h-10" type="date" max={todayKey()} value={soldOn} onChange={(e) => draft.update({ soldOn: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.buyer")}</Label>
+                <Input className="h-10" placeholder={t("workflow.electronics.sold.optional")} value={customerName} onChange={(e) => draft.update({ customerName: e.target.value })} />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.mobile")}</Label>
+                <Input className="h-10" type="tel" inputMode="numeric" placeholder={t("workflow.electronics.sold.optional")} value={customerPhone} onChange={(e) => draft.update({ customerPhone: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.price")}</Label>
+              <Input className="h-10" type="number" min="0" step="0.01" value={sellingPrice} onChange={(e) => draft.update({ sellingPrice: e.target.value })} />
+            </div>
+            <div className="flex gap-2.5 pt-1">
+              <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={onClose}>{t("workflow.electronics.sold.cancel")}</Button>
+              <Button
+                type="button"
+                className="h-11 flex-1 gap-2 rounded-[10px] bg-emerald-600 font-black text-white hover:bg-emerald-700"
+                disabled={saving}
+                onClick={() => onConfirm({ billNumber, soldOn, customerName, customerPhone, sellingPrice: Number(sellingPrice) || 0 })}
+              >
+                {saving ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {t("workflow.electronics.sold.confirm")}
+              </Button>
+            </div>
+          </fieldset>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

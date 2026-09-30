@@ -88,6 +88,96 @@ export function prescriptionBlockers(prescription, { now = Date.now(), validityD
   return blockers;
 }
 
+const normalized = (value) => String(value ?? "").trim().toLowerCase();
+
+/**
+ * Every word this bill line's own unit goes by.
+ *
+ * The register's unit is typed by a chemist; the bill's is whatever the till
+ * calls the pack. "strip" on the slip has to meet a pack labelled "Strip" whose
+ * code is "strip", in either spelling and either case — comparing one string
+ * against one string refuses a bill the app itself built from the slip.
+ *
+ * Only the names the line carries. The product's rate unit is NOT one of them:
+ * a loose line is entered in grams against a per-kilo rate, so the two are
+ * different amounts, and treating them as the same word would let 500 of one
+ * pass as 500 of the other.
+ */
+function unitNamesOf(item) {
+  return new Set([item.enteredUnit, item.sellingUnitLabel, item.sellingUnitCode].map(normalized).filter(Boolean));
+}
+
+/**
+ * Does the bill hand over what the attached prescription says?
+ *
+ * The register entry is the record of what was dispensed against a slip, so a
+ * bill closed against it has to agree with it: a restricted medicine must be on
+ * the slip, in the unit the slip gives, and no more of it than the slip allows.
+ * Until this existed any valid slip authorised any Schedule H line — a slip for
+ * one strip of an antibiotic could close a bill for ten of something else.
+ *
+ * Returns null when they agree, or `{ code, message }` naming the medicine and
+ * what is wrong with it. One sentence the counter can act on beats "does not
+ * match": the fix is a different one each time.
+ *
+ * A medicine typed onto the slip by hand has no product id, so it is matched by
+ * name — that is all a free-text line has. Lines the slip does not mention are
+ * left alone unless they are restricted: a patient buying a bandage with their
+ * antibiotics is an ordinary bill.
+ *
+ * Pure, like everything else in this file.
+ */
+export function prescriptionLineMismatch({ items, productMap, prescription, restrictedProductIds = new Set() } = {}) {
+  const slipLines = prescription?.items ?? [];
+  const entry = prescription?.registerNumber ? `prescription ${prescription.registerNumber}` : "the attached prescription";
+  const billed = new Map();
+
+  for (const item of items ?? []) {
+    const product = item.productId ? productMap?.[item.productId] : null;
+    if (!product) continue;
+
+    const onSlip = slipLines.filter((line) => (
+      line.productId ? line.productId === item.productId : normalized(line.name) === normalized(product.name)
+    ));
+    if (onSlip.length === 0) {
+      if (!restrictedProductIds.has(item.productId)) continue;
+      return {
+        code: "PRESCRIPTION_ITEMS_MISMATCH",
+        message: `${product.name} is not on ${entry}. Add it to the register entry, or attach the prescription it was written on.`,
+      };
+    }
+
+    const unitNames = unitNamesOf(item);
+    const inThisUnit = onSlip.filter((line) => unitNames.has(normalized(line.unit)));
+    if (inThisUnit.length === 0) {
+      const prescribedIn = [...new Set(onSlip.map((line) => String(line.unit ?? "").trim()).filter(Boolean))].join(" or ");
+      return {
+        code: "PRESCRIPTION_ITEMS_MISMATCH",
+        message: `${product.name} is prescribed in ${prescribedIn || "another unit"} but billed in ${item.enteredUnit}. Bill it in the prescribed unit, or correct the register entry.`,
+      };
+    }
+
+    const allowed = inThisUnit.reduce((total, line) => total + (Number(line.qty) || 0), 0);
+    const total = (billed.get(item.productId) ?? 0) + (Number(item.quantity) || 0);
+    // Two lines of the same medicine add up; the slip is a ceiling on the bill, not on a line.
+    if (total > allowed + 1e-9) {
+      return {
+        code: "PRESCRIPTION_ITEMS_MISMATCH",
+        message: `${product.name}: ${total} ${inThisUnit[0].unit} on the bill, but ${entry} allows ${allowed}.`,
+      };
+    }
+    billed.set(item.productId, total);
+  }
+
+  if (billed.size === 0) {
+    return {
+      code: "PRESCRIPTION_ITEMS_MISMATCH",
+      message: `Nothing on this bill is on ${entry}. Add one of its medicines, or remove the prescription from the bill.`,
+    };
+  }
+  return null;
+}
+
 /**
  * The whole decision for one sale.
  *

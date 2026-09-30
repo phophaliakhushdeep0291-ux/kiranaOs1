@@ -36,7 +36,31 @@ describe("vertical billing slots", () => {
 
     await loadVerticalSlots(packForBusinessType("pharmacy"));
 
-    expect(billingSlotsFor(scheduleHCart).map((slot) => slot.id)).toEqual(["prescriptionId"]);
+    const [prescription] = billingSlotsFor(scheduleHCart);
+    expect(prescription.id).toBe("prescriptionId");
+    // The slip is closed by the sale that dispenses it, so such a bill is saved
+    // on the server rather than queued. Billing reads this off the slot and
+    // never learns what a drug schedule is.
+    expect(prescription.requiresOnline).toBe(true);
+  }, SLOT_IMPORT_TIMEOUT_MS);
+
+  it("registers the serial control for an electronics shop, and only there", async () => {
+    const phoneCart = { productIds: ["p1"], products: [{}] };
+    expect(packForBusinessType("electronics").billingSlots).toEqual(["electronics/units", "electronics/serial-check"]);
+
+    await loadVerticalSlots(packForBusinessType("electronics"));
+
+    const [serials] = billingSlotsFor({ ...phoneCart, businessType: "electronics" });
+    expect(serials.id).toBe("trackedUnits");
+    // It rewrites the bill's lines — one per chosen unit — which is why billing
+    // has to total the prepared lines. A bill with no serial on it may still be
+    // queued, so unlike the prescription it does not demand the server.
+    expect(typeof serials.prepareItems).toBe("function");
+    expect(serials.requiresOnline).toBeUndefined();
+
+    // The registration outlives a switch to another shop in the same session.
+    expect(billingSlotsFor({ ...phoneCart, businessType: "kirana" })).toEqual([]);
+    expect(billingSlotsFor({ productIds: [], products: [], businessType: "electronics" })).toEqual([]);
   }, SLOT_IMPORT_TIMEOUT_MS);
 
   it("shows it only when the cart actually holds a restricted medicine", async () => {

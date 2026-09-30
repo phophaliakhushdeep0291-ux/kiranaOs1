@@ -1,6 +1,5 @@
-import { runBillLifecycle } from "../../shared/bill-lifecycle.js";
-import { serializableTransaction } from "../../lib/transactions.js";
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { addMoney, moneyEquals, moneyShadows, multiplyMoney, round2, subtractMoney, sumMoney } from "../../utils/money.js";
 import { toBaseQty, baseQtyToRateQty } from "../../utils/units.js";
@@ -23,6 +22,7 @@ import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../pay
 import { reapplyBillLoyaltyInTransaction, recordBillLoyaltyInTransaction, recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption, reverseBillLoyaltyInTransaction } from "../loyalty/loyalty.service.js";
 import { issueReturnCreditInTransaction, reapplyGiftCardRedemptions, recordGiftCardRedemptions, reserveGiftCardPayments, reverseGiftCardRedemptions } from "../gift-cards/giftCards.service.js";
 import { evaluateSaleGuards } from "../../shared/sale-guards.js";
+import { runBillLifecycle } from "../../shared/bill-lifecycle.js";
 import { allocateLotsForBill, batchMrpCeilings, reapplyBillLotAllocations, restoreBillLotAllocations, restoreLotsForSaleReturn } from "../inventory-lots/inventoryLots.service.js";
 import { reapplyBillOfferRedemption, redeemOfferInTransaction, reverseBillOfferRedemption, validateOfferForBill } from "../offers/offers.service.js";
 import { sendTransactionalEmail } from "../../lib/authEmail.js";
@@ -523,6 +523,7 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null, t
       stockHandledProductIds,
     } = await evaluateSaleGuards({
       shopId, tx, body, items, productMap, isEstimate, location,
+      isOfflineReplay: actor?.isOfflineReplay === true,
     });
     if (saleRefusal) {
       const error = new AppError(saleRefusal.message, saleRefusal.status ?? 409, saleRefusal.code);

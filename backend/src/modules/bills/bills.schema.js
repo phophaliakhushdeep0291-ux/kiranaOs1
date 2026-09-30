@@ -85,7 +85,11 @@ export const confirmBillSchema = z.object({
   gstMode: z.enum(["inclusive", "exclusive", "none"]).default("inclusive"),
   customerId: z.string().optional(),
   customerName: z.string().default("Walk-in"),
-  customerMobile: z.string().trim().max(20).regex(/^[0-9+\-\s()]*$/).optional(),
+  // The buyer's number as typed at the counter, kept only so a trade's own record
+  // of the sale can carry it (a serial register notes who has the handset). It is
+  // never a reason to refuse a bill: every till already sends this field and it
+  // used to be ignored, so anything unusable here is dropped rather than rejected.
+  customerMobile: z.string().trim().max(20).regex(/^[0-9+\-\s()]*$/).optional().catch(undefined),
   // The register entry authorising this sale. Required only when the bill holds a
   // Schedule H, H1 or X medicine; every other sale ignores it entirely.
   prescriptionId: z.string().optional(),
