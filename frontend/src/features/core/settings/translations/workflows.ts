@@ -203,6 +203,7 @@ export const workflowsEn = {
   // -- electronics --
   "workflow.electronics.register.title": "Register serial numbers",
   "workflow.electronics.register.stockHint": "Record the codes on your existing stock. To add product quantities, record a purchase or use Stock In separately.",
+  "workflow.electronics.register.productSearch": "Search your catalogue for the product",
   "workflow.electronics.title": "Electronics retail workflow",
   "workflow.electronics.subtitle": "Keep model-wise stock clear, capture warranty context, and make bill-linked returns easy.",
   "workflow.electronics.action.1": "Model catalogue",

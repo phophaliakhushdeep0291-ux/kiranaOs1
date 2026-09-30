@@ -9,6 +9,7 @@ import type { workflowsEn } from "./workflows";
 export const workflowsHi: Record<keyof typeof workflowsEn, string> = {
   "workflow.electronics.register.title": "सीरियल नंबर दर्ज करें",
   "workflow.electronics.register.stockHint": "अपने मौजूदा स्टॉक के कोड दर्ज करें। उत्पाद की मात्रा बढ़ाने के लिए अलग से खरीद दर्ज करें या स्टॉक इन का उपयोग करें।",
+  "workflow.electronics.register.productSearch": "अपने कैटलॉग में उत्पाद खोजें",
   "workflow.register.returnSeparately": "पहले इस सीरियल की वापसी दर्ज करें, फिर बदले में दिए जाने वाले सामान का बिल बनाएँ।",
   "workflow.register.returnOnline": "सीरियल की वापसी और रिफ़ंड एक साथ दर्ज करने के लिए दोबारा कनेक्ट करें।",
   "workflow.register.returnSaved": "वापसी और सीरियल रजिस्टर अपडेट हुए",
