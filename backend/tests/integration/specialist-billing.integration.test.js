@@ -312,6 +312,28 @@ else {
   }
   const slip = (id) => ctx.db.prescription.findUniqueOrThrow({ where: { id } });
 
+  test("a medicine counted in strips bills, dispenses and returns without inventing a pack size", async () => {
+    const f = await fixture({ schedule: "otc" });
+    await ctx.db.product.update({ where: { id: f.product.id }, data: { baseUnit: "strip", rateUnit: "strip", displayUnit: "strip" } });
+    const rx = await prescription(f, { unit: "strip", qty: 2 });
+    const body = { ...f.payload({ quantity: 2, enteredUnit: "strip" }), prescriptionId: rx.id };
+    const bill = assertSuccess(await sale(f, body), 201);
+    assert.equal(bill.items[0].quantityInBaseUnit, 2);
+    assert.equal(bill.grandTotal, 100);
+    assert.equal(bill.items[0].lineCost, 60);
+    assert.equal(await stock(f), 8);
+    assert.equal((await slip(rx.id)).billId, bill.id);
+    assert.equal((await slip(rx.id)).status, "dispensed");
+    assert.equal(assertSuccess(await sale(f, body), 201).id, bill.id);
+    assert.equal(await stock(f), 8);
+    const returned = assertSuccess(await ctx.post("/api/bills/returns", {
+      returnOfBillId: bill.id, clientBillId: randomUUID(), reason: "Wrong medicine", refundMode: "cash",
+      items: [{ productId: f.product.id, originalBillItemId: bill.items[0].id, name: f.product.name, quantity: 1, enteredUnit: "strip", ratePerRateUnit: 50 }],
+    }, f.credentials), 201);
+    assert.equal(returned.grandTotal, -50);
+    assert.equal(await stock(f), 9);
+  });
+
   test("an attached OTC prescription is dispensed with its bill, while a retry does not spend a refill", async () => {
     const f = await fixture({ schedule: "otc" });
     const rx = await prescription(f, { refillsAllowed: 1 });
