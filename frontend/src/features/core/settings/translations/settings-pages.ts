@@ -1148,4 +1148,7 @@ export const settingsPagesEn = {
   "settings.theme.slate": "Slate",
   "settings.theme.slateHelp": "Neutral and minimal",
   "settings.store.upiIdInvalid": "That does not look like a UPI ID. It should read like name@bank.",
+  "staff.roleHelp.manager": "Runs the shop day to day: billing, stock, products, customers and settings. Cannot manage staff or see profit.",
+  "staff.roleHelp.cashier": "Works the counter: bills, payments and customers. Needs the owner PIN to cancel a bill or correct stock.",
+  "staff.roleHelp.viewer": "Read-only: can look at bills, stock, customers and reports, but cannot change anything. Uses a staff seat.",
 } as const;

@@ -3,6 +3,7 @@ import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { verifyOwnerPinProof } from "../../middleware/permissions.js";
+import { isReadOnlyRole, roleHasPermission } from "../../core/permissions/rbac.js";
 import { confirmBillSchema } from "../bills/bills.schema.js";
 import { assertSensitiveBillReason, deriveSensitiveBillActions } from "../bills/bill-sensitive-approval.js";
 import { BILL_REPLICA_ITEM_COLUMNS, BILL_REPLICA_PAYMENT_SELECT, cancelBill, confirmBill, createSaleReturn, restoreCancelledBill, restoreDeletedBill, softDeleteBill } from "../bills/bills.service.js";
@@ -1769,6 +1770,7 @@ async function processOneSyncEvent(shopId, event, user, context) {
 }
 
 async function applySyncEvent(shopId, event, user, context) {
+  assertSyncWriteAllowed(user);
   switch (event.type) {
     case SYNC_EVENT_TYPES.CREATE_BILL:
       // Static contract: applyCreateBill(shopId, event, user) receives authenticated sync user.
@@ -4403,8 +4405,17 @@ async function assertOwnerPermission(shopId, user, ownerPin, context = null) {
 }
 
 function assertProductManagementPermission(user) {
-  if (["owner", "admin"].includes(user?.role)) return;
+  if (roleHasPermission(user?.role, "manage_products")) return;
   throw new AppError("Product management requires an owner or manager account", 403, "PRODUCT_MANAGEMENT_PERMISSION_DENIED");
+}
+
+// Every sync event is a write, so a read-only role is refused before any of
+// them is looked at. The till never pushes from such a session; this is the
+// server holding the line if one does. The 403 classifies as PERMISSION_DENIED
+// and not retryable, so the row is parked rather than retried twelve times.
+function assertSyncWriteAllowed(user) {
+  if (!isReadOnlyRole(user?.role)) return;
+  throw new AppError("This is a view-only account. Ask the owner to make this change.", 403, "ROLE_READ_ONLY");
 }
 
 function stripKnownSyncPayloadKeys(payload) {

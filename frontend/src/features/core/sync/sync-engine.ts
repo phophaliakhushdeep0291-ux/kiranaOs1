@@ -11,6 +11,8 @@ import { ACTIVITY_EVENTS, trackEvent, type ActivityEventType } from "@/lib/activ
 import { drainDeviceCommands } from "@/features/core/remote-support/command-runner";
 import { refreshServerConflictCache } from "@/features/core/sync/sync-conflict-cache";
 import { loadAuthSession } from "@/lib/storage/auth-storage";
+import { isReadOnlySession } from "@/features/core/staff/role-access";
+import { settleLocalOnlyOutboxOperations } from "@/features/core/sync/sync-operation-normalizer";
 
 async function canSubscriptionSync(): Promise<boolean> {
   const snapshot = await getCurrentSubscriptionSnapshot();
@@ -158,7 +160,19 @@ async function runSyncCycleBody(ownsCrossTabLock = false): Promise<SyncRunResult
     // Drains rather than sending a single batch. One batch per cycle meant a
     // backlog moved at the scheduler's cadence — 2.5s of dead air per batch,
     // and no movement at all while the tab was hidden.
-    push = await drainPendingOutboxOperations();
+    // A view-only login never pushes. The outbox outlives a logout, so on a
+    // shared counter it can still hold the cashier's sales from before; pushed
+    // under this login, the server would refuse each one and park it for good.
+    // Left alone, they go out with the next login that is allowed to send them.
+    // Rows that never leave this device (the login's own audit entry) are still
+    // settled — the push is where that normally happens, and without it they
+    // would read "pending backup" for as long as the viewer stays signed in.
+    if (isReadOnlySession()) {
+      await settleLocalOnlyOutboxOperations();
+      push = { pushed: 0, failed: 0, conflicts: 0, skipped: 0 };
+    } else {
+      push = await drainPendingOutboxOperations();
+    }
     pull = await pullServerChanges();
   } catch (error) {
     trackSyncEvent(ACTIVITY_EVENTS.SYNC_FAILED, Date.now() - startedAt, {

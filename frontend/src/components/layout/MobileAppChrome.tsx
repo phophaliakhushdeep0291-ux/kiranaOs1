@@ -36,6 +36,7 @@ import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i1
 import { useModuleVisibility } from "@/features/core/settings/modules";
 import { useActiveVerticalPack } from "@/features/verticals/registry";
 import { isPathAllowedByCapabilities, isPathInBusinessProfile, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
+import { normalizeStaffRole, routeAccessFor } from "@/features/core/staff/role-access";
 import { preloadCoreRoute } from "@/app/route-preload";
 import {
   Drawer,
@@ -346,6 +347,8 @@ function MoreNavigation({ location, userRole }: { location: string; userRole?: s
   const groups = useMemo(() => {
     const navigation = businessProfile.data?.navigation;
     const reachable = (path: string) => isHrefEnabled(path) && isPathInBusinessProfile(path, navigation);
+    const role = normalizeStaffRole(userRole);
+    const roleCanOpen = (path: string) => routeAccessFor(path, role).allowed;
     const extras = verticalPack.nav.filter((entry) => entry.mobile && isHrefEnabled(entry.href));
     const visibleGroups = userRole === "staff"
       ? MORE_GROUPS.map((group) => ({
@@ -366,6 +369,11 @@ function MoreNavigation({ location, userRole }: { location: string; userRole?: s
             .filter((entry) => entry.mobile?.group === group.label)
             .map((entry) => ({ href: entry.href, label: t(entry.label), helper: t(entry.mobile!.helper), Icon: entry.Icon })),
         ] as NavigationItem[])
+          // A screen this role would only be turned away from is not offered.
+          .flatMap<NavigationItem>((item) => {
+            if (!item.children) return roleCanOpen(item.href) ? [item] : [];
+            return [{ ...item, children: item.children.filter((child) => roleCanOpen(child.href)) }];
+          })
           // A section is judged by its screens, not its own href: it survives on
           // whichever children are still switched on, and goes when none are.
           .flatMap<NavigationItem>((item) => {
@@ -444,8 +452,9 @@ export function MobileBottomNav({
   const businessProfile = useShopBusinessProfile();
   const tabs = useMemo(
     () => TOP_LEVEL_TABS.filter((tab) => isHrefEnabled(tab.href))
-      .filter((tab) => isPathInBusinessProfile(tab.href, businessProfile.data?.navigation)),
-    [businessProfile.data?.navigation, isHrefEnabled],
+      .filter((tab) => isPathInBusinessProfile(tab.href, businessProfile.data?.navigation))
+      .filter((tab) => routeAccessFor(tab.href, normalizeStaffRole(userRole)).allowed),
+    [businessProfile.data?.navigation, isHrefEnabled, userRole],
   );
   const moreActive = !tabs.some((tab) => pathMatches(location, tab.matches));
 

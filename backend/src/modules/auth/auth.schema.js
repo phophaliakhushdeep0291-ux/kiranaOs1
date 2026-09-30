@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BUSINESS_TYPES } from "../../verticals/profile.js";
+import { ASSIGNABLE_STAFF_ROLES } from "../../core/permissions/rbac.js";
 
 const trimmedString = (min, message) => z.preprocess((value) => {
   if (typeof value !== "string") return value;
@@ -130,7 +131,7 @@ export const inviteStaffSchema = z.object({
   email:    optionalEmail,
   password: z.string().min(6),
   // Owners cannot be invited through staff management; owner transfer needs a separate audited flow.
-  role:     z.enum(["staff", "admin"]).default("staff"),
+  role:     z.enum(ASSIGNABLE_STAFF_ROLES).default("staff"),
 }).refine((value) => value.mobile || value.email, {
   message: "Mobile number or email is required",
   path: ["mobile"],
@@ -141,7 +142,7 @@ export const updateStaffSchema = z.object({
   mobile: optionalIndianMobile,
   email: optionalEmail,
   password: z.string().min(6).optional(),
-  role: z.enum(["staff", "admin"]).optional(),
+  role: z.enum(ASSIGNABLE_STAFF_ROLES).optional(),
 }).refine((value) => Object.values(value).some((item) => item !== undefined), {
   message: "At least one staff field must be changed",
 });

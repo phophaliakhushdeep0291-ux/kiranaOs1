@@ -10,12 +10,15 @@ export interface StaffInviteRequest {
   role?: StaffRole | string;
 }
 
+/** The roles staff management can assign, as `User.role` stores them. */
+export type StaffServerRole = "admin" | "staff" | "viewer";
+
 export interface StaffUpdateRequest {
   name?: string;
   mobile?: string;
   email?: string;
   password?: string;
-  role?: "staff" | "admin";
+  role?: StaffServerRole;
 }
 
 export interface StaffLocationAccessRow {

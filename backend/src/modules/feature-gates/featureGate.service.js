@@ -1,5 +1,6 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
+import { ASSIGNABLE_STAFF_ROLES } from "../../core/permissions/rbac.js";
 import {
   deserializeFeatures,
   hasLegacyShopTypeFeatureAccess,
@@ -95,8 +96,10 @@ export async function canUseDevice(shopId) {
 
 export async function canAddStaff(shopId, client = db) {
   const limits = await getPlanLimits(shopId, client);
+  // Every login the owner can hand out takes a seat, the view-only one
+  // included — a seat is a person signed in to the shop, not what they may do.
   const staffCount = await client.user.count({
-    where: { shopId, disabledAt: null, role: { in: ["staff", "admin"] } },
+    where: { shopId, disabledAt: null, role: { in: [...ASSIGNABLE_STAFF_ROLES] } },
   });
   return { allowed: staffCount < limits.maxStaff, staffCount, maxStaff: limits.maxStaff };
 }

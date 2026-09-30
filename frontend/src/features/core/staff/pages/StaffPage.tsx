@@ -26,10 +26,16 @@ import { createStaffLocalFirst, deactivateStaffLocalFirst, listStaffSnapshot, up
 import { getStaffLocationAssignments, updateStaffLocationAssignments, type StaffLocationAccessRow } from "@/features/core/staff/api";
 import { Edit, MapPin, ShieldAlert, UserPlus, UserRoundX, UsersRound, WifiOff } from "lucide-react";
 import { DataTableCard, EmptyState, PageHeader, PageShell, PermissionDenied, SyncBadge } from "@/components/shared";
+import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i18n";
 
 const STAFF_QUERY_KEY = ["staff-users-local"];
-const MANAGEABLE_STAFF_ROLES: StaffRole[] = ["manager", "cashier"];
+const MANAGEABLE_STAFF_ROLES = ["manager", "cashier", "viewer"] as const satisfies readonly StaffRole[];
 const DISPLAYED_STAFF_ROLES: StaffRole[] = ["owner", ...MANAGEABLE_STAFF_ROLES];
+const ROLE_HELP_KEYS: Record<typeof MANAGEABLE_STAFF_ROLES[number], TranslationKey> = {
+  manager: "staff.roleHelp.manager",
+  cashier: "staff.roleHelp.cashier",
+  viewer: "staff.roleHelp.viewer",
+};
 
 interface StaffFormState {
   id?: string;
@@ -78,6 +84,7 @@ function permissionSummary(member: StaffMember) {
 
 export default function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
+  const { t } = useAppLanguage();
   const queryClient = useQueryClient();
   const manageStaff = usePermission("manage_staff");
   const [formOpen, setFormOpen] = useState(false);
@@ -345,6 +352,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
                 <div><Label>{form.id ? "New password optional" : "Password *"}</Label><Input type="password" className="mt-1" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} /></div>
               </div>
               <div><Label>Role</Label><Select value={form.role} onValueChange={(value) => changeRole(value as StaffRole)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{MANAGEABLE_STAFF_ROLES.map((role) => <SelectItem key={role} value={role}>{ROLE_LABELS[role]}</SelectItem>)}</SelectContent></Select></div>
+              {form.role !== "owner" ? <p className="text-sm leading-5 text-muted-foreground" data-testid="staff-role-help">{t(ROLE_HELP_KEYS[form.role])}</p> : null}
               <div className="rounded-xl border p-3">
                 <div className="mb-2 flex items-center gap-2 font-medium"><ShieldAlert size={16} />Role access enforced by the server</div>
                 <p className="text-sm text-muted-foreground">

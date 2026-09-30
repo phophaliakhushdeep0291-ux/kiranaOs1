@@ -16,6 +16,8 @@ import { useScreenTracking } from "@/lib/activity";
 import type { FeatureName } from "@/features/core/subscription/plans";
 import { isPathInBusinessProfile, profileHasCapability, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import { PermissionDenied } from "@/components/shared/PermissionDenied";
+import { normalizeStaffRole, routeAccessFor, serverPermissions, type StaffRole } from "@/features/core/staff/role-access";
+import type { TranslationKey } from "@/features/core/settings/i18n";
 import { loadBillingRoute, loadBillsRoute, loadCustomersRoute, loadInventoryRoute, loadProductsRoute, loadPurchasesRoute, loadReportsRoute, loadSalesOverviewRoute } from "./route-preload";
 import { Button } from "@/components/ui/button";
 import { readBackendConnectionSnapshot, type BackendConnectionSnapshot } from "@/features/core/sync/backend-health";
@@ -195,6 +197,32 @@ function BusinessProfileRouteGate({ capability, children }: { capability?: strin
   return <>{children}</>;
 }
 
+const ROLE_NAME_KEYS: Record<StaffRole, TranslationKey> = {
+  owner: "role.owner",
+  manager: "role.manager",
+  cashier: "role.cashier",
+  viewer: "role.viewer",
+};
+
+/**
+ * Screens the signed-in role may not use (see ROUTE_ACCESS_RULES). The server
+ * already refuses the data behind each of them; this says so up front instead
+ * of opening a page that fails a moment later, or — offline — one that lets a
+ * view-only login fill in a form it can never save.
+ */
+function RoleRouteGate({ children }: { children: ReactNode }) {
+  const { t } = useAppLanguage();
+  const { user } = useAuth();
+  const [location] = useLocation();
+  const role = normalizeStaffRole(user?.role);
+  const access = routeAccessFor(location, role, serverPermissions(user));
+  if (access.allowed) return <>{children}</>;
+  if (access.reason === "read_only") {
+    return <PermissionDenied title={t("chrome.route.readOnly")} message={t("chrome.route.readOnlyHelp")} />;
+  }
+  return <PermissionDenied title={t("chrome.route.roleDenied")} message={t("chrome.route.roleDeniedHelp", { role: t(ROLE_NAME_KEYS[role]) })} />;
+}
+
 function routeConnectionAvailable(): boolean {
   if (typeof navigator !== "undefined" && !navigator.onLine) return false;
   const snapshot = readBackendConnectionSnapshot();
@@ -259,9 +287,11 @@ function ProtectedRoute({ component: Component, featureName, capability, onlineO
         <AppLayout>
           <ErrorBoundary>
             <BusinessProfileRouteGate capability={capability}>
-              {onlineOnly && !routeConnection
-                ? <InternetRequiredRoute />
-                : <LazyPage component={Component} featureName={featureName} />}
+              <RoleRouteGate>
+                {onlineOnly && !routeConnection
+                  ? <InternetRequiredRoute />
+                  : <LazyPage component={Component} featureName={featureName} />}
+              </RoleRouteGate>
             </BusinessProfileRouteGate>
           </ErrorBoundary>
         </AppLayout>
