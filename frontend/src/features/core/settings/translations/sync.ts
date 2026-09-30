@@ -53,6 +53,19 @@ export const syncEn = {
   "sync.banner.waitingTitle.one": "1 change waiting to back up",
   "sync.banner.waitingTitle": "{count} changes waiting to back up",
   "sync.banner.waitingBody": "Will retry automatically when the connection is healthy.",
+  // A fourth face, for the one case the other three get wrong.
+  //
+  // When the subscription has lapsed the engine does not fail to sync — it never
+  // tries. The cycle returns an empty result, so the queue looks exactly like an
+  // offline wait, and the banner said "will retry automatically when the
+  // connection is healthy" over a connection that was already healthy. A shop
+  // read that as "my bills are queued and safe", pressed Retry, watched the
+  // count stay at 1, and had no reason to think anything was wrong. Nothing
+  // retries until the plan is paid, so the banner has to say that and offer the
+  // only button that changes it.
+  "sync.banner.blockedTitle.one": "1 change is saved on this device only",
+  "sync.banner.blockedTitle": "{count} changes are saved on this device only",
+  "sync.banner.blockedBody": "Cloud backup is paused until you renew. Billing keeps working.",
   "sync.banner.retry": "Retry now",
   "sync.banner.retrying": "Retrying...",
   "sync.banner.view": "View",

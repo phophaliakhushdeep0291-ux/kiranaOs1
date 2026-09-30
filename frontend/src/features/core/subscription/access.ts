@@ -28,6 +28,16 @@ const DEFAULT_TRIAL_PLAN: PlanCode = "pro";
 export interface SubscriptionSnapshot {
   plan: PlanDefinition;
   planCode: PlanCode;
+  /**
+   * The state the shop is actually in, not the last word the server wrote.
+   *
+   * The backend runs no subscription scheduler, so a lapsed row keeps saying
+   * "active" (or "trial") for ever; only its dates move past. Reading that word
+   * as the status put "Plan status: Active" beside "Access until: a month ago",
+   * drew the header badge in the healthy colour, and — worst — offered "Cancel
+   * plan" to an expired shop while turning its only renew button into a cancel
+   * button. Every consumer wants the derived state, so it is derived once here.
+   */
   status: SubscriptionState;
   isTrial: boolean;
   isExpired: boolean;
@@ -345,13 +355,27 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
     : periodEndTime + 7 * DAY_MS;
   const timeExpired = Number.isFinite(periodEndTime) && now > periodEndTime;
   const explicitlyExpired = status === "expired" || (status === "cancelled" && timeExpired);
-  const subscriptionAccessExpired = timeExpired || explicitlyExpired || status === "grace";
-  const graceActive = status !== "cancelled" && subscriptionAccessExpired && now <= graceEndTime;
+  // The server's own verdict, from the same rule it uses to refuse sync
+  // (isSubscriptionActive). Trusted in one direction only: "false" ends access
+  // even when this device's clock disagrees — a phone set a month behind would
+  // otherwise call itself paid while every sync is refused — but "true" does not
+  // revive a row whose dates this device has watched pass while offline, because
+  // that `true` was computed before they passed.
+  const serverSaysLapsed = payload.active === false;
+  const subscriptionAccessExpired = timeExpired || explicitlyExpired || status === "grace" || serverSaysLapsed;
+  const graceActive = status !== "cancelled" && !serverSaysLapsed && subscriptionAccessExpired && now <= graceEndTime;
   const isPaymentFailed =
     status === "payment_failed" ||
     payload.paymentFailed === true ||
     payload.payment_failed === true;
   const isExpired = subscriptionAccessExpired && !graceActive;
+  const displayedStatus: SubscriptionState = isPaymentFailed
+    ? "payment_failed"
+    : isExpired
+      ? "expired"
+      : graceActive
+        ? "grace"
+        : status;
   const localOnlyAfterExpiry =
     subscriptionAccessExpired || isPaymentFailed || payload.syncAllowed === false || payload.sync_enabled === false;
   const cloudSyncAllowed =
@@ -368,8 +392,8 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
   return {
     plan,
     planCode: plan.code,
-    status,
-    isTrial: status === "trial",
+    status: displayedStatus,
+    isTrial: displayedStatus === "trial",
     isExpired,
     isPaymentFailed,
     trialEndsAt,
@@ -395,6 +419,22 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
     foundingEndsAt: foundingCustomer ? trialEndsAt : null,
     intendedPaidPlanCode,
   };
+}
+
+/**
+ * Whether the server will refuse this shop's sync push because of its plan.
+ *
+ * The sync strip and the sidebar's backup card both answer this, and they have to
+ * give the same answer or the screen contradicts itself. The server's rule is
+ * isSubscriptionActive: it refuses once access has fully ended — past grace, or a
+ * failed payment — and it still ACCEPTS during grace, so a grace-period queue is
+ * genuinely waiting on the connection, not blocked. An unread snapshot counts as
+ * not blocked; announcing a block that turns out not to exist is a false alarm too.
+ */
+export function subscriptionBlocksSync(
+  snapshot: Pick<SubscriptionSnapshot, "isExpired" | "isPaymentFailed"> | null | undefined,
+): boolean {
+  return Boolean(snapshot && (snapshot.isExpired || snapshot.isPaymentFailed));
 }
 
 export async function writeSubscriptionRequest(

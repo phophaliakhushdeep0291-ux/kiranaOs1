@@ -247,6 +247,29 @@ export const shellEn = {
   "plans.softwareBundled": "Software inside the serviced bundle",
   "plans.viewAll": "View all plans",
   "chrome.subscription.activeShort": "Subscription active",
+  // The sidebar's backup card had no vocabulary for a lapsed plan, so it reached
+  // for its offline words: "Checking backup", and after a manual retry "1
+  // pending — Backup will finish shortly". It will not finish. Renewing is the
+  // only thing that finishes it, so the card says that and links there.
+  "chrome.backupPaused": "Backup paused",
+  "chrome.backupPausedRenew": "Renew to resume cloud backup",
+  "chrome.subscription.renew": "Renew",
+  "plans.badge.expired": "Expired",
+  "plans.badge.unpaid": "Unpaid",
+  "plans.badge.grace": "Grace",
+  "plans.renew": "Renew {plan}",
+  "plans.renewReason": "Paying turns cloud backup, your other devices and premium tools back on. Billing keeps working either way.",
+  "plans.payAndRenew": "Pay and renew",
+  "plans.renewedTitle": "Subscription renewed",
+  "plans.renewRequestSaved": "Renewal request saved",
+  "plans.upgradedTitle": "Subscription upgraded",
+  "plans.upgradeRequestSaved": "Upgrade request saved",
+  "plans.lapsed.title": "Billing keeps working",
+  "plans.lapsed.body": "Sales, bills and exports work as normal, and every record stays safe on this device. Cloud backup, syncing to your other devices and premium tools are paused until you renew.",
+  "plans.grace.body": "Your plan has ended and you are in the grace period. Billing keeps working and premium tools are paused. Renew before the grace period ends to keep everything running.",
+  "chrome.subscription.expiredLong": "Your plan has expired. Billing and exports keep working; cloud backup and premium tools are paused until you renew.",
+  "chrome.subscription.graceLong": "Your plan has ended. Billing keeps working — renew before the grace period ends to keep cloud backup running.",
+  "chrome.subscription.paymentFailedLong": "Your last payment did not go through. Billing and exports keep working; cloud backup and premium tools are paused until you renew.",
 
   // Dashboard prose passed as props rather than written between tags.
   "dashboard.step.addProducts": "Add products",
