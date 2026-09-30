@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -543,7 +543,7 @@ function WarrantyCell({ unit, large = false }: { unit: ProductUnit; large?: bool
  * stock or take money, and the sale date can be set back to the day of the bill
  * so the warranty runs from when the customer actually took it home.
  */
-function RecordSaleDialog({ unit, saving, onClose, onConfirm }: {
+export function RecordSaleDialog({ unit, saving, onClose, onConfirm }: {
   unit: ProductUnit | null;
   saving: boolean;
   onClose: () => void;
@@ -552,6 +552,10 @@ function RecordSaleDialog({ unit, saving, onClose, onConfirm }: {
   const { t } = useAppLanguage();
   const draft = useCounterDraft(unitSaleDraft);
   const { billNumber, soldOn, customerName, customerPhone, sellingPrice } = draft.value;
+  // Each label is tied to its field, so a screen reader names the box that has
+  // focus. The bill number had no name at all; the others were read out as
+  // their placeholder or their current value.
+  const fieldId = useId();
 
   return (
     <Dialog open={unit !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -569,27 +573,27 @@ function RecordSaleDialog({ unit, saving, onClose, onConfirm }: {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.billNumber")}</Label>
-                <Input className="h-10" value={billNumber} onChange={(e) => draft.update({ billNumber: e.target.value })} />
+                <Label htmlFor={`${fieldId}-bill`} className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.billNumber")}</Label>
+                <Input id={`${fieldId}-bill`} className="h-10" value={billNumber} onChange={(e) => draft.update({ billNumber: e.target.value })} />
               </div>
               <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.soldOn")}</Label>
-                <Input className="h-10" type="date" max={todayKey()} value={soldOn} onChange={(e) => draft.update({ soldOn: e.target.value })} />
+                <Label htmlFor={`${fieldId}-date`} className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.soldOn")}</Label>
+                <Input id={`${fieldId}-date`} className="h-10" type="date" max={todayKey()} value={soldOn} onChange={(e) => draft.update({ soldOn: e.target.value })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.buyer")}</Label>
-                <Input className="h-10" placeholder={t("workflow.electronics.sold.optional")} value={customerName} onChange={(e) => draft.update({ customerName: e.target.value })} />
+                <Label htmlFor={`${fieldId}-buyer`} className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.buyer")}</Label>
+                <Input id={`${fieldId}-buyer`} className="h-10" placeholder={t("workflow.electronics.sold.optional")} value={customerName} onChange={(e) => draft.update({ customerName: e.target.value })} />
               </div>
               <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.mobile")}</Label>
-                <Input className="h-10" type="tel" inputMode="numeric" placeholder={t("workflow.electronics.sold.optional")} value={customerPhone} onChange={(e) => draft.update({ customerPhone: e.target.value })} />
+                <Label htmlFor={`${fieldId}-mobile`} className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.mobile")}</Label>
+                <Input id={`${fieldId}-mobile`} className="h-10" type="tel" inputMode="numeric" placeholder={t("workflow.electronics.sold.optional")} value={customerPhone} onChange={(e) => draft.update({ customerPhone: e.target.value })} />
               </div>
             </div>
             <div>
-              <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.price")}</Label>
-              <Input className="h-10" type="number" min="0" step="0.01" value={sellingPrice} onChange={(e) => draft.update({ sellingPrice: e.target.value })} />
+              <Label htmlFor={`${fieldId}-price`} className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("workflow.electronics.sold.price")}</Label>
+              <Input id={`${fieldId}-price`} className="h-10" type="number" min="0" step="0.01" value={sellingPrice} onChange={(e) => draft.update({ sellingPrice: e.target.value })} />
             </div>
             <div className="flex gap-2.5 pt-1">
               <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={onClose}>{t("workflow.electronics.sold.cancel")}</Button>
