@@ -77,6 +77,7 @@ export const workflowsEn = {
   "workflow.register.interrupted": "The app closed during a save. Check the register before creating another entry to avoid recording it twice.",
   "workflow.register.reviewRecords": "Close draft and check register",
   "workflow.register.storageFailed": "This device could not save your draft. Keep this screen open until you finish.",
+  "workflow.pharmacy.draftHint": "This entry stays here while you use other screens or unlock the counter. Record or cancel it before refreshing, closing this tab or signing out.",
   "workflow.register.draftHint": "Your draft stays on this device for up to 7 days, including after a restart. Cancel or sign out to discard it.",
   "workflow.electronics.register.saved": "{count} units registered",
   "workflow.register.billAfterRecording": "Continue to billing",
