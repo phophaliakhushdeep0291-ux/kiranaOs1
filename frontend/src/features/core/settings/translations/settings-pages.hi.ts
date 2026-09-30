@@ -1111,4 +1111,7 @@ export const settingsPagesHi: Record<keyof typeof settingsPagesEn, string> = {
   "settings.theme.slate": "स्लेटी",
   "settings.theme.slateHelp": "सादा और सरल",
   "settings.store.upiIdInvalid": "यह UPI ID जैसी नहीं लगती। यह name@bank जैसी होनी चाहिए।",
+  "staff.roleHelp.manager": "रोज़ का काम संभालता है: बिलिंग, स्टॉक, सामान, ग्राहक और सेटिंग। स्टाफ़ नहीं संभाल सकता, मुनाफ़ा नहीं देख सकता।",
+  "staff.roleHelp.cashier": "काउंटर संभालता है: बिल, भुगतान और ग्राहक। बिल रद्द करने या स्टॉक सुधारने के लिए मालिक का PIN चाहिए।",
+  "staff.roleHelp.viewer": "सिर्फ़ देख सकता है: बिल, स्टॉक, ग्राहक और रिपोर्ट। कुछ बदल नहीं सकता। एक स्टाफ़ सीट लेता है।",
 };

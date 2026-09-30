@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 import { AppError } from "./error.js";
 import db from "../db.js";
+import { isReadOnlyAllowedRequest, isReadOnlyRole, roleHasPermission } from "../core/permissions/rbac.js";
 
 /**
  * requireAuth — verifies JWT, confirms the user still exists and is active,
@@ -132,6 +133,14 @@ export async function requireAuth(req, _res, next) {
       deviceRecordId: session?.deviceRecordId ?? payload.deviceRecordId ?? null,
       sessionVersion: session?.device?.sessionVersion ?? payload.sessionVersion ?? null,
     };
+
+    // A read-only role is refused every write here, once, rather than on each
+    // route. A new route is therefore closed to it from the first commit — the
+    // failure mode this avoids is a viewer who can change whatever someone
+    // forgot to guard.
+    if (isReadOnlyRole(user.role) && !isReadOnlyAllowedRequest(req.method, req.originalUrl ?? req.url)) {
+      throw new AppError("This is a view-only account. Ask the owner to make this change.", 403, "ROLE_READ_ONLY");
+    }
     next();
   } catch (error) {
     if (error instanceof AppError) return next(error);
@@ -155,6 +164,23 @@ export function requireRole(...roles) {
     if (!req.user) return next(new AppError("Not authenticated", 401));
     if (!allowedRoles.includes(req.user.role)) {
       return next(new AppError("Insufficient permissions", 403));
+    }
+    next();
+  };
+}
+
+/**
+ * requirePermission — checks req.user.role against the role catalogue
+ * (core/permissions/rbac.js). Every listed permission must be held.
+ * Usage: requirePermission("manage_products")
+ */
+export function requirePermission(...permissions) {
+  const required = permissions.flat();
+
+  return (req, _res, next) => {
+    if (!req.user) return next(new AppError("Not authenticated", 401));
+    if (!required.every((permission) => roleHasPermission(req.user.role, permission))) {
+      return next(new AppError("Insufficient permissions", 403, "PERMISSION_DENIED"));
     }
     next();
   };

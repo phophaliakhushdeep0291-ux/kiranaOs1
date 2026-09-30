@@ -3,6 +3,8 @@ import type { SyncStatus } from "@/types/domain";
 import { getOfflineScope, nowIso, type OfflineScope } from "@/lib/offline/context";
 import { StorageFullError, isQuotaExceededError } from "@/lib/offline/storage-errors";
 import { nextTransientFailureCount } from "@/features/core/sync/sync-failure-classification";
+import { LOCAL_ONLY_SYNC_OPERATION_TYPES } from "@/features/core/sync/local-only-operations";
+import { isReadOnlySession } from "@/features/core/staff/role-access";
 
 export interface OfflineRow {
   id: string;
@@ -486,6 +488,31 @@ export function assertOfflineWriteScope(value: unknown): void {
   }
 }
 
+export class ReadOnlyRoleError extends Error {
+  readonly code = "ROLE_READ_ONLY";
+  constructor() {
+    super("This is a view-only account. Ask the owner to make this change.");
+    this.name = "ReadOnlyRoleError";
+  }
+}
+
+/**
+ * A view-only login may not queue a change for the server. Checked here, where
+ * every outbox row is written, because the UI reports success on the LOCAL
+ * write: a guard on each form would miss one, and the shop would be told the
+ * change was saved, only for the server to refuse it on the next push. Thrown
+ * inside the caller's transaction, it rolls the local write back with it.
+ *
+ * Operations that stay on this device (its audit trail, settings, device state)
+ * are still allowed — logging in writes one.
+ */
+export function assertOutboxWriteAllowed(event: Pick<PendingSyncEvent, "operation_type" | "type">): void {
+  if (!isReadOnlySession()) return;
+  const operation = String(event.operation_type || event.type || "").trim();
+  if (LOCAL_ONLY_SYNC_OPERATION_TYPES.has(operation)) return;
+  throw new ReadOnlyRoleError();
+}
+
 export function filterRowsForCurrentScope<T>(rows: T[]): T[] {
   return rows.filter((row) => rowMatchesCurrentScope(row));
 }
@@ -897,6 +924,7 @@ class OfflineDBFacade {
         },
         enqueueOutboxOperation: async (event: PendingSyncEvent) => {
           assertOfflineWriteScope(event);
+          assertOutboxWriteAllowed(event);
           await this.table<PendingSyncEvent>("sync_outbox").put(event);
           outboxEvents.push(event);
         },
@@ -1023,6 +1051,7 @@ class OfflineDBFacade {
   async enqueueOutboxOperation(event: PendingSyncEvent): Promise<void> {
     await this.init();
     assertOfflineWriteScope(event);
+    assertOutboxWriteAllowed(event);
     await this.table<PendingSyncEvent>("sync_outbox").put(event);
     emitSyncQueueUpdated({
       clientEventId: event.clientEventId,

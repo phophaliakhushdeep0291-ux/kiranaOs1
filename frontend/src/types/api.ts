@@ -8,7 +8,9 @@ export interface User {
   mobile?: string;
   email?: string;
   emailVerifiedAt?: string | null;
-  role: "owner" | "staff" | string;
+  role: "owner" | "admin" | "staff" | "viewer" | string;
+  /** From the server's role catalogue; absent on sessions cached by older builds. */
+  permissions?: string[];
   createdAt?: string;
   updatedAt?: string;
 }

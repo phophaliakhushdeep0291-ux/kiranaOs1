@@ -58,6 +58,7 @@ import { MobileBottomNav, MobileTopBar } from "./MobileAppChrome";
 import { apiRequest, getApiBaseUrl } from "@/lib/api/http";
 import { getActiveLocationId, LOCATION_CHANGED_EVENT, setActiveLocationId as persistActiveLocationId } from "@/features/core/stores/location-context";
 import { cn } from "@/lib/utils";
+import { normalizeStaffRole, routeAccessFor, serverPermissions } from "@/features/core/staff/role-access";
 import { preloadCoreRoute, scheduleCoreRoutePreload } from "@/app/route-preload";
 import {
   DropdownMenu,
@@ -551,12 +552,16 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
   const nav = useMemo(() => {
     const profileNavigation = businessProfile.data?.navigation;
     const profileCapabilities = businessProfile.data?.capabilities;
+    const role = normalizeStaffRole(user?.role);
+    const granted = serverPermissions(user);
     const pathEnabled = (href: string) =>
       isHrefEnabled(href)
       && isPathInBusinessProfile(href, profileNavigation)
       // Dated-stock tooling belongs to shops that hold the capability, not to
       // every shop that happens to carry the "inventory" nav key.
-      && isPathAllowedByCapabilities(href, profileCapabilities);
+      && isPathAllowedByCapabilities(href, profileCapabilities)
+      // A screen this role would only be turned away from is not offered.
+      && routeAccessFor(href, role, granted).allowed;
     const items = buildSidebarNav(verticalPack.nav, pathEnabled, t);
     if (user?.role !== "staff") return items;
 
@@ -571,7 +576,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
         overviewHref: item.overviewHref && CASHIER_NAV_PATHS.has(item.overviewHref) ? item.overviewHref : undefined,
       }];
     });
-  }, [businessProfile.data?.navigation, isHrefEnabled, user?.role, verticalPack]);
+  }, [businessProfile.data?.navigation, isHrefEnabled, user, verticalPack]);
 
   // auto-expand groups when child route is active
   useEffect(() => {
