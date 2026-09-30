@@ -360,6 +360,7 @@ export function useGetStockLedger(
 export function useRecordPurchase(options?: MutationHookOptions<unknown, StockMovementVariables>) {
   return useMutation<unknown, ApiClientError, StockMovementVariables>({
     ...getMutationOptions<unknown, StockMovementVariables>(options),
+    networkMode: "always",
     mutationFn: ({ data }) => recordPurchaseLocalFirst(data),
   });
 }
@@ -367,6 +368,7 @@ export function useRecordPurchase(options?: MutationHookOptions<unknown, StockMo
 export function useRecordDamage(options?: MutationHookOptions<unknown, StockMovementVariables>) {
   return useMutation<unknown, ApiClientError, StockMovementVariables>({
     ...getMutationOptions<unknown, StockMovementVariables>(options),
+    networkMode: "always",
     mutationFn: ({ data }) => recordDamageLocalFirst(data),
   });
 }
@@ -374,6 +376,7 @@ export function useRecordDamage(options?: MutationHookOptions<unknown, StockMove
 export function useRecordSale(options?: MutationHookOptions<unknown, StockMovementVariables>) {
   return useMutation<unknown, ApiClientError, StockMovementVariables>({
     ...getMutationOptions<unknown, StockMovementVariables>(options),
+    networkMode: "always",
     mutationFn: ({ data }) => recordSaleLocalFirst(data),
   });
 }
@@ -381,6 +384,7 @@ export function useRecordSale(options?: MutationHookOptions<unknown, StockMoveme
 export function useStockCorrection(options?: MutationHookOptions<unknown, StockMovementVariables>) {
   return useMutation<unknown, ApiClientError, StockMovementVariables>({
     ...getMutationOptions<unknown, StockMovementVariables>(options),
+    networkMode: "always",
     mutationFn: ({ data }) => stockCorrectionLocalFirst(data),
   });
 }

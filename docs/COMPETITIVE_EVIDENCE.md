@@ -32,6 +32,21 @@ run failed source-snapshot stability on September 2. The August 24 pass remains
 historical. The resulting 7.68/10 internal evidence score is not an independent
 product rating or proof of parity with any competitor.
 
+## September 30 follow-up
+
+The machine-readable score remains a September 8 evidence snapshot. Later
+September 29 deployment evidence records successful live smoke/readiness checks
+and a production dump, but does not prove scheduled offsite durability or a
+restore of that production dump. Do not repeat the old “latest observed” dates
+as a current release verdict, or promote the combined production claims merely
+because a narrower check passed.
+
+[September 30 offline verification](OFFLINE_WORKFLOW_VERIFICATION_2026-09-30.md)
+records fresh local browser and regression results plus the fixes developed on
+top of `7e0c21f9`. These are local QA results, not deployment, provider, physical
+hardware, or a complete release-certification run. No competitive score was
+raised by this work.
+
 ## Improvement loop
 
 1. Start with the lowest capped domain or the highest-weight absent claim.

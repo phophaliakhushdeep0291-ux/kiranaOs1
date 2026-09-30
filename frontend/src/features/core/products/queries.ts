@@ -319,6 +319,7 @@ export function useListProducts(
 export function useCreateProduct(options?: MutationHookOptions<Product, CreateProductVariables>) {
   return useMutation<Product, ApiClientError, CreateProductVariables>({
     ...getMutationOptions<Product, CreateProductVariables>(options),
+    networkMode: "always",
     mutationFn: ({ data }) => createProductLocalFirst(data),
   });
 }
@@ -326,6 +327,7 @@ export function useCreateProduct(options?: MutationHookOptions<Product, CreatePr
 export function useUpdateProduct(options?: MutationHookOptions<Product, UpdateProductVariables>) {
   return useMutation<Product, ApiClientError, UpdateProductVariables>({
     ...getMutationOptions<Product, UpdateProductVariables>(options),
+    networkMode: "always",
     mutationFn: ({ id, data }) => updateProductLocalFirst(id, data),
   });
 }
@@ -333,6 +335,7 @@ export function useUpdateProduct(options?: MutationHookOptions<Product, UpdatePr
 export function useDeleteProduct(options?: MutationHookOptions<Product, DeleteProductVariables>) {
   return useMutation<Product, ApiClientError, DeleteProductVariables>({
     ...getMutationOptions<Product, DeleteProductVariables>(options),
+    networkMode: "always",
     mutationFn: ({ id, ownerPin, reason }) => deleteProductLocalFirst(id, ownerPin, reason),
   });
 }

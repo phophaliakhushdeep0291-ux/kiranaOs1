@@ -56,6 +56,7 @@ export function useListStaff(options?: QueryHookOptions<StaffMember[], StaffQuer
 export function useInviteStaff(options?: MutationHookOptions<StaffMember, InviteStaffVariables>) {
   return useMutation<StaffMember, ApiClientError, InviteStaffVariables>({
     ...getMutationOptions<StaffMember, InviteStaffVariables>(options),
+    networkMode: "always",
     mutationFn: ({ data }) => createStaffLocalFirst({ ...data, role: normaliseStaffRole(data.role) }),
   });
 }
@@ -63,6 +64,7 @@ export function useInviteStaff(options?: MutationHookOptions<StaffMember, Invite
 export function useRemoveStaff(options?: MutationHookOptions<unknown, RemoveStaffVariables>) {
   return useMutation<unknown, ApiClientError, RemoveStaffVariables>({
     ...getMutationOptions<unknown, RemoveStaffVariables>(options),
+    networkMode: "always",
     mutationFn: ({ id, ownerPin }) => deactivateStaffLocalFirst(id, ownerPin ?? "", "Removed from settings staff list"),
   });
 }

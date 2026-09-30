@@ -245,6 +245,7 @@ export function useListCustomers(
 export function useCreateCustomer(options?: MutationHookOptions<Customer, CreateCustomerVariables>) {
   return useMutation<Customer, ApiClientError, CreateCustomerVariables>({
     ...getMutationOptions<Customer, CreateCustomerVariables>(options),
+    networkMode: "always",
     mutationFn: ({ data }) => createCustomerLocalFirst(data),
   });
 }
@@ -252,6 +253,7 @@ export function useCreateCustomer(options?: MutationHookOptions<Customer, Create
 export function useUpdateCustomer(options?: MutationHookOptions<Customer, UpdateCustomerVariables>) {
   return useMutation<Customer, ApiClientError, UpdateCustomerVariables>({
     ...getMutationOptions<Customer, UpdateCustomerVariables>(options),
+    networkMode: "always",
     mutationFn: ({ id, data }) => updateCustomerLocalFirst(id, data),
   });
 }
@@ -259,6 +261,7 @@ export function useUpdateCustomer(options?: MutationHookOptions<Customer, Update
 export function useDeleteCustomer(options?: MutationHookOptions<{ success: boolean; message?: string }, DeleteCustomerVariables>) {
   return useMutation<{ success: boolean; message?: string }, ApiClientError, DeleteCustomerVariables>({
     ...getMutationOptions<{ success: boolean; message?: string }, DeleteCustomerVariables>(options),
+    networkMode: "always",
     mutationFn: ({ id, ownerPin, reason }) => deleteCustomerLocalFirst({ id, ownerPin, reason }),
   });
 }
@@ -285,6 +288,7 @@ export function useGetCustomerKhata(
 export function useRecordUdharPayment(options?: MutationHookOptions<unknown, RecordUdharPaymentVariables>) {
   return useMutation<unknown, ApiClientError, RecordUdharPaymentVariables>({
     ...getMutationOptions<unknown, RecordUdharPaymentVariables>(options),
+    networkMode: "always",
     mutationFn: ({ id, data, expectedOutstanding }) => recordPaymentLocalFirst(id, data, { expectedOutstanding }),
   });
 }

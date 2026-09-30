@@ -751,7 +751,16 @@ export default function InventoryPage() {
     };
 
     if (form.movementType === "purchase") {
-      recordPurchase.mutate({ data: payload });
+      // A price patch reads and rewrites the product snapshot. Wait for stock
+      // and average cost to commit, or it can overwrite the received quantity
+      // with the pre-purchase snapshot while the device is offline.
+      try {
+        await recordPurchase.mutateAsync({ data: payload });
+      } catch {
+        // The mutation's onError already shows the failure; don't change prices
+        // for a receipt that did not save.
+        return;
+      }
       await maybeUpdateProductPrices(ownerPin, ownerPinReason);
       return;
     }

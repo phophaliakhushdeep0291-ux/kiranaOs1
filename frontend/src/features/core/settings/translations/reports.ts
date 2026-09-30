@@ -4,6 +4,9 @@
 // kept — but in the words an Indian shop owner actually uses: "पेआउट", "सेटलमेंट"
 // and "मिलान", not translated-from-textbook coinages nobody says out loud.
 export const reportsEn = {
+  "expenses.summary.unavailable": "Summary totals are unavailable. You can still record and view expenses saved on this device.",
+  "expenses.summary.offline": "You're offline. Summary totals are from your last connection; recent changes appear in the expense list.",
+  "expenses.summary.updating": "Summary totals may be out of date. Recent changes appear in the expense list.",
   "reports.read.checking": "Loading the complete report…",
   "reports.read.unavailable": "Report is incomplete",
   "reports.read.help": "Some saved entries or online payments could not be loaded. Check your connection and retry before using these totals.",

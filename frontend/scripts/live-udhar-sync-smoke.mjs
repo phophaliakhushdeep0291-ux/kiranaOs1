@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { verifyOfflineShopCycle } from "./offline-shop-cycle.mjs";
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:5173";
 const API_URL = process.env.API_URL ?? "http://localhost:3000/api";
@@ -112,6 +113,40 @@ async function waitForPage(client, predicate, argument, timeoutMs = 20_000) {
 async function navigate(client, url) {
   await client.send("Page.navigate", { url });
   await waitForPage(client, () => document.readyState === "complete", null);
+  if (!url.endsWith("/register")) await unlockQaCounter(client);
+}
+
+async function unlockQaCounter(client) {
+  await waitForPage(client, () => Boolean(document.querySelector(".session-lock-input, main")), null);
+  if (!await client.evaluate(`Boolean(document.querySelector('.session-lock-input'))`)) return;
+  if (await client.evaluate(`Boolean(document.querySelector('[data-testid="device-unlock"]'))`)) {
+    await client.evaluate(`document.querySelector('[data-testid="device-unlock"]').click()`);
+  } else {
+    await client.evaluate(`document.querySelector('.session-lock-input').focus()`);
+    await client.send("Input.insertText", { text: "2468" });
+    await client.evaluate(`document.querySelector('.session-lock-form button[type="submit"]').click()`);
+  }
+  await waitForPage(client, () => !document.querySelector(".session-lock-screen") && Boolean(document.querySelector("main")), null);
+}
+
+async function enrollQaDevice(client) {
+  // Only this disposable Chrome profile gets virtual hardware. Enrollment still
+  // goes through the application's owner-PIN form and WebAuthn verification.
+  await client.send("WebAuthn.enable", { enableUI: false });
+  await client.send("WebAuthn.addVirtualAuthenticator", { options: {
+    protocol: "ctap2", transport: "internal", hasResidentKey: true,
+    hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true,
+  } });
+  await navigate(client, `${FRONTEND_URL}/settings/security`);
+  const selector = 'button[role="switch"][aria-label="Biometric unlock"]';
+  await waitForPage(client, (selector) => Boolean(document.querySelector(selector)), selector);
+  await client.evaluateFunction(pageHelpers.click, selector);
+  await waitForPage(client, () => Boolean(document.querySelector('[role="dialog"] input[inputmode="numeric"]')), null);
+  await client.evaluate(`document.querySelector('[role="dialog"] input[inputmode="numeric"]').focus()`);
+  await client.send("Input.insertText", { text: "2468" });
+  await client.evaluate(`document.querySelector('[role="dialog"] button[type="submit"]').click()`);
+  await waitForPage(client, (selector) => !document.querySelector('[role="dialog"]') && document.querySelector(selector)?.getAttribute('aria-checked') === 'true', selector);
+  await sleep(1000);
 }
 
 async function navigateSpa(client, pathName) {
@@ -371,12 +406,7 @@ async function main() {
         user: auth.user,
         shop: auth.shop,
       }));
-      // A normal registration calls markAuthenticatedSessionActive(). This
-      // harness registers through fetch, so mirror that presence proof instead
-      // of accidentally testing the configured cold-start PIN lock.
-      const authenticatedAt = String(Date.now());
-      localStorage.setItem("kiranaos.security.lastActivity.v1", authenticatedAt);
-      sessionStorage.setItem("kiranaos.security.sessionStarted.v1", authenticatedAt);
+      localStorage.setItem("kirana-os:ui-language:v1", "en");
       const headers = {
         "content-type": "application/json",
         authorization: `Bearer ${auth.accessToken ?? auth.token}`,
@@ -412,6 +442,7 @@ async function main() {
       };
     }, { apiUrl: API_URL, mobile, runId, amount: TEST_AMOUNT });
 
+    await enrollQaDevice(client);
     await navigate(client, `${FRONTEND_URL}/billing`);
     await client.evaluateFunction(pageHelpers.install, null);
     const productSelector = `[data-testid="product-card-${setup.product.id}"]`;
@@ -626,6 +657,8 @@ async function main() {
     }
 
     await client.send("Page.reload", { ignoreCache: true });
+    await waitForPage(client, () => document.readyState === "complete", null);
+    await unlockQaCounter(client);
     await waitForPage(client, () =>
       document.readyState === "complete" &&
       location.pathname === "/customers" &&
@@ -744,9 +777,18 @@ async function main() {
     });
     await mkdir(OUTPUT_DIR, { recursive: true });
     await writeFile(path.join(OUTPUT_DIR, "udhar-after-partial-payment.png"), Buffer.from(screenshot.data, "base64"));
+    const shopCycle = process.env.QA_FULL_OFFLINE_WORKFLOW === "true"
+      ? await verifyOfflineShopCycle({ client, waitForPage, navigate, setOffline, pageHelpers, frontendUrl: FRONTEND_URL, apiUrl: API_URL, product: setup.product, outputDir: OUTPUT_DIR })
+      : undefined;
+    if (shopCycle) {
+      const finalStock = await client.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+      shopCycle.screenshot = "inventory-after-offline-cycle.png";
+      await writeFile(path.join(OUTPUT_DIR, shopCycle.screenshot), Buffer.from(finalStock.data, "base64"));
+    }
     const report = {
       generatedAt: new Date().toISOString(),
       passed: true,
+      shopCycle,
       scenario: "offline udhar bill -> reconnect/navigation acknowledgement recovery -> offline partial payment -> immediate repaint -> offline SPA return -> offline document reload -> sync -> server reconciliation",
       creditAmount: TEST_AMOUNT,
       partialPaymentAmount: PARTIAL_PAYMENT_AMOUNT,

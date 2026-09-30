@@ -24,6 +24,8 @@ import { expenseDateInput, expenseDateTimestamp } from "@/features/core/expenses
 import { cacheServerExpenses, createExpenseLocalFirst, deleteExpenseLocalFirst, listLocalExpenses, mergeExpenseSnapshots, updateExpenseLocalFirst } from "@/features/core/expenses/local-actions";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useOfflineStatus } from "@/features/core/sync";
 import { expenseCategoryOptions } from "@/features/core/settings/shop-expenses";
 import type { Expense, ExpenseInput } from "@/types/api";
 const MODES: { value: string; label: string }[] = [
@@ -84,6 +86,8 @@ type ExpenseFormData = z.infer<typeof expenseFormSchema>;
 export default function ExpensesPage() {
   const requestExport = useDataExport();
   const { toast } = useToast();
+  const { t } = useAppLanguage();
+  const { isOnline } = useOfflineStatus();
   const businessType = useBusinessTypeKey();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -109,6 +113,7 @@ export default function ExpensesPage() {
     return () => window.removeEventListener("kirana:local-data-changed", refreshLocalExpenses);
   }, [refreshLocalExpenses]);
   const expensesQ = useQuery({
+    networkMode: "online",
     queryKey: ["expenses", filters],
     queryFn: async () => {
       const rows = await listExpenses(filters);
@@ -116,11 +121,12 @@ export default function ExpensesPage() {
       return rows;
     },
   });
-  const overviewQ = useQuery({ queryKey: ["expense-overview"], queryFn: getExpenseOverview });
+  const overviewQ = useQuery({ networkMode: "online", queryKey: ["expense-overview"], queryFn: getExpenseOverview });
 
   const invalidate = () => { void queryClient.invalidateQueries({ queryKey: ["expenses"] }); void queryClient.invalidateQueries({ queryKey: ["expense-overview"] }); };
 
   const saveMut = useMutation({
+    networkMode: "always",
     mutationFn: (vars: { id?: string; data: ExpenseInput; ownerPin?: string }) => (vars.id ? updateExpenseLocalFirst(vars.id, vars.data, vars.ownerPin ?? "") : createExpenseLocalFirst(vars.data)),
     onSuccess: () => { refreshLocalExpenses(); invalidate(); setPanelOpen(false); setEditing(null); toast({ title: editing ? "Expense updated" : "Expense saved on this device", description: editing ? undefined : "Cloud backup will run automatically." }); },
     onError: (err: unknown) => {
@@ -128,6 +134,7 @@ export default function ExpensesPage() {
     },
   });
   const deleteMut = useMutation({
+    networkMode: "always",
     mutationFn: (vars: { id: string; ownerPin: string }) => deleteExpenseLocalFirst(vars.id, vars.ownerPin),
     onSuccess: () => { refreshLocalExpenses(); invalidate(); setDeleting(null); setDeleteOwnerPin(""); toast({ title: "Expense moved to recycle bin", description: "The deletion is safe locally and queued for cloud backup." }); },
     onError: (err: unknown) => {
@@ -144,6 +151,11 @@ export default function ExpensesPage() {
     return true;
   });
   const ov = overviewQ.data;
+  const hasPendingExpenses = localExpenses.some((expense) => {
+    const row = expense as Expense & { sync_status?: string; merged_into_id?: string; mergedIntoId?: string };
+    return row.sync_status && row.sync_status !== "synced" && !row.merged_into_id && !row.mergedIntoId;
+  });
+  const summaryMayBeStale = !isOnline || hasPendingExpenses || overviewQ.isError || overviewQ.isFetching;
   const topCategory = ov ? Object.entries(ov.byCategory).sort((a, b) => b[1] - a[1])[0] : undefined;
   const todayDelta = ov ? pctDelta(ov.today, ov.yesterday) : null;
   const monthDelta = ov ? pctDelta(ov.month, ov.lastMonth) : null;
@@ -196,16 +208,22 @@ export default function ExpensesPage() {
       style={panelOpen && isDesktop ? { paddingRight: panelWidth + 24 } : undefined}
     >
       <div className="space-y-4">
+        {(!ov || summaryMayBeStale) && (
+          <div role="status" data-testid="expense-summary-status" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <Clock3 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <p>{t(!ov ? "expenses.summary.unavailable" : !isOnline ? "expenses.summary.offline" : "expenses.summary.updating")}</p>
+          </div>
+        )}
         {/* KPI row */}
         <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
-          <Kpi icon={<Wallet size={16} />} iconBg="bg-[var(--brand-soft)] text-[var(--brand)]" label="Today's Expenses" value={inr(ov?.today)}
-            sub={todayDelta == null ? "vs yesterday" : `${Math.abs(todayDelta)}% vs yesterday`} subTone={todayDelta == null ? "muted" : todayDelta <= 0 ? "good" : "bad"} loading={overviewQ.isLoading} />
-          <Kpi icon={<CalendarDays size={16} />} iconBg="bg-violet-50 text-violet-600" label="This Month's Expenses" value={inr(ov?.month)}
-            sub={monthDelta == null ? "vs last month" : `${Math.abs(monthDelta)}% vs last month`} subTone={monthDelta == null ? "muted" : monthDelta <= 0 ? "good" : "bad"} loading={overviewQ.isLoading} />
-          <Kpi icon={<Clock3 size={16} />} iconBg="bg-amber-50 text-amber-600" label="Pending Payouts" value={inr(ov?.pendingTotal)}
-            sub={`${ov?.pendingCount ?? 0} payment${(ov?.pendingCount ?? 0) === 1 ? "" : "s"} pending`} subTone="warn" loading={overviewQ.isLoading} />
+          <Kpi icon={<Wallet size={16} />} iconBg="bg-[var(--brand-soft)] text-[var(--brand)]" label="Today's Expenses" value={ov ? inr(ov.today) : "—"}
+            sub={todayDelta == null ? "vs yesterday" : `${Math.abs(todayDelta)}% vs yesterday`} subTone={todayDelta == null ? "muted" : todayDelta <= 0 ? "good" : "bad"} loading={overviewQ.isLoading && isOnline} />
+          <Kpi icon={<CalendarDays size={16} />} iconBg="bg-violet-50 text-violet-600" label="This Month's Expenses" value={ov ? inr(ov.month) : "—"}
+            sub={monthDelta == null ? "vs last month" : `${Math.abs(monthDelta)}% vs last month`} subTone={monthDelta == null ? "muted" : monthDelta <= 0 ? "good" : "bad"} loading={overviewQ.isLoading && isOnline} />
+          <Kpi icon={<Clock3 size={16} />} iconBg="bg-amber-50 text-amber-600" label="Pending Payouts" value={ov ? inr(ov.pendingTotal) : "—"}
+            sub={`${ov?.pendingCount ?? 0} payment${(ov?.pendingCount ?? 0) === 1 ? "" : "s"} pending`} subTone="warn" loading={overviewQ.isLoading && isOnline} />
           <Kpi icon={<PieIcon size={16} />} iconBg="bg-emerald-50 text-emerald-600" label="Top Expense Category" value={topCategory?.[0] ?? "—"}
-            sub={topCategory && ov?.month ? `${inr(topCategory[1])} (${Math.round((topCategory[1] / ov.month) * 100)}%)` : "No expenses yet"} subTone="muted" loading={overviewQ.isLoading} />
+            sub={topCategory && ov?.month ? `${inr(topCategory[1])} (${Math.round((topCategory[1] / ov.month) * 100)}%)` : "No expenses yet"} subTone="muted" loading={overviewQ.isLoading && isOnline} />
         </div>
 
         {/* Toolbar */}
@@ -311,9 +329,9 @@ export default function ExpensesPage() {
             <h3 className="font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">All Expenses</h3>
             <span className="text-[11px] text-[#94a3b8]">{rows.length === 0 ? "" : `Showing ${(safePage - 1) * pageSize + 1} to ${Math.min(safePage * pageSize, rows.length)} of ${rows.length} expenses`}</span>
           </div>
-          {expensesQ.isLoading ? (
+          {expensesQ.isLoading && rows.length === 0 && isOnline ? (
             <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[#64748b]"><Loader2 size={16} className="animate-spin" /> Loading…</div>
-          ) : expensesQ.isError ? (
+          ) : expensesQ.isError && rows.length === 0 && isOnline ? (
             <div className="py-12 text-center text-[13px] text-rose-600">Couldn't load expenses. Check your connection and retry.</div>
           ) : rows.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
