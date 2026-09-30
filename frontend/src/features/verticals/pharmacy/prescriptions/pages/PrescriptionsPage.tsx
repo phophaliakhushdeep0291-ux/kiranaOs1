@@ -9,6 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useCounterDraft } from "@/hooks/use-counter-draft";
+import { counterDraftScope } from "@/lib/counter-draft";
+import { authSessionInstance } from "@/lib/storage/auth-storage";
+import { getActiveLocationId } from "@/features/core/stores/location-context";
+import { prescriptionDraft, prescriptionFormDraft } from "../prescription-draft";
 import { usePanelResize } from "@/hooks/use-panel-resize";
 import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
@@ -62,8 +67,12 @@ export default function PrescriptionsPage() {
   const [filter, setFilter] = useState("pending");
   const [scheduleFilter, setScheduleFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [editing, setEditing] = useState<Prescription | null>(null);
+  const draft = useCounterDraft(prescriptionDraft);
+  const { open: panelOpen, editing } = draft.value;
+  const openEntry = (entry?: Prescription) => {
+    if (panelOpen || draft.pending) return;
+    draft.update({ ...prescriptionFormDraft(entry), open: true });
+  };
   const [deleting, setDeleting] = useState<Prescription | null>(null);
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:prescriptions-panel-width", { defaultWidth: 500 });
 
@@ -93,12 +102,17 @@ export default function PrescriptionsPage() {
   const saveMut = useMutation({
     // Always recorded as still to dispense. Handing over is what the bill does,
     // so the entry and the sale cannot disagree about whether it happened.
-    mutationFn: (vars: { id?: string; data: PrescriptionInput }) => (vars.id ? updatePrescription(vars.id, vars.data) : createPrescription({ ...vars.data, dispenseNow: false })),
+    mutationFn: (vars: { id?: string; data: PrescriptionInput; scope: string | null }) =>
+      prescriptionDraft.forScope(vars.scope).submit(() => vars.id
+        ? updatePrescription(vars.id, vars.data)
+        : createPrescription({ ...vars.data, dispenseNow: false })),
     onSuccess: (prescription, vars) => {
+      // A response from a signed-out counter must not open a patient's bill
+      // in the next login or after switching locations. The store itself has
+      // already cleared only the submitted scope.
+      if (vars.scope !== counterDraftScope(authSessionInstance(), getActiveLocationId())) return;
       invalidate();
-      setPanelOpen(false);
-      setEditing(null);
-      toast({ title: editing ? `${prescription.registerNumber} corrected` : `Recorded as ${prescription.registerNumber}` });
+      toast({ title: vars.id ? `${prescription.registerNumber} corrected` : `Recorded as ${prescription.registerNumber}` });
       if (vars.id || !vars.data.dispenseNow) return;
       // "Handing it over now": through a bill when there is something to bill,
       // and straight from the register when every medicine was typed by hand.
@@ -202,7 +216,8 @@ export default function PrescriptionsPage() {
               </p>
             </div>
             <Button
-              onClick={() => { setEditing(null); setPanelOpen(true); }}
+              disabled={panelOpen || draft.pending}
+              onClick={() => openEntry()}
               style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
               className="h-11 lg:mouse:h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95"
             >
@@ -349,7 +364,7 @@ export default function PrescriptionsPage() {
                               </Button>
                             ))}
                             {open && (
-                              <button onClick={() => { setEditing(entry); setPanelOpen(true); }} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Correct ${entry.registerNumber}`}><Pencil size={14} /></button>
+                              <button disabled={panelOpen || draft.pending} onClick={() => openEntry(entry)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Correct ${entry.registerNumber}`}><Pencil size={14} /></button>
                             )}
                             {open && (
                               <button onClick={() => cancelMut.mutate(entry.id)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Cancel ${entry.registerNumber}`}><X size={15} /></button>
@@ -370,11 +385,11 @@ export default function PrescriptionsPage() {
       <PrescriptionPanel
         open={panelOpen}
         editing={editing}
-        saving={saveMut.isPending}
+        saving={draft.pending}
         width={panelWidth}
         onResizeStart={onResizeStart}
-        onClose={() => { setPanelOpen(false); setEditing(null); }}
-        onSubmit={(data) => saveMut.mutate({ id: editing?.id, data })}
+        onClose={draft.discard}
+        onSubmit={(data) => saveMut.mutate({ id: editing?.id, data, scope: draft.scope })}
       />
 
       <Dialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>

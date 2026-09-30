@@ -73,6 +73,7 @@ export const workflowsHi: Record<keyof typeof workflowsEn, string> = {
   "workflow.register.interrupted": "सहेजते समय ऐप बंद हुआ था। दोबारा प्रविष्टि बनाने से पहले रजिस्टर जाँचें, ताकि यह दो बार दर्ज न हो।",
   "workflow.register.reviewRecords": "ड्राफ़्ट बंद करें और रजिस्टर जाँचें",
   "workflow.register.storageFailed": "इस डिवाइस पर ड्राफ़्ट सहेजा नहीं जा सका। काम पूरा होने तक यह स्क्रीन खुली रखें।",
+  "workflow.pharmacy.draftHint": "दूसरी स्क्रीन खोलने या काउंटर अनलॉक करने पर यह प्रविष्टि यहीं रहेगी। पेज रीफ़्रेश करने, टैब बंद करने या साइन आउट करने से पहले इसे दर्ज करें या रद्द करें।",
   "workflow.register.draftHint": "ड्राफ़्ट इस डिवाइस पर 7 दिनों तक रहेगा, ऐप दोबारा खोलने पर भी। रद्द करने या साइन आउट करने पर यह हट जाएगा।",
   "workflow.electronics.register.saved": "{count} यूनिट दर्ज की गईं",
   "workflow.register.billAfterRecording": "बिलिंग पर जाएँ",

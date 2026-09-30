@@ -8,17 +8,13 @@ import { cn } from "@/lib/utils";
 import { defaultSellingUnit } from "@/features/core/billing/cart-product";
 import { useListProducts } from "@/features/core/products/queries";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useCounterDraft } from "@/hooks/use-counter-draft";
+import { prescriptionDraft, prescriptionDayKey as dayKey, emptyPrescriptionItem as emptyItem, type DraftItem } from "../prescription-draft";
 import type {
-  Prescription,
   PrescriptionGender,
   PrescriptionInput,
   PrescriptionScheduleType,
 } from "@/types/api";
-
-/** Local YYYY-MM-DD — never toISOString(), which shifts the day backwards east of UTC. */
-function dayKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
 
 export const SCHEDULES: Array<{ key: PrescriptionScheduleType; label: string; hint: string }> = [
   { key: "h", label: "Schedule H", hint: "Prescription-only. The register must be kept." },
@@ -34,27 +30,9 @@ const GENDERS: Array<{ key: PrescriptionGender; label: string }> = [
   { key: "other", label: "Other" },
 ];
 
-interface DraftItem {
-  productId: string | null;
-  name: string;
-  strength: string;
-  dosage: string;
-  qty: number;
-  unit: string;
-  batchNumber: string;
-  substitutedFor: string;
-}
-
-function emptyItem(overrides: Partial<DraftItem> = {}): DraftItem {
-  return {
-    productId: null, name: "", strength: "", dosage: "", qty: 1,
-    unit: "strip", batchNumber: "", substitutedFor: "", ...overrides,
-  };
-}
-
 export function PrescriptionPanel({ open, editing, saving, width, onResizeStart, onClose, onSubmit }: {
   open: boolean;
-  editing: Prescription | null;
+  editing: { id: string; registerNumber: string } | null;
   saving: boolean;
   width: number;
   onResizeStart: (e: React.MouseEvent) => void;
@@ -62,72 +40,28 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
   onSubmit: (data: PrescriptionInput) => void;
 }) {
   const { t } = useAppLanguage();
-  const [doctorName, setDoctorName] = useState("");
-  const [doctorRegNo, setDoctorRegNo] = useState("");
-  const [doctorClinic, setDoctorClinic] = useState("");
-  const [patientName, setPatientName] = useState("");
-  const [patientPhone, setPatientPhone] = useState("");
-  const [patientAge, setPatientAge] = useState("");
-  const [patientGender, setPatientGender] = useState<PrescriptionGender | "">("");
-  const [patientAddress, setPatientAddress] = useState("");
-  const [scheduleType, setScheduleType] = useState<PrescriptionScheduleType>("h");
-  const [prescribedOn, setPrescribedOn] = useState(dayKey(new Date()));
-  const [refillsAllowed, setRefillsAllowed] = useState("0");
-  const [items, setItems] = useState<DraftItem[]>([emptyItem()]);
-  const [notes, setNotes] = useState("");
-  const [dispenseNow, setDispenseNow] = useState(true);
-  const [medicineSearch, setMedicineSearch] = useState("");
+  const draft = useCounterDraft(prescriptionDraft);
+  const { doctorName, doctorRegNo, doctorClinic, patientName, patientPhone, patientAge,
+    patientGender, patientAddress, scheduleType, prescribedOn, refillsAllowed, items,
+    notes, dispenseNow, medicineSearch } = draft.value;
+  const setDoctorName = (value: string) => draft.update({ doctorName: value });
+  const setDoctorRegNo = (value: string) => draft.update({ doctorRegNo: value });
+  const setDoctorClinic = (value: string) => draft.update({ doctorClinic: value });
+  const setPatientName = (value: string) => draft.update({ patientName: value });
+  const setPatientPhone = (value: string) => draft.update({ patientPhone: value });
+  const setPatientAge = (value: string) => draft.update({ patientAge: value });
+  const setPatientGender = (value: PrescriptionGender | "") => draft.update({ patientGender: value });
+  const setPatientAddress = (value: string) => draft.update({ patientAddress: value });
+  const setScheduleType = (value: PrescriptionScheduleType) => draft.update({ scheduleType: value });
+  const setPrescribedOn = (value: string) => draft.update({ prescribedOn: value });
+  const setRefillsAllowed = (value: string) => draft.update({ refillsAllowed: value });
+  const setNotes = (value: string) => draft.update({ notes: value });
+  const setDispenseNow = (value: boolean) => draft.update({ dispenseNow: value });
+  const setMedicineSearch = (value: string) => draft.update({ medicineSearch: value });
+  const setItems = (update: (previous: DraftItem[]) => DraftItem[]) => draft.update((current) => ({ ...current, items: update(current.items) }));
   const [error, setError] = useState<string | null>(null);
-
-  // Reloading the form from the record each time the panel opens keeps one
-  // patient's details from leaking into the next entry.
-  useEffect(() => {
-    if (!open) return;
-    setError(null);
-    setMedicineSearch("");
-    if (editing) {
-      setDoctorName(editing.doctorName);
-      setDoctorRegNo(editing.doctorRegNo ?? "");
-      setDoctorClinic(editing.doctorClinic ?? "");
-      setPatientName(editing.patientName);
-      setPatientPhone(editing.patientPhone ?? "");
-      setPatientAge(editing.patientAge ?? "");
-      setPatientGender(editing.patientGender ?? "");
-      setPatientAddress(editing.patientAddress ?? "");
-      setScheduleType(editing.scheduleType);
-      setPrescribedOn(editing.prescribedOnKey);
-      setRefillsAllowed(String(editing.refillsAllowed ?? 0));
-      setItems(editing.items.map((item) => emptyItem({
-        productId: item.productId ?? null,
-        name: item.name,
-        strength: item.strength ?? "",
-        dosage: item.dosage ?? "",
-        qty: Number(item.qty) || 1,
-        unit: item.unit || "strip",
-        batchNumber: item.batchNumber ?? "",
-        substitutedFor: item.substitutedFor ?? "",
-      })));
-      setNotes(editing.notes ?? "");
-      // An existing entry is being corrected, not dispensed — hand-over is its
-      // own action, so a correction must never silently mark it as given.
-      setDispenseNow(false);
-      return;
-    }
-    setDoctorName("");
-    setDoctorRegNo("");
-    setDoctorClinic("");
-    setPatientName("");
-    setPatientPhone("");
-    setPatientAge("");
-    setPatientGender("");
-    setPatientAddress("");
-    setScheduleType("h");
-    setPrescribedOn(dayKey(new Date()));
-    setRefillsAllowed("0");
-    setItems([emptyItem()]);
-    setNotes("");
-    setDispenseNow(true);
-  }, [open, editing]);
+  useEffect(() => { setError(null); }, [open, editing?.id]);
+  const busy = saving || draft.pending;
 
   const productsQ = useListProducts({ limit: 500 }, { query: { enabled: open } });
   const catalogue = productsQ.data ?? [];
@@ -175,6 +109,7 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy) return;
     const filled = items.filter((item) => item.name.trim());
     if (!doctorName.trim()) return setError("Enter the prescribing doctor's name.");
     if (!patientName.trim()) return setError("Enter the patient's name.");
@@ -232,11 +167,12 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
               : "Who prescribed it, for whom, and what is being handed over"}
           </p>
         </div>
-        <button onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
+        <button disabled={busy} onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
       </div>
 
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+        <fieldset disabled={busy} className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <p className="rounded-lg bg-[var(--brand-soft)] px-3 py-2 text-xs text-[var(--brand)]">{t("workflow.pharmacy.draftHint")}</p>
           {/* ── Prescriber ── */}
           <section className="space-y-3">
             <SectionTitle>Prescribing doctor</SectionTitle>
@@ -421,18 +357,18 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
           </section>
 
           {error && <p role="alert" className="rounded-[10px] bg-rose-50 px-3.5 py-2.5 text-[12px] font-semibold text-rose-700">{error}</p>}
-        </div>
+        </fieldset>
 
         <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
           <div className="grid grid-cols-2 gap-2.5">
-            <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" disabled={busy} onClick={onClose}>Cancel</Button>
             <Button
               type="submit"
-              disabled={saving}
+              disabled={busy}
               style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
               className={cn("h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95")}
             >
-              {saving
+              {busy
                 ? <><Loader2 size={16} className="animate-spin" /> Saving…</>
                 : <><ClipboardPlus size={15} /> {editing ? "Save Correction" : "Record Entry"}</>}
             </Button>
