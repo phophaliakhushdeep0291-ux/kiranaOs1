@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useMemo, useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input, useQuantityDraft } from "@/components/ui/input";
@@ -44,6 +45,8 @@ interface CreatedReturn {
 
 export interface ReturnLineInput {
   billItemId?: string;
+  trackedUnitId?: string;
+  note?: string;
   productId?: string;
   sellingUnitId?: string;
   sellingUnitCode?: string;
@@ -77,6 +80,9 @@ interface ReturnDialogProps {
 
 export function ReturnDialog({ open, onOpenChange, lines, customerId, customerName, originalBillId, gstMode = "inclusive", onDone }: ReturnDialogProps) {
   const { toast } = useToast();
+  const { t } = useAppLanguage();
+  const returnIdentity = useRef(crypto.randomUUID());
+  const hasTrackedUnits = lines.some((line) => line.trackedUnitId);
   const { isOnline } = useOfflineStatus();
   const productsQuery = useListProducts({ limit: 1000 });
   const [qty, setQty] = useState<Record<number, number>>({});
@@ -154,6 +160,7 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
   }
 
   function resetForm() {
+    returnIdentity.current = crypto.randomUUID();
     setQty({});
     setDamaged({});
     setOwnerPin("");
@@ -195,6 +202,10 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
     }
     if (refundMode === "udhar" && !hasCustomer) {
       toast({ title: "Customer required", description: "A return can only reduce udhar for a known customer.", variant: "destructive" });
+      return;
+    }
+    if (hasTrackedUnits && isExchange) {
+      toast({ title: t("workflow.register.returnSeparately"), variant: "destructive" });
       return;
     }
     const activeExchangeLines = isExchange ? exchangeLines.filter((line) => line.quantity > 0) : [];
@@ -272,6 +283,13 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
         if (!created.issuedGiftCard?.code) throw new Error("Return was recorded but its store-credit code was not returned. Contact support before closing this screen.");
         setIssuedGiftCard(created.issuedGiftCard);
         toast({ title: "Store credit issued", description: `Return ${created.billNo} created for ₹${refundTotal.toLocaleString("en-IN")}. Copy the one-time code now.` });
+      } else if (hasTrackedUnits) {
+        if (!isOnline) throw new Error(t("workflow.register.returnOnline"));
+        await apiRequest<CreatedReturn>("/bills/returns", { method: "POST", ownerPin,
+          body: JSON.stringify({ items, refundMode, gstMode, customerId, customerName, returnOfBillId: originalBillId,
+            clientBillId: returnIdentity.current, reason: reason.trim() || "Customer return" }),
+        });
+        toast({ title: t("workflow.register.returnSaved") });
       } else {
         await createSaleReturnLocalFirst({
           items,
@@ -325,6 +343,7 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold">{line.name}</div>
+                    {line.note && <p className="text-xs text-muted-foreground">{line.note}</p>}
                     <div className="text-xs text-muted-foreground">
                       ₹{Number(line.ratePerRateUnit).toLocaleString("en-IN")}/{line.enteredUnit}
                       {max > 0 ? ` · sold ${max}` : ""}
@@ -357,12 +376,14 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
             <button
               type="button"
               data-testid="exchange-toggle"
+              disabled={hasTrackedUnits}
               onClick={() => setExchangeOpen((current) => !current)}
               className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-semibold"
             >
               <span className="inline-flex items-center gap-2"><ArrowLeftRight size={15} className="text-primary" />Customer takes new items (exchange)</span>
               <span className="text-xs text-muted-foreground">{exchangeOpen ? "Hide" : "Add"}</span>
             </button>
+            {hasTrackedUnits && <p className="px-3 pb-2 text-xs text-muted-foreground">{t("workflow.register.returnSeparately")}</p>}
             {exchangeOpen && (
               <div className="space-y-2 border-t px-3 py-3">
                 <div className="grid gap-2 sm:grid-cols-[1fr_auto]">

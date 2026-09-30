@@ -35,6 +35,12 @@ export async function summary(req, res, next) {
   catch (err) { next(err); }
 }
 
+/** Which products on a bill are sold by serial, and the units of each that are on the shelf. */
+export async function billingOptions(req, res, next) {
+  try { res.json({ success: true, data: await svc.getUnitBillingOptions(req.shopId, req.query.productIds) }); }
+  catch (err) { next(err); }
+}
+
 /**
  * The counter lookup. A code nobody recognises answers 200 with null rather than
  * 404: "we have no record of this handset" is a real answer about a unit bought

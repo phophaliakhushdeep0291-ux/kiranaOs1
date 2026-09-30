@@ -1,5 +1,6 @@
 import { offlineDB } from "@/lib/offline/db";
 import type { Product } from "@/lib/api/client";
+import type { CartProductOptions } from "./cart-product";
 import type { BillingDraft, CartItem } from "./pages/billing-types";
 
 /**
@@ -60,7 +61,7 @@ export async function queueProductsForBilling(additions: PendingCartAddition[]):
   });
 }
 
-export type QueuedProductMerger = (cart: CartItem[], product: Product, draft: BillingDraft) => CartItem[] | null;
+export type QueuedProductMerger = (cart: CartItem[], product: Product, draft: BillingDraft, options?: CartProductOptions) => CartItem[] | null;
 
 /** Save the receiving cart and consume its queue in one transaction.
  * Billing supplies its ordinary line merge/pricing function. A lost UI

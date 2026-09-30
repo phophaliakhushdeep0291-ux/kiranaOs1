@@ -1,5 +1,6 @@
+import { AppError } from "../../../middleware/error.js";
 import { registerSaleGuard } from "../../../shared/sale-guards.js";
-import { evaluateSale } from "./scheduleEnforcement.js";
+import { evaluateSale, prescriptionBlockers, prescriptionLineMismatch } from "./scheduleEnforcement.js";
 
 /**
  * The pharmacy's own condition on a sale: Schedule H, H1 and X do not leave the
@@ -14,7 +15,7 @@ import { evaluateSale } from "./scheduleEnforcement.js";
  * empty and the whole thing collapses to a boolean.
  */
 export function registerPrescriptionSaleGuard() {
-  registerSaleGuard(async ({ shopId, tx, body, items, productMap, isEstimate }) => {
+  registerSaleGuard(async ({ shopId, tx, body, items, productMap, isEstimate, isOfflineReplay }) => {
     // A kacha estimate hands nothing over. Blocking one would stop a pharmacy
     // pricing a prescription before the customer has decided to buy.
     if (isEstimate) return null;
@@ -26,10 +27,10 @@ export function registerPrescriptionSaleGuard() {
         name: productMap[item.productId].name,
         schedule: productMap[item.productId].drugSchedule,
       }));
-    if (lines.length === 0) return null;
+    if (lines.length === 0 && !body.prescriptionId) return null;
 
     const prescription = body.prescriptionId
-      ? await tx.prescription.findFirst({ where: { id: body.prescriptionId, shopId } })
+      ? await tx.prescription.findFirst({ where: { id: body.prescriptionId, shopId }, include: { items: true } })
       : null;
     const decision = evaluateSale({ lines, prescription });
 
@@ -49,13 +50,43 @@ export function registerPrescriptionSaleGuard() {
       };
     }
 
-    // Nothing restricted on this bill means there is no register entry to close.
-    //
-    // An OTC line still gets this far: it carries a drugSchedule, so it survives
-    // the filter above, and only evaluateSale decides it is unrestricted. Handing
-    // back an onConfirmed anyway is what made an ordinary sale in a classified
-    // pharmacy dereference a null prescription the moment the bill was confirmed.
-    if (!decision.requiresPrescription || !prescription) return null;
+    if (!decision.requiresPrescription) {
+      // Nothing restricted on this bill, so nothing here needs a slip.
+      //
+      // An OTC line still gets this far: it carries a drugSchedule, so it
+      // survives the filter above, and only evaluateSale decides it is
+      // unrestricted. Handing back an onConfirmed anyway is what made an
+      // ordinary sale in a classified pharmacy dereference a null prescription
+      // the moment the bill was confirmed.
+      //
+      // A slip attached on purpose is different: the chemist is dispensing it,
+      // and the entry should close with this bill. That holds only for a bill
+      // being made now. A replayed sale already happened, the slip it names may
+      // have been used since, and nothing on it needed one — so it is taken as
+      // it always was, with the slip left untouched.
+      if (!body.prescriptionId || isOfflineReplay) return null;
+      if (prescriptionBlockers(prescription).length) {
+        return {
+          code: "PRESCRIPTION_NOT_AVAILABLE",
+          status: 409,
+          message: "This prescription can no longer be dispensed. Refresh the register and check its status, or remove it from the bill.",
+        };
+      }
+    }
+
+    // A bill being made at the counter has to hand over what the slip says. A
+    // replay is not held to that: until this check existed any valid slip
+    // authorised the sale, and a till still on that version must not find its
+    // morning's bills parked as conflicts after the fact.
+    if (!isOfflineReplay) {
+      const mismatch = prescriptionLineMismatch({
+        items,
+        productMap,
+        prescription,
+        restrictedProductIds: new Set(decision.restrictedLines.map((line) => line.productId)),
+      });
+      if (mismatch) return { ...mismatch, status: 409 };
+    }
 
     // Allowed — and once the bill exists, close the register entry against it.
     //
@@ -74,8 +105,12 @@ export function registerPrescriptionSaleGuard() {
         // use. Incrementing on the first dispense too put this one path on its
         // own scale, and a slip dispensed at the register then billed here was
         // read as having a hand-over left when it did not.
-        await confirmTx.prescription.update({
-          where: { id: prescription.id },
+        //
+        // Claimed on the state the decision was made in. Two counters billing
+        // the same one-time slip both pass the check above; only one of these
+        // updates matches the row, and the other bill rolls back whole.
+        const claimed = await confirmTx.prescription.updateMany({
+          where: { id: prescription.id, shopId, status: prescription.status, refillsUsed: prescription.refillsUsed, deletedAt: null },
           data: {
             status: "dispensed",
             dispensedAt: new Date(),
@@ -84,6 +119,9 @@ export function registerPrescriptionSaleGuard() {
             ...(isRefill ? { refillsUsed: { increment: 1 } } : {}),
           },
         });
+        if (claimed.count !== 1) {
+          throw new AppError("This prescription was dispensed at another counter just now. Refresh the register.", 409, "PRESCRIPTION_ALREADY_DISPENSED");
+        }
       },
     };
   });

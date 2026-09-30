@@ -502,6 +502,7 @@ export interface BillPayment {
 }
 
 export interface BillInputItem {
+  trackedUnitId?: string;
   guestOrderId?: string;
   guestOrderLineId?: string;
   productId?: string;
@@ -1279,6 +1280,31 @@ export interface ProductUnitSummary {
   atService: number;
   warrantyExpiringSoon: number;
   warrantySoonDays: number;
+  /**
+   * Products whose register shows more units on the shelf than stock does —
+   * how a sale made without its serial is noticed afterwards. Absent from a
+   * server that predates it.
+   */
+  shelfMismatches?: ProductUnitShelfMismatch[];
+}
+
+export interface ProductUnitShelfMismatch {
+  productId: string;
+  productName: string;
+  /** Units the register still counts as on the shelf. */
+  registered: number;
+  /** What the product's stock count says. */
+  stock: number;
+}
+
+/** One serial-tracked product on a bill, and the units of it that can be handed over. */
+export interface UnitBillingOption {
+  productId: string;
+  /** Units ever recorded for this product. Being above zero is what "sold by serial" means. */
+  registered: number;
+  /** Units on the shelf. May exceed `units.length`, which is capped — the rest are found by scanning. */
+  sellableCount: number;
+  units: ProductUnit[];
 }
 
 /* ── Auto parts: vehicle fitment ──────────────────────────────────────────── */

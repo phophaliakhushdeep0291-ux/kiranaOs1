@@ -24,10 +24,18 @@ const guards = [];
  *   items: Array<object>,
  *   productMap: Record<string, object>,
  *   isEstimate: boolean,
+ *   isOfflineReplay: boolean,
  * }) => Promise<null | { code?: string, message?: string, status?: number, publicData?: object, onConfirmed?: Function, decorateBillItem?: Function }>} guard
  *   Returns null to allow the sale, or a refusal describing why. `onConfirmed`,
  *   when present, runs after the bill exists — that is where a guard records
  *   what its own ledger needs to say about the sale it just permitted.
+ *
+ *   `isOfflineReplay` is true when the bill arrives through sync rather than
+ *   from a cashier waiting at the counter: the goods left the shop before the
+ *   server heard about it. A refusal there cannot stop the sale — it only parks
+ *   it in the device's outbox as a conflict nobody at the counter can clear —
+ *   so a guard should refuse a replay only for what the law does not let the
+ *   shop record at all, and leave its own bookkeeping to be caught up by hand.
  *
  *   `stockHandledProductIds` claims a line's stock: billing will not decrement
  *   those products, because the guard has already moved what actually left the

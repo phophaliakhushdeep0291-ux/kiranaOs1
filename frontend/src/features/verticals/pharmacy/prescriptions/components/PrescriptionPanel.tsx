@@ -5,7 +5,9 @@ import { Input, useQuantityDraft } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { cn } from "@/lib/utils";
+import { defaultSellingUnit } from "@/features/core/billing/cart-product";
 import { useListProducts } from "@/features/core/products/queries";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import type {
   Prescription,
   PrescriptionGender,
@@ -59,6 +61,7 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
   onClose: () => void;
   onSubmit: (data: PrescriptionInput) => void;
 }) {
+  const { t } = useAppLanguage();
   const [doctorName, setDoctorName] = useState("");
   const [doctorRegNo, setDoctorRegNo] = useState("");
   const [doctorClinic, setDoctorClinic] = useState("");
@@ -149,7 +152,11 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
       const line = emptyItem({
         productId: product.id,
         name: product.name,
-        unit: product.displayUnit || product.rateUnit || "strip",
+        // The unit the till will bill this medicine in — its default pack, or
+        // the product's own rate unit — and not merely the one it is displayed
+        // in. The bill is checked against the entry, unit included, so an entry
+        // written in a unit the shop does not sell could never be dispensed.
+        unit: defaultSellingUnit(product)?.name || product.rateUnit || product.displayUnit || "strip",
       });
       // The first line starts blank; filling it beats appending below it.
       const blankIndex = prev.findIndex((item) => !item.name.trim());
@@ -404,9 +411,9 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
                   onChange={(e) => setDispenseNow(e.target.checked)}
                 />
                 <span>
-                  <span className="block text-[12.5px] font-bold text-[var(--brand-ink)]">Handing it over now</span>
+                  <span className="block text-[12.5px] font-bold text-[var(--brand-ink)]">{t("workflow.register.billAfterRecording")}</span>
                   <span className="mt-0.5 block text-[11px] text-[#8492ac]">
-                    Leave this off to record a slip the patient has left for collection later.
+                    {t("workflow.register.billAfterRecordingHint")}
                   </span>
                 </span>
               </label>

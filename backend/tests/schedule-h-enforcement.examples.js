@@ -8,6 +8,7 @@ import {
   isRestricted,
   normalizeSchedule,
   prescriptionBlockers,
+  prescriptionLineMismatch,
   strictestSchedule,
 } from "../src/verticals/pharmacy/prescriptions/scheduleEnforcement.js";
 
@@ -150,4 +151,80 @@ test("every blocker is reported at once, not one per attempt", () => {
   // stops using the feature.
   const blockers = prescriptionBlockers(slip({ status: "cancelled", prescribedOn: daysAgo(400), deletedAt: new Date() }), { now: NOW });
   assert.deepEqual(blockers.sort(), ["PRESCRIPTION_CANCELLED", "PRESCRIPTION_DELETED", "PRESCRIPTION_EXPIRED"]);
+});
+
+/* ── The bill against the slip it is closed with ───────────────────────────── */
+
+const catalogue = {
+  azee: { name: "Azee 500", drugSchedule: "h" },
+  alprax: { name: "Alprax 0.25", drugSchedule: "h1" },
+  crocin: { name: "Crocin", drugSchedule: "otc" },
+};
+const restricted = new Set(["azee", "alprax"]);
+const entry = (items) => ({ registerNumber: "RX-000042", items });
+const mismatch = (items, slipItems) => prescriptionLineMismatch({
+  items, productMap: catalogue, prescription: entry(slipItems), restrictedProductIds: restricted,
+});
+const azeeOnSlip = { productId: "azee", name: "Azee 500", qty: 2, unit: "strip" };
+const azeeLine = (over = {}) => ({ productId: "azee", quantity: 1, enteredUnit: "strip", ...over });
+
+test("a bill that hands over what the slip says agrees with it", () => {
+  assert.equal(mismatch([azeeLine({ quantity: 2 })], [azeeOnSlip]), null);
+  // Less than prescribed is a patient buying part of it, which is their business.
+  assert.equal(mismatch([azeeLine()], [azeeOnSlip]), null);
+});
+
+test("a restricted medicine has to be on the slip it is sold against", () => {
+  // The hole this closes: any valid slip used to authorise any Schedule H line.
+  const result = mismatch([azeeLine(), { productId: "alprax", quantity: 1, enteredUnit: "strip" }], [azeeOnSlip]);
+  assert.equal(result.code, "PRESCRIPTION_ITEMS_MISMATCH");
+  assert.match(result.message, /^Alprax 0\.25 is not on prescription RX-000042\./);
+});
+
+test("an unrestricted extra on the same bill is nobody's concern", () => {
+  assert.equal(mismatch([azeeLine(), { productId: "crocin", quantity: 4, enteredUnit: "strip" }], [azeeOnSlip]), null);
+  // A line typed in by hand has no product to hold against anything.
+  assert.equal(mismatch([azeeLine(), { name: "Carry bag", quantity: 1, enteredUnit: "piece" }], [azeeOnSlip]), null);
+});
+
+test("the slip's quantity is a ceiling on the bill, not on a line", () => {
+  assert.equal(mismatch([azeeLine(), azeeLine()], [azeeOnSlip]), null);
+  const result = mismatch([azeeLine({ quantity: 2 }), azeeLine()], [azeeOnSlip]);
+  assert.match(result.message, /Azee 500: 3 strip on the bill, but prescription RX-000042 allows 2\./);
+  // The same medicine written on two lines of the slip adds up too.
+  assert.equal(mismatch([azeeLine({ quantity: 3 })], [azeeOnSlip, { ...azeeOnSlip, qty: 1 }]), null);
+});
+
+test("the unit is matched by every name the line carries for it, and by nothing else", () => {
+  // A pack labelled "Strip" with the code "strip10" is one pack, however the
+  // chemist spelled it on the entry.
+  const pack = { sellingUnitId: "su1", sellingUnitLabel: "Strip", sellingUnitCode: "strip10", enteredUnit: "Strip" };
+  assert.equal(mismatch([azeeLine(pack)], [{ ...azeeOnSlip, unit: "STRIP " }]), null);
+  assert.equal(mismatch([azeeLine(pack)], [{ ...azeeOnSlip, unit: "strip10" }]), null);
+
+  // A different unit is a different amount — ten tablets are not ten strips.
+  const result = mismatch([azeeLine({ enteredUnit: "tablet" })], [azeeOnSlip]);
+  assert.match(result.message, /Azee 500 is prescribed in strip but billed in tablet\./);
+
+  // Including the catalogue's own rate unit: a loose line is entered in grams
+  // against a per-kilo rate, and those are not the same 500.
+  const loose = { ...catalogue, azee: { ...catalogue.azee, rateUnit: "kg", displayUnit: "kg" } };
+  assert.ok(prescriptionLineMismatch({
+    items: [azeeLine({ enteredUnit: "g" })], productMap: loose, prescription: entry([{ ...azeeOnSlip, unit: "kg" }]), restrictedProductIds: restricted,
+  }));
+});
+
+test("a medicine typed onto the slip by hand is matched by its name", () => {
+  // The register does not need a medicine to be in the catalogue, so a line
+  // with no product id has only its name to go by.
+  assert.equal(mismatch([azeeLine()], [{ productId: null, name: "  azee 500 ", qty: 1, unit: "strip" }]), null);
+  assert.match(
+    mismatch([azeeLine()], [{ productId: null, name: "Azithromycin", qty: 1, unit: "strip" }]).message,
+    /Azee 500 is not on prescription RX-000042/,
+  );
+});
+
+test("a slip with nothing from this bill on it does not close against it", () => {
+  const result = mismatch([{ productId: "crocin", quantity: 1, enteredUnit: "strip" }], [azeeOnSlip]);
+  assert.match(result.message, /Nothing on this bill is on prescription RX-000042/);
 });

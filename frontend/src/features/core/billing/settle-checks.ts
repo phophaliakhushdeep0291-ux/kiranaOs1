@@ -37,6 +37,21 @@ export interface SettleCheckContext {
    * without opening it.
    */
   slotValues?: Record<string, unknown>;
+  /**
+   * Whether the till believes it can reach the server, as billing itself reads it.
+   *
+   * A check may need to say something different when a bill is about to be
+   * queued rather than saved — a serial cannot be reserved offline — and it must
+   * agree with what billing then does with the bill, so it is told rather than
+   * left to ask `navigator` and get a second opinion.
+   */
+  online?: boolean;
+  /**
+   * The shop's trade. A check is registered for the life of the page, which can
+   * outlast a switch to another shop — one with a different trade, where the
+   * question it asks has no meaning and must not cost that shop a request.
+   */
+  businessType?: string;
 }
 
 /**

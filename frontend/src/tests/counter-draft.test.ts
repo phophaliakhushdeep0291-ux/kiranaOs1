@@ -73,10 +73,10 @@ describe("counter draft recovery", () => {
     expect(duplicate).not.toHaveBeenCalled();
     remounted.update({ codes: ["SERIAL-02"] });
     remounted.discard();
-    expect(remounted.getSnapshot()).toEqual({ value: { open: true, codes: ["SERIAL-01"], notes: "" }, pending: true });
+    expect(remounted.getSnapshot()).toMatchObject({ value: { open: true, codes: ["SERIAL-01"], notes: "" }, pending: true });
     finish("saved");
     await expect(saving).resolves.toBe("saved");
-    expect(remounted.getSnapshot()).toEqual({ value: { open: false, codes: [], notes: "" }, pending: false });
+    expect(remounted.getSnapshot()).toMatchObject({ value: { open: false, codes: [], notes: "" }, pending: false });
   });
 
   it("keeps the draft after a failed save so it can be corrected and retried", async () => {
@@ -106,4 +106,64 @@ describe("counter draft recovery", () => {
     expect(next.getSnapshot().value.notes).toBe("New entry");
     await expect(old.submit(async () => "no")).rejects.toThrow();
   });
+});
+
+function storageFixture() {
+  const values = new Map<string, string>();
+  vi.stubGlobal("window", { localStorage: {
+    get length() { return values.size; }, key: (index: number) => [...values.keys()][index],
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); },
+    removeItem: (key: string) => { values.delete(key); },
+  } });
+  return values;
+}
+const persisted = () => createCounterDraft(() => ({ notes: "", open: false }), {
+  key: "test-entry", parse(value: unknown) {
+    const row = value as { notes: string; open: boolean };
+    if (typeof row?.notes !== "string" || typeof row?.open !== "boolean") throw Error("Invalid draft");
+    return row;
+  },
+});
+it("recovers after a new JS runtime, isolates location, and removes completed or cancelled drafts", async () => {
+  const values = storageFixture();
+  persisted().forScope("owner/location-a").update({ notes: "Saved on disk", open: true });
+  const restarted = persisted();
+  expect(restarted.forScope("owner/location-b").getSnapshot().value.notes).toBe("");
+  const restored = restarted.forScope("owner/location-a");
+  expect(restored.getSnapshot().value).toEqual({ notes: "Saved on disk", open: true });
+  await restored.submit(async () => "saved");
+  expect(values.size).toBe(0);
+  restored.update({ notes: "Discard me" }); restored.discard();
+  expect(values.size).toBe(0);
+});
+it("an interrupted save cannot be retried or edited after restart", async () => {
+  storageFixture();
+  const first = persisted().forScope("a"); first.update({ notes: "May already be saved", open: true });
+  let finish!: () => void;
+  const pending = first.submit(() => new Promise<void>(resolve => { finish = resolve; }));
+  const recovered = persisted().forScope("a");
+  expect(recovered.getSnapshot().recoveryRequired).toBe(true);
+  const duplicate = vi.fn(); await expect(recovered.submit(duplicate)).rejects.toThrow();
+  expect(duplicate).not.toHaveBeenCalled();
+  recovered.update({ notes: "Changed" });
+  expect(recovered.getSnapshot().value.notes).toBe("May already be saved");
+  recovered.discard(); expect(recovered.getSnapshot().recoveryRequired).toBe(false);
+  finish(); await pending;
+});
+it.each(["corrupt", "expired", "wrong-shape"])("ignores a %s durable record", (kind) => {
+  const values = storageFixture(); persisted().forScope("a").update({ notes: "Old" });
+  const [key, raw] = [...values][0]; const record = JSON.parse(raw);
+  if (kind === "expired") record.savedAt = Date.now() - 8 * 86_400_000;
+  if (kind === "wrong-shape") record.value.notes = 42;
+  values.set(key, kind === "corrupt" ? "{" : JSON.stringify(record));
+  expect(persisted().forScope("a").getSnapshot().value.notes).toBe("");
+});
+it("reports storage failure without losing edits, and sign-out removes lazy form records", () => {
+  const values = storageFixture(); persisted().forScope("a").update({ notes: "Private" });
+  values.set('artha:counter-draft:v1:unloaded-form', "private");
+  clearCounterDrafts(); expect(values.size).toBe(0);
+  window.localStorage.setItem = () => { throw Error("Quota full"); };
+  const form = persisted().forScope("a"); form.update({ notes: "Still here" });
+  expect(form.getSnapshot()).toMatchObject({ value: { notes: "Still here" }, storageFailed: true });
 });

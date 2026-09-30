@@ -1,3 +1,4 @@
+import { CounterDraftNotice } from "@/components/CounterDraftNotice";
 import { useEffect, useMemo, useState } from "react";
 import { Boxes, Loader2, Plus, Search, Smartphone, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -135,11 +136,12 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
           <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{t("workflow.electronics.register.title")}</h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">{t("workflow.electronics.register.stockHint")}</p>
         </div>
-        <button disabled={saving} onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
+        <button disabled={saving || draft.recoveryRequired} onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
       </div>
 
+      <CounterDraftNotice draft={draft} />
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
-        <fieldset disabled={saving} className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+        <fieldset disabled={saving || draft.recoveryRequired} className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <p className="text-[12px] text-[#6d7c98]">{t("workflow.register.draftHint")}</p>
           {/* ── Which product ── */}
           <section className="space-y-3">
@@ -268,10 +270,10 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
 
         <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
           <div className="grid grid-cols-2 gap-2.5">
-            <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" disabled={saving} onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" disabled={saving || draft.recoveryRequired} onClick={onClose}>Cancel</Button>
             <Button
               type="submit"
-              disabled={saving}
+              disabled={saving || draft.recoveryRequired}
               style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
               className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95"
             >

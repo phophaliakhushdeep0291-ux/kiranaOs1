@@ -1,0 +1,163 @@
+Browser tab: 1, Title: "Prescriptions · Artha", URL: "http://localhost:5501/prescriptions".
+1 AXWebArea Prescriptions · Artha, URL: localhost:5501/prescriptions
+	2 container root
+		3 link Description: Skip to main content, Value: localhost:5501/prescriptions#main-content
+		4 container
+			5 button Description: Resize sidebar, 260 pixels. Use left and right arrow keys., Help: Drag, use arrow keys, or press Home/End to resize the sidebar
+			6 link Description: Artha Pharmacy Counter, Value: localhost:5501/dashboard
+			7 button Collapse sidebar
+			8 container Main navigation
+				9 link Description: Dashboard, Value: localhost:5501/dashboard
+				10 link Description: Counter F2, Value: localhost:5501/billing
+				11 link Description: Prescriptions, Value: localhost:5501/prescriptions
+				12 link Description: Stock, Value: localhost:5501/inventory
+				13 button (expanded) Description: Collapse Stock menu, Secondary Actions: Collapse
+				14 container
+					15 link Description: Medicines, Value: localhost:5501/products
+					16 link Description: Categories, Value: localhost:5501/categories
+					17 link Description: Stock In, Value: localhost:5501/inventory/stock-in
+					18 link Description: Stock Out, Value: localhost:5501/inventory/stock-out
+					19 link Description: Adjustments, Value: localhost:5501/inventory/adjustments
+					20 link Description: Stock Transfers, Value: localhost:5501/inventory/stock-transfers
+					21 link Description: Stock Counts, Value: localhost:5501/inventory/stock-counts
+					22 link Description: Batch & Expiry, Value: localhost:5501/inventory/batches
+				23 link Description: Accounts, Value: localhost:5501/customers
+				24 link Description: Purchases, Value: localhost:5501/purchase-bills
+				25 button Sales
+				26 container
+					27 link Description: Billing History, Value: localhost:5501/bills
+					28 link Description: Orders Received, Value: localhost:5501/orders-received
+					29 link Description: Sales Overview, Value: localhost:5501/sales-overview
+				30 link Description: Returns, Value: localhost:5501/returns
+				31 link Description: Reports, Value: localhost:5501/reports
+				32 link Description: Cash & Payments, Value: localhost:5501/money-statement
+				33 link Description: Accounting, Value: localhost:5501/accounting
+				34 button Business Tools
+				35 container
+					36 link Description: Activity & Insights, Value: localhost:5501/activity-insights
+					37 link Description: Offers & Discounts, Value: localhost:5501/offers
+					38 link Description: Loyalty, Value: localhost:5501/loyalty
+					39 link Description: Gift Cards, Value: localhost:5501/gift-cards
+					40 link Description: Financial Assurance, Value: localhost:5501/assurance
+				41 link Description: Expenses, Value: localhost:5501/expenses
+				42 link Description: Settings, Value: localhost:5501/settings
+			43 pop up button (collapsed) QP QA Pharmacy QA Pharmacy - Main · Jodhpur, ID: radix-:r1r:, Secondary Actions: Expand
+				44 text QP
+				45 text QA Pharmacy
+				46 text QA Pharmacy - Main · Jodhpur
+		47 container
+			48 button Toggle sidebar
+			49 heading Prescriptions, Value: 1
+				50 text Prescriptions
+			51 pop up button (collapsed) QA Pharmacy - Main MAIN · PRIMARY, ID: radix-:r1t:, Secondary Actions: Expand
+				52 image
+				53 text QA Pharmacy - Main
+				54 text MAIN
+				55 text  · PRIMARY
+				56 image
+			57 text Synced Just now
+			58 text Free · Business
+			59 link Description: Open sync alerts, Value: localhost:5501/sync-status
+			60 pop up button (collapsed) QP, ID: radix-:r1v:, Secondary Actions: Expand
+		61 container main-content
+			62 text Prescriptions page loaded
+			63 text Waiting to dispense
+			64 image
+			65 text 0
+			66 text Dispensed today
+			67 image
+			68 text 1
+			69 text Repeats available
+			70 image
+			71 text 0
+			72 text Older than 90 days
+			73 image
+			74 text 0
+			75 heading Prescription register, Value: 3
+				76 text Prescription register
+			77 text 1 Schedule H/H1/X entry this month, out of 2 recorded.
+			78 button Record Prescription
+				79 image
+				80 text Record Prescription
+			81 button To dispense
+			82 button Dispensed
+			83 button Cancelled
+			84 button Whole register
+			85 pop up button (collapsed, settable) Description: Filter by schedule, Value: Every schedule, Secondary Actions: Expand
+				86 menu
+					87 (selected) Every schedule
+					88 Schedule H
+					89 Schedule H1
+					90 Schedule X
+					91 Over the counter
+					92 Other
+			93 container
+				94 image
+				95 text field (settable)
+			105 table
+				106 row
+					107 cell
+						108 text PATIENT
+					109 cell
+						110 text PRESCRIBED BY
+					111 cell
+						112 text MEDICINES
+					113 cell
+						114 text STATUS
+					115 cell
+						116 text ACTIONS
+				117 row
+					118 cell
+						119 text QA Billing Patient
+						120 image
+						121 text 6999996422
+						122 text RX-000002
+						123 text KOS-2026-000001
+					124 cell
+						125 text QA Billing Doctor
+						126 image
+						127 text 29 Sept 26
+					128 cell
+						129 content list
+							130 container
+								131 text 1  ×  QA Vitamin Tablets
+					132 cell
+						133 text Dispensed
+					134 cell
+						135 button Correct RX-000002
+							136 image
+						137 button Cancel RX-000002
+							138 image
+						139 button Delete RX-000002
+							140 image
+				141 row
+					142 cell
+						143 text QA Patient
+						144 image
+						145 text —
+						146 text RX-000001
+					147 cell
+						148 text QA Doctor
+						149 image
+						150 text 27 Sept 26
+					151 cell
+						152 content list
+							153 container
+								154 text 1  ×  QA Vitamin Tablets
+					155 cell
+						156 text Dispensed Schedule H
+					157 cell
+						158 button Correct RX-000001
+							159 image
+						160 button Cancel RX-000001
+							161 image
+						162 button Delete RX-000001
+							163 image
+		99 button Voice assistant
+		100 button Report a problem
+		101 button Open assistant
+			102 image
+		103 container Notifications (F8)
+			104 content list
+
+The focused UI element is 82 button Dispensed

@@ -46,6 +46,7 @@ export function billItemsToInput(itemRows: AnyRow[]): BillInputItem[] {
     .filter((row) => row && (row.name ?? row.productName))
     .map((row) => ({
       productId: str(row.productId ?? row.product_id) || undefined,
+      trackedUnitId: str(row.trackedUnitId ?? row.tracked_unit_id) || undefined,
       sellingUnitId: str(row.sellingUnitId ?? row.selling_unit_id) || undefined,
       sellingUnitCode: str(row.sellingUnitCode ?? row.selling_unit_code) || undefined,
       sellingUnitLabel: str(row.sellingUnitLabel ?? row.selling_unit_label) || undefined,
@@ -177,6 +178,9 @@ export async function editFinalizedBillLocalFirst({
     throw new Error("This bill is already cancelled and cannot be edited");
   }
 
+  if ((replacement.items ?? []).some((item) => item.trackedUnitId) || (Array.isArray(original.items) && original.items.some((item) => item.trackedUnitId))) {
+    throw new Error("Cancel this serial-linked bill first, then create its replacement in Billing so the serial can be selected again.");
+  }
   const created = await createBillLocalFirst(replacement);
   const cancelled = await cancelBillWithOwnerPinLocalFirst(
     str(original.id) || originalBillId,
