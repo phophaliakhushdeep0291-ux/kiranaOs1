@@ -14,6 +14,9 @@ export function userSafeSyncReason(t: Translate, rawReason: unknown, fallback?: 
   const text = typeof rawReason === "string" ? rawReason.trim() : "";
   if (!text) return fallbackText;
   const lower = text.toLowerCase();
+  if ((lower.includes("payment") || lower.includes("udhar")) && lower.includes("exceeds") && (lower.includes("outstanding") || lower.includes("due"))) {
+    return t("sync.reason.paymentExceedsDue");
+  }
   if (lower.includes("purchase") || lower.includes("stockledgerid") || lower.includes("purchasehistoryid") || lower.includes("purchasebillid")) {
     return t("sync.reason.purchase");
   }

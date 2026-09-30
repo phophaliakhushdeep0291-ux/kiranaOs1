@@ -1,0 +1,97 @@
+{
+  "generatedAt": "2026-09-30T19:46:21.568Z",
+  "passed": true,
+  "databaseEngine": "postgresql-18.4",
+  "scenario": "two independent counters: offline sales and collections, reload, staggered reconnect, repeated sync and contested collection",
+  "checks": [
+    {
+      "name": "independent registered devices in the same synthetic shop",
+      "evidence": {
+        "shopId": "cmuoindfi00kvv9aq00cx1l3s",
+        "devices": [
+          "02c0a8c3-c7b4-4328-a969-a42e83bdeeab",
+          "c1281a9c-6260-44d5-ad4c-bc48ee8f2279"
+        ]
+      }
+    },
+    {
+      "name": "both counters start from stock 20 and udhar 1000",
+      "evidence": {}
+    },
+    {
+      "name": "both counters have blocked network requests",
+      "evidence": {}
+    },
+    {
+      "name": "counter A sale and payment survive offline reload",
+      "evidence": {
+        "stock": 19,
+        "balance": 925,
+        "operations": [
+          "AUDIT_LOG_APPEND",
+          "AUDIT_LOG_APPEND",
+          "CREATE_BILL",
+          "RECORD_PAYMENT"
+        ]
+      }
+    },
+    {
+      "name": "counter B sale and payment survive offline reload",
+      "evidence": {
+        "stock": 19,
+        "balance": 875,
+        "operations": [
+          "AUDIT_LOG_APPEND",
+          "AUDIT_LOG_APPEND",
+          "CREATE_BILL",
+          "RECORD_PAYMENT"
+        ]
+      }
+    },
+    {
+      "name": "counter B syncs while A retains its independent pending work",
+      "evidence": {}
+    },
+    {
+      "name": "both counters converge to stock 18 and udhar 800",
+      "evidence": {}
+    },
+    {
+      "name": "repeated sync preserves exactly two sales and two payments",
+      "evidence": {
+        "serverStock": 18,
+        "serverBalance": 800,
+        "sales": 2,
+        "salesTotal": 400,
+        "payments": [
+          75,
+          125
+        ]
+      }
+    },
+    {
+      "name": "reconciled values survive a second outage and document reload on both counters",
+      "evidence": {}
+    },
+    {
+      "name": "competing offline collections cannot over-credit customer; rejected payment persists for owner review",
+      "evidence": {
+        "startingBalance": 100,
+        "attemptedPayments": [
+          80,
+          80
+        ],
+        "acceptedPayments": 1,
+        "serverBalance": 20,
+        "rejectedStatus": "CONFLICT",
+        "visibleCorrectionRequired": true,
+        "retainedAfterReload": true
+      }
+    }
+  ],
+  "limitations": [
+    "Two disposable Chrome profiles on one computer, not physical till hardware.",
+    "Database engine is that of the configured QA API; this does not replace PostgreSQL concurrent-transaction certification.",
+    "Provider and hardware integrations are outside this test."
+  ]
+}

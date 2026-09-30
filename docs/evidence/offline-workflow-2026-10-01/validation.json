@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-01",
+  "applicationParentCommit": "1e22abc84dd8708d54254e8bf1d0c2dbf18b3092",
+  "branch": "work/offline-workflow-verification",
+  "deployment": "local QA only",
+  "environment": "macOS arm64; isolated Chrome profiles and virtual WebAuthn authenticators; PostgreSQL 18.4 bound to 127.0.0.1:55439",
+  "buildId": "20260930194328",
+  "frontendGate": {
+    "command": "VITE_API_BASE_URL=http://127.0.0.1:3017/api KIRANA_OUT_DIR=dist/two-counter-final npm run prod:check",
+    "passed": 3073,
+    "failed": 0,
+    "skipped": 1,
+    "typecheck": true,
+    "i18n": true,
+    "build": true,
+    "productionAppCheck": true,
+    "finalBundleCheck": true,
+    "bundleNote": "Final build copied unchanged into dist/public; bundle:check repeated against that exact output."
+  },
+  "postgresIntegration": {
+    "passed": 472,
+    "failed": 0,
+    "skipped": 9,
+    "files": 52,
+    "skipReason": "Eight SQLite audit-fault injection cases and one SQLite migration proof; concurrency cases ran and passed."
+  },
+  "browser": {
+    "twoCounterPassed": true,
+    "checkpoints": 10,
+    "fullShopCyclePassed": true,
+    "excessPaymentReasonVisible": true,
+    "profilesIndependent": true,
+    "virtualAuthenticatorOnly": true,
+    "reconnectOrder": "B then A, followed by B catch-up; API suite separately exercises parallel writes"
+  },
+  "moneyConsistency": {
+    "readOnly": true,
+    "passed": true,
+    "missing": 0,
+    "mismatched": 0
+  },
+  "sourceSha256": {
+    "frontend/src/features/core/sync/sync-reason.ts": "1c1c5700aa3789902fd47547dd075fbb7ed90eda85336e8a82a7c0a5c216d1c8",
+    "frontend/src/features/core/settings/translations/sync.ts": "710589f9e18708dbd982a14d7346f5794bbb13f67856808e99741f269bab9268",
+    "frontend/src/features/core/settings/translations/sync.hi.ts": "37080828fe7ded86177f0ffdcc80ea9551da4751b2b73f4d8817f2b307739e9e",
+    "frontend/src/tests/sync-reason-readability.test.ts": "d7eb91529a99a162ba64d5d9958e28cbde4eaf2fa3e7cc54011a50ea053222f5",
+    "frontend/scripts/verify-offline-two-counter.mjs": "d0a165942dea7c131c624fdb3b9e6e47cc43d70c693354c6a4e4a31c6b07d4e7",
+    "frontend/scripts/live-udhar-sync-smoke.mjs": "2e66a519fc6f0f6f97086f889c5289b65ddc19b8fa27c6e21dfcf9b97fbe4d26",
+    "frontend/scripts/offline-shop-cycle.mjs": "8fa907a31f6de3dd3e3ab46377b919bfbf8dc4cacd3db4f7cbbde6c9f0b6767d",
+    "frontend/package.json": "fa5db3cd977860768038cecd3e1a5cd718e4a8645a6d0026ebe4298610f513e0",
+    "backend/src/modules/customers/customers.service.js": "a8e2df825fdbb2607c74b95d18f62e915a8c11069c54ec854bcbf63fe53fea30",
+    "backend/src/modules/sync/sync.service.js": "8088b378f9fef8204e7eb18cd4d2052eeeaf158217b310d6bafc6f251e846f8c",
+    "backend/src/lib/transactions.js": "e3e5ec2bf25680178083f43b7a84728042d7e0bead2c876a6b4408f221b08fa6"
+  },
+  "buildSha256": {
+    "index.html": "523519db67d2a2946c5b0767576e9b4a0b38999dd5063f2799ccb70084fd020b",
+    "sw.js": "5ad24e380644216bf06e3c4f06f8a45d12947b4c59d950ac0278c83b3614bf21"
+  },
+  "artifactSha256": {
+    "postgres-integration.json": "531134fe0b224e3a4dd296aa0a8cd22cd38845dc235e2826b72753679d60a20f",
+    "shop-cycle-postgres.json": "b56625b0d52a8dc04951a19b8c9126000d55e47c305f92d7f6f22b4b219cbd83",
+    "two-counter-postgres.json": "a0d6289543a02d04f8d390b111997f11f25fe51fdf6be6c34c32479f7247e3af"
+  },
+  "limitations": [
+    "Local proof only; no deployment, physical hardware, provider integration or production load certification.",
+    "53-route cold restart result is retained from the earlier September 30 build; the new browser proofs exercise offline document reloads on the final build."
+  ]
+}

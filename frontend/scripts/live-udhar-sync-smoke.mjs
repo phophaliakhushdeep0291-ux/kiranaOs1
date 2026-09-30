@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { verifyOfflineShopCycle } from "./offline-shop-cycle.mjs";
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:5173";
@@ -814,7 +815,11 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error?.stack ?? error);
-  process.exitCode = 1;
-});
+export { CdpClient, waitForHttp, waitForExit, waitForPage, navigate, enrollQaDevice, setOffline, pageHelpers };
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  main().catch((error) => {
+    console.error(error?.stack ?? error);
+    process.exitCode = 1;
+  });
+}

@@ -47,6 +47,11 @@ top of `7e0c21f9`. These are local QA results, not deployment, provider, physica
 hardware, or a complete release-certification run. No competitive score was
 raised by this work.
 
+[1 October PostgreSQL and two-counter verification](OFFLINE_POSTGRES_TWO_COUNTER_VERIFICATION_2026-10-01.md)
+adds local concurrent-write and browser transaction evidence. Physical hardware,
+provider credentials and production-scale performance remain separate acceptance
+work; this follow-up does not change the competitive score.
+
 ## Improvement loop
 
 1. Start with the lowest capped domain or the highest-weight absent claim.

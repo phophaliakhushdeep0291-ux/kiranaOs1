@@ -1,5 +1,9 @@
 # Offline workflow verification — 30 September 2026
 
+**Follow-up:** [1 October PostgreSQL and two-counter verification](OFFLINE_POSTGRES_TWO_COUNTER_VERIFICATION_2026-10-01.md)
+adds the concurrent-write results, full PostgreSQL shop cycle and payment-conflict
+wording fix. The results below describe the earlier build.
+
 **Result: the tested core counter cycle works after five fixes. This is local verification, not a production deployment or a claim that every feature works offline.**
 
 Work is on `work/offline-workflow-verification`, based on locally recorded
