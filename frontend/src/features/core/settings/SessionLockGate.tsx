@@ -222,7 +222,7 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
             type="submit"
             disabled={checking}
             style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
-            className="session-lock-primary"
+            className="session-lock-primary text-white"
           >
             {checking ? <><Loader2 size={16} className="animate-spin" /> {t("settings.lock.checking")}</> : <><ShieldCheck size={16} /> {t("settings.lock.unlock")}</>}
           </Button>
