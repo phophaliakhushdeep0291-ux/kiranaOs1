@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expenseLocationUnknown, expenseOverview, expensesForLocation } from "@/features/core/expenses/overview";
+import { expenseLocationUnknown, expenseOverview, expenseSummaryWindowStart, expensesForLocation, shopDayKey } from "@/features/core/expenses/overview";
 import type { Expense } from "@/types/api";
 
 const now = new Date("2026-09-30T19:00:00Z"); // 1 October in the shop, still September in UTC.
@@ -56,5 +56,13 @@ describe("expense totals on the offline device", () => {
     const result = expenseOverview([row("last-year", 10, "2025-12-31T18:29:59Z")], new Date("2025-12-31T18:30:00Z"));
     expect(result).toMatchObject({ today: 0, yesterday: 10, month: 0, lastMonth: 10 });
     expect(result.trend.map((p) => p.month)).toEqual(["2025-08", "2025-09", "2025-10", "2025-11", "2025-12", "2026-01"]);
+  });
+
+  it("asks the server for exactly the window the cards count", () => {
+    // Shop midnight on 1 May: the same boundary the "start"/"too-old" rows straddle above.
+    expect(expenseSummaryWindowStart(now)).toBe("2026-04-30T18:30:00.000Z");
+    expect(expenseSummaryWindowStart(new Date("2025-12-31T18:30:00Z"))).toBe("2025-07-31T18:30:00.000Z");
+    expect(shopDayKey(new Date("2025-12-31T18:29:59Z"))).toBe("2025-12-31");
+    expect(shopDayKey(new Date("2025-12-31T18:30:00Z"))).toBe("2026-01-01");
   });
 });

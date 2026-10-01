@@ -154,13 +154,61 @@ export async function listLocalExpenses(): Promise<Expense[]> {
   return offlineDB.getAll<LocalExpense>("expenses");
 }
 
-export async function cacheServerExpenses(rows: Expense[]): Promise<void> {
+/** What one server list request covered, so rows it omitted can be judged. */
+export interface ServerExpenseCoverage {
+  /** Branch the server filtered on. Without one, nothing is pruned. */
+  locationId: string | null;
+  /** Earliest spentAt the request covered; omitted when it returned all history. */
+  from?: string;
+}
+
+/**
+ * Fetch the branch's server list and make this device's cache agree with it.
+ *
+ * Sync pull never sends expenses to a cashier device, so this list is the only
+ * way a delete made elsewhere (the owner's phone, another counter) reaches it.
+ * Without pruning, the cached copy stayed in the list and the summary totals.
+ */
+export async function refreshServerExpenses(
+  fetchRows: () => Promise<Expense[]>,
+  coverage: ServerExpenseCoverage,
+): Promise<Expense[]> {
+  // Only rows already synced before the request can be judged by its answer.
+  // A create whose sync lands mid-request is legitimately missing from it.
+  const syncedBefore = new Map((await offlineDB.getAll<LocalExpense>("expenses").catch(() => []))
+    .filter((row) => row.sync_status === "synced")
+    .map((row) => [row.id, row.version]));
+  const rows = await fetchRows();
+  await cacheServerExpenses(rows, coverage, syncedBefore);
+  return rows;
+}
+
+async function cacheServerExpenses(
+  rows: Expense[],
+  coverage: ServerExpenseCoverage,
+  syncedBefore: ReadonlyMap<string, number>,
+): Promise<void> {
   const scope = getOfflineScope();
   const now = nowIso();
   const local = await offlineDB.getAll<LocalExpense>("expenses").catch(() => []);
   const pendingIds = new Set(local
     .filter((row) => row.sync_status !== "synced")
     .flatMap((row) => [row.id, row.local_id, row.server_id].filter((id): id is string => typeof id === "string")));
+  const serverIds = new Set(rows.map((row) => row.id));
+  const from = coverage.from ? new Date(coverage.from).getTime() : Number.NEGATIVE_INFINITY;
+  // A server copy this request should have returned but did not was deleted
+  // (or moved out of the window) on the server. Tombstones and retired local-id
+  // copies are sync bookkeeping and are left alone.
+  const isStaleServerCopy = (candidate: Record<string, unknown>) => {
+    const row = candidate as unknown as LocalExpense;
+    return Boolean(coverage.locationId)
+      && row.locationId === coverage.locationId
+      && syncedBefore.get(row.id) === row.version
+      && typeof row.server_id === "string"
+      && !serverIds.has(row.id) && !serverIds.has(row.server_id)
+      && !row.deletedAt && !row.deleted_at && !row.merged_into_id && !row.mergedIntoId
+      && new Date(row.spentAt).getTime() >= from;
+  };
   const safeRows = rows
     .filter((row) => !pendingIds.has(row.id))
     .map((row) => ({
@@ -176,7 +224,8 @@ export async function cacheServerExpenses(rows: Expense[]): Promise<void> {
       version: 1,
       sync_status: "synced" as const,
     }));
-  if (safeRows.length) await offlineDB.putMany("expenses", safeRows);
+  // One transaction: unsynced rows always survive, stale copies go, fresh rows land.
+  await offlineDB.replaceSyncedSnapshot("expenses", safeRows, scope, isStaleServerCopy);
 }
 
 export function mergeExpenseSnapshots(server: Expense[], local: Expense[]): Expense[] {

@@ -316,7 +316,7 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
 
   // A movement alone does not change the product quantity used by billing.
   // Commit both projections with the refund so the next offline sale sees stock.
-  const updatedProducts = new Map<string, Product>();
+  const updatedProducts = new Map<string, Product & Record<string, unknown>>();
   const movements = items
     .filter((item) => item.productId && productTracksStock(findCachedProduct(item.productId)))
     .map((item) => {
@@ -340,6 +340,11 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
             ? product.sellingUnits?.map((unit) => unit.id === sellingUnit.id ? { ...unit, onHandQty: roundMoney(readNumber(unit.onHandQty, 0) + qty) } : unit)
             : product.sellingUnits,
           updatedAt: now,
+          updated_at: now,
+          // Same rule as billing and cancellation: once a return lifts stock out
+          // of negative, the review flag the oversell raised no longer applies.
+          stockNeedsReview: after < 0,
+          negativeStockWarning: after < 0 ? (product as Product & { negativeStockWarning?: string }).negativeStockWarning : undefined,
         });
       }
       return makeLocalEntity({
