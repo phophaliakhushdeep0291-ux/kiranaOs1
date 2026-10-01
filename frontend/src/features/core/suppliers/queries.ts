@@ -93,6 +93,7 @@ export function useListSuppliers(options?: QueryHookOptions<ListSuppliersRespons
 export function useCreateSupplier(options?: MutationHookOptions<Supplier, CreateSupplierVariables>) {
   return useMutation<Supplier, ApiClientError, CreateSupplierVariables>({
     ...getMutationOptions<Supplier, CreateSupplierVariables>(options),
+    networkMode: "always",
     mutationFn: ({ data }) => createSupplierLocalFirst(data),
   });
 }
@@ -100,6 +101,7 @@ export function useCreateSupplier(options?: MutationHookOptions<Supplier, Create
 export function useUpdateSupplier(options?: MutationHookOptions<Supplier, UpdateSupplierVariables>) {
   return useMutation<Supplier, ApiClientError, UpdateSupplierVariables>({
     ...getMutationOptions<Supplier, UpdateSupplierVariables>(options),
+    networkMode: "always",
     mutationFn: ({ id, data }) => updateSupplierLocalFirst(id, data),
   });
 }
@@ -107,6 +109,7 @@ export function useUpdateSupplier(options?: MutationHookOptions<Supplier, Update
 export function useDeleteSupplier(options?: MutationHookOptions<DeleteSupplierResponse, DeleteSupplierVariables>) {
   return useMutation<DeleteSupplierResponse, ApiClientError, DeleteSupplierVariables>({
     ...getMutationOptions<DeleteSupplierResponse, DeleteSupplierVariables>(options),
+    networkMode: "always",
     mutationFn: ({ id, ownerPin, reason }) => deleteSupplierLocalFirst({ id, ownerPin, reason }),
   });
 }

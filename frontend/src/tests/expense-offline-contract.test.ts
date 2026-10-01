@@ -21,6 +21,11 @@ describe("offline expense contract", () => {
     expect(actions).toContain('ownerPin,');
   });
 
+  it("does not pause local expense writes while disconnected", () => {
+    expect(page).toMatch(/const saveMut = useMutation\(\{\s*networkMode: "always"/);
+    expect(page).toMatch(/const deleteMut = useMutation\(\{\s*networkMode: "always"/);
+  });
+
   it("renders local expenses immediately and pulls cross-device changes", () => {
     expect(page).toContain("createExpenseLocalFirst(vars.data)");
     expect(page).toContain('updateExpenseLocalFirst(vars.id, vars.data, vars.ownerPin ?? "")');

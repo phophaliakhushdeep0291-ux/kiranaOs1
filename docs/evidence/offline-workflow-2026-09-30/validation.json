@@ -1,0 +1,56 @@
+{
+  "date": "2026-09-30",
+  "baseCommit": "7e0c21f95d27c053b453a4da5156271eb156e97f",
+  "branch": "work/offline-workflow-verification",
+  "deployment": "local QA only",
+  "environment": "macOS arm64; Chrome headless with disposable profiles; isolated SQLite QA API on 3017",
+  "buildId": "20260930112817",
+  "frontendGate": {
+    "command": "VITE_API_BASE_URL=http://127.0.0.1:3017/api KIRANA_OUT_DIR=dist/final-offline-qa npm run prod:check",
+    "passed": 3069,
+    "skipped": 1,
+    "typecheck": true,
+    "i18n": true,
+    "build": true,
+    "bundleBudget": true,
+    "productionAppCheck": true,
+    "bundleNote": "Final build copied unchanged into dist/public and npm run bundle:check rerun, since the checker uses the default output path."
+  },
+  "focusedRegressions": {
+    "passed": 37,
+    "note": "37 focused tests passed; all are included in the final 3069-test frontend gate."
+  },
+  "backendIntegration": {
+    "command": "PRISMA_CLIENT_VARIANT=integration FORCE_DB_TESTS=true node scripts/run-integration-tests.js",
+    "passed": 475,
+    "failed": 0,
+    "skipped": 4,
+    "skipReason": "PostgreSQL-specific migration and concurrency proofs are excluded by SQLite."
+  },
+  "browser": {
+    "transactionCyclePassed": true,
+    "coldRestartRoutes": 53,
+    "uncachedNetworkProbesBlocked": 53,
+    "internetRequiredRoutes": 12,
+    "virtualAuthenticatorOnly": true
+  },
+  "sourceSha256": {
+    "frontend/src/features/core/customers/queries.ts": "e886a281fe7ae95d75710905ea31ca724c71368a7ec67c2bdf77e5e4242cbfa5",
+    "frontend/src/features/core/expenses/local-actions.ts": "1f111c6171845337dbe8e4389dabb60012e44e420c071e056c7d08ec06d02ec6",
+    "frontend/src/features/core/expenses/pages/ExpensesPage.tsx": "f7171f4f5eb535a3e42fbab7af0799b6c30cb3b7215a66368574d5f06d639a6f",
+    "frontend/src/features/core/inventory/pages/InventoryPage.tsx": "6761e8f13b237a2206fe30998ae0c17884a339821120f7e0f8473675126406cf",
+    "frontend/src/features/core/inventory/queries.ts": "52a58ba6723da53823842fc204c00f97d2edb5d943859e502ed4efedea96cdcc",
+    "frontend/src/features/core/products/queries.ts": "22b7ade7941686f0315b3afe781c416d71f48d9e253ab010bc5a8da823fa20c3",
+    "frontend/src/features/core/returns/local-actions.ts": "44224191a5ac618582cb0b025f58c98d2a3347554f2883bbe30e746df9316e16",
+    "frontend/src/features/core/settings/queries.ts": "73f7258776e917b8efdf95cf571cc128f201f3660de66fd313077140c79554c2",
+    "frontend/src/features/core/settings/translations/reports.hi.ts": "a1bf5b1025761cf9d4df6c1f209c2da992b084aa774b649aba55b3052e93eb00",
+    "frontend/src/features/core/settings/translations/reports.ts": "c56821ab22182163abc3ffdcce2e6371c0c56575f724b4760ecce559f99b9e83",
+    "frontend/src/features/core/suppliers/queries.ts": "5d1aea6101ed4bace64306f65ff462d944b978d9d7bd3b31e5259922d5c13c4a",
+    "frontend/src/tests/expense-offline-contract.test.ts": "d5717b0a2b9da1c6fb89eb04e3e8d7d501c4bf7cdc8485f1d40a17868181a129",
+    "frontend/src/tests/sale-return-local-flow.test.ts": "bfaad463d3521f99854de84ec6e86c8d2b6e00907127167a114057df155ac7bc"
+  },
+  "artifactSha256": {
+    "cold-restart.json": "74977a01f698ed9c771acca5e52a0089203296ac34122a7b16b336f660a4fea8",
+    "shop-cycle.json": "b2804d9bdf1362eae519efa02e48dece16f07b8e48b78736929be284467cf34c"
+  }
+}

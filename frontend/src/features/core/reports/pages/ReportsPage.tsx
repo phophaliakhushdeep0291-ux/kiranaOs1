@@ -523,7 +523,7 @@ export default function ReportsPage() {
               <Link href="/daily-closing" className="mt-1 flex min-h-11 items-center border-t border-[#edf1f6] px-3 py-2 text-xs font-semibold text-[var(--brand)] sm:min-h-0">Open daily closing</Link>
             </PopoverContent>
           </Popover>
-          <Button onClick={exportReport} disabled={!snapshot || loading} className="h-11 w-full rounded-xl bg-[var(--brand)] px-4 text-[12px] font-bold shadow-[0_8px_20px_rgba(7,95,255,0.22)] hover:bg-[var(--brand-strong)] sm:mouse:h-9 sm:w-auto sm:rounded-[7px]"><Download size={14} className="mr-2" />Export</Button>
+          <Button onClick={exportReport} disabled={!snapshot || loading} className="h-11 w-full rounded-xl bg-[var(--brand)] px-4 text-[12px] font-bold text-white shadow-[0_8px_20px_rgba(7,95,255,0.22)] hover:bg-[var(--brand-strong)] sm:mouse:h-9 sm:w-auto sm:rounded-[7px]"><Download size={14} className="mr-2" />Export</Button>
           {/* Icon-only, so it keeps the 44px square `button.tsx` sets as the
               standard for this variant rather than shrinking with the row. */}
           <Button variant="outline" size="icon" title="Refresh reports" aria-label="Refresh reports" onClick={() => void loadReports({ showLoader: !snapshotRef.current })} disabled={loading && !snapshot} className="h-11 w-11 rounded-xl border-[#dfe7f2] sm:rounded-[7px]"><RefreshCw size={16} className={loading ? "animate-spin" : ""} /></Button>

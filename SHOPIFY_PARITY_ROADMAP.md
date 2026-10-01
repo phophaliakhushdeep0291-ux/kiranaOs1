@@ -82,9 +82,10 @@ the codebase, not assumed.
 - [x] **Receipt customization** — already existed (re-audit 2026-07-18):
       printer settings cover logo, footer text, copies, paper size, and a
       dozen show/hide content toggles (`printer-config.ts`).
-- [ ] **Email receipts** — BLOCKED: needs SMTP/provider credentials only the
-      owner can supply (Settings → Integrations). Everything else on this
-      roadmap is done; revisit when credentials exist.
+- [~] **Email receipts** — endpoint and transactional-email invocation are
+      implemented. Credentialed provider delivery remains unverified in this
+      audit; an endpoint test does not establish inbox delivery. *(re-audited
+      2026-09-30)*
 
 ## Phase 2 — Prove it, then deepen
 
@@ -171,10 +172,10 @@ automation re-firing the request, not from a product defect.
 - [x] **"Show MRP" on the receipt** — third dead printer toggle. Now each line
       prints its MRP struck-through under the name when the MRP beats the sold
       rate. *(done 2026-07-26)*
-- [ ] **"Show previous udhar" on the receipt** — the second dead printer
-      toggle (`showPreviousUdhar`): switch exists, renderer ignores it. Needs
-      the customer's prior outstanding balance threaded into the receipt
-      snapshot from the billing flow (more involved than savings). Queued.
+- [x] **"Show previous udhar" on the receipt** — `showPreviousUdhar` is read
+      by receipt rendering, with prior-balance snapshot support and receipt
+      regression coverage. The former “renderer ignores it” entry was stale.
+      *(re-audited 2026-09-30)*
 - [x] **Bulk price/stock edit** — row checkboxes + select-all on Products, a
       floating action bar (bulk edit / print labels), and a dialog: raise or
       cut price by % or ₹ or set absolute; set/increase/decrease stock. Prices
@@ -185,20 +186,14 @@ automation re-firing the request, not from a product defect.
       "stale" marker with a parked-age tooltip in the switcher; bills over 7
       days are auto-archived on load (with a toast) so the capped bar stays
       usable. Pure helpers in `open-bills.ts` (8 tests). *(done 2026-07-20)*
-- [~] **Offline-first coverage for expenses/offers** — PARTIAL. Shipped the
-      safe half: recording an expense/offer offline now shows a clear "You're
-      offline — reconnect and save again, your typed details stay" message
-      instead of a misleading "Try again" that never would. *(2026-07-20)*
-
-      The full offline-first pipeline (local write + outbox replay) is
-      DEFERRED, not skipped: it needs new backend sync operation types AND
-      expenses post into the P&L / financial ledger, which the other active
-      session is *currently* restructuring (`feat(accounting): integrate
-      accounting control and financial ledger updates`). Building offline
-      expense posting against a moving ledger is a correctness collision, not
-      just a merge risk. Revisit once the accounting work has settled, then
-      mirror the bill outbox pattern (CREATE_EXPENSE sync op + normalizer +
-      local store + read-merge).
+- [x] **Offline expense writes** — create/update/delete use a local database
+      transaction and outbox replay. The September 30 audit fixed paused
+      offline mutation scheduling and deleted rows reappearing from cached
+      server snapshots. See [offline verification](docs/OFFLINE_WORKFLOW_VERIFICATION_2026-09-30.md)
+      for fresh browser evidence and remaining aggregate-report limitations.
+- [~] **Offline offers** — cached offers can be read offline. Offer management
+      writes still require connectivity; offline offer editing remains a
+      separate feature, with conflict handling yet to be implemented.
 
 ## Explicitly out of scope
 

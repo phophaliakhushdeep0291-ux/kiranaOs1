@@ -1,0 +1,73 @@
+{
+  "date": "2026-10-01",
+  "worktree": "/private/tmp/kirana-pos-optimization-audit-20260930",
+  "frontend": {
+    "command": "npm run prod:check",
+    "passed": 3191,
+    "skipped": 1,
+    "filesPassed": 419,
+    "filesSkipped": 1,
+    "typecheck": true,
+    "translations": true,
+    "build": true,
+    "bundleBudget": true,
+    "productionApp": true
+  },
+  "sqliteIntegration": {
+    "tests": 503,
+    "pass": 499,
+    "fail": 0,
+    "skipped": 4
+  },
+  "hardwareBridge": {
+    "passed": 32,
+    "failed": 0,
+    "physicalDevicesTested": false
+  },
+  "razorpayFixtures": {
+    "passed": 6,
+    "liveProviderTested": false
+  },
+  "offsiteRestoreGuards": {
+    "passed": true,
+    "liveOffsiteBackupVerified": false
+  },
+  "buttonAudit": {
+    "sharedButtonUsesScanned": 714,
+    "fixed": [
+      "Inventory Export",
+      "Reports Export",
+      "Sales New Sale",
+      "Apply Stock Count",
+      "Save loyalty rules"
+    ],
+    "namedIconControls": [
+      "Remove purchase item",
+      "Close voice assistant"
+    ]
+  },
+  "sourceGates": {
+    "parse": true,
+    "repositoryHygiene": true,
+    "appendOnlyMigrations": true
+  },
+  "backendProductionCheck": true,
+  "remainingExternalRequirements": [
+    "Physical printers/scanners/scales and biometric device",
+    "Approved payment provider sandbox",
+    "Approved offsite storage credentials and monitoring project"
+  ],
+  "legacyBranchCache": {
+    "primaryPersistedPerShop": true,
+    "unknownLegacyRowsRetained": true,
+    "unknownBranchTotalsUnavailable": true,
+    "regressionTestsPassed": 7
+  },
+  "coldRestart": {
+    "buildId": "20261001083928",
+    "passed": 53,
+    "failed": 0,
+    "networkDisabled": true,
+    "physicalBiometricsTested": false
+  }
+}

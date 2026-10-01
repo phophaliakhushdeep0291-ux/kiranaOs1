@@ -2,6 +2,7 @@ import { buildOutboxOperation } from "@/features/core/sync/outbox";
 import { offlineDB } from "@/lib/offline/db";
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
 import { createLocalId, emitLocalDataChanged } from "@/lib/offline/instant-cache";
+import { getActiveLocationId } from "@/features/core/stores/location-context";
 import type { Expense, ExpenseInput } from "@/types/api";
 
 type LocalExpense = Expense & {
@@ -15,6 +16,8 @@ type LocalExpense = Expense & {
   deleted_at: string | null;
   version: number;
   sync_status: "pending_sync" | "syncing" | "synced" | "failed" | "conflict" | "local_only";
+  merged_into_id?: string | null;
+  mergedIntoId?: string | null;
 };
 
 export async function createExpenseLocalFirst(data: ExpenseInput): Promise<Expense> {
@@ -22,9 +25,13 @@ export async function createExpenseLocalFirst(data: ExpenseInput): Promise<Expen
   const now = nowIso();
   const id = data.clientExpenseId?.trim() || createLocalId("expense");
   const idempotencyKey = data.idempotencyKey?.trim() || `create-expense:${id}`;
+  // Capture the counter's branch now. A queued expense must not move to the
+  // primary branch (or a newly selected branch) when connectivity returns.
+  const locationId = data.locationId || getActiveLocationId() || undefined;
   const expense: LocalExpense = {
     id,
     local_id: id,
+    locationId,
     title: data.title.trim(),
     amount: Number(data.amount),
     category: data.category || "general",
@@ -53,7 +60,7 @@ export async function createExpenseLocalFirst(data: ExpenseInput): Promise<Expen
     idempotency_key: idempotencyKey,
     payload: {
       localExpenseId: id,
-      expense: { ...data, clientExpenseId: id, idempotencyKey },
+      expense: { ...data, locationId, clientExpenseId: id, idempotencyKey },
     },
   });
   await offlineDB.transaction(["expenses", "sync_outbox"], async (tx) => {
@@ -142,9 +149,9 @@ export async function deleteExpenseLocalFirst(id: string, ownerPin: string): Pro
 }
 
 export async function listLocalExpenses(): Promise<Expense[]> {
-  return offlineDB.getAll<LocalExpense>("expenses")
-    .then((rows) => rows.filter((row) => !row.deletedAt && !row.deleted_at))
-    .catch(() => []);
+  // Keep deletion markers until the server snapshot has been merged. Dropping
+  // them here resurrects a cached server expense while its delete is offline.
+  return offlineDB.getAll<LocalExpense>("expenses");
 }
 
 export async function cacheServerExpenses(rows: Expense[]): Promise<void> {
@@ -173,10 +180,19 @@ export async function cacheServerExpenses(rows: Expense[]): Promise<void> {
 }
 
 export function mergeExpenseSnapshots(server: Expense[], local: Expense[]): Expense[] {
+  const identities = (row: Expense) => [row.id, (row as LocalExpense).local_id, (row as LocalExpense).server_id]
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  const isDeleted = (row: Expense) => Boolean(row.deletedAt || (row as LocalExpense).deleted_at);
+  // Sync retires a financial row's local-id copy after assigning its server id.
+  // That bookkeeping tombstone must not suppress the surviving expense.
+  const isRetired = (row: Expense) => Boolean((row as LocalExpense).merged_into_id || (row as LocalExpense).mergedIntoId);
+  const deletedIds = new Set(local.filter((row) => isDeleted(row) && !isRetired(row)).flatMap(identities));
+  const isVisible = (row: Expense) => !isRetired(row) && !isDeleted(row) && !identities(row).some((id) => deletedIds.has(id));
   const byIdentity = new Map<string, Expense>();
-  for (const row of server) byIdentity.set(row.id, row);
+  for (const row of server) if (isVisible(row)) byIdentity.set(row.id, row);
   for (const row of local) {
-    const ids = [row.id, (row as LocalExpense).server_id].filter((id): id is string => typeof id === "string");
+    if (!isVisible(row)) continue;
+    const ids = identities(row);
     for (const id of ids) byIdentity.delete(id);
     byIdentity.set(row.id, row);
   }

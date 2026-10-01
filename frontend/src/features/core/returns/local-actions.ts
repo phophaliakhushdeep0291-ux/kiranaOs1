@@ -13,6 +13,7 @@ import { buildAuditLogOutboxInput, buildAuditLogRow } from "@/features/core/audi
 import { buildReturnLineBalances, consumeReturnLine } from "@/features/core/returns/return-math";
 import { withCustomerFinancialLock } from "@/features/core/ledger/customer-financial-lock";
 import { productTracksStock } from "@/features/core/inventory/stock-display";
+import { toInventoryBaseQty } from "@/features/core/inventory/calculations";
 import { dedupeBillItemsForDisplay, dedupeBillsForDisplay } from "@/features/core/sync/bill-reconciliation";
 import type { Bill, Customer, Product } from "@/types/api";
 
@@ -24,6 +25,10 @@ export type RefundMode = "cash" | "upi" | "bank" | "udhar";
 export interface SaleReturnItemInput {
   originalBillItemId?: string;
   productId?: string;
+  sellingUnitId?: string;
+  sellingUnitCode?: string;
+  sellingUnitLabel?: string;
+  conversionToBase?: number;
   name: string;
   quantity: number;
   enteredUnit: string;
@@ -52,6 +57,7 @@ const RETURN_TRANSACTION_TABLES = [
   "payments",
   "customer_ledger",
   "inventory_movements",
+  "products",
   "customers",
   "local_audit_logs",
   "sync_outbox",
@@ -61,11 +67,6 @@ function lineGstAmount(lineTotal: number, gstRate: number, gstMode: string): num
   if (gstRate <= 0 || gstMode === "none") return 0;
   if (gstMode === "exclusive") return roundMoney((lineTotal * gstRate) / 100);
   return roundMoney(lineTotal - lineTotal / (1 + gstRate / 100));
-}
-
-function findCachedProduct(productId: string | undefined): Product | undefined {
-  if (!productId) return undefined;
-  return readInstantCache<Product[]>("products", []).find((p) => p.id === productId);
 }
 
 /**
@@ -85,6 +86,12 @@ export function createSaleReturnLocalFirst(input: SaleReturnInput): Promise<Bill
 }
 
 async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bill> {
+  // Persisted quantities win over an older in-memory snapshot after navigation.
+  const productsById = new Map([
+    ...readInstantCache<Product[]>("products", []),
+    ...await offlineDB.getAll<Product>("products"),
+  ].map((product) => [product.id, product]));
+  const findCachedProduct = (id: string | undefined) => id ? productsById.get(id) : undefined;
   const items = (input.items ?? [])
     .filter((item) => readNumber(item.quantity, 0) > 0)
     // enteredUnit is mandatory server-side (toBaseQty). A quick/standalone return may omit it,
@@ -207,6 +214,10 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
       product_id: item.productId ?? null,
       originalBillItemId: item.originalBillItemId ?? null,
       original_bill_item_id: item.originalBillItemId ?? null,
+      sellingUnitId: item.sellingUnitId,
+      sellingUnitCode: item.sellingUnitCode,
+      sellingUnitLabel: item.sellingUnitLabel,
+      conversionToBase: item.conversionToBase,
       name: item.name,
       quantity: -Math.abs(qty),
       enteredUnit: item.enteredUnit,
@@ -303,21 +314,45 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
       }, "payment", "pending_sync")]
     : [];
 
-  // Inventory movements: restock resellable items (+qty); damaged -> damage write-off.
+  // A movement alone does not change the product quantity used by billing.
+  // Commit both projections with the refund so the next offline sale sees stock.
+  const updatedProducts = new Map<string, Product>();
   const movements = items
     .filter((item) => item.productId && productTracksStock(findCachedProduct(item.productId)))
     .map((item) => {
       const qty = Math.abs(readNumber(item.quantity, 0));
       const damaged = item.damaged === true;
+      const originalItem = originalRows.find((row) => row.id === item.originalBillItemId);
+      const product = updatedProducts.get(item.productId!) ?? findCachedProduct(item.productId);
+      const sellingUnitId = String(originalItem?.sellingUnitId ?? originalItem?.selling_unit_id ?? item.sellingUnitId ?? "");
+      const sellingUnit = product?.sellingUnits?.find((unit) => unit.id === sellingUnitId || unit.unitCode === item.sellingUnitCode);
+      const conversion = Number(originalItem?.conversionToBase ?? originalItem?.conversion_to_base ?? item.conversionToBase ?? sellingUnit?.conversionToBase);
+      const baseUnit = product?.baseUnit ?? product?.stockUnit ?? product?.unit ?? product?.displayUnit ?? item.enteredUnit;
+      const baseQty = conversion > 0 ? roundMoney(qty * conversion) : Math.abs(toInventoryBaseQty(qty, item.enteredUnit, baseUnit));
+      const before = readNumber(product?.stockBaseQty ?? product?.stockQuantity, 0);
+      const after = roundMoney(before + (damaged ? 0 : baseQty));
+      if (product && !damaged) {
+        updatedProducts.set(product.id, {
+          ...product,
+          stockBaseQty: after,
+          stockQuantity: after,
+          sellingUnits: product.packagingMode === "per_pack" && sellingUnit
+            ? product.sellingUnits?.map((unit) => unit.id === sellingUnit.id ? { ...unit, onHandQty: roundMoney(readNumber(unit.onHandQty, 0) + qty) } : unit)
+            : product.sellingUnits,
+          updatedAt: now,
+        });
+      }
       return makeLocalEntity({
         id: createLocalId(damaged ? "stock_damage" : "stock_return"),
         productId: item.productId,
         product_id: item.productId,
         type: damaged ? "damage" : "return",
         action: damaged ? "damage" : "return",
-        quantityDelta: damaged ? 0 : qty,
-        quantity_delta: damaged ? 0 : qty,
-        unit: item.enteredUnit,
+        quantityDelta: damaged ? 0 : baseQty,
+        quantity_delta: damaged ? 0 : baseQty,
+        stockBefore: before,
+        stockAfter: after,
+        unit: baseUnit,
         reference_type: "bill",
         reference_id: billId,
         billId,
@@ -404,6 +439,10 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
         originalBillItemId: item.originalBillItemId ?? null,
         productId: item.productId ?? null,
         localProductId: item.productId ?? null,
+        sellingUnitId: item.sellingUnitId,
+        sellingUnitCode: item.sellingUnitCode,
+        sellingUnitLabel: item.sellingUnitLabel,
+        conversionToBase: item.conversionToBase,
         name: item.name,
         quantity: Math.abs(readNumber(item.quantity, 0)),
         enteredUnit: item.enteredUnit,
@@ -423,6 +462,7 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
     await tx.putMany("bill_items", billItems);
     if (paymentRows.length) await tx.putMany("payments", paymentRows);
     if (movements.length) await tx.putMany("inventory_movements", movements);
+    if (updatedProducts.size) await tx.putMany("products", [...updatedProducts.values()]);
     if (updatedCustomer) await tx.put("customers", updatedCustomer);
     if (udharLedgerEntry) await tx.put("customer_ledger", udharLedgerEntry);
     await tx.put("local_audit_logs", auditLog);
@@ -431,6 +471,10 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
   });
 
   upsertCachedListItem<Bill>(BILL_CACHE_KEY, negativeBill as unknown as Bill, 500);
+  for (const product of updatedProducts.values()) {
+    upsertCachedListItem<Product>("products", product, 1000);
+    upsertCachedListItem<Product>("inventory", product, 1000);
+  }
   if (updatedCustomer) upsertCachedListItem<Customer>(CUSTOMER_CACHE_KEY, updatedCustomer, 1000);
   if (udharLedgerEntry) upsertCachedListItem("customer_ledger", udharLedgerEntry, 1500);
   emitLocalDataChanged({ type: "bill", id: billId, action: "created" });

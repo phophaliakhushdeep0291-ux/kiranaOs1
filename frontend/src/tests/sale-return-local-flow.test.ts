@@ -5,6 +5,7 @@ const dbState = vi.hoisted(() => ({
   committed: {} as Record<string, Array<Record<string, unknown>>>,
   instant: {} as Record<string, unknown[]>,
   idCounter: 0,
+  failStore: null as string | null,
 }));
 
 function clone<T>(value: T): T {
@@ -30,7 +31,10 @@ vi.mock("@/lib/offline/db", () => ({
     }) => Promise<unknown>) => {
       const staged = clone(dbState.committed);
       const tx = {
-        put: vi.fn(async (table: string, value: unknown) => replaceRow(table, value as Record<string, unknown>, staged)),
+        put: vi.fn(async (table: string, value: unknown) => {
+          if (table === dbState.failStore) throw new Error("Simulated disk failure");
+          replaceRow(table, value as Record<string, unknown>, staged);
+        }),
         putMany: vi.fn(async (table: string, values: unknown[]) => {
           for (const value of values) await tx.put(table, value);
         }),
@@ -87,6 +91,7 @@ describe("sale return local-first", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbState.idCounter = 0;
+    dbState.failStore = null;
     seed();
   });
 
@@ -121,6 +126,9 @@ describe("sale return local-first", () => {
     expect(rows("bill_items")[0]).toEqual(expect.objectContaining({ quantity: -2, lineTotal: -50 }));
     expect(rows("payments")[0]).toEqual(expect.objectContaining({ mode: "cash", amount: -50 }));
     expect(rows("inventory_movements")[0]).toEqual(expect.objectContaining({ action: "return", quantity_delta: 2 }));
+    expect(rows("products")[0]).toMatchObject({ id: "product_sugar", stockBaseQty: 12 });
+    expect(dbState.instant.products[0]).toMatchObject({ stockBaseQty: 12 });
+    expect(dbState.instant.inventory[0]).toMatchObject({ stockBaseQty: 12 });
     const op = rows("sync_outbox").find((row) => row.operation_type === "CREATE_SALE_RETURN");
     expect(op).toBeTruthy();
     expect((op?.payload as Record<string, unknown>)?.refundMode).toBe("cash");
@@ -226,6 +234,39 @@ describe("sale return local-first", () => {
       ownerPin: "4321",
     });
     expect(rows("inventory_movements")[0]).toEqual(expect.objectContaining({ action: "damage", quantity_delta: 0 }));
+    expect(rows("products")).toEqual([]);
+    expect(dbState.instant.products[0]).toMatchObject({ stockBaseQty: 10 });
+  });
+
+  it("restocks base units from the latest persisted quantity, including repeated lines", async () => {
+    dbState.committed.products = [{ ...dbState.instant.products[0] as Product, baseUnit: "kg", stockBaseQty: 7 }];
+    await createSaleReturnLocalFirst({
+      items: [1, 2].map(() => ({ productId: "product_sugar", name: "Sugar", quantity: 500, enteredUnit: "gram", ratePerRateUnit: 0.025 })),
+      refundMode: "cash", ownerPin: "4321",
+    });
+    expect(rows("products")[0]).toMatchObject({ stockBaseQty: 8 });
+    expect(rows("inventory_movements").map((row) => row.quantityDelta)).toEqual([0.5, 0.5]);
+  });
+
+  it("restores only the returned pack as well as its base quantity", async () => {
+    dbState.instant.products = [{ ...dbState.instant.products[0] as Product, packagingMode: "per_pack", stockBaseQty: 12,
+      sellingUnits: [{ id: "box6", unitCode: "box", conversionToBase: 6, onHandQty: 2 }, { id: "single", unitCode: "piece", conversionToBase: 1, onHandQty: 0 }] }];
+    await createSaleReturnLocalFirst({
+      items: [{ productId: "product_sugar", name: "Sugar", quantity: 1, enteredUnit: "box", sellingUnitId: "box6", conversionToBase: 6, ratePerRateUnit: 150 }],
+      refundMode: "cash", ownerPin: "4321",
+    });
+    expect(rows("products")[0]).toMatchObject({ stockBaseQty: 18, sellingUnits: [{ id: "box6", onHandQty: 3 }, { id: "single", onHandQty: 0 }] });
+    expect(rows("inventory_movements")[0]).toMatchObject({ quantityDelta: 6, unit: "piece" });
+  });
+
+  it("rolls back the refund, movement and outbox if product storage fails", async () => {
+    dbState.failStore = "products";
+    await expect(createSaleReturnLocalFirst({
+      items: [{ productId: "product_sugar", name: "Sugar", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 25 }],
+      refundMode: "cash", ownerPin: "4321",
+    })).rejects.toThrow("Simulated disk failure");
+    for (const table of ["bills", "bill_items", "payments", "inventory_movements", "sync_outbox"]) expect(rows(table)).toEqual([]);
+    expect(dbState.instant.products[0]).toMatchObject({ stockBaseQty: 10 });
   });
 
   it("counts a backed-up return once when its deleted local twin remains on the device", async () => {

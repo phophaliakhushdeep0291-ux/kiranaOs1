@@ -3,6 +3,8 @@
 import type { shellEn } from "./shell";
 
 export const shellHi: Record<keyof typeof shellEn, string> = {
+  "actions.close": "बंद करें",
+  "actions.removeItem": "आइटम हटाएँ",
   "app.tagline": "तेज़ POS",
   "app.taglineHindi": "तेज़ POS",
   "status.online": "बैकएंड ऑनलाइन",

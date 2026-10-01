@@ -324,6 +324,7 @@ export type ExpenseRecurringInterval = "none" | "daily" | "weekly" | "monthly";
 export interface Expense {
   id: string;
   shopId?: string;
+  locationId?: string | null;
   title: string;
   amount: number;
   category: string;
@@ -343,6 +344,7 @@ export interface Expense {
 export interface ExpenseInput {
   idempotencyKey?: string;
   clientExpenseId?: string;
+  locationId?: string;
   title: string;
   amount: number;
   category?: string;

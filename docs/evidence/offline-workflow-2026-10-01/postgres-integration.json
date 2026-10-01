@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-01",
+  "type": "isolated-postgresql-integration",
+  "passed": true,
+  "databaseEngine": "PostgreSQL 18.4",
+  "host": "127.0.0.1",
+  "port": 55439,
+  "database": "kirana_offline_concurrency_test",
+  "integrationFiles": 52,
+  "results": {
+    "tests": 481,
+    "pass": 472,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 9
+  },
+  "skipReasons": [
+    "\ufe63 bulk saves roll back earlier entries when mandatory audit fails (18.097583ms) # SQLite fault injection",
+    "\ufe63 reference mutations roll back on audit failure and successful edits and removals retain history (6.712792ms) # SQLite fault injection",
+    "\ufe63 receipt and delivery changes roll back if mandatory audit cannot be saved (16.012416ms) # SQLite fault injection",
+    "\ufe63 receipt audit failure rolls back all accounting and a retry recovers (20.504958ms) # SQLite fault injection",
+    "\ufe63 historical invoice audit failure preserves the installed order and its stock (16.885208ms) # SQLite fault injection",
+    "\ufe63 delivery audit failure rolls back the invoice, stock, application and status as one operation (41.969167ms) # SQLite fault injection",
+    "\ufe63 collection rolls back when its mandatory audit cannot be written (19.476625ms) # SQLite fault injection",
+    "\ufe63 legacy payments are never inferred; missing refund audit rolls back all money changes (392.457292ms) # SQLite audit fault injection",
+    "\ufe63 combo migration stops tracking assembled meals and preserves counted components and history (16.815625ms) # SQLite migration proof"
+  ],
+  "concurrencyEvidence": [
+    "\u2714 concurrent whole-order returns refund and restore each consignment only once (344.4015ms)",
+    "\u2714 parallel bills apply every sale once while preserving negative-stock reconciliation (449.109417ms)",
+    "\u2714 parallel udhar payments cannot over-decrement customer balance (352.038ms)",
+    "\u2714 the losing transaction runs again and neither write is lost (229.870458ms)",
+    "\u2714 concurrent offline customer updates preserve the first write and create a durable conflict (334.090167ms)",
+    "\u2714 two same-amount udhar payments can clear balance and retry idempotently (343.893541ms)",
+    "\u2714 re-pushing an offline edit (lost-ack retry) makes no duplicate bill and no stale stock (560.004083ms)"
+  ],
+  "command": "POSTGRES_TEST_DATABASE_URL=<isolated-test-url> ALLOW_POSTGRES_TEST_DB=true REQUIRE_POSTGRES_TEST_DB=true FORCE_DB_TESTS=true SKIP_PRISMA_GENERATE=true npm run test:postgres",
+  "limitations": [
+    "Ephemeral local PostgreSQL cluster; deployed infrastructure and physical hardware are outside this proof.",
+    "SQLite-specific fault-injection and migration cases skip on PostgreSQL; the earlier SQLite suite separately covers them."
+  ]
+}

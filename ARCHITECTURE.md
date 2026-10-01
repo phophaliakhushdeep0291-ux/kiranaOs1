@@ -11,7 +11,7 @@ thing that was missing — the entry point that says where to start looking.
 
 | Piece | Stack | What it is |
 |---|---|---|
-| `frontend/` | React 18, Vite 6, wouter, Dexie, react-query, Tailwind 4 | The till. Offline-first PWA — it runs a full shop with no network. |
+| `frontend/` | React 18, Vite 6, wouter, Dexie, react-query, Tailwind 4 | The till. Offline-first PWA for core counter workflows; provider and selected management operations require connectivity. |
 | `backend/` | Express 4, Prisma 5, BullMQ, zod | Multi-tenant API. SQLite locally (`backend/prisma/dev.db`), Postgres in production. |
 | `hardware-bridge/` | dependency-free Node, Windows service | Printer and drawer access. Binds `127.0.0.1` only, per-device bearer token, signed installer. |
 | `catalog/` | CSV | Source for the 560-item starter catalogue a new shop can load in one click. |
@@ -36,6 +36,11 @@ user action → local-actions.ts → IndexedDB (products, bills, …)
                                → sync_outbox row
                                → push → server accepts … or CONFLICTs
 ```
+
+React Query mutation hooks wrapping these local actions must set
+`networkMode: "always"`. Query defaults do not apply to mutations: leaving the
+mutation default pauses the entire local write while offline, before IndexedDB
+or the outbox can run. Keep network-only operations on their existing policy.
 
 Two consequences worth holding on to:
 

@@ -161,6 +161,7 @@ export const syncEn = {
   "sync.reason.purchase": "Purchase backup needs one more retry. Your purchase is safe on this device.",
   "sync.reason.ledger": "Udhar backup needs one more retry. Your local ledger is safe on this device.",
   "sync.reason.payment": "Payment backup needs one more retry. Your local payment is safe on this device.",
+  "sync.reason.paymentExceedsDue": "This payment exceeds the amount still due. Review the account and payments recorded on other counters.",
   "sync.reason.changedElsewhere": "This record changed on another device before backup finished. Review it when you are free.",
   "sync.reason.waitingForce": "Waiting for cloud backup. Press Force sync when backend is online.",
   "sync.reason.noDetail": "No detailed reason received from backend yet.",

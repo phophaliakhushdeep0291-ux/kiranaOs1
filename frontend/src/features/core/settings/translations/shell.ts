@@ -5,6 +5,8 @@
 // English without a Hindi counterpart is a compile error rather than an English
 // string leaking into the Hindi app.
 export const shellEn = {
+  "actions.close": "Close",
+  "actions.removeItem": "Remove item",
   "app.tagline": "Fast POS",
   "app.taglineHindi": "Fast POS",
   "status.online": "Backend online",

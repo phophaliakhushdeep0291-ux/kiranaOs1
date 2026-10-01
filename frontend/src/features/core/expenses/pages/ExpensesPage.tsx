@@ -1,5 +1,5 @@
 import { useDataExport } from "@/features/core/reports/DataExportProvider";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,11 +19,16 @@ import {
   Package, Pencil, Percent, PieChart as PieIcon, Plus, Receipt, Scissors, ScrollText, Search, Smartphone,
   Sparkles, Store, Thermometer, Trash2, Truck, Users, Utensils, Wallet, Wrench, X, Zap,
 } from "lucide-react";
-import { listExpenses, getExpenseOverview } from "@/features/core/expenses/api";
+import { listExpenses } from "@/features/core/expenses/api";
+import { expenseLocationUnknown, expenseOverview, expensesForLocation } from "@/features/core/expenses/overview";
+import { getActiveLocationId, getPrimaryLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
+import { apiRequest } from "@/lib/api/http";
 import { expenseDateInput, expenseDateTimestamp } from "@/features/core/expenses/dates";
 import { cacheServerExpenses, createExpenseLocalFirst, deleteExpenseLocalFirst, listLocalExpenses, mergeExpenseSnapshots, updateExpenseLocalFirst } from "@/features/core/expenses/local-actions";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useOfflineStatus } from "@/features/core/sync";
 import { expenseCategoryOptions } from "@/features/core/settings/shop-expenses";
 import type { Expense, ExpenseInput } from "@/types/api";
 const MODES: { value: string; label: string }[] = [
@@ -66,6 +71,11 @@ function rangeFor(option: string) {
   return { from: undefined, to: undefined };
 }
 
+function subscribeLocation(listener: () => void) {
+  window.addEventListener(LOCATION_CHANGED_EVENT, listener);
+  return () => window.removeEventListener(LOCATION_CHANGED_EVENT, listener);
+}
+
 const expenseFormSchema = z.object({
   title: z.string().trim().min(1, "Description is required").max(160),
   amount: z.coerce.number().positive("Enter an amount"),
@@ -84,6 +94,8 @@ type ExpenseFormData = z.infer<typeof expenseFormSchema>;
 export default function ExpensesPage() {
   const requestExport = useDataExport();
   const { toast } = useToast();
+  const { t } = useAppLanguage();
+  const { isOnline } = useOfflineStatus();
   const businessType = useBusinessTypeKey();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -96,31 +108,54 @@ export default function ExpensesPage() {
   const [deleting, setDeleting] = useState<Expense | null>(null);
   const [deleteOwnerPin, setDeleteOwnerPin] = useState("");
   const [localExpenses, setLocalExpenses] = useState<Expense[]>([]);
+  const [localLoaded, setLocalLoaded] = useState(false);
+  const [localReadError, setLocalReadError] = useState(false);
+  const [summaryDate, setSummaryDate] = useState(() => new Date());
+  const locationId = useSyncExternalStore(subscribeLocation, getActiveLocationId, () => null);
+  const cachedPrimaryLocationId = useSyncExternalStore(subscribeLocation, getPrimaryLocationId, () => null);
+  const locationsQ = useQuery({
+    queryKey: ["store-locations", "active-context"],
+    queryFn: () => apiRequest<{ locations: { id: string; isPrimary: boolean }[] }>("/stores"),
+    staleTime: 60_000,
+  });
+  const primaryLocationId = locationsQ.data?.locations.find((row) => row.isPrimary)?.id ?? cachedPrimaryLocationId ?? undefined;
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:expenses-panel-width", { defaultWidth: 420 });
 
   const range = useMemo(() => rangeFor(rangeOption), [rangeOption]);
-  const filters = { ...range, search: search.trim() || undefined, category: category === "all" ? undefined : category };
-  const refreshLocalExpenses = useCallback(() => {
-    void listLocalExpenses().then(setLocalExpenses);
+  const refreshLocalExpenses = useCallback(async () => {
+    try {
+      setLocalExpenses(await listLocalExpenses());
+      setLocalLoaded(true);
+      setLocalReadError(false);
+    } catch {
+      setLocalReadError(true);
+    }
   }, []);
   useEffect(() => {
     refreshLocalExpenses();
     window.addEventListener("kirana:local-data-changed", refreshLocalExpenses);
     return () => window.removeEventListener("kirana:local-data-changed", refreshLocalExpenses);
   }, [refreshLocalExpenses]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setSummaryDate(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const expensesQ = useQuery({
-    queryKey: ["expenses", filters],
+    networkMode: "online",
+    queryKey: ["expenses", "all", locationId],
     queryFn: async () => {
-      const rows = await listExpenses(filters);
+      // The cards need every expense, independently of the table's filters.
+      const rows = await listExpenses();
       await cacheServerExpenses(rows);
+      await refreshLocalExpenses();
       return rows;
     },
   });
-  const overviewQ = useQuery({ queryKey: ["expense-overview"], queryFn: getExpenseOverview });
 
   const invalidate = () => { void queryClient.invalidateQueries({ queryKey: ["expenses"] }); void queryClient.invalidateQueries({ queryKey: ["expense-overview"] }); };
 
   const saveMut = useMutation({
+    networkMode: "always",
     mutationFn: (vars: { id?: string; data: ExpenseInput; ownerPin?: string }) => (vars.id ? updateExpenseLocalFirst(vars.id, vars.data, vars.ownerPin ?? "") : createExpenseLocalFirst(vars.data)),
     onSuccess: () => { refreshLocalExpenses(); invalidate(); setPanelOpen(false); setEditing(null); toast({ title: editing ? "Expense updated" : "Expense saved on this device", description: editing ? undefined : "Cloud backup will run automatically." }); },
     onError: (err: unknown) => {
@@ -128,6 +163,7 @@ export default function ExpensesPage() {
     },
   });
   const deleteMut = useMutation({
+    networkMode: "always",
     mutationFn: (vars: { id: string; ownerPin: string }) => deleteExpenseLocalFirst(vars.id, vars.ownerPin),
     onSuccess: () => { refreshLocalExpenses(); invalidate(); setDeleting(null); setDeleteOwnerPin(""); toast({ title: "Expense moved to recycle bin", description: "The deletion is safe locally and queued for cloud backup." }); },
     onError: (err: unknown) => {
@@ -135,7 +171,10 @@ export default function ExpensesPage() {
     },
   });
 
-  const rows = mergeExpenseSnapshots(expensesQ.data ?? [], localExpenses).filter((expense) => {
+  const allRows = useMemo(() => expensesForLocation(
+    mergeExpenseSnapshots(expensesQ.data ?? [], localExpenses), locationId, primaryLocationId,
+  ), [expensesQ.data, localExpenses, locationId, primaryLocationId]);
+  const rows = allRows.filter((expense) => {
     if (category !== "all" && expense.category !== category) return false;
     const needle = search.trim().toLowerCase();
     if (needle && ![expense.title, expense.vendor, expense.notes].some((value) => String(value ?? "").toLowerCase().includes(needle))) return false;
@@ -143,7 +182,16 @@ export default function ExpensesPage() {
     if (range.to && new Date(expense.spentAt).getTime() > new Date(range.to).getTime()) return false;
     return true;
   });
-  const ov = overviewQ.data;
+  const locationUnknown = expenseLocationUnknown(allRows, locationId, primaryLocationId);
+  const ov = useMemo(() => localLoaded && !localReadError && !locationUnknown
+    ? expenseOverview(allRows, summaryDate) : undefined,
+  [allRows, localLoaded, localReadError, locationUnknown, summaryDate]);
+  const hasPendingExpenses = localExpenses.some((expense) => {
+    const row = expense as Expense & { sync_status?: string; merged_into_id?: string; mergedIntoId?: string };
+    return row.sync_status && row.sync_status !== "synced" && !row.merged_into_id && !row.mergedIntoId;
+  });
+  const summaryMayBeStale = !isOnline || hasPendingExpenses || expensesQ.isError || expensesQ.isFetching || !expensesQ.data;
+  const summaryLoading = !localLoaded && expensesQ.isLoading && isOnline;
   const topCategory = ov ? Object.entries(ov.byCategory).sort((a, b) => b[1] - a[1])[0] : undefined;
   const todayDelta = ov ? pctDelta(ov.today, ov.yesterday) : null;
   const monthDelta = ov ? pctDelta(ov.month, ov.lastMonth) : null;
@@ -196,16 +244,22 @@ export default function ExpensesPage() {
       style={panelOpen && isDesktop ? { paddingRight: panelWidth + 24 } : undefined}
     >
       <div className="space-y-4">
+        {(!ov || summaryMayBeStale) && (
+          <div role="status" data-testid="expense-summary-status" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <Clock3 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <p>{t(locationUnknown ? "expenses.summary.locationUnknown" : !ov ? "expenses.summary.unavailable" : !isOnline ? "expenses.summary.offline" : "expenses.summary.updating")}</p>
+          </div>
+        )}
         {/* KPI row */}
         <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
-          <Kpi icon={<Wallet size={16} />} iconBg="bg-[var(--brand-soft)] text-[var(--brand)]" label="Today's Expenses" value={inr(ov?.today)}
-            sub={todayDelta == null ? "vs yesterday" : `${Math.abs(todayDelta)}% vs yesterday`} subTone={todayDelta == null ? "muted" : todayDelta <= 0 ? "good" : "bad"} loading={overviewQ.isLoading} />
-          <Kpi icon={<CalendarDays size={16} />} iconBg="bg-violet-50 text-violet-600" label="This Month's Expenses" value={inr(ov?.month)}
-            sub={monthDelta == null ? "vs last month" : `${Math.abs(monthDelta)}% vs last month`} subTone={monthDelta == null ? "muted" : monthDelta <= 0 ? "good" : "bad"} loading={overviewQ.isLoading} />
-          <Kpi icon={<Clock3 size={16} />} iconBg="bg-amber-50 text-amber-600" label="Pending Payouts" value={inr(ov?.pendingTotal)}
-            sub={`${ov?.pendingCount ?? 0} payment${(ov?.pendingCount ?? 0) === 1 ? "" : "s"} pending`} subTone="warn" loading={overviewQ.isLoading} />
+          <Kpi icon={<Wallet size={16} />} iconBg="bg-[var(--brand-soft)] text-[var(--brand)]" label="Today's Expenses" value={ov ? inr(ov.today) : "—"}
+            sub={todayDelta == null ? "vs yesterday" : `${Math.abs(todayDelta)}% vs yesterday`} subTone={todayDelta == null ? "muted" : todayDelta <= 0 ? "good" : "bad"} loading={summaryLoading} />
+          <Kpi icon={<CalendarDays size={16} />} iconBg="bg-violet-50 text-violet-600" label="This Month's Expenses" value={ov ? inr(ov.month) : "—"}
+            sub={monthDelta == null ? "vs last month" : `${Math.abs(monthDelta)}% vs last month`} subTone={monthDelta == null ? "muted" : monthDelta <= 0 ? "good" : "bad"} loading={summaryLoading} />
+          <Kpi icon={<Clock3 size={16} />} iconBg="bg-amber-50 text-amber-600" label="Pending Payouts" value={ov ? inr(ov.pendingTotal) : "—"}
+            sub={`${ov?.pendingCount ?? 0} payment${(ov?.pendingCount ?? 0) === 1 ? "" : "s"} pending`} subTone="warn" loading={summaryLoading} />
           <Kpi icon={<PieIcon size={16} />} iconBg="bg-emerald-50 text-emerald-600" label="Top Expense Category" value={topCategory?.[0] ?? "—"}
-            sub={topCategory && ov?.month ? `${inr(topCategory[1])} (${Math.round((topCategory[1] / ov.month) * 100)}%)` : "No expenses yet"} subTone="muted" loading={overviewQ.isLoading} />
+            sub={topCategory && ov?.month ? `${inr(topCategory[1])} (${Math.round((topCategory[1] / ov.month) * 100)}%)` : "No expenses yet"} subTone="muted" loading={summaryLoading} />
         </div>
 
         {/* Toolbar */}
@@ -311,9 +365,9 @@ export default function ExpensesPage() {
             <h3 className="font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">All Expenses</h3>
             <span className="text-[11px] text-[#94a3b8]">{rows.length === 0 ? "" : `Showing ${(safePage - 1) * pageSize + 1} to ${Math.min(safePage * pageSize, rows.length)} of ${rows.length} expenses`}</span>
           </div>
-          {expensesQ.isLoading ? (
+          {expensesQ.isLoading && rows.length === 0 && isOnline ? (
             <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[#64748b]"><Loader2 size={16} className="animate-spin" /> Loading…</div>
-          ) : expensesQ.isError ? (
+          ) : expensesQ.isError && rows.length === 0 && isOnline ? (
             <div className="py-12 text-center text-[13px] text-rose-600">Couldn't load expenses. Check your connection and retry.</div>
           ) : rows.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">

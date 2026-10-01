@@ -172,9 +172,29 @@ async function startPreview() {
     cwd: path.resolve("."),
     env: { ...process.env, KIRANA_OUT_DIR: BUILD_DIR },
     windowsHide: true,
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
   });
-  await waitForUrl(FRONTEND_URL);
+  // A healthy URL alone could belong to another checkout already using the
+  // port. Require this preview process to announce its own successful bind.
+  try {
+    await new Promise((resolve, reject) => {
+      let output = "";
+      const timer = setTimeout(() => reject(new Error(`QA preview did not start: ${output}`)), 20000);
+      const fail = (error) => { clearTimeout(timer); reject(error); };
+      const read = (chunk) => {
+        output = `${output}${chunk}`.slice(-4000);
+        if (/Local:\s+http/.test(output)) { clearTimeout(timer); resolve(); }
+      };
+      preview.stdout.on("data", read);
+      preview.stderr.on("data", read);
+      preview.once("error", fail);
+      preview.once("exit", (code) => fail(new Error(`QA preview exited (${code}): ${output}`)));
+    });
+    await waitForUrl(FRONTEND_URL);
+  } catch (error) {
+    if (preview.exitCode === null) preview.kill();
+    throw error;
+  }
   return preview;
 }
 

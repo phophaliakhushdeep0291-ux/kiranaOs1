@@ -38,8 +38,17 @@ describe("the reason shown for a refused change", () => {
 
   it("keeps the friendlier wording for the cases that have their own", () => {
     expect(userSafeSyncReason(t, "purchaseHistoryId missing")).toBe("<sync.reason.purchase>");
-    expect(userSafeSyncReason(t, "Udhar payment exceeds outstanding")).toBe("<sync.reason.payment>");
+    expect(userSafeSyncReason(t, "Udhar payment could not be backed up")).toBe("<sync.reason.payment>");
     expect(userSafeSyncReason(t, "Server changed this record")).toBe("<sync.reason.changedElsewhere>");
+  });
+
+  it.each([
+    "Payment ₹80 exceeds outstanding udhar ₹20",
+    "UDHAR_PAYMENT_EXCEEDS_OUTSTANDING",
+    "Supplier payment exceeds purchase due (20)",
+    "PAYMENT_EXCEEDS_DUE",
+  ])("explains an excess payment without advising another retry: %s", (reason) => {
+    expect(userSafeSyncReason(t, reason)).toBe("<sync.reason.paymentExceedsDue>");
   });
 
   it("falls back on nothing to say, and on an essay", () => {
