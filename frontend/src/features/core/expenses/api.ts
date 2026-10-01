@@ -1,6 +1,6 @@
 import { apiRequest } from "@/lib/api/http";
 import { safeRandomUUID } from "@/lib/safe-uuid";
-import type { Expense, ExpenseInput, ExpenseOverview, ExpenseSummary } from "@/types/api";
+import type { Expense, ExpenseInput, ExpenseSummary } from "@/types/api";
 
 function qs(params?: Record<string, string | undefined>) {
   if (!params) return "";
@@ -14,10 +14,6 @@ export function listExpenses(params?: { category?: string; status?: string; from
 
 export function getExpenseSummary(params?: { from?: string; to?: string }) {
   return apiRequest<ExpenseSummary>(`/expenses/summary${qs(params)}`);
-}
-
-export function getExpenseOverview() {
-  return apiRequest<ExpenseOverview>("/expenses/overview");
 }
 
 export function createExpense(data: ExpenseInput) {

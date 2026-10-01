@@ -1,6 +1,6 @@
 import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -20,11 +20,11 @@ import {
   Sparkles, Store, Thermometer, Trash2, Truck, Users, Utensils, Wallet, Wrench, X, Zap,
 } from "lucide-react";
 import { listExpenses } from "@/features/core/expenses/api";
-import { expenseLocationUnknown, expenseOverview, expensesForLocation } from "@/features/core/expenses/overview";
+import { expenseLocationUnknown, expenseOverview, expenseSummaryWindowStart, expensesForLocation, shopDayKey } from "@/features/core/expenses/overview";
 import { getActiveLocationId, getPrimaryLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
 import { apiRequest } from "@/lib/api/http";
 import { expenseDateInput, expenseDateTimestamp } from "@/features/core/expenses/dates";
-import { cacheServerExpenses, createExpenseLocalFirst, deleteExpenseLocalFirst, listLocalExpenses, mergeExpenseSnapshots, updateExpenseLocalFirst } from "@/features/core/expenses/local-actions";
+import { createExpenseLocalFirst, deleteExpenseLocalFirst, listLocalExpenses, mergeExpenseSnapshots, refreshServerExpenses, updateExpenseLocalFirst } from "@/features/core/expenses/local-actions";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { useAppLanguage } from "@/features/core/settings/i18n";
@@ -97,7 +97,6 @@ export default function ExpensesPage() {
   const { t } = useAppLanguage();
   const { isOnline } = useOfflineStatus();
   const businessType = useBusinessTypeKey();
-  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [rangeOption, setRangeOption] = useState("this-month");
@@ -137,27 +136,34 @@ export default function ExpensesPage() {
     return () => window.removeEventListener("kirana:local-data-changed", refreshLocalExpenses);
   }, [refreshLocalExpenses]);
   useEffect(() => {
-    const timer = window.setInterval(() => setSummaryDate(new Date()), 60_000);
+    // Totals depend only on the shop day: keep the same Date (no re-render)
+    // until the day actually changes, but still notice it within a minute.
+    const timer = window.setInterval(() => {
+      const next = new Date();
+      setSummaryDate((current) => shopDayKey(current) === shopDayKey(next) ? current : next);
+    }, 60_000);
     return () => window.clearInterval(timer);
   }, []);
+  // The cards need six months of every expense, independently of the table's
+  // filters. Only "All Time" in the table needs anything older.
+  const summaryFrom = useMemo(() => expenseSummaryWindowStart(summaryDate), [summaryDate]);
+  const fetchFrom = rangeOption === "all" ? undefined : summaryFrom;
   const expensesQ = useQuery({
     networkMode: "online",
-    queryKey: ["expenses", "all", locationId],
+    queryKey: ["expenses", locationId, fetchFrom ?? "all"],
     queryFn: async () => {
-      // The cards need every expense, independently of the table's filters.
-      const rows = await listExpenses();
-      await cacheServerExpenses(rows);
+      const rows = await refreshServerExpenses(() => listExpenses({ from: fetchFrom }), { locationId, from: fetchFrom });
       await refreshLocalExpenses();
       return rows;
     },
   });
 
-  const invalidate = () => { void queryClient.invalidateQueries({ queryKey: ["expenses"] }); void queryClient.invalidateQueries({ queryKey: ["expense-overview"] }); };
-
+  // Saves and deletes only reach the server through the outbox, so refetching
+  // here would download the same list again. The local refresh is enough.
   const saveMut = useMutation({
     networkMode: "always",
     mutationFn: (vars: { id?: string; data: ExpenseInput; ownerPin?: string }) => (vars.id ? updateExpenseLocalFirst(vars.id, vars.data, vars.ownerPin ?? "") : createExpenseLocalFirst(vars.data)),
-    onSuccess: () => { refreshLocalExpenses(); invalidate(); setPanelOpen(false); setEditing(null); toast({ title: editing ? "Expense updated" : "Expense saved on this device", description: editing ? undefined : "Cloud backup will run automatically." }); },
+    onSuccess: () => { refreshLocalExpenses(); setPanelOpen(false); setEditing(null); toast({ title: editing ? "Expense updated" : "Expense saved on this device", description: editing ? undefined : "Cloud backup will run automatically." }); },
     onError: (err: unknown) => {
       toast({ title: "Could not save", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
     },
@@ -165,7 +171,7 @@ export default function ExpensesPage() {
   const deleteMut = useMutation({
     networkMode: "always",
     mutationFn: (vars: { id: string; ownerPin: string }) => deleteExpenseLocalFirst(vars.id, vars.ownerPin),
-    onSuccess: () => { refreshLocalExpenses(); invalidate(); setDeleting(null); setDeleteOwnerPin(""); toast({ title: "Expense moved to recycle bin", description: "The deletion is safe locally and queued for cloud backup." }); },
+    onSuccess: () => { refreshLocalExpenses(); setDeleting(null); setDeleteOwnerPin(""); toast({ title: "Expense moved to recycle bin", description: "The deletion is safe locally and queued for cloud backup." }); },
     onError: (err: unknown) => {
       toast({ title: "Could not delete", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
     },

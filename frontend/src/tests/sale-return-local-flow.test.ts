@@ -141,6 +141,20 @@ describe("sale return local-first", () => {
     expect(/":\s*"device_/.test(payloadJson)).toBe(false);
   });
 
+  it.each([
+    { start: -1, after: 1, needsReview: false },
+    { start: -5, after: -3, needsReview: true },
+  ])("re-derives the oversell review flag after a return: $start -> $after", async ({ start, after, needsReview }) => {
+    const warning = "Stock went negative from billing. Add stock when inventory is updated.";
+    dbState.instant.products = [{ ...(dbState.instant.products[0] as object), stockBaseQty: start, stockNeedsReview: true, negativeStockWarning: warning }];
+    await createSaleReturnLocalFirst({
+      items: [{ productId: "product_sugar", name: "Sugar", quantity: 2, enteredUnit: "piece", ratePerRateUnit: 25, gstRate: 0 }],
+      refundMode: "cash", ownerPin: "4321",
+    });
+    expect(rows("products")[0]).toMatchObject({ stockBaseQty: after, stockNeedsReview: needsReview });
+    expect(rows("products")[0].negativeStockWarning).toBe(needsReview ? warning : undefined);
+  });
+
   it("bank refund: negative bank payment row, tender refund like cash/upi", async () => {
     const ret = await createSaleReturnLocalFirst({
       items: [{ productId: "product_sugar", name: "Sugar", quantity: 2, enteredUnit: "piece", ratePerRateUnit: 25, gstRate: 0 }],
