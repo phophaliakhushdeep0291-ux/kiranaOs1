@@ -42,12 +42,18 @@ export async function verifyOfflineShopCycle({ client, waitForPage, navigate, se
   const title = `Offline shop expense ${Date.now()}`;
   await go("/expenses");
   await wait(() => [...document.querySelectorAll("button")].some((button) => button.textContent.includes("Add Expense")));
+  await wait(() => [...document.querySelectorAll("p.font-display")].some((row) => row.textContent === "₹0"));
+  const expectToday = (amount) => wait((expected) => {
+    const heading = [...document.querySelectorAll("p")].find((row) => row.textContent === "Today's Expenses");
+    return heading?.parentElement?.parentElement?.querySelector("p.font-display")?.textContent === expected;
+  }, `₹${amount}`);
   await setOffline(client, true);
   await clickText("Add Expense");
   await fill('input[name="title"]', title);
   await fill('input[name="amount"]', 200);
   await click('[role="dialog"][aria-hidden="false"] button[type="submit"]');
   await wait((title) => [...document.querySelectorAll("tr")].some((row) => row.textContent.includes(title)), title);
+  await expectToday(200);
   const clickExpense = (action) => client.evaluateFunction(({ title, action }) => {
     const row = [...document.querySelectorAll("tr")].find((row) => row.textContent.includes(title));
     if (!row) throw new Error("Expense row missing");
@@ -58,11 +64,13 @@ export async function verifyOfflineShopCycle({ client, waitForPage, navigate, se
   await fill('[role="dialog"][aria-hidden="false"] input[type="password"]', "2468");
   await click('[role="dialog"][aria-hidden="false"] button[type="submit"]');
   await wait(async (title) => (await window.__qaReadStore("expenses")).some((row) => row.title === title && row.amount === 225), title);
+  await expectToday(225);
   let outbox = await read("sync_outbox");
   assert(["CREATE_EXPENSE", "UPDATE_EXPENSE"].every((operation) => outbox.some((row) => row.operation_type === operation && row.status === "PENDING")), "Expense writes were not queued offline");
   await go("/expenses");
   await wait((title) => [...document.querySelectorAll("tr")].some((row) => row.textContent.includes(title) && row.textContent.includes("225")), title);
   await wait(() => Boolean(document.querySelector('[data-testid="expense-summary-status"]')));
+  await expectToday(225);
   await wait(() => {
     const label = [...document.querySelectorAll("p")].find((row) => row.textContent === "Today's Expenses");
     const card = label?.parentElement?.parentElement;
@@ -81,9 +89,11 @@ export async function verifyOfflineShopCycle({ client, waitForPage, navigate, se
   await fill("#expense-delete-owner-pin", "2468");
   await clickText("Delete", '[role="dialog"] button');
   await wait((title) => ![...document.querySelectorAll("tr")].some((row) => row.textContent.includes(title)), title);
+  await expectToday(0);
   await go("/expenses");
   await wait(() => Boolean(document.querySelector("table")) || document.body.innerText.includes("No expenses"));
   assert(!await client.evaluateFunction((title) => [...document.querySelectorAll("tr")].some((row) => row.textContent.includes(title)), title), "Deleted expense reappeared after offline reload");
+  await expectToday(0);
   await sync();
   const remaining = await request("/expenses");
   assert(!(Array.isArray(remaining) ? remaining : remaining.expenses).some((row) => row.title === title), "Deleted expense remained on server");
@@ -143,5 +153,5 @@ export async function verifyOfflineShopCycle({ client, waitForPage, navigate, se
   await go("/inventory");
   await stock(22);
   console.log("Offline stock intake, cash sale, linked return, reload and server stock reconciliation passed.");
-  return { passed: true, expense: { created: 200, edited: 225, offlineReloadPreservedEditedRow: true, summaryFreshnessNotice: true, screenshot: "expense-summary-offline.png", deletedLocallyAndOnServer: true }, stock: { opening: 20, creditSale: -1, purchase: 3, cashSale: -1, return: 1, finalLocalAndServer: 22 }, queuedOperations, serverSales: normalBills.length, serverReturns: returns.length };
+  return { passed: true, expense: { created: 200, edited: 225, offlineReloadPreservedEditedRow: true, liveOfflineSummary: { afterCreate: 200, afterEdit: 225, afterReload: 225, afterDelete: 0, afterDeleteReload: 0 }, summaryFreshnessNotice: true, screenshot: "expense-summary-offline.png", deletedLocallyAndOnServer: true }, stock: { opening: 20, creditSale: -1, purchase: 3, cashSale: -1, return: 1, finalLocalAndServer: 22 }, queuedOperations, serverSales: normalBills.length, serverReturns: returns.length };
 }

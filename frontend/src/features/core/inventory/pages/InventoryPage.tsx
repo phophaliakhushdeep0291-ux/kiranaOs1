@@ -893,7 +893,7 @@ export default function InventoryPage() {
                       <Input aria-label={t("inventory.page.search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("inventory.page.search")} className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
                     </div>
                     <Button variant="outline" className="h-10 rounded-[8px] px-3 text-[12px]" onClick={() => setStockFilter(stockFilter === "all" ? "low" : "all")}><SlidersHorizontal size={14} className="mr-1.5" />{t("inventory.page.filters")}</Button>
-                    <Button className="h-10 rounded-[8px] bg-[var(--brand)] px-4 text-[12px] shadow-[0_7px_16px_var(--brand-shadow)] hover:bg-[var(--brand-strong)]" onClick={() => requestExport({ reportType: "inventory", format: "csv" }, exportInventory)}><Download size={14} className="mr-1.5" />{t("inventory.page.export")}</Button>
+                    <Button className="h-10 rounded-[8px] bg-[var(--brand)] px-4 text-[12px] text-white shadow-[0_7px_16px_var(--brand-shadow)] hover:bg-[var(--brand-strong)]" onClick={() => requestExport({ reportType: "inventory", format: "csv" }, exportInventory)}><Download size={14} className="mr-1.5" />{t("inventory.page.export")}</Button>
                   </div>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

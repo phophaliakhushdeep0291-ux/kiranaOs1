@@ -1,5 +1,5 @@
 import { useDataExport } from "@/features/core/reports/DataExportProvider";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,7 +19,10 @@ import {
   Package, Pencil, Percent, PieChart as PieIcon, Plus, Receipt, Scissors, ScrollText, Search, Smartphone,
   Sparkles, Store, Thermometer, Trash2, Truck, Users, Utensils, Wallet, Wrench, X, Zap,
 } from "lucide-react";
-import { listExpenses, getExpenseOverview } from "@/features/core/expenses/api";
+import { listExpenses } from "@/features/core/expenses/api";
+import { expenseOverview, expensesForLocation } from "@/features/core/expenses/overview";
+import { getActiveLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
+import { apiRequest } from "@/lib/api/http";
 import { expenseDateInput, expenseDateTimestamp } from "@/features/core/expenses/dates";
 import { cacheServerExpenses, createExpenseLocalFirst, deleteExpenseLocalFirst, listLocalExpenses, mergeExpenseSnapshots, updateExpenseLocalFirst } from "@/features/core/expenses/local-actions";
 import { CHIP_TONES } from "@/lib/chip-tones";
@@ -68,6 +71,11 @@ function rangeFor(option: string) {
   return { from: undefined, to: undefined };
 }
 
+function subscribeLocation(listener: () => void) {
+  window.addEventListener(LOCATION_CHANGED_EVENT, listener);
+  return () => window.removeEventListener(LOCATION_CHANGED_EVENT, listener);
+}
+
 const expenseFormSchema = z.object({
   title: z.string().trim().min(1, "Description is required").max(160),
   amount: z.coerce.number().positive("Enter an amount"),
@@ -100,28 +108,48 @@ export default function ExpensesPage() {
   const [deleting, setDeleting] = useState<Expense | null>(null);
   const [deleteOwnerPin, setDeleteOwnerPin] = useState("");
   const [localExpenses, setLocalExpenses] = useState<Expense[]>([]);
+  const [localLoaded, setLocalLoaded] = useState(false);
+  const [localReadError, setLocalReadError] = useState(false);
+  const [summaryDate, setSummaryDate] = useState(() => new Date());
+  const locationId = useSyncExternalStore(subscribeLocation, getActiveLocationId, () => null);
+  const locationsQ = useQuery({
+    queryKey: ["store-locations", "active-context"],
+    queryFn: () => apiRequest<{ locations: { id: string; isPrimary: boolean }[] }>("/stores"),
+    staleTime: 60_000,
+  });
+  const primaryLocationId = locationsQ.data?.locations.find((row) => row.isPrimary)?.id;
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:expenses-panel-width", { defaultWidth: 420 });
 
   const range = useMemo(() => rangeFor(rangeOption), [rangeOption]);
-  const filters = { ...range, search: search.trim() || undefined, category: category === "all" ? undefined : category };
-  const refreshLocalExpenses = useCallback(() => {
-    void listLocalExpenses().then(setLocalExpenses);
+  const refreshLocalExpenses = useCallback(async () => {
+    try {
+      setLocalExpenses(await listLocalExpenses());
+      setLocalLoaded(true);
+      setLocalReadError(false);
+    } catch {
+      setLocalReadError(true);
+    }
   }, []);
   useEffect(() => {
     refreshLocalExpenses();
     window.addEventListener("kirana:local-data-changed", refreshLocalExpenses);
     return () => window.removeEventListener("kirana:local-data-changed", refreshLocalExpenses);
   }, [refreshLocalExpenses]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setSummaryDate(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const expensesQ = useQuery({
     networkMode: "online",
-    queryKey: ["expenses", filters],
+    queryKey: ["expenses", "all", locationId],
     queryFn: async () => {
-      const rows = await listExpenses(filters);
+      // The cards need every expense, independently of the table's filters.
+      const rows = await listExpenses();
       await cacheServerExpenses(rows);
+      await refreshLocalExpenses();
       return rows;
     },
   });
-  const overviewQ = useQuery({ networkMode: "online", queryKey: ["expense-overview"], queryFn: getExpenseOverview });
 
   const invalidate = () => { void queryClient.invalidateQueries({ queryKey: ["expenses"] }); void queryClient.invalidateQueries({ queryKey: ["expense-overview"] }); };
 
@@ -142,7 +170,10 @@ export default function ExpensesPage() {
     },
   });
 
-  const rows = mergeExpenseSnapshots(expensesQ.data ?? [], localExpenses).filter((expense) => {
+  const allRows = useMemo(() => expensesForLocation(
+    mergeExpenseSnapshots(expensesQ.data ?? [], localExpenses), locationId, primaryLocationId,
+  ), [expensesQ.data, localExpenses, locationId, primaryLocationId]);
+  const rows = allRows.filter((expense) => {
     if (category !== "all" && expense.category !== category) return false;
     const needle = search.trim().toLowerCase();
     if (needle && ![expense.title, expense.vendor, expense.notes].some((value) => String(value ?? "").toLowerCase().includes(needle))) return false;
@@ -150,12 +181,15 @@ export default function ExpensesPage() {
     if (range.to && new Date(expense.spentAt).getTime() > new Date(range.to).getTime()) return false;
     return true;
   });
-  const ov = overviewQ.data;
+  const ov = useMemo(() => localLoaded && !localReadError
+    ? expenseOverview(allRows, summaryDate) : undefined,
+  [allRows, localLoaded, localReadError, summaryDate]);
   const hasPendingExpenses = localExpenses.some((expense) => {
     const row = expense as Expense & { sync_status?: string; merged_into_id?: string; mergedIntoId?: string };
     return row.sync_status && row.sync_status !== "synced" && !row.merged_into_id && !row.mergedIntoId;
   });
-  const summaryMayBeStale = !isOnline || hasPendingExpenses || overviewQ.isError || overviewQ.isFetching;
+  const summaryMayBeStale = !isOnline || hasPendingExpenses || expensesQ.isError || expensesQ.isFetching || !expensesQ.data;
+  const summaryLoading = !localLoaded && expensesQ.isLoading && isOnline;
   const topCategory = ov ? Object.entries(ov.byCategory).sort((a, b) => b[1] - a[1])[0] : undefined;
   const todayDelta = ov ? pctDelta(ov.today, ov.yesterday) : null;
   const monthDelta = ov ? pctDelta(ov.month, ov.lastMonth) : null;
@@ -217,13 +251,13 @@ export default function ExpensesPage() {
         {/* KPI row */}
         <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
           <Kpi icon={<Wallet size={16} />} iconBg="bg-[var(--brand-soft)] text-[var(--brand)]" label="Today's Expenses" value={ov ? inr(ov.today) : "—"}
-            sub={todayDelta == null ? "vs yesterday" : `${Math.abs(todayDelta)}% vs yesterday`} subTone={todayDelta == null ? "muted" : todayDelta <= 0 ? "good" : "bad"} loading={overviewQ.isLoading && isOnline} />
+            sub={todayDelta == null ? "vs yesterday" : `${Math.abs(todayDelta)}% vs yesterday`} subTone={todayDelta == null ? "muted" : todayDelta <= 0 ? "good" : "bad"} loading={summaryLoading} />
           <Kpi icon={<CalendarDays size={16} />} iconBg="bg-violet-50 text-violet-600" label="This Month's Expenses" value={ov ? inr(ov.month) : "—"}
-            sub={monthDelta == null ? "vs last month" : `${Math.abs(monthDelta)}% vs last month`} subTone={monthDelta == null ? "muted" : monthDelta <= 0 ? "good" : "bad"} loading={overviewQ.isLoading && isOnline} />
+            sub={monthDelta == null ? "vs last month" : `${Math.abs(monthDelta)}% vs last month`} subTone={monthDelta == null ? "muted" : monthDelta <= 0 ? "good" : "bad"} loading={summaryLoading} />
           <Kpi icon={<Clock3 size={16} />} iconBg="bg-amber-50 text-amber-600" label="Pending Payouts" value={ov ? inr(ov.pendingTotal) : "—"}
-            sub={`${ov?.pendingCount ?? 0} payment${(ov?.pendingCount ?? 0) === 1 ? "" : "s"} pending`} subTone="warn" loading={overviewQ.isLoading && isOnline} />
+            sub={`${ov?.pendingCount ?? 0} payment${(ov?.pendingCount ?? 0) === 1 ? "" : "s"} pending`} subTone="warn" loading={summaryLoading} />
           <Kpi icon={<PieIcon size={16} />} iconBg="bg-emerald-50 text-emerald-600" label="Top Expense Category" value={topCategory?.[0] ?? "—"}
-            sub={topCategory && ov?.month ? `${inr(topCategory[1])} (${Math.round((topCategory[1] / ov.month) * 100)}%)` : "No expenses yet"} subTone="muted" loading={overviewQ.isLoading && isOnline} />
+            sub={topCategory && ov?.month ? `${inr(topCategory[1])} (${Math.round((topCategory[1] / ov.month) * 100)}%)` : "No expenses yet"} subTone="muted" loading={summaryLoading} />
         </div>
 
         {/* Toolbar */}

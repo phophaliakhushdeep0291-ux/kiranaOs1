@@ -5,18 +5,38 @@ const state = vi.hoisted(() => ({ rows: [] as Array<Expense & Record<string, unk
 vi.mock("@/lib/offline/db", () => ({ offlineDB: {
   getAll: vi.fn(async () => state.rows),
   transaction: vi.fn(async (_tables: string[], work: (tx: unknown) => Promise<void>) => work({
-    put: async (_table: string, row: Expense & Record<string, unknown>) => { state.rows = state.rows.map((old) => old.id === row.id ? row : old); },
+    put: async (_table: string, row: Expense & Record<string, unknown>) => { state.rows = [...state.rows.filter((old) => old.id !== row.id), row]; },
     enqueueOutboxOperation: async (event: unknown) => { state.events.push(event); },
   })),
 } }));
 vi.mock("@/features/core/sync/outbox", () => ({ buildOutboxOperation: (input: unknown) => input }));
 vi.mock("@/lib/offline/context", () => ({ getOfflineScope: () => ({ tenant_id: "shop", store_id: "store", device_id: "device" }), nowIso: () => "2026-09-30T10:00:00Z" }));
 vi.mock("@/lib/offline/instant-cache", () => ({ createLocalId: () => "delete-event", emitLocalDataChanged: vi.fn() }));
-import { deleteExpenseLocalFirst, listLocalExpenses, mergeExpenseSnapshots } from "@/features/core/expenses/local-actions";
+vi.mock("@/features/core/stores/location-context", () => ({ getActiveLocationId: () => "branch-b" }));
+import { createExpenseLocalFirst, deleteExpenseLocalFirst, listLocalExpenses, mergeExpenseSnapshots, updateExpenseLocalFirst } from "@/features/core/expenses/local-actions";
+import { expenseOverview } from "@/features/core/expenses/overview";
 
 const server = { id: "server-expense", title: "Transport", amount: 50, spentAt: "2026-09-30", deletedAt: null } as Expense;
 beforeEach(() => { state.rows = []; state.events = []; });
 describe("offline expense deletion against a cached server snapshot", () => {
+  it("captures the selected branch in the local expense and its eventual cloud operation", async () => {
+    const created = await createExpenseLocalFirst({ title: "Courier", amount: 200, spentAt: "2026-09-30T10:00:00Z" });
+    expect(created.locationId).toBe("branch-b");
+    expect(state.events[0]).toMatchObject({ payload: { expense: { locationId: "branch-b" } } });
+  });
+
+  it("updates the summary on create, edit and delete before the server catches up", async () => {
+    const created = await createExpenseLocalFirst({ title: "Courier", amount: 200, spentAt: "2026-09-30T10:00:00Z" });
+    const at = new Date("2026-09-30T12:00:00Z");
+    const total = () => expenseOverview(mergeExpenseSnapshots([created], state.rows), at).today;
+    expect(total()).toBe(200);
+    await updateExpenseLocalFirst(created.id, { title: "Courier corrected", amount: 225 }, "2468");
+    expect(total()).toBe(225);
+    await deleteExpenseLocalFirst(created.id, "2468");
+    expect(total()).toBe(0);
+    expect(state.events).toHaveLength(3);
+  });
+
   it("stays deleted immediately and after rereading local storage", async () => {
     state.rows = [{ ...server, local_id: server.id, server_id: server.id, version: 1, sync_status: "synced" }];
     await deleteExpenseLocalFirst(server.id, "2468");

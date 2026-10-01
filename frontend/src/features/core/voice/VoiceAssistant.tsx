@@ -381,7 +381,7 @@ export function VoiceAssistant() {
               <Bot className="h-4 w-4 text-primary" />
               AI voice assistant
             </div>
-            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setOpen(false)}><X className="h-4 w-4" /></Button>
+            <Button type="button" size="icon" variant="ghost" aria-label={t("actions.close")} title={t("actions.close")} className="h-8 w-8" onClick={() => setOpen(false)}><X className="h-4 w-4" /></Button>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">Control app pages and prepare product, customer, inventory, billing, payment, and search drafts. Nothing financial or sensitive is saved without review.</p>
           <Textarea

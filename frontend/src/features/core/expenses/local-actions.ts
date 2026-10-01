@@ -2,6 +2,7 @@ import { buildOutboxOperation } from "@/features/core/sync/outbox";
 import { offlineDB } from "@/lib/offline/db";
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
 import { createLocalId, emitLocalDataChanged } from "@/lib/offline/instant-cache";
+import { getActiveLocationId } from "@/features/core/stores/location-context";
 import type { Expense, ExpenseInput } from "@/types/api";
 
 type LocalExpense = Expense & {
@@ -24,9 +25,13 @@ export async function createExpenseLocalFirst(data: ExpenseInput): Promise<Expen
   const now = nowIso();
   const id = data.clientExpenseId?.trim() || createLocalId("expense");
   const idempotencyKey = data.idempotencyKey?.trim() || `create-expense:${id}`;
+  // Capture the counter's branch now. A queued expense must not move to the
+  // primary branch (or a newly selected branch) when connectivity returns.
+  const locationId = data.locationId || getActiveLocationId() || undefined;
   const expense: LocalExpense = {
     id,
     local_id: id,
+    locationId,
     title: data.title.trim(),
     amount: Number(data.amount),
     category: data.category || "general",
@@ -55,7 +60,7 @@ export async function createExpenseLocalFirst(data: ExpenseInput): Promise<Expen
     idempotency_key: idempotencyKey,
     payload: {
       localExpenseId: id,
-      expense: { ...data, clientExpenseId: id, idempotencyKey },
+      expense: { ...data, locationId, clientExpenseId: id, idempotencyKey },
     },
   });
   await offlineDB.transaction(["expenses", "sync_outbox"], async (tx) => {
@@ -146,8 +151,7 @@ export async function deleteExpenseLocalFirst(id: string, ownerPin: string): Pro
 export async function listLocalExpenses(): Promise<Expense[]> {
   // Keep deletion markers until the server snapshot has been merged. Dropping
   // them here resurrects a cached server expense while its delete is offline.
-  return offlineDB.getAll<LocalExpense>("expenses")
-    .catch(() => []);
+  return offlineDB.getAll<LocalExpense>("expenses");
 }
 
 export async function cacheServerExpenses(rows: Expense[]): Promise<void> {
