@@ -19,6 +19,7 @@ import {
   ChevronDown,
   BookOpenCheck,
   ChevronRight,
+  CreditCard,
   LayoutDashboard,
   Landmark,
   LogOut,
@@ -40,7 +41,7 @@ import {
 } from "lucide-react";
 import { PlanBadge } from "@/features/core/subscription/components/PlanBadge";
 import { SubscriptionStatusBanner } from "@/features/core/subscription/components/SubscriptionStatusBanner";
-import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
+import { subscriptionBlocksSync, useSubscriptionSnapshot } from "@/features/core/subscription/access";
 import { useBusinessType } from "@/features/core/settings/business-types";
 import { useBusinessTypeServerSync } from "@/features/core/settings/business-type-sync";
 import { isPathAllowedByCapabilities, isPathInBusinessProfile, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
@@ -483,37 +484,61 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
   const hasSyncProblems = queueStatus !== "ready" || failedCount > 0 || conflictCount > 0;
   const hasPendingSync = pendingCount > 0;
   const backendChecked = Boolean(backendStatus.checkedAt);
-  const connectionLabel = queueStatus !== "ready" ? (queueStatus === "error" ? t("sync.local.unavailable") : t("sync.local.checking")) : isOnline
-    ? (hasSyncProblems ? "Review sync" : isSyncing ? "Syncing..." : hasPendingSync ? `${pendingCount} pending` : "Synced")
-    : backendStatus.browserOnline
-      ? (backendChecked ? "Cloud paused" : "Checking backup")
-      : "Offline safe";
-  const connectionDetail = queueStatus !== "ready" ? t("sync.local.unavailableBody") : isOnline
-    ? (hasSyncProblems ? "Some records need owner review" : hasPendingSync ? "Backup will finish shortly" : "Last synced just now")
-    : backendStatus.browserOnline
-      ? "Local billing works; backup will retry"
-      : "Your data is safe on this device";
-  const connectionBadgeClass = isOnline
-    ? (hasSyncProblems
-      ? "border-rose-200 bg-rose-50 text-rose-700"
-      : hasPendingSync
-        ? "border-amber-200 bg-amber-50 text-amber-700"
-        : "border-emerald-200 bg-emerald-50 text-emerald-700")
-    : backendStatus.browserOnline
-      ? "border-sky-200 bg-sky-50 text-sky-700"
-      : "border-amber-200 bg-amber-50 text-amber-700";
-  const connectionDotClass = isOnline
-    ? (hasSyncProblems ? "bg-rose-500" : hasPendingSync ? "bg-amber-500" : "bg-emerald-500")
-    : backendStatus.browserOnline
-      ? "bg-sky-500"
-      : "bg-amber-500";
-  const mobileConnectionTone = hasSyncProblems
+  /**
+   * A lapsed plan is not a connection problem, and this card only knew about
+   * connections.
+   *
+   * Every branch below is about the network or the local queue, so an expired
+   * subscription fell through to whichever one happened to match: "Checking
+   * backup / Local billing works; backup will retry" while online, and after a
+   * manual retry the worse one — "1 pending / Backup will finish shortly". The
+   * engine had already decided not to send anything at all, so nothing was
+   * finishing shortly or otherwise. It outranks the network states because it
+   * survives them: reconnecting changes nothing, renewing changes everything.
+   * (The same rule as the sync strip, from the same function, so the two agree.)
+   */
+  const cloudSyncBlocked = subscriptionBlocksSync(snapshot);
+  const connectionLabel = queueStatus !== "ready" ? (queueStatus === "error" ? t("sync.local.unavailable") : t("sync.local.checking")) : cloudSyncBlocked
+    ? t("chrome.backupPaused")
+    : isOnline
+      ? (hasSyncProblems ? "Review sync" : isSyncing ? "Syncing..." : hasPendingSync ? `${pendingCount} pending` : "Synced")
+      : backendStatus.browserOnline
+        ? (backendChecked ? "Cloud paused" : "Checking backup")
+        : "Offline safe";
+  const connectionDetail = queueStatus !== "ready" ? t("sync.local.unavailableBody") : cloudSyncBlocked
+    ? t("chrome.backupPausedRenew")
+    : isOnline
+      ? (hasSyncProblems ? "Some records need owner review" : hasPendingSync ? "Backup will finish shortly" : "Last synced just now")
+      : backendStatus.browserOnline
+        ? "Local billing works; backup will retry"
+        : "Your data is safe on this device";
+  const connectionBadgeClass = cloudSyncBlocked
+    ? "border-amber-200 bg-amber-50 text-amber-700"
+    : isOnline
+      ? (hasSyncProblems
+        ? "border-rose-200 bg-rose-50 text-rose-700"
+        : hasPendingSync
+          ? "border-amber-200 bg-amber-50 text-amber-700"
+          : "border-emerald-200 bg-emerald-50 text-emerald-700")
+      : backendStatus.browserOnline
+        ? "border-sky-200 bg-sky-50 text-sky-700"
+        : "border-amber-200 bg-amber-50 text-amber-700";
+  const connectionDotClass = cloudSyncBlocked
+    ? "bg-amber-500"
+    : isOnline
+      ? (hasSyncProblems ? "bg-rose-500" : hasPendingSync ? "bg-amber-500" : "bg-emerald-500")
+      : backendStatus.browserOnline
+        ? "bg-sky-500"
+        : "bg-amber-500";
+  const mobileConnectionTone = cloudSyncBlocked
     ? "attention" as const
-    : isSyncing || hasPendingSync
-      ? "busy" as const
-      : isOnline
-        ? "good" as const
-        : "offline" as const;
+    : hasSyncProblems
+      ? "attention" as const
+      : isSyncing || hasPendingSync
+        ? "busy" as const
+        : isOnline
+          ? "good" as const
+          : "offline" as const;
   const pageHasOwnTopbarActions = loc === "/reports" || loc === "/sales-overview";
 
   const [sidebarWidth, setSidebarWidth] = useState(() => clampW(Number(readLS(SIDEBAR_WIDTH_KEY, String(DEFAULT_WIDTH)))));
@@ -743,7 +768,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
           ) : (
             <>
               {/* Sync status */}
-              {(attentionCount > 0 || !isOnline) && <div className="app-sidebar-sync-card">
+              {(attentionCount > 0 || !isOnline || cloudSyncBlocked) && <div className="app-sidebar-sync-card">
                 <div className="flex items-center gap-2">
                   <span className={cn("h-2 w-2 shrink-0 rounded-full", connectionDotClass, !isOnline && "animate-pulse")} />
                   <span className="text-sm font-semibold text-white">
@@ -752,9 +777,15 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
                   {attentionCount > 0 && <span className="ml-auto text-[11px] font-bold text-amber-300">{attentionCount}</span>}
                 </div>
                 <p className="mt-1 text-[11px] text-sidebar-foreground/50">{connectionDetail}</p>
-                <Link href="/sync-status" className="app-sidebar-sync-link tap-target">
-                  <RefreshCw size={13} aria-hidden="true" /> {t("chrome.syncNow")}
-                </Link>
+                {cloudSyncBlocked ? (
+                  <Link href="/subscription" className="app-sidebar-sync-link tap-target">
+                    <CreditCard size={13} aria-hidden="true" /> {t("chrome.subscription.renew")}
+                  </Link>
+                ) : (
+                  <Link href="/sync-status" className="app-sidebar-sync-link tap-target">
+                    <RefreshCw size={13} aria-hidden="true" /> {t("chrome.syncNow")}
+                  </Link>
+                )}
               </div>}
 
               {/* Store + logout */}

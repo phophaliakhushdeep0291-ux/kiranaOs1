@@ -130,19 +130,32 @@ function checkoutErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unable to start online checkout.";
 }
 
+/**
+ * `renew` is the same checkout for the plan the shop already has.
+ *
+ * This modal only ever spoke upsell, so an expired Business shop pressing
+ * "Renew Business" was greeted with "Upgrade to Business — Business includes
+ * this feature", asked to "Pay and upgrade", and thanked with "Subscription
+ * upgraded". At the one moment the owner is deciding whether to pay, the words
+ * described a purchase they were not making. The flow underneath is identical;
+ * only what it says changes.
+ */
 export function UpgradeModal({
   open,
   onOpenChange,
   targetPlanCode,
   reason,
   billingCycle = "yearly",
+  mode = "upgrade",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   targetPlanCode?: PlanCode;
   reason?: string;
   billingCycle?: BillingCycle;
+  mode?: "upgrade" | "renew";
 }) {
+  const renewing = mode === "renew";
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
@@ -229,7 +242,7 @@ export function UpgradeModal({
       await subscriptionRefreshLocalFirst(target.code);
       checkoutAttemptKeyRef.current = null;
       toast({
-        title: "Subscription upgraded",
+        title: t(renewing ? "plans.renewedTitle" : "plans.upgradedTitle"),
         description: `${target.name} is active after verified payment.`,
       });
       onOpenChange(false);
@@ -258,7 +271,7 @@ export function UpgradeModal({
       await writeSubscriptionRequest(target.code);
       await subscriptionRefreshLocalFirst(target.code);
       toast({
-        title: "Upgrade request saved",
+        title: t(renewing ? "plans.renewRequestSaved" : "plans.upgradeRequestSaved"),
         description: checkoutErrorMessage(error),
       });
     } finally {
@@ -288,9 +301,9 @@ export function UpgradeModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Upgrade to {target.name}</DialogTitle>
+          <DialogTitle>{renewing ? t("plans.renew", { plan: target.name }) : <>Upgrade to {target.name}</>}</DialogTitle>
           <DialogDescription>
-            {reason ?? `${target.name} includes this feature.`}
+            {reason ?? (renewing ? t("plans.renewReason") : `${target.name} includes this feature.`)}
           </DialogDescription>
         </DialogHeader>
 
@@ -382,7 +395,7 @@ export function UpgradeModal({
             Later
           </Button>
           <Button onClick={() => void requestUpgrade()} disabled={saving || validatingCoupon}>
-            {saving ? "Starting..." : appliedCoupon ? `Pay Rs ${(appliedCoupon.finalAmountPaise / 100).toLocaleString("en-IN")}` : "Pay and upgrade"}
+            {saving ? "Starting..." : appliedCoupon ? `Pay Rs ${(appliedCoupon.finalAmountPaise / 100).toLocaleString("en-IN")}` : renewing ? t("plans.payAndRenew") : "Pay and upgrade"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -127,19 +127,21 @@ describe("what the banner says while that happens", () => {
     const banner = readFileSync("src/features/core/sync/SyncAlertBanner.tsx", "utf8");
     expect(banner).toContain('mode === "backingUp"');
     expect(banner).toContain("animate-spin");
-    // And no Retry button while the queue is already moving.
-    expect(banner).toContain('{mode === "backingUp" ? null : (');
+    // And no Retry button while the queue is already moving — nor while it is
+    // blocked, where the subscription strip above carries Renew (the render test
+    // in subscription-lapsed-surfaces.test.ts checks that face).
+    expect(banner).toContain('{mode === "backingUp" || mode === "blocked" ? null : (');
   });
 
   it("reaches for the singular headline when there is one of something", () => {
     // A single refusal now counts once rather than twice, so "1 changes need
     // review" is the line a shop reads most often. Every headline the banner can
-    // show is a count, so all three need a singular form in both languages.
+    // show is a count, so all four need a singular form in both languages.
     const banner = readFileSync("src/features/core/sync/SyncAlertBanner.tsx", "utf8");
     expect(banner).toContain("headlineCount === 1 ? `${headlineKey}.one` : headlineKey");
 
     for (const [language, dictionary] of [["English", syncEn], ["Hindi", syncHi]] as const) {
-      for (const key of ["reviewTitle", "backingUpTitle", "waitingTitle"] as const) {
+      for (const key of ["reviewTitle", "backingUpTitle", "waitingTitle", "blockedTitle"] as const) {
         const singular = (dictionary as Record<string, string>)[`sync.banner.${key}.one`];
         expect(singular, `${language} is missing sync.banner.${key}.one`).toBeTruthy();
         // A singular line that still interpolates the count has not been written

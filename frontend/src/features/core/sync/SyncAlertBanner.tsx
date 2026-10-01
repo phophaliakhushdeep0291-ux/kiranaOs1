@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, CloudOff, Loader2, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useOfflineStatus } from "@/features/core/sync/useOfflineStatus";
 import { runManualSyncCycle } from "@/features/core/sync/manual-sync";
+import { subscriptionBlocksSync, useSubscriptionSnapshot } from "@/features/core/subscription/access";
 
 /**
  * What the top of the app says about work that has not reached the cloud yet.
@@ -20,16 +21,26 @@ import { runManualSyncCycle } from "@/features/core/sync/manual-sync";
  * moment nothing was wrong. The first thing a new shop does with the product
  * list looked like a fault.
  *
- * So there are three states, not two:
+ * So there are four states, not two:
  *
  *   review     something failed or conflicted and a person must look at it
  *   backing up rows are queued and the engine is actively sending them
  *   waiting    rows are queued and nothing is moving right now (offline, paused)
+ *   blocked    rows are queued and the engine will not send them at all
  *
  * Only the first two existed before, and everything that was not failing got the
  * third one's wording with the first one's colour.
+ *
+ * `blocked` is the subscription case, and it is the reason the other three are
+ * not enough. When a plan lapses the sync cycle returns an empty result without
+ * touching the network, so the queue is indistinguishable from an offline wait —
+ * and `waiting` told the shop its bills would "retry automatically when the
+ * connection is healthy" while the connection was perfectly healthy and nothing
+ * would ever retry. Pressing Retry ran a cycle that did nothing and reported no
+ * error, leaving the count where it was. A shop can be told its data is queued
+ * and safe for as long as it takes to lose the device.
  */
-export type SyncBannerMode = "review" | "backingUp" | "waiting";
+export type SyncBannerMode = "review" | "backingUp" | "waiting" | "blocked";
 
 /**
  * Which face the banner wears, as a rule rather than a nested ternary.
@@ -45,9 +56,15 @@ export function syncBannerMode(counts: {
   failedCount: number;
   conflictCount: number;
   isSyncing: boolean;
+  cloudSyncBlocked?: boolean;
 }): SyncBannerMode | null {
   const needsReview = counts.failedCount + counts.conflictCount;
   if (counts.pendingCount + needsReview === 0) return null;
+  // Outranks review, because it outranks it in what the owner can do about it.
+  // A refused row still needs correcting, but correcting it changes nothing
+  // while the engine is switched off — renewing is the step that unblocks every
+  // queued row, including that one. The View link still reaches the review list.
+  if (counts.cloudSyncBlocked) return "blocked";
   if (needsReview > 0) return "review";
   return counts.isSyncing ? "backingUp" : "waiting";
 }
@@ -60,30 +77,41 @@ export function SyncAlertBanner() {
   // timer, and is what makes isSyncing — the whole point of this change —
   // visible to the banner at all.
   const { pendingCount, failedCount, conflictCount, isSyncing, queueStatus } = useOfflineStatus();
+  const { snapshot: subscription } = useSubscriptionSnapshot();
   const [retrying, setRetrying] = useState(false);
 
   const needsReview = failedCount + conflictCount;
+  // Blocked means the server will refuse the push — nothing narrower or wider.
+  // In grace it still accepts, so a grace queue keeps its ordinary wording.
+  const cloudSyncBlocked = subscriptionBlocksSync(subscription);
   // A manual retry is the shop asking for exactly this, so treat it as sending.
-  const mode = syncBannerMode({ pendingCount, failedCount, conflictCount, isSyncing: isSyncing || retrying });
+  const mode = syncBannerMode({ pendingCount, failedCount, conflictCount, isSyncing: isSyncing || retrying, cloudSyncBlocked });
   if (queueStatus === "error") return <div role="alert" className="border-b border-amber-300 bg-amber-50 p-3 text-amber-950"><p className="font-bold">{t("sync.local.unavailable")}</p><p className="text-sm">{t("sync.local.unavailableBody")}</p><Link href="/recovery-mode" className="inline-flex min-h-11 items-center underline">{t("sync.local.recovery")}</Link></div>;
   if (queueStatus === "checking" || !mode) return null;
 
   // "1 changes need review" is what a shop reads most of the time now that a
   // single refusal is counted once, and Hindi distinguishes the two forms too
   // ("देखना है" against "देखने हैं"). Both dictionaries carry a .one variant.
-  const headlineCount = mode === "review" ? needsReview : pendingCount;
+  // Blocked counts every queued row, review included: they are all equally stuck,
+  // and "1 change" over a queue of four is the kind of undercount that makes a
+  // shop stop reading the strip.
+  const headlineCount = mode === "review" ? needsReview : mode === "blocked" ? pendingCount + needsReview : pendingCount;
   const headlineKey = mode === "review"
     ? "sync.banner.reviewTitle"
     : mode === "backingUp"
       ? "sync.banner.backingUpTitle"
-      : "sync.banner.waitingTitle";
+      : mode === "blocked"
+        ? "sync.banner.blockedTitle"
+        : "sync.banner.waitingTitle";
   const headline = t(headlineCount === 1 ? `${headlineKey}.one` : headlineKey, { count: headlineCount });
 
   const sub = mode === "review"
     ? t("sync.banner.reviewBody")
     : mode === "backingUp"
       ? t("sync.banner.backingUpBody")
-      : t("sync.banner.waitingBody");
+      : mode === "blocked"
+        ? t("sync.banner.blockedBody")
+        : t("sync.banner.waitingBody");
 
   const tone = mode === "review"
     ? "border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200"
@@ -110,14 +138,23 @@ export function SyncAlertBanner() {
     <div className={`flex items-center gap-3 border-b px-3 py-2 ${tone}`} data-testid="sync-alert-banner" data-mode={mode}>
       {mode === "backingUp"
         ? <Loader2 size={16} className="shrink-0 animate-spin" aria-hidden="true" />
-        : <AlertTriangle size={16} className="shrink-0" aria-hidden="true" />}
+        : mode === "blocked"
+          ? <CloudOff size={16} className="shrink-0" aria-hidden="true" />
+          : <AlertTriangle size={16} className="shrink-0" aria-hidden="true" />}
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-bold leading-tight">{headline}</div>
         <div className="text-[11px] leading-tight opacity-80">{sub}</div>
       </div>
       {/* Nothing to retry while the queue is already moving — offering it there
-          invites a second cycle that the engine would only serialise anyway. */}
-      {mode === "backingUp" ? null : (
+          invites a second cycle that the engine would only serialise anyway. And
+          nothing to retry while the engine is switched off: a Retry that cannot
+          move a row is how this strip came to be believed in the first place.
+          Blocked gets no button of its own either. It only happens when the plan
+          has lapsed, and then the subscription strip directly above already
+          carries Renew — a second one stacked beneath it spent a phone's worth
+          of height saying the same thing twice. View stays: which rows are
+          stuck is still worth a look. */}
+      {mode === "backingUp" || mode === "blocked" ? null : (
         <button
           type="button"
           onClick={() => void onRetry()}

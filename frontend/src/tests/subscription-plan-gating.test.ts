@@ -106,6 +106,23 @@ function cachedSubscription({
   } as SubscriptionCacheRow;
 }
 
+function serverRow(payload: Record<string, unknown>): SubscriptionCacheRow {
+  return {
+    id: "current",
+    plan_code: String(payload.planCode),
+    payload,
+    tenant_id: "tenant_subscription_tests",
+    store_id: "store_subscription_tests",
+    device_id: "device_subscription_tests",
+    created_at: "2026-06-01T00:00:00.000Z",
+    updated_at: "2026-06-05T00:00:00.000Z",
+    deleted_at: null,
+    version: 1,
+    sync_status: "synced",
+    last_modified_by: null,
+  } as SubscriptionCacheRow;
+}
+
 describe("subscription and plan gating", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -358,5 +375,144 @@ describe("subscription and plan gating", () => {
     expect(current.graceActive).toBe(false);
     expect(current.cloudSyncAllowed).toBe(false);
     expect(current.localOnlyAfterExpiry).toBe(true);
+  });
+});
+
+/**
+ * What a lapsed plan is called, as the shop reads it.
+ *
+ * The backend runs no subscription scheduler, so nothing ever rewrites a row's
+ * status when its period ends: a lapsed plan reaches the app still saying
+ * "active", with dates in the past and a computed `active: false` beside them.
+ * Taking that word at face value is what put "Plan status: Active" next to an
+ * access date a month gone and offered the expired shop a Cancel button.
+ */
+describe("the status a lapsed plan is shown with", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-06T10:00:00.000Z"));
+    // A plan can only lapse once the launch promotion is over: inside it every
+    // shop is active. Shut the window, as the plan-gating block above does.
+    vi.stubEnv("VITE_FREE_ACCESS_UNTIL", "2020-01-01T00:00:00+05:30");
+    mockState.subscriptionRows = [];
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("calls a plan expired once its grace has passed, whatever word the row still carries", async () => {
+    // Exactly the production shape, as cached while the device was offline: no
+    // server verdict at all, just a status nobody updated and dates that passed.
+    mockState.subscriptionRows = [serverRow({
+      planCode: "pro",
+      status: "active",
+      currentPeriodEnd: "2026-05-01T00:00:00.000Z",
+      graceEndsAt: "2026-05-08T00:00:00.000Z",
+    })];
+
+    const current = await getCurrentSubscriptionSnapshot();
+
+    expect(current.status).toBe("expired");
+    expect(current.isExpired).toBe(true);
+    expect(current.cloudSyncAllowed).toBe(false);
+  });
+
+  it("does not keep calling an ended trial a trial", async () => {
+    mockState.subscriptionRows = [serverRow({
+      planCode: "pro",
+      status: "trial",
+      currentPeriodEnd: "2026-05-01T00:00:00.000Z",
+      trialEndsAt: "2026-05-01T00:00:00.000Z",
+      graceEndsAt: "2026-05-08T00:00:00.000Z",
+    })];
+
+    const current = await getCurrentSubscriptionSnapshot();
+
+    expect(current.status).toBe("expired");
+    expect(current.isTrial).toBe(false);
+  });
+
+  it("calls a period that has just ended grace, not active", async () => {
+    mockState.subscriptionRows = [serverRow({
+      planCode: "growth",
+      status: "active",
+      currentPeriodEnd: "2026-06-01T00:00:00.000Z",
+      graceEndsAt: "2026-06-10T00:00:00.000Z",
+    })];
+
+    const current = await getCurrentSubscriptionSnapshot();
+
+    expect(current.status).toBe("grace");
+    expect(current.graceActive).toBe(true);
+    expect(current.isExpired).toBe(false);
+  });
+
+  it("takes the server's word that access has ended even when this device's clock disagrees", async () => {
+    // A phone set weeks behind still sees the period as running. The server,
+    // which refuses every sync from this shop, has said otherwise.
+    mockState.subscriptionRows = [serverRow({
+      planCode: "pro",
+      status: "active",
+      active: false,
+      currentPeriodEnd: "2026-07-01T00:00:00.000Z",
+      graceEndsAt: "2026-07-08T00:00:00.000Z",
+    })];
+
+    const current = await getCurrentSubscriptionSnapshot();
+
+    expect(current.status).toBe("expired");
+    expect(current.isExpired).toBe(true);
+    expect(current.graceActive).toBe(false);
+    expect(current.cloudSyncAllowed).toBe(false);
+  });
+
+  it("does not let a cached 'active' verdict revive dates this device has watched pass", async () => {
+    // `active: true` was computed when the row was fetched, before the period ran
+    // out offline. It is a stale answer, not a renewal.
+    mockState.subscriptionRows = [serverRow({
+      planCode: "pro",
+      status: "active",
+      active: true,
+      currentPeriodEnd: "2026-05-01T00:00:00.000Z",
+      graceEndsAt: "2026-05-08T00:00:00.000Z",
+    })];
+
+    const current = await getCurrentSubscriptionSnapshot();
+
+    expect(current.status).toBe("expired");
+    expect(current.isExpired).toBe(true);
+  });
+
+  it("keeps a failed payment named as one after its period also ends", async () => {
+    mockState.subscriptionRows = [serverRow({
+      planCode: "growth",
+      status: "payment_failed",
+      active: false,
+      currentPeriodEnd: "2026-05-01T00:00:00.000Z",
+      graceEndsAt: "2026-05-08T00:00:00.000Z",
+    })];
+
+    const current = await getCurrentSubscriptionSnapshot();
+
+    expect(current.status).toBe("payment_failed");
+    expect(current.isPaymentFailed).toBe(true);
+  });
+
+  it("leaves a healthy paid plan's status alone", async () => {
+    mockState.subscriptionRows = [serverRow({
+      planCode: "growth",
+      status: "active",
+      active: true,
+      currentPeriodEnd: "2026-07-01T00:00:00.000Z",
+      graceEndsAt: "2026-07-08T00:00:00.000Z",
+    })];
+
+    const current = await getCurrentSubscriptionSnapshot();
+
+    expect(current.status).toBe("active");
+    expect(current.isExpired).toBe(false);
+    expect(current.cloudSyncAllowed).toBe(true);
   });
 });
