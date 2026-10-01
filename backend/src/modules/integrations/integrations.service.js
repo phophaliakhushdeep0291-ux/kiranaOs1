@@ -19,7 +19,7 @@ import { JOB_NAMES, QUEUE_NAMES } from "../../workers/queueNames.js";
 import { buildTallyEnvelope } from "./tally-voucher.js";
 import { validateGstin } from "../../utils/gst.js";
 import { createAuditLog } from "../audit/audit.service.js";
-import { baseQtyToRateQty } from "../../utils/units.js";
+import { convertibleRateUnitFactorsFor } from "../inventory/rate-unit-factor.js";
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 const MAX_ACTIVE_API_KEYS = 10;
@@ -692,11 +692,17 @@ export async function buildTallyExport(shopId, query) {
     const ids = [...new Set(selected.productionRuns.flatMap((run) => [...run.consumptions, ...run.outputs].map((row) => row.productId)))];
     const products = await db.product.findMany({ where: { shopId, id: { in: ids } }, select: { id: true, name: true, baseUnit: true, rateUnit: true, hsn: true, costPerRateUnit: true } });
     const byId = new Map(products.map((row) => [row.id, row]));
+    // Cost is per RATE unit, and a packaged material's rate unit is its pack's word
+    // ("pouch"), which only its packaging can size. Through the unit table alone it
+    // fell back to the base quantity: 4 L of oil at ₹150 a pouch went to the books
+    // as ₹6,00,000. What is left of that fallback is a material with no packaging
+    // and a word the table does not know — which can no longer complete a run.
+    const factors = await convertibleRateUnitFactorsFor(db, shopId, products);
     selected.productionRuns = selected.productionRuns.map((run) => {
       const consumptions = run.consumptions.map((row) => {
         const product = byId.get(row.productId);
-        let rateQty = Number(row.actualBaseQty);
-        try { rateQty = baseQtyToRateQty(rateQty, product?.rateUnit, product?.baseUnit); } catch { /* use base quantity */ }
+        const factor = factors.get(row.productId);
+        const rateQty = factor ? Number(row.actualBaseQty) / factor : Number(row.actualBaseQty);
         return { ...row, productName: product?.name, baseUnit: product?.baseUnit, hsn: product?.hsn, stockValue: rateQty * Number(product?.costPerRateUnit || 0) };
       });
       const totalInputValue = consumptions.reduce((sum, row) => sum + Number(row.stockValue || 0), 0);

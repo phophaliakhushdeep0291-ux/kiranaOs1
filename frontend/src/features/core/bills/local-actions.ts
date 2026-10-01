@@ -1,3 +1,4 @@
+import { apiRequest } from "@/lib/api/http";
 import { offlineDB } from "@/lib/offline/db";
 import { emitLocalDataChanged, readInstantCache, upsertCachedListItem, writeInstantCache } from "@/lib/offline/instant-cache";
 import { buildOutboxOperation } from "@/features/core/sync/outbox";
@@ -5,6 +6,7 @@ import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/off
 import { ownerPinRequiredActionSchema } from "@/lib/validation";
 import type { Bill, Customer, Product } from "@/types/api";
 import { buildAuditLogOutboxInput, buildAuditLogRow } from "@/features/core/audit-logs/local-actions";
+import { productTracksStock } from "@/features/core/inventory/stock-display";
 
 const BILL_CACHE_KEY = "bills";
 const CUSTOMER_CACHE_KEY = "customers";
@@ -132,7 +134,7 @@ async function buildCancellationStockChanges(bill: Bill & Record<string, unknown
     const productId = item.productId ?? item.product_id;
     if (!productId) continue;
     const product = productsById.get(productId);
-    if (!product) continue;
+    if (!product || !productTracksStock(product)) continue;
     const quantityBase = cancellationItemBaseQuantity(item);
     if (!(quantityBase > 0)) continue;
     const before = runningBaseStock.has(productId)
@@ -240,6 +242,17 @@ export async function cancelBillWithOwnerPinLocalFirst(id: string, ownerPin: str
     (candidate.returnOfBillId === existing.id || candidate.return_of_bill_id === existing.id),
   );
   if (hasActiveReturn) throw new Error("This bill has completed returns and can no longer be cancelled");
+
+  if ((await cancellationItemsFor(existing)).some((item) => item.trackedUnitId || item.tracked_unit_id)) {
+    if (!navigator.onLine) throw new Error("Reconnect to cancel this serial-linked bill. Its sale is still active.");
+    const serverId = String(existing.server_id ?? existing.id);
+    const confirmed = await apiRequest<Bill>(`/bills/${encodeURIComponent(serverId)}/cancel`, { method: "POST", ownerPin, body: JSON.stringify({ reason }) });
+    const saved = { ...existing, ...confirmed, sync_status: "synced", isSynced: true, is_synced: true };
+    await offlineDB.transaction(["bills"], async (tx) => { await tx.put("bills", saved); });
+    updateBillCache(saved);
+    emitLocalDataChanged({ type: "bill", id: saved.id, action: "cancelled" });
+    return saved;
+  }
 
   const now = new Date().toISOString();
   const updated = {

@@ -1,0 +1,201 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { hasSubscriptionAccess, isSubscriptionActive } from "../src/modules/subscription/subscription.service.js";
+import {
+  FREE_ACCESS_PRESALE_DAYS,
+  FREE_ACCESS_PRESALE_FROM,
+  FREE_ACCESS_UNTIL,
+  freeAccessPlan,
+  freeAccessPresaleFromIso,
+  freeAccessUntilIso,
+  isFreeAccessActive,
+  isFreeAccessPresale,
+  paidPeriodStart,
+} from "../src/modules/subscription/freeAccess.js";
+import { BUSINESS_TYPE_PLAN_PRICING, PLAN_CODES, getPlanConfigForBusinessType } from "../src/modules/subscription/planConfig.js";
+import { FEATURE_REGISTRY } from "../src/modules/feature-gates/featureRegistry.js";
+import { licenseValidity } from "../src/modules/devices/license.service.js";
+
+const DAY = 24 * 60 * 60 * 1000;
+const during = new Date(FREE_ACCESS_UNTIL.getTime() - DAY);
+const after = new Date(FREE_ACCESS_UNTIL.getTime() + DAY);
+
+// The SHIPPED boundary is read from env.js rather than from the running process,
+// because buildTestEnv deliberately pins FREE_ACCESS_UNTIL to a past instant so the
+// rest of the suite can test plan enforcement. Asserting the runtime value here
+// would only re-read that override and prove nothing about what ships.
+//
+// It must be IST, not UTC: 2027-01-01T00:00+05:30 is 2026-12-31T18:30Z, and a shop
+// in Indore closing its counter on new year's eve is still inside the window. Read
+// as +00:00 it would shut five and a half hours early, mid-evening, still trading.
+const envSource = readFileSync(new URL("../src/config/env.js", import.meta.url), "utf8");
+const shipped = envSource.match(/FREE_ACCESS_UNTIL:[\s\S]{0,200}?\.default\("([^"]+)"\)/);
+assert.ok(shipped, "env.js must give FREE_ACCESS_UNTIL a default");
+assert.equal(shipped[1], "2027-01-01T00:00:00+05:30", "the shipped window must close at midnight IST");
+assert.equal(
+  new Date(shipped[1]).toISOString(),
+  "2026-12-31T18:30:00.000Z",
+  "and that must resolve to 18:30Z -- if this reads 00:00Z the offset has been dropped",
+);
+
+// Whatever the window is set to, the two readings of it must agree.
+assert.equal(freeAccessUntilIso(), FREE_ACCESS_UNTIL.toISOString());
+
+assert.equal(isFreeAccessActive(during), true, "inside the window");
+assert.equal(isFreeAccessActive(after), false, "past the window");
+
+// Every status a gate can meet. The promotion answers for all of them while it runs,
+// and for none of them afterwards — the row underneath decides again on its own,
+// which is the whole point of laying the promotion OVER the row instead of rewriting it.
+const rows = {
+  expired: { status: "expired" },
+  payment_failed: { status: "payment_failed" },
+  lapsedTrial: { status: "trial", trialEndsAt: new Date("2020-01-01"), graceEndsAt: new Date("2020-01-01") },
+  lapsedGrace: { status: "grace", graceEndsAt: new Date("2020-01-01") },
+};
+for (const [label, row] of Object.entries(rows)) {
+  assert.equal(isSubscriptionActive(row), false, `${label} is genuinely inactive`);
+  assert.equal(hasSubscriptionAccess(row, during), true, `${label} must be served while the product is free`);
+  assert.equal(hasSubscriptionAccess(row, after), false, `${label} must be enforced again once the window closes`);
+}
+
+// A paying shop is unaffected either way. Its period end is anchored to the REAL
+// clock, not to the window: isSubscriptionActive deliberately reads new Date()
+// rather than the `now` it is handed, because it answers about the row as it
+// stands today. Anchoring this to FREE_ACCESS_UNTIL would expire the shop the
+// moment a test run pins the window to the past.
+const paid = { status: "active", currentPeriodEnd: new Date(Date.now() + 400 * DAY) };
+assert.equal(hasSubscriptionAccess(paid, after), true, "a paid shop keeps access after the window");
+assert.equal(hasSubscriptionAccess(paid, during), true, "and during it");
+
+// The device licence has to agree with the gates. An offline counter trusts its
+// licence before anything else, so a lapsed shop issued a licence dated by its
+// lapsed row was locked out on the till while the server was letting it in.
+// Dated against the window, not the clock, so it holds wherever the window is pinned.
+const lapsedLicence = {
+  status: "expired",
+  currentPeriodEnd: new Date(FREE_ACCESS_UNTIL.getTime() - 30 * DAY),
+  graceEndsAt: new Date(FREE_ACCESS_UNTIL.getTime() - 27 * DAY),
+  maxDevices: 2,
+};
+const issuedDuring = licenseValidity({ ...lapsedLicence, issuedAt: during });
+assert.equal(issuedDuring.validUntil.getTime(), FREE_ACCESS_UNTIL.getTime(), "a licence issued in the window is valid to its end");
+assert.ok(issuedDuring.offlineGraceUntil > FREE_ACCESS_UNTIL, "and keeps offline grace past it, so new year lands in grace, not a lockout");
+assert.deepEqual(issuedDuring.warnings, [], "and does not warn a shop using a free product that it is restricted");
+
+const issuedAfter = licenseValidity({ ...lapsedLicence, issuedAt: after });
+assert.equal(issuedAfter.validUntil.getTime(), lapsedLicence.currentPeriodEnd.getTime(), "once the window closes the row dates the licence again");
+assert.ok(issuedAfter.warnings.includes("SUBSCRIPTION_RESTRICTED"), "and the restriction is reported again");
+
+// A shop paid past the window keeps its own, later, dates.
+const paidPast = new Date(FREE_ACCESS_UNTIL.getTime() + 200 * DAY);
+const paidLicence = licenseValidity({ status: "active", currentPeriodEnd: paidPast, graceEndsAt: null, issuedAt: during, maxDevices: 2 });
+assert.equal(paidLicence.validUntil.getTime(), paidPast.getTime(), "the window never shortens a paid licence");
+
+// The gates must ask hasSubscriptionAccess, not isSubscriptionActive. This is the bug
+// this file exists for: the promotion was written and every gate still read the row
+// directly, so a lapsed shop was told it had free access and then refused at the door.
+const gates = {
+  "../src/modules/feature-gates/featureGate.service.js": 4,
+  "../src/modules/devices/device.middleware.js": 2,
+  "../src/modules/sync/sync.controller.js": 1,
+  "../src/modules/ai/agent/agent.service.js": 1,
+};
+for (const [path, minimum] of Object.entries(gates)) {
+  const src = readFileSync(new URL(path, import.meta.url), "utf8");
+  const calls = (src.match(/hasSubscriptionAccess\(/g) ?? []).length;
+  assert.ok(calls >= minimum, `${path} must gate on hasSubscriptionAccess (saw ${calls}, expected >= ${minimum})`);
+  assert.ok(
+    !/\bisSubscriptionActive\b/.test(src),
+    `${path} must not gate on isSubscriptionActive — it ignores the free-access window`,
+  );
+}
+
+// Nobody is charged for something that is currently free — until the last month,
+// when plans go back on sale so that a shop's first bill and its first lockout are
+// not the same midnight, with no way to have paid beforehand.
+const checkout = readFileSync(new URL("../src/modules/payment-provider/paymentProvider.service.js", import.meta.url), "utf8");
+assert.ok(
+  checkout.includes("isFreeAccessActive() && !isFreeAccessPresale()"),
+  "checkout must refuse while the product is free, except in the presale month",
+);
+assert.ok(checkout.includes("FREE_ACCESS_ACTIVE"), "the refusal must be identifiable by code");
+
+// The presale month: open 31 days before the window shuts, shut when it shuts.
+const dayBeforePresale = new Date(FREE_ACCESS_PRESALE_FROM.getTime() - 1);
+const presale = new Date(FREE_ACCESS_UNTIL.getTime() - 10 * DAY);
+assert.equal(FREE_ACCESS_PRESALE_DAYS, 31, "31 days puts the sale on 1 December for a 1 January window");
+assert.equal(
+  FREE_ACCESS_UNTIL.getTime() - FREE_ACCESS_PRESALE_FROM.getTime(),
+  FREE_ACCESS_PRESALE_DAYS * DAY,
+  "and the sale date follows the window if that date moves",
+);
+assert.equal(freeAccessPresaleFromIso(), FREE_ACCESS_PRESALE_FROM.toISOString());
+assert.equal(isFreeAccessPresale(dayBeforePresale), false, "a day early is still nothing to pay");
+assert.equal(isFreeAccessPresale(new Date(FREE_ACCESS_PRESALE_FROM)), true, "the sale opens on the boundary itself");
+assert.equal(isFreeAccessPresale(presale), true, "and stays open to the end of the window");
+assert.equal(isFreeAccessPresale(after), false, "after the window it is an ordinary sale, not a presale");
+// Access itself is unchanged by the sale: the product is free for the whole window.
+assert.equal(isFreeAccessActive(presale), true, "buying ahead does not end anyone's free access");
+assert.equal(hasSubscriptionAccess(rows.expired, presale), true, "including a lapsed shop that has not bought");
+
+// What a shop buys in that month starts when the window shuts, so it is not sold
+// days it was getting for nothing.
+const boughtInPresale = paidPeriodStart(presale, presale);
+assert.equal(boughtInPresale.getTime(), FREE_ACCESS_UNTIL.getTime(), "a plan bought early starts when the window shuts");
+const boughtAfter = paidPeriodStart(after, after);
+assert.equal(boughtAfter.getTime(), after.getTime(), "once the window has shut a plan starts when it is bought");
+const renewalBeyondWindow = new Date(FREE_ACCESS_UNTIL.getTime() + 90 * DAY);
+assert.equal(
+  paidPeriodStart(renewalBeyondWindow, presale).getTime(),
+  renewalBeyondWindow.getTime(),
+  "a renewal that already runs past the window keeps its own later start",
+);
+const service2 = readFileSync(new URL("../src/modules/subscription/subscription.service.js", import.meta.url), "utf8");
+assert.ok(
+  /const paidFrom = paidPeriodStart\(startsAt, now\);/.test(service2)
+  && !/currentPeriodStart: startsAt/.test(service2),
+  "activateSubscriptionAfterPayment must date the paid period from paidPeriodStart",
+);
+
+// The renewal-period maths must keep reading the row, or a renewal bought the day the
+// window closes would stack onto a period the promotion only appeared to grant.
+const service = readFileSync(new URL("../src/modules/subscription/subscription.service.js", import.meta.url), "utf8");
+assert.ok(
+  /const currentActive = isSubscriptionActive\(current\);/.test(service),
+  "activateSubscriptionAfterPayment must price renewals from the real subscription row",
+);
+
+// "Fully accessible" means the whole product, not the trade's own top plan. That
+// plan left every other trade's features locked, though any shop can switch those
+// modules on, and held a grocer to 3 stores and 10 staff. So in the window every
+// trade holds every feature any plan grants anywhere, and the highest limits.
+const trades = Object.keys(BUSINESS_TYPE_PLAN_PRICING);
+const everyPlan = PLAN_CODES.flatMap((code) => trades.map((trade) => getPlanConfigForBusinessType(code, trade)));
+for (const trade of trades) {
+  const free = freeAccessPlan(trade);
+  for (const plan of everyPlan) {
+    for (const feature of plan.features) {
+      assert.ok(free.features.includes(feature), `${trade} must hold ${feature} (from ${plan.code}) in the window`);
+    }
+    for (const limit of ["maxDevices", "maxStaff", "maxStores"]) {
+      assert.ok(free[limit] >= plan[limit], `${trade} ${limit} must be at least ${plan.code}'s ${plan[limit]}`);
+    }
+  }
+  for (const feature of Object.keys(FEATURE_REGISTRY)) {
+    assert.ok(free.features.includes(feature), `${trade} must hold registered feature ${feature} in the window`);
+  }
+  // The licence the server signs carries this code, and the counter checks it on refresh.
+  assert.equal(free.code, "pro", `${trade} holds the top plan code, which the licence refresh expects`);
+}
+const grocer = freeAccessPlan("kirana");
+assert.ok(grocer.features.includes("clothing_rentals"), "a grocer who switches rentals on can use it");
+assert.ok(grocer.features.includes("serial_imei_tracking"), "and the serial register");
+assert.ok(grocer.maxStores > getPlanConfigForBusinessType("pro", "kirana").maxStores, "and is not held to the grocery store cap");
+assert.equal(freeAccessPlan("restaurant").name, "Dine-in", "the plan keeps the trade's own name");
+assert.ok(
+  service.includes("freeAccessPlan(await getShopBusinessType(shopId, client))"),
+  "getEffectivePlan must hand out the whole product in the window, not the trade's top plan",
+);
+
+console.log("Free access window examples passed");

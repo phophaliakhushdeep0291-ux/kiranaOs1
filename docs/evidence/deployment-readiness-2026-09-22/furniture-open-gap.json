@@ -1,0 +1,31 @@
+{
+  "status": "open",
+  "finding": "Installed furniture QA order has recorded payments but no linked bill or delivery stock deduction",
+  "orders": [
+    {
+      "orderNumber": "SO-000001",
+      "status": "installed",
+      "grandTotal": 120.0,
+      "billId": null,
+      "payments": [
+        {
+          "amount": 40.0,
+          "mode": "cash"
+        },
+        {
+          "amount": 80.0,
+          "mode": "cash"
+        }
+      ],
+      "products": [
+        {
+          "name": "QA Trade Item",
+          "stockBaseQty": 20.0,
+          "qty": 1.0
+        }
+      ]
+    }
+  ],
+  "observedAt": "2026-09-22",
+  "source": "Read-only check of previous browser fixture; no production data used."
+}

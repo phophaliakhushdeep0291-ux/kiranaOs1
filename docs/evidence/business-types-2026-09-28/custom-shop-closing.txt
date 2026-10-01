@@ -1,0 +1,147 @@
+Daily Closing page loaded
+Daily Closing
+
+Cash drawer and business summary from local data.
+
+Reports
+Print
+Share
+Refresh
+CLOSING DATE
+
+EXPECTED CASH IN DRAWER TONIGHT
+
+₹145
+
+Opening float + cash sales + old udhar cash recovery + cash in - supplier cash paid - cash expenses - cash out
+
+Cash in ₹50
+UPI in ₹0
+Bank in ₹0
+
+CASH, UPI, AND BANK SPLIT
+
+Cash in
+₹50
+
+100%
+
+UPI in
+₹0
+
+0%
+
+Bank in
+₹0
+
+OPENING FLOAT & CASH IN / OUT
+
+OPENING FLOAT FOR 2026-09-28
+Save
+
+The change you put in the drawer this morning. Declared each day rather than carried over, so yesterday's shortage never hides inside today's expected cash. Currently ₹100.
+
+Cash expenses today
+₹5
+
+Cash-paid expenses only — UPI and bank expenses never leave the drawer.
+
+RECORD CASH IN / OUT
+Cash in
+Cash out
+
+Nothing recorded for 2026-09-28. Log money you add to or take from the till so the count at closing can actually match.
+
+COUNT THE DRAWER — OVER / SHORT
+
+COUNTED CASH FOR 2026-09-28
+Update
+
+Drawer matches expected — perfect close.
+
+Saved on this device and kept for 90 days — repeated shorts on the same weekday are worth investigating.
+
+OVER / SHORT HISTORY
+
+28 Sept
+counted ₹145 / expected ₹145
+Exact
+Income today
+
+Everything that came in
+
+Total sales
+
+All bills for the day
+
+₹50
+
+Cash sales
+
+₹50
+
+UPI sales
+
+₹0
+
+Bank sales
+
+₹0
+
+Old udhar recovered
+
+Cash ₹0 / UPI ₹0 / Bank ₹0
+
+₹0
+
+Credit & outgoing
+
+What went out or remains due
+
+Udhar given today
+
+Credit extended to customers
+
+₹0
+
+Supplier cash paid
+
+₹0
+
+Supplier UPI paid
+
+₹0
+
+Supplier bank paid
+
+₹0
+
+Supplier due (unpaid)
+
+Purchase bills not yet paid
+
+₹0
+
+Top sold products
+PRODUCT	QTY	SALES
+
+1
+QA Gift Box
+	1	₹50
+Low-stock items
+No low-stock items
+Sync check before closing
+
+Ensure all data is backed up to the cloud
+
+0
+
+Pending backup
+
+0
+
+Failed sync
+
+0
+
+Conflicts

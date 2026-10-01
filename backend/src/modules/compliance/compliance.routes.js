@@ -7,10 +7,14 @@ import { requireFeature } from "../feature-gates/featureGate.middleware.js";
 import { complianceExportQuery, eWayBillSchema, hsnCategoryAssignmentSchema } from "./compliance.schema.js";
 import * as controller from "./compliance.controller.js";
 import { requireLocationAccess } from "../stores/location-access.service.js";
+import { taxReviewQuery } from "./tax-review.schema.js";
+import { taxReconciliationSchema } from "./tax-reconciliation.js";
 
 const router = Router();
 router.use(requireAuth, requireShop, requireDeviceActivated());
 router.get("/readiness", requireRole("owner", "admin"), controller.readiness);
+router.get("/tax-review", requireRole("owner", "admin"), requireFeature("gst_reports"), validateQuery(taxReviewQuery), requireLocationAccess("view"), controller.taxReview);
+router.post("/tax-reconciliation", requireRole("owner", "admin"), requireFeature("gst_reports"), validate(taxReconciliationSchema), controller.taxReconciliation);
 router.get("/gst-register", requireRole("owner", "admin"), requireFeature("gst_reports"), validateQuery(complianceExportQuery), requireLocationAccess("view"), controller.gstRegister);
 router.get("/gstr1-working", requireRole("owner", "admin"), requireFeature("gst_reports"), validateQuery(complianceExportQuery), requireLocationAccess("view"), controller.gstr1Working);
 router.get("/gstr3b-working", requireRole("owner", "admin"), requireFeature("gst_reports"), validateQuery(complianceExportQuery), requireLocationAccess("view"), controller.gstr3bWorking);

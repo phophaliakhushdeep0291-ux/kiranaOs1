@@ -23,10 +23,38 @@ const t: Translate = (key, vars) =>
 const EMPTY_FACTS: MerchantSetupFacts = {
   storeProfileReady: false,
   productCount: 0,
+  productsInStockCount: 0,
   customerCount: 0,
   supplierCount: 0,
   billCount: 0,
 };
+
+describe("a catalogue with nothing on the shelf is not a ready shop", () => {
+  const productsStep = (facts: MerchantSetupFacts) =>
+    buildMerchantSetupProgress(facts, createMerchantSetupState(), t).steps.find((step) => step.id === "products");
+
+  it("stays Needed when every product is out of stock", () => {
+    // What loading the 560-item starter catalogue leaves behind: it ships with
+    // Opening Stock 0 on every row, so the shop has a full price list and an
+    // empty shelf. Calling that Ready sent a shopkeeper to the counter to find
+    // out.
+    const step = productsStep({ ...EMPTY_FACTS, productCount: 560, productsInStockCount: 0 });
+    expect(step?.complete).toBe(false);
+    expect(step?.detail).toContain("560");
+    expect(step?.detail).toMatch(/stock/i);
+  });
+
+  it("is Ready once anything is actually sellable", () => {
+    const step = productsStep({ ...EMPTY_FACTS, productCount: 560, productsInStockCount: 12 });
+    expect(step?.complete).toBe(true);
+  });
+
+  it("still tells a brand-new shop it has no products at all", () => {
+    const step = productsStep(EMPTY_FACTS);
+    expect(step?.complete).toBe(false);
+    expect(step?.detail).not.toContain("0 products");
+  });
+});
 
 describe("merchant setup readiness", () => {
   it("does not mark confirmable production settings ready from defaults alone", () => {
@@ -50,7 +78,7 @@ describe("merchant setup readiness", () => {
     });
 
     const progress = buildMerchantSetupProgress(
-      { ...EMPTY_FACTS, storeProfileReady: true, productCount: 125 },
+      { ...EMPTY_FACTS, storeProfileReady: true, productCount: 125, productsInStockCount: 125 },
       state,
       t,
     );
@@ -66,7 +94,7 @@ describe("merchant setup readiness", () => {
     });
 
     const progress = buildMerchantSetupProgress(
-      { ...EMPTY_FACTS, storeProfileReady: true, productCount: 1 },
+      { ...EMPTY_FACTS, storeProfileReady: true, productCount: 1, productsInStockCount: 1 },
       state,
       t,
     );
@@ -90,6 +118,7 @@ describe("merchant setup readiness", () => {
       {
         storeProfileReady: true,
         productCount: 3,
+        productsInStockCount: 3,
         customerCount: 2,
         supplierCount: 1,
         billCount: 1,

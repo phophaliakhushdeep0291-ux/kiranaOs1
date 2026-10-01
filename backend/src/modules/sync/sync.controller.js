@@ -1,7 +1,7 @@
 import { env } from "../../config/env.js";
 import * as svc from "./sync.service.js";
 import { incrementMetric } from "../../lib/metrics.js";
-import { getEffectivePlan, isSubscriptionActive } from "../subscription/subscription.service.js";
+import { getEffectivePlan, hasSubscriptionAccess } from "../subscription/subscription.service.js";
 import { markDeviceSynced } from "../devices/devices.service.js";
 import { getSyncDiagnostics } from "./sync-diagnostics.service.js";
 
@@ -27,7 +27,7 @@ function writeSyncLog(level, payload) {
 
 function buildStatusPayload(req, effectivePlan, serverSeq) {
   const features = Array.isArray(effectivePlan.features) ? effectivePlan.features : [];
-  const subscriptionActive = isSubscriptionActive(effectivePlan.subscription);
+  const subscriptionActive = hasSubscriptionAccess(effectivePlan.subscription);
   const featureAllowed = features.includes("cloud_backup") || features.includes("auto_two_way_sync");
   const allowed = Boolean(subscriptionActive && featureAllowed);
   const serverTime = new Date().toISOString();

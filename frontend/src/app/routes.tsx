@@ -1,4 +1,4 @@
-import { useAppLanguage } from "@/features/core/settings/i18n";
+import { loadCloudTranslations, useAppLanguage } from "@/features/core/settings/i18n";
 import { lazy, Suspense, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { Redirect, Route, Switch, useLocation } from "wouter";
 import NotFound from "@/components/shared/NotFound";
@@ -16,9 +16,25 @@ import { useScreenTracking } from "@/lib/activity";
 import type { FeatureName } from "@/features/core/subscription/plans";
 import { isPathInBusinessProfile, profileHasCapability, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import { PermissionDenied } from "@/components/shared/PermissionDenied";
+import { normalizeStaffRole, routeAccessFor, serverPermissions, type StaffRole } from "@/features/core/staff/role-access";
+import type { TranslationKey } from "@/features/core/settings/i18n";
 import { loadBillingRoute, loadBillsRoute, loadCustomersRoute, loadInventoryRoute, loadProductsRoute, loadPurchasesRoute, loadReportsRoute, loadSalesOverviewRoute } from "./route-preload";
 import { Button } from "@/components/ui/button";
 import { readBackendConnectionSnapshot, type BackendConnectionSnapshot } from "@/features/core/sync/backend-health";
+
+/**
+ * A lazy import for an `onlineOnly` page whose copy lives in the cloud-only
+ * translation tier.
+ *
+ * Requesting the strings alongside the chunk puts both behind the same Suspense
+ * boundary, so such a page cannot paint a raw key while its tables are still in
+ * flight — the guarantee that lets that tier stay out of the offline precache
+ * entirely. Every page wrapped here MUST also carry `onlineOnly` on its route;
+ * the pairing is what offline-route-capability.test.ts checks.
+ */
+function cloudPage<T>(load: () => Promise<{ default: T }>): () => Promise<{ default: T }> {
+  return () => Promise.all([load(), loadCloudTranslations()]).then(([module]) => module);
+}
 
 const Login = lazy(() => import("@/features/core/auth/pages/LoginPage"));
 const Register = lazy(() => import("@/features/core/auth/pages/RegisterPage"));
@@ -76,22 +92,22 @@ const AdvancedSettings = lazy(() => import("@/features/core/settings/pages/Advan
 const SyncStatusPage = lazy(() => import("@/features/core/sync/pages/SyncStatusPage"));
 const PlansPage = lazy(() => import("@/features/core/subscription/pages/PlansPage"));
 const SubscriptionPage = lazy(() => import("@/features/core/subscription/pages/SubscriptionPage"));
-const DevicesPage = lazy(() => import("@/features/core/devices/pages/DevicesPage"));
+const DevicesPage = lazy(cloudPage(() => import("@/features/core/devices/pages/DevicesPage")));
 const PlatformAdminPage = lazy(() => import("@/features/core/platform-admin/pages/PlatformAdminPage"));
 const RemoteSupportConsolePage = lazy(() => import("@/features/core/remote-support/pages/RemoteSupportConsolePage"));
 const AskArthaPage = lazy(() => import("@/features/core/support/pages/AskArthaPage"));
 const ActivityInsightsPage = lazy(() => import("@/features/core/activity/pages/ActivityInsightsPage"));
 const StaffPage = lazy(() => import("@/features/core/staff/pages/StaffPage"));
 const AuditLogsPage = lazy(() => import("@/features/core/audit-logs/pages/AuditLogsPage"));
-const AssuranceDashboardPage = lazy(() => import("@/features/core/assurance/pages/AssuranceDashboardPage"));
-const AssuranceFindingsPage = lazy(() => import("@/features/core/assurance/pages/FindingsPage"));
-const AssuranceFindingDetailPage = lazy(() => import("@/features/core/assurance/pages/FindingDetailPage"));
-const AssuranceEvidencePage = lazy(() => import("@/features/core/assurance/pages/EvidenceRequestsPage"));
-const AssuranceRunsPage = lazy(() => import("@/features/core/assurance/pages/AuditRunsPage"));
-const AssuranceRulesPage = lazy(() => import("@/features/core/assurance/pages/AuditRulesPage"));
-const AssuranceReviewQueuePage = lazy(() => import("@/features/core/assurance/pages/ReviewQueuePage"));
-const AssuranceReportPage = lazy(() => import("@/features/core/assurance/pages/AssuranceReportPage"));
-const AssuranceCasesPage = lazy(() => import("@/features/core/assurance/pages/CasesPage"));
+const AssuranceDashboardPage = lazy(cloudPage(() => import("@/features/core/assurance/pages/AssuranceDashboardPage")));
+const AssuranceFindingsPage = lazy(cloudPage(() => import("@/features/core/assurance/pages/FindingsPage")));
+const AssuranceFindingDetailPage = lazy(cloudPage(() => import("@/features/core/assurance/pages/FindingDetailPage")));
+const AssuranceEvidencePage = lazy(cloudPage(() => import("@/features/core/assurance/pages/EvidenceRequestsPage")));
+const AssuranceRunsPage = lazy(cloudPage(() => import("@/features/core/assurance/pages/AuditRunsPage")));
+const AssuranceRulesPage = lazy(cloudPage(() => import("@/features/core/assurance/pages/AuditRulesPage")));
+const AssuranceReviewQueuePage = lazy(cloudPage(() => import("@/features/core/assurance/pages/ReviewQueuePage")));
+const AssuranceReportPage = lazy(cloudPage(() => import("@/features/core/assurance/pages/AssuranceReportPage")));
+const AssuranceCasesPage = lazy(cloudPage(() => import("@/features/core/assurance/pages/CasesPage")));
 const RecycleBinPage = lazy(() => import("@/features/core/recycle-bin/pages/RecycleBinPage"));
 const SmartToolsPage = lazy(() => import("@/features/core/innovation/pages/SmartToolsPage"));
 const RecoveryModePage = lazy(() => import("@/features/core/recovery/pages/RecoveryModePage"));
@@ -181,6 +197,32 @@ function BusinessProfileRouteGate({ capability, children }: { capability?: strin
   return <>{children}</>;
 }
 
+const ROLE_NAME_KEYS: Record<StaffRole, TranslationKey> = {
+  owner: "role.owner",
+  manager: "role.manager",
+  cashier: "role.cashier",
+  viewer: "role.viewer",
+};
+
+/**
+ * Screens the signed-in role may not use (see ROUTE_ACCESS_RULES). The server
+ * already refuses the data behind each of them; this says so up front instead
+ * of opening a page that fails a moment later, or — offline — one that lets a
+ * view-only login fill in a form it can never save.
+ */
+function RoleRouteGate({ children }: { children: ReactNode }) {
+  const { t } = useAppLanguage();
+  const { user } = useAuth();
+  const [location] = useLocation();
+  const role = normalizeStaffRole(user?.role);
+  const access = routeAccessFor(location, role, serverPermissions(user));
+  if (access.allowed) return <>{children}</>;
+  if (access.reason === "read_only") {
+    return <PermissionDenied title={t("chrome.route.readOnly")} message={t("chrome.route.readOnlyHelp")} />;
+  }
+  return <PermissionDenied title={t("chrome.route.roleDenied")} message={t("chrome.route.roleDeniedHelp", { role: t(ROLE_NAME_KEYS[role]) })} />;
+}
+
 function routeConnectionAvailable(): boolean {
   if (typeof navigator !== "undefined" && !navigator.onLine) return false;
   const snapshot = readBackendConnectionSnapshot();
@@ -245,9 +287,11 @@ function ProtectedRoute({ component: Component, featureName, capability, onlineO
         <AppLayout>
           <ErrorBoundary>
             <BusinessProfileRouteGate capability={capability}>
-              {onlineOnly && !routeConnection
-                ? <InternetRequiredRoute />
-                : <LazyPage component={Component} featureName={featureName} />}
+              <RoleRouteGate>
+                {onlineOnly && !routeConnection
+                  ? <InternetRequiredRoute />
+                  : <LazyPage component={Component} featureName={featureName} />}
+              </RoleRouteGate>
             </BusinessProfileRouteGate>
           </ErrorBoundary>
         </AppLayout>

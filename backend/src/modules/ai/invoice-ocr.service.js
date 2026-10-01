@@ -1,8 +1,8 @@
-import OpenAI from "openai";
 import { z } from "zod";
 import { env } from "../../config/env.js";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
+import { runChatCompletion, soleProvider } from "./provider-gateway.js";
 
 const lineSchema = z.object({
   description: z.string().trim().min(1).max(160),
@@ -63,25 +63,24 @@ function checkAmount(actual, expected, label, floor) {
   return { status: consistent ? "consistent" : "inconsistent", actual, expected, issue: consistent ? null : `${label} does not reconcile` };
 }
 
-function provider() {
-  if (!env.OPENAI_API_KEY) throw new AppError("Invoice OCR requires OPENAI_API_KEY", 503, "INVOICE_OCR_NOT_CONFIGURED");
-  return {
-    client: new OpenAI({ apiKey: env.OPENAI_API_KEY, timeout: env.INVOICE_OCR_TIMEOUT_MS, maxRetries: 1 }),
-    model: env.OPENAI_INVOICE_MODEL,
-  };
-}
-
 export async function extractPurchaseInvoice(shopId, image, { providerOverride, database = db } = {}) {
   if (!image?.buffer || !image?.mimeType) throw new AppError("Invoice image is required", 400, "INVOICE_IMAGE_REQUIRED");
-  const selected = providerOverride ?? provider();
-  const response = await selected.client.chat.completions.create({
-    model: selected.model,
-    temperature: 0,
-    response_format: { type: "json_schema", json_schema: JSON_SCHEMA },
-    messages: [{ role: "system", content: SYSTEM }, { role: "user", content: [
-      { type: "text", text: "Extract this purchase invoice into a draft for human review." },
-      { type: "image_url", image_url: { url: `data:${image.mimeType};base64,${image.buffer.toString("base64")}`, detail: "high" } },
-    ] }],
+  // Vision, so OpenAI only — but still through the gateway, for the deadline,
+  // the retry budget, the breaker and the tokens it counts.
+  const candidates = providerOverride ? [providerOverride] : soleProvider("openai", env.OPENAI_INVOICE_MODEL);
+  if (!candidates.length) throw new AppError("Invoice OCR requires OPENAI_API_KEY", 503, "INVOICE_OCR_NOT_CONFIGURED");
+  const { completion: response } = await runChatCompletion({
+    purpose: "invoice_ocr",
+    deadline: Date.now() + env.INVOICE_OCR_TIMEOUT_MS,
+    candidates,
+    body: {
+      temperature: 0,
+      response_format: { type: "json_schema", json_schema: JSON_SCHEMA },
+      messages: [{ role: "system", content: SYSTEM }, { role: "user", content: [
+        { type: "text", text: "Extract this purchase invoice into a draft for human review." },
+        { type: "image_url", image_url: { url: `data:${image.mimeType};base64,${image.buffer.toString("base64")}`, detail: "high" } },
+      ] }],
+    },
   });
   let parsed;
   try { parsed = resultSchema.parse(JSON.parse(response?.choices?.[0]?.message?.content ?? "")); }

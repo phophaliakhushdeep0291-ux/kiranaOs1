@@ -1,0 +1,22 @@
+Final isolated integration: {"tests": 418, "pass": 415, "fail": 0, "skipped": 3}, 45 files
+
+PostgreSQL-only skips:
+ok 7 - concurrent whole-order returns refund and restore each consignment only once # SKIP PostgreSQL is required to prove concurrent returns
+ok 1 - production concurrency integration tests skipped on SQLite # SKIP SQLite cannot prove production concurrent write behavior; run npm run test:postgres for the PostgreSQL proof.
+ok 1 - the losing transaction runs again and neither write is lost # SKIP SQLite has one writer, so two open transactions cannot be forced to overlap; PostgreSQL proves this in CI.
+
+Final frontend gate:
+Translations: 6227 key(s) compared across 18 module(s)
+ Test Files  394 passed | 1 skipped (395)
+      Tests  2946 passed | 1 skipped (2947)
+
+Final label-only rebuild:
+Initial JS: 867.7 kB (262.1 kB gzip) across 5 files
+Largest shop offline payload (restaurant): 4489.2 kB (1264.2 kB gzip) across 186 files
+Offline boot coverage: 32 entries and 179 installed assets verified.
+Production app check passed.
+
+Backend production:
+Production application module graph: OK
+Production readiness checks passed
+Dependency security regressions passed: patched query parsers, enforced array limits, safe constructor handling, ordinary query compatibility

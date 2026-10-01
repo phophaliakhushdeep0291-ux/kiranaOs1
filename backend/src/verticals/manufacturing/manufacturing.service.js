@@ -1,7 +1,7 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { round2, addMoney, multiplyMoney, moneyShadows } from "../../utils/money.js";
-import { baseQtyToRateQty } from "../../utils/units.js";
+import { rateUnitFactor } from "../../modules/inventory/rate-unit-factor.js";
 import { decrementLocationInventory, incrementLocationInventory, resolveOperationalLocation, getVariantLocationQuantity } from "../../modules/stores/location-context.service.js";
 import { stockLedgerProvenance } from "../../modules/inventory/stock-ledger-provenance.js";
 import { formatDateInTimeZone } from "../../utils/dates.js";
@@ -138,7 +138,10 @@ export async function completeRun(shopId, runId, input, actor = {}) {
       const moved = await decrementLocationInventory(tx, { shopId, location, product, quantityBase: row.actualBaseQty, packs });
       if (pack && product.packagingMode === "per_pack" && await getVariantLocationQuantity(tx, shopId, location, product, row.sellingUnitId) < 0) throw new AppError(`Insufficient selected packaging stock for ${product.name}`, 409, "PRODUCTION_PACK_STOCK_SHORT");
       await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: product.id, productName: product.name, ...stockLedgerProvenance(actor), sellingUnitId: row.sellingUnitId ?? null, sellingUnitQty: row.packageCount ?? null, action: "production_use", changeBaseQty: -row.actualBaseQty, oldStockBaseQty: moved.oldStock, newStockBaseQty: moved.newStock, sourceType: "production_run", sourceId: run.id, note: `Consumed by ${run.runNumber}` } });
-      materialCost = addMoney(materialCost, multiplyMoney(sourceCostPerRateUnit, baseQtyToRateQty(Number(row.actualBaseQty), product.rateUnit, product.baseUnit)));
+      // The cost is per RATE unit — per pouch for oil quoted per pouch — so the
+      // divisor is the rate unit's own size, never the packaging this row happened
+      // to be drawn in: a case of four pouches is four pouches of cost.
+      materialCost = addMoney(materialCost, multiplyMoney(sourceCostPerRateUnit, Number(row.actualBaseQty) / await rateUnitFactor(tx, shopId, product)));
       // Allocate the recipe expectation across source rows. Recording the full
       // expectation on every split would multiply planned use in trace reports.
       const consumed = round2((consumedTotal.get(product.id) || 0) + Number(row.actualBaseQty));
@@ -163,7 +166,7 @@ export async function completeRun(shopId, runId, input, actor = {}) {
     // What this batch actually cost to make, rather than what the product master
     // guesses. Margins on a produced batch were previously the buy price of a
     // good the shop never buys.
-    const outputRateQty = baseQtyToRateQty(Number(input.actualOutputBaseQty), finished.rateUnit, finished.baseUnit);
+    const outputRateQty = Number(input.actualOutputBaseQty) / await rateUnitFactor(tx, shopId, finished);
     const producedCostPerRateUnit = outputRateQty > 0 ? round2(materialCost / outputRateQty) : Number(finished.costPerRateUnit || 0);
     const lot = await tx.inventoryLot.create({ data: { shopId, locationId: location.id, productId: finished.id, producedByRunId: run.id, batchNumber: input.finishedBatchNumber, manufacturedOn: cleanDate(input.manufacturedOn), expiresOn: cleanDate(input.expiresOn), receivedBaseQty: input.actualOutputBaseQty, availableBaseQty: input.actualOutputBaseQty, costPerRateUnit: producedCostPerRateUnit, ...moneyShadows({ costPerRateUnit: producedCostPerRateUnit }), status: input.qcStatus === "conditional" ? "quarantined" : "active", note: `Produced by ${run.runNumber}` } });
     const packMap = new Map();

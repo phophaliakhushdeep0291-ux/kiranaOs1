@@ -166,6 +166,9 @@ export async function setComboComponents(shopId, comboProductId, components = []
   }
 
   await db.$transaction(async (tx) => {
+    // Assembled combos consume their components, never a second stored meal.
+    // Keep the product flag in sync so offline billing follows the same rule.
+    if (components.length > 0) await tx.product.update({ where: { id: comboProductId }, data: { stockTrackingEnabled: false } });
     await tx.menuComboComponent.deleteMany({ where: { shopId, comboProductId } });
     for (const [index, component] of components.entries()) {
       await tx.menuComboComponent.create({

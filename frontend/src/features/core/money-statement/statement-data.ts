@@ -38,7 +38,7 @@ export interface MoneyStatementRow {
   timeLabel: string;
   partyName: string;
   partyMobile?: string;
-  source: "Bill payment" | "Udhar payment" | "Purchase payment" | "Expense";
+  source: "Bill payment" | "Udhar payment" | "Purchase payment" | "Expense" | "Rental payment" | "Furniture payment";
   reference: string;
   mode: MoneyStatementMode;
   direction: MoneyStatementDirection;
@@ -73,6 +73,8 @@ export interface MoneyStatementFilters {
 }
 
 export interface MoneyStatementInput {
+  rentalPayments?: Array<Record<string, unknown>>;
+  furniturePayments?: Array<Record<string, unknown>>;
   bills?: Array<Record<string, unknown>>;
   payments?: Array<Record<string, unknown>>;
   customerLedger?: Array<Record<string, unknown>>;
@@ -570,6 +572,32 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
     });
   });
 
+  for (const payment of input.rentalPayments ?? []) {
+    const mode = normaliseMoneyMode(payment.paymentMode);
+    const signedAmount = firstNumber(payment, ["amount"]);
+    if (!mode || !signedAmount) continue;
+    const occurredAt = dateValue(payment, ["businessDate"]);
+    rows.push({
+      id: `rental:${asString(payment.id)}`, occurredAt, dateLabel: dateLabel(occurredAt), timeLabel: timeLabel(occurredAt),
+      partyName: asString(payment.customerName), partyMobile: asString(payment.customerPhone),
+      source: "Rental payment", reference: asString(payment.bookingNumber), mode,
+      direction: signedAmount < 0 ? "out" : "in", amount: Math.abs(signedAmount), status: "posted", note: asString(payment.reference),
+    });
+  }
+
+  for (const payment of input.furniturePayments ?? []) {
+    const mode = normaliseMoneyMode(payment.paymentMode);
+    const signedAmount = firstNumber(payment, ["amount"]);
+    if (!mode || !signedAmount) continue;
+    const occurredAt = dateValue(payment, ["businessDate"]);
+    rows.push({
+      id: `furniture:${asString(payment.id)}`, occurredAt, dateLabel: dateLabel(occurredAt), timeLabel: timeLabel(occurredAt),
+      partyName: asString(payment.customerName), partyMobile: asString(payment.customerPhone),
+      source: "Furniture payment", reference: asString(payment.orderNumber), mode,
+      direction: signedAmount < 0 ? "out" : "in", amount: Math.abs(signedAmount), status: "posted", note: asString(payment.reference),
+    });
+  }
+
   const filteredRows = rows
     .filter((row) => withinRange(row.occurredAt, filters))
     .filter((row) => !filters.mode || filters.mode === "all" || row.mode === filters.mode)
@@ -604,14 +632,14 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
 
 export async function loadMoneyStatementInput(): Promise<MoneyStatementInput> {
   const [bills, billItems, payments, customerLedger, customers, products, purchaseBills, suppliers] = await Promise.all([
-    offlineDB.getAll<Bill & Record<string, unknown>>("bills").catch(() => []),
-    offlineDB.getAll<Record<string, unknown>>("bill_items").catch(() => []),
-    offlineDB.getAll<Record<string, unknown>>("payments").catch(() => []),
-    offlineDB.getAll<Record<string, unknown>>("customer_ledger").catch(() => []),
-    offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []),
-    offlineDB.getAll<Record<string, unknown>>("products").catch(() => []),
-    offlineDB.getAll<PurchaseBill & Record<string, unknown>>("purchase_bills").catch(() => []),
-    offlineDB.getAll<Supplier & Record<string, unknown>>("suppliers").catch(() => []),
+    offlineDB.getAll<Bill & Record<string, unknown>>("bills"),
+    offlineDB.getAll<Record<string, unknown>>("bill_items"),
+    offlineDB.getAll<Record<string, unknown>>("payments"),
+    offlineDB.getAll<Record<string, unknown>>("customer_ledger"),
+    offlineDB.getAll<Customer & Record<string, unknown>>("customers"),
+    offlineDB.getAll<Record<string, unknown>>("products"),
+    offlineDB.getAll<PurchaseBill & Record<string, unknown>>("purchase_bills"),
+    offlineDB.getAll<Supplier & Record<string, unknown>>("suppliers"),
   ]);
   return {
     bills: filterRowsForCurrentScope(bills),

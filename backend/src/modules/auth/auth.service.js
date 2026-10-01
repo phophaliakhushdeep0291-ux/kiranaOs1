@@ -4,6 +4,7 @@ import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { isWriteConflict, serializableTransaction } from "../../lib/transactions.js";
 import { signToken } from "../../middleware/auth.js";
+import { permissionsForRole } from "../../core/permissions/rbac.js";
 import { AppError } from "../../middleware/error.js";
 import { canAddStaff, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
 import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
@@ -1122,5 +1123,8 @@ function refreshExpiryDate() {
 
 function sanitizeUser(user) {
   const { passwordHash, pinHash, shop, sessions, ...safe } = user;
-  return safe;
+  // What this login may do, from the role catalogue. The till reads this rather
+  // than its own copy, so a shop on an older build still shows what the server
+  // will actually allow.
+  return { ...safe, permissions: permissionsForRole(user.role) };
 }

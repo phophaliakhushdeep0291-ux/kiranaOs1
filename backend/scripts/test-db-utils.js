@@ -186,6 +186,16 @@ export function buildTestEnv(extra = {}) {
     ENABLE_DEVICE_LICENSE_SIGNING: process.env.ENABLE_DEVICE_LICENSE_SIGNING || "true",
     LICENSE_SIGNING_SECRET: process.env.LICENSE_SIGNING_SECRET || "test-license-secret-change-me-1234567890",
     ALLOW_MANUAL_SUBSCRIPTION_ACTIVATION: "true",
+    // The launch promotion is OFF for tests, because almost every entitlement test
+    // asserts that a plan is enforced -- a starter shop refused a Business feature,
+    // a lapsed shop refused at the counter -- and while the promotion runs every
+    // shop holds the full plan, so those assertions describe nothing. Pinning the
+    // window to a past instant runs the suite against the enforcement that resumes
+    // once it closes, which is the state the product spends most of its life in.
+    // freeAccess.js says the same thing from the other side. The promotion's own
+    // behaviour is covered by tests/free-access-window.examples.js, which supplies
+    // its own `now` and so does not depend on this.
+    FREE_ACCESS_UNTIL: process.env.FREE_ACCESS_UNTIL || "2020-01-01T00:00:00+05:30",
     DEV_MAX_ACTIVE_DEVICES: "1",
     ...extra,
   };

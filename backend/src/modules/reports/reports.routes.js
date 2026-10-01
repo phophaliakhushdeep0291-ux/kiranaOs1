@@ -69,8 +69,12 @@ router.get("/exports/:jobId", requireRole("owner", "admin"), ctrl.getReportExpor
 router.post("/exports/:jobId/cancel", requireRole("owner", "admin"), requireOwnerPin, ctrl.cancelReportExportJob);
 
 // Export endpoints contain sensitive business data.
-router.get("/export/bills", requireOwnerPin, ctrl.exportBills);
-router.get("/export/stock", requireOwnerPin, ctrl.exportStock);
-router.get("/export/udhar", requireOwnerPin, ctrl.exportUdhar);
+// Gated exactly like POST /exports above: requireContinuityAction enforces
+// csv_import_export while the shop is entitled, and still lets a LAPSED shop take
+// its own data away. Without it these three were the whole paid export feature,
+// reachable on any plan by asking for the CSV directly instead of the export job.
+router.get("/export/bills", requireOwnerPin, requireContinuityAction("export_data"), ctrl.exportBills);
+router.get("/export/stock", requireOwnerPin, requireContinuityAction("export_data"), ctrl.exportStock);
+router.get("/export/udhar", requireOwnerPin, requireContinuityAction("export_data"), ctrl.exportUdhar);
 
 export default router;

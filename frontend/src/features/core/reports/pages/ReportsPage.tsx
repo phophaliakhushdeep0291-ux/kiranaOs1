@@ -53,6 +53,7 @@ import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { getShopReportsProfile } from "@/features/core/settings/shop-reports";
 import { getExpenseSummary, listExpenses } from "@/features/core/expenses/api";
+import { expenseTotalsByDay, reportCalendarDay } from "@/features/core/reports/report-calendar";
 import {
   buildLocalReportSnapshot,
   reportCategoryLabel,
@@ -130,7 +131,8 @@ function previousRange(from: string, to: string) {
 }
 
 function dateLabel(value: string) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  const day = reportCalendarDay(value);
+  return day ? new Date(`${day}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 }
 
 function rangeLabel(from: string, to: string) {
@@ -318,15 +320,7 @@ export default function ReportsPage() {
   }, [creditWord, snapshot]);
 
   const paymentTotal = paymentModes.reduce((sum, item) => sum + item.value, 0);
-  const expenseByDay = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const expense of expenses.data ?? []) {
-      if (expense.deletedAt) continue;
-      const date = expense.spentAt?.slice(0, 10);
-      if (date) map.set(date, (map.get(date) ?? 0) + Number(expense.amount || 0));
-    }
-    return map;
-  }, [expenses.data]);
+  const expenseByDay = useMemo(() => expenseTotalsByDay(expenses.data ?? []), [expenses.data]);
 
   const dailyRows = useMemo(() => (snapshot?.dailyTrend ?? []).slice(-7).reverse().map((point) => {
     const dayExpense = expenseByDay.get(point.date) ?? 0;
@@ -633,7 +627,7 @@ export default function ReportsPage() {
             <MobileReportRow
               key={row.customerId}
               title={row.name}
-              subtitle={row.lastPurchase ? `Last purchase ${dateLabel(row.lastPurchase.slice(0, 10))}` : "No recent purchase"}
+              subtitle={row.lastPurchase ? `Last purchase ${dateLabel(row.lastPurchase)}` : "No recent purchase"}
               value={fmt(row.balance)}
               meta={<RiskChip balance={row.balance} />}
             />
@@ -679,11 +673,11 @@ export default function ReportsPage() {
       <section className="hidden items-start gap-4 md:grid xl:grid-cols-3">
         <DenseTable title={t(tradeProfile.topItemsKey)} action="View all" actionHref="/products" headers={["Product", "Category", "Qty Sold", "Sales (₹)", "Margin (%)"]} loading={loading} empty={!snapshot?.topProducts.length}>
           {snapshot?.topProducts.slice(0, 5).map((row) => <tr key={row.productId}><Td strong>{row.name}</Td><Td>{reportCategoryLabel(row.category, t)}</Td><Td right>{row.quantitySold}</Td><Td right strong>{fmt(row.revenue)}</Td><Td right>{row.marginPct.toFixed(1)}%</Td></tr>)}
-          {snapshot?.topProducts.length ? <tr className="font-bold"><Td>Total</Td><Td /><Td right>{snapshot.topProducts.reduce((sum, row) => sum + row.quantitySold, 0)}</Td><Td right>{fmt(snapshot.topProducts.reduce((sum, row) => sum + row.revenue, 0))}</Td><Td /></tr> : null}
+          {snapshot?.topProducts.length ? <tr className="font-bold"><Td>Total</Td><Td /><Td right>—</Td><Td right>{fmt(snapshot.topProducts.reduce((sum, row) => sum + row.revenue, 0))}</Td><Td /></tr> : null}
         </DenseTable>
 
         <DenseTable title={t("reports.table.topCustomers", { credit: creditWord })} action="View all" actionHref="/customers" headers={["Customer", "Total Due (₹)", "Last Purchase", "Risk"]} loading={loading} empty={!snapshot?.topCustomers.length}>
-          {snapshot?.topCustomers.slice(0, 5).map((row) => <tr key={row.customerId}><Td strong>{row.name}</Td><Td right strong>{fmt(row.balance)}</Td><Td right>{row.lastPurchase ? dateLabel(row.lastPurchase.slice(0, 10)) : "—"}</Td><Td right><RiskChip balance={row.balance} /></Td></tr>)}
+          {snapshot?.topCustomers.slice(0, 5).map((row) => <tr key={row.customerId}><Td strong>{row.name}</Td><Td right strong>{fmt(row.balance)}</Td><Td right>{row.lastPurchase ? dateLabel(row.lastPurchase) : "—"}</Td><Td right><RiskChip balance={row.balance} /></Td></tr>)}
           {snapshot?.topCustomers.length ? <tr className="font-bold"><Td>Total Outstanding</Td><Td right>{fmt(snapshot.topCustomers.reduce((sum, row) => sum + row.balance, 0))}</Td><Td /><Td /></tr> : null}
         </DenseTable>
 

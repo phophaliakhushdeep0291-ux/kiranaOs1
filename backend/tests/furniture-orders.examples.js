@@ -175,12 +175,12 @@ assert.throws(() => createOrderSchema.parse({ ...minimal, promisedOn: "next Tues
 assert.throws(() => createOrderSchema.parse({ ...minimal, discount: -100 }));
 
 // An advance of nothing is not an advance.
-assert.throws(() => addPaymentSchema.parse({ amount: 0 }), /how much was paid/i);
-assert.throws(() => addPaymentSchema.parse({ amount: -500 }));
-assert.equal(addPaymentSchema.parse({ amount: 20000 }).mode, "cash", "cash unless said otherwise");
-assert.doesNotThrow(() => addPaymentSchema.parse({ amount: 20000, mode: "upi", reference: "UPI-8891" }));
-assert.throws(() => addPaymentSchema.parse({ amount: 100, mode: "barter" }));
+assert.throws(() => addPaymentSchema.parse({ clientRequestId: "receipt-qa", amount: 0 }), /how much was paid/i);
+assert.throws(() => addPaymentSchema.parse({ clientRequestId: "receipt-qa", amount: -500 }));
+assert.equal(addPaymentSchema.parse({ clientRequestId: "receipt-qa", amount: 20000 }).mode, "cash", "cash unless said otherwise");
+assert.doesNotThrow(() => addPaymentSchema.parse({ clientRequestId: "receipt-qa", amount: 20000, mode: "upi", reference: "UPI-8891" }));
+assert.throws(() => addPaymentSchema.parse({ clientRequestId: "receipt-qa", amount: 100, mode: "barter" }));
 // Backdating catches up an advance taken and not entered at the time.
-assert.doesNotThrow(() => addPaymentSchema.parse({ amount: 100, paidOn: "2026-08-01" }));
+assert.doesNotThrow(() => addPaymentSchema.parse({ clientRequestId: "receipt-qa", amount: 100, paidOn: "2026-08-01" }));
 
 console.log("furniture-orders: all checks passed");

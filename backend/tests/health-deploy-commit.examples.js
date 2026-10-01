@@ -16,6 +16,31 @@ process.env.RAILWAY_GIT_BRANCH = "main";
 
 const { default: app } = await import("../src/app.js");
 
+/**
+ * Release what the readiness probe opens, before this process is allowed to end.
+ *
+ * /health/ready calls getRedisClient() whenever QUEUES_ENABLED is set. That client
+ * is built with lazyConnect and maxRetriesPerRequest: null, so once it CONNECTS it
+ * holds the event loop open with a live socket and reconnect timers — and this
+ * file, like its siblings, has no process.exit and relies on the loop draining.
+ *
+ * On a machine with no Redis the connection simply fails and the loop drains, which
+ * is why this passed locally for the whole time it was broken. In CI, where the job
+ * provisions Redis alongside PostgreSQL, it connects and the script never exits: the
+ * release certification sat inside test:source-contracts until the 45-minute job
+ * timeout killed it, on a suite that finishes in 16 minutes without this file.
+ */
+async function releaseOpenHandles() {
+  try {
+    const { closeRedis } = await import("../src/lib/redis.js");
+    await closeRedis();
+  } catch { /* no client was ever created */ }
+  try {
+    const { default: db } = await import("../src/db.js");
+    await db.$disconnect();
+  } catch { /* nothing to disconnect */ }
+}
+
 const server = app.listen(0);
 await new Promise((resolve) => server.once("listening", resolve));
 const { port } = server.address();
@@ -71,5 +96,7 @@ const bare = JSON.parse(out);
 assert.equal(bare.commit, "unknown", "a missing commit reports 'unknown', not undefined or a crash");
 assert.equal(bare.branch, undefined, "branch is omitted entirely rather than reported as a fake value");
 assert.equal(bare.status, "ok", "the endpoint still serves without any platform vars");
+
+await releaseOpenHandles();
 
 console.log("health-deploy-commit.examples.js OK");

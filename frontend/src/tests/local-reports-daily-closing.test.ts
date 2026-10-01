@@ -1274,3 +1274,25 @@ describe("local reports and daily closing", () => {
     expect(snapshot.pendingSyncCount).toBe(1);
   });
 });
+
+
+it("adds rental receipts and refunds to tender balances without turning deposits into sales or profit", async () => {
+  const before = await buildDailyClosingReport("2026-06-06");
+  const after = await buildDailyClosingReport("2026-06-06", { rentalTenders: { cash: -200, upi: 10, bank: 0, other: 0 } });
+  expect(after.expectedCashInDrawer).toBe(before.expectedCashInDrawer - 200);
+  expect(after.cashReceived).toBe(before.cashReceived - 200);
+  expect(after.upiReceived).toBe(before.upiReceived + 10);
+  expect(after.totalSales).toBe(before.totalSales);
+  expect(after.profitEstimate).toBe(before.profitEstimate);
+});
+
+it("includes furniture refunds and advance applications in closing without adding revenue", async () => {
+  const before = await buildDailyClosingReport("2026-06-06");
+  const after = await buildDailyClosingReport("2026-06-06", { furnitureTenders: { cash: -40, upi: 60, bank: 10, other: 0 } });
+  expect(after.expectedCashInDrawer).toBe(before.expectedCashInDrawer - 40);
+  expect(after.cashReceived).toBe(before.cashReceived - 40);
+  expect(after.upiReceived).toBe(before.upiReceived + 60);
+  expect(after.bankReceived).toBe(before.bankReceived + 10);
+  expect(after.totalSales).toBe(before.totalSales);
+  expect(after.profitEstimate).toBe(before.profitEstimate);
+});

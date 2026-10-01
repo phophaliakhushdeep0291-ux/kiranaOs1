@@ -2,7 +2,7 @@ import crypto from "crypto";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { moneyShadows, multiplyMoney, round2 } from "../../utils/money.js";
-import { rateUnitToBase } from "../../utils/units.js";
+import { rateUnitFactorsFor } from "../inventory/rate-unit-factor.js";
 import { decrementLocationInventory, incrementLocationInventory } from "../stores/location-context.service.js";
 import { postPurchaseReturnCancelledLedger, postPurchaseReturnCreatedLedger } from "../finance/financial-ledger.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -96,13 +96,14 @@ export async function createPurchaseReturn(shopId, data, actor = {}, requestedLo
     if (requestedLocationId && receipt.locationId !== requestedLocationId) throw new AppError("Purchase receipt belongs to another branch", 403, "LOCATION_ACCESS_DENIED");
     if (!receipt.location.active) throw new AppError("Receipt branch is inactive", 409, "STORE_LOCATION_UNAVAILABLE");
     const byId = new Map(receipt.items.map((item) => [item.id, item]));
+    const factors = await rateUnitFactorsFor(tx, shopId, receipt.items.map((item) => ({ id: item.purchaseOrderItem.productId, rateUnit: item.purchaseOrderItem.rateUnit, baseUnit: item.purchaseOrderItem.baseUnit })));
     const lines = data.items.map((input) => {
       const item = byId.get(input.purchaseReceiptItemId);
       if (!item) throw new AppError("Return line is not part of this receipt", 422, "PURCHASE_RETURN_ITEM_INVALID");
       const alreadyReturned = round2(item.returnItems.filter((row) => row.purchaseReturn.status !== "cancelled").reduce((sum, row) => sum + row.quantityBaseQty, 0));
       const remaining = round2(item.quantityBaseQty - alreadyReturned);
       if (input.quantityBaseQty > remaining + 0.000001) throw new AppError(`${item.product.name} has only ${remaining} ${item.product.baseUnit} returnable`, 409, "PURCHASE_RETURN_EXCEEDS_RECEIPT");
-      const factor = rateUnitToBase(item.purchaseOrderItem.rateUnit, item.purchaseOrderItem.baseUnit);
+      const factor = factors.get(item.purchaseOrderItem.productId);
       return { input, item, lineAmount: multiplyMoney(item.actualRate, input.quantityBaseQty / factor) };
     });
     const totalAmount = round2(lines.reduce((sum, line) => sum + line.lineAmount, 0));

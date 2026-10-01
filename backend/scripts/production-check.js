@@ -809,6 +809,16 @@ if (exists("prisma-postgres/schema.prisma") && migrationFiles.length) {
     ["Bill_shopId_updatedAt_id_idx",          "Bill sync pull keyset index (shopId, updatedAt, id)"],
     ["StockLedger_shopId_updatedAt_id_idx",   "StockLedger sync pull keyset index (shopId, updatedAt, id)"],
     ["UdharLedger_shopId_updatedAt_id_idx",   "UdharLedger sync pull keyset index (shopId, updatedAt, id)"],
+    // Shop-wide udhar reads by date. Daily closing, payment modes, P&L and the payment
+    // summary ask for a businessDate window with neither a customer nor a location, and
+    // the customerId/locationId composites cannot serve that — their second column is
+    // unconstrained. Without this one the read degrades with the shop's whole history.
+    ["UdharLedger_shopId_businessDate_idx",   "Udhar ledger shop-wide date-range report index"],
+    // Everything that asks what stock one bill moved: the cancel and restore
+    // guards, the sync echo's sale rows, the assurance context. billId was on no
+    // index at all, so each of those scanned the shop's entire movement history
+    // to find the handful of rows belonging to a single sale.
+    ["StockLedger_shopId_billId_action_idx",  "Stock ledger per-bill movement index"],
   ];
   for (const [indexName, description] of criticalIndexes) {
     if (!allMigrationSql.includes(indexName)) {
@@ -1911,12 +1921,30 @@ if (exists("package.json")) {
 
 
 // AI transcription must be operational, bounded, and clean up every upload.
+//
+// The provider half of this moved into provider-gateway.js on 2026-09-21, so
+// these snippets are asserted where the behavior now lives. Checking
+// ai.service.js for them would have forced the call site to keep a second
+// OpenAI client alive purely to satisfy a grep — which is the exact drift the
+// gateway exists to end.
 if (exists("src/modules/ai/ai.service.js") && exists("src/modules/ai/ai.controller.js")) {
   const aiService = read("src/modules/ai/ai.service.js");
   const aiController = read("src/modules/ai/ai.controller.js");
   const aiUpload = read("src/modules/ai/ai.upload.js");
-  for (const snippet of ["audio.transcriptions.create", "OPENAI_TRANSCRIBE_MODEL", "GROQ_TRANSCRIBE_MODEL", "MAX_AUDIO_BYTES", "response_format: \"json\""]) {
+  const aiGateway = read("src/modules/ai/provider-gateway.js");
+  for (const snippet of ["audio.transcriptions.create", "OPENAI_TRANSCRIBE_MODEL", "GROQ_TRANSCRIBE_MODEL", "response_format: \"json\""]) {
+    if (!aiGateway.includes(snippet)) errors.push(`provider-gateway.js missing operational transcription behavior: ${snippet}`);
+  }
+  for (const snippet of ["MAX_AUDIO_BYTES", "runTranscription"]) {
     if (!aiService.includes(snippet)) errors.push(`ai.service.js missing operational transcription behavior: ${snippet}`);
+  }
+  // Every model call goes through the one gateway. A second client anywhere
+  // else is how the timeout, retry, failover and token accounting drifted into
+  // seven different answers the first time.
+  for (const file of ["src/modules/ai/ai.service.js", "src/modules/ai/invoice-ocr.service.js", "src/modules/diagnostics/incident-report.service.js", "src/modules/assurance/ai/providers.js"]) {
+    if (exists(file) && read(file).includes("new OpenAI(")) {
+      errors.push(`${file} constructs its own OpenAI client; route the call through provider-gateway.js instead`);
+    }
   }
   for (const snippet of ["getUploadedAudioFile", "removeUploadedAudioFile", "finally", "svc.transcribeAudio(file)"]) {
     if (!aiController.includes(snippet)) errors.push(`ai.controller.js missing safe transcription lifecycle behavior: ${snippet}`);
@@ -2296,6 +2324,38 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   }
   for (const snippet of ["permissionAllowed === false", "requiresManualFallback === true", "confidence < 0.65"]) {
     if (!frontendAdapter.includes(snippet)) errors.push("Frontend AI fail-closed adapter missing " + snippet);
+  }
+}
+
+/*
+ * Every test file has to be run by something.
+ *
+ * The suite is a hand-written chain of npm scripts, so a new tests/*.examples.js
+ * only ever runs if somebody remembers to name it. Twenty-seven did not get
+ * named — including live guards on udhar sync atomicity, plan entitlements and
+ * purchase stock traceability. Three of those had gone red against code that had
+ * moved on, and nobody found out, because a test nothing runs is not a test.
+ *
+ * tests/integration/ is exempt: run-integration-tests.js discovers that
+ * directory itself, so files there are wired by existing.
+ */
+{
+  const testsDir = path.join(root, "tests");
+  if (fs.existsSync(testsDir)) {
+    const scriptText = Object.values(readJson("package.json").scripts ?? {}).join("\n");
+    const runnerText = fs.readdirSync(path.join(root, "scripts"))
+      .filter((name) => name.endsWith(".js"))
+      .map((name) => read(`scripts/${name}`))
+      .join("\n");
+    const named = `${scriptText}\n${runnerText}`;
+    const unrun = fs.readdirSync(testsDir)
+      .filter((name) => /\.(examples|test)\.js$/.test(name))
+      // Match on a path boundary: "foo.examples.js" must not count as named
+      // because some script mentions "other-foo.examples.js".
+      .filter((name) => !new RegExp(`(^|[\\s/"'])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(named));
+    for (const name of unrun) {
+      errors.push(`tests/${name} is not run by any npm script or scripts/ runner — wire it into test:isolated-suite or delete it`);
+    }
   }
 }
 

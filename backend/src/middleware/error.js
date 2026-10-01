@@ -1,4 +1,5 @@
 import { ZodError } from "zod";
+import { describeZodError, zodIssueList } from "../utils/validationMessage.js";
 import { env } from "../config/env.js";
 import { logger } from "../lib/logger.js";
 import { captureRequestError } from "../lib/errorTracking.js";
@@ -133,10 +134,16 @@ export function errorHandler(err, req, res, _next) {
 
   // Zod validation failure
   if (err instanceof ZodError) {
+    // `details` stays exactly as it was — existing clients map it onto form
+    // fields. What changes is the message, which is the part a human reads:
+    // flatten() keys only the top of the path, so a bad line on a forty-line
+    // bill used to arrive as "Validation failed" with details `{items:
+    // ["Required"]}`. `issues` carries the full paths for logs and support.
     return res.status(400).json({
-      ...baseError(req, "Validation failed"),
+      ...baseError(req, describeZodError(err)),
       code: "VALIDATION_FAILED",
       details: err.flatten().fieldErrors,
+      issues: zodIssueList(err),
     });
   }
 

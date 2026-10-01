@@ -32,12 +32,23 @@ launch runbook possible at all.
 `backend/Dockerfile` ends with:
 
 ```
-prisma:deploy:postgres && prisma:generate:postgres && verify-product-schema && npm start
+npm run deploy:migrate:postgres && npm run start:runtime
 ```
 
 So on Railway **every deploy migrates before the API starts**. You do not run
 `deploy:migrate` by hand; the manual steps in the launch runbook are for
 non-Docker hosts.
+
+The backend image also installs PostgreSQL 18 client tools from the signed
+[PostgreSQL APT repository](https://www.postgresql.org/download/linux/debian/).
+The image build executes `pg_dump`, `pg_restore`, and `psql` to check that the
+backup worker and scheduled backup service can use them inside the container.
+Keep this client major aligned with the deployed database: `pg_dump` cannot dump
+a server running a newer major version than itself. The deployed server was
+verified as PostgreSQL 18.6 on 27 September 2026; testing only against CI's
+PostgreSQL 16 database did not establish that the previous version-16 client
+could back up production. Version 18 supports both server versions. Check the
+actual server version before a PostgreSQL upgrade.
 
 Two consequences:
 
@@ -178,23 +189,146 @@ configured". At café scale that is three extra moving parts — Redis, a bucket
 worker — for one nightly dump.
 
 Use a Railway **scheduled service** instead, matching the convention already in
-[`backend/docs/SCHEDULING.md`](../../backend/docs/SCHEDULING.md):
+[`backend/docs/SCHEDULING.md`](../../backend/docs/SCHEDULING.md).
 
-- Service: `backup`, root directory `backend`, no public domain
-- Command: `npm run backup:postgres`
-- Schedule: `0 2 * * *`
-- Variables: `DATABASE_URL=${{postgres.DATABASE_URL}}`, `BACKUP_DIR=/data/backups`
+### Scheduled off-site backups
+
+The `backup` service runs `npm run backup:postgres:offsite` once a night. That
+command dumps the database with the image's PostgreSQL 18 `pg_dump`, uploads the
+dump to an S3-compatible bucket, reads it back and compares the SHA-256, prunes
+copies older than `BACKUP_RETENTION_DAYS` (never fewer than
+`DATABASE_BACKUP_MIN_RETAINED`), and deletes the local file. If any step fails,
+the process exits non-zero and Railway marks that run failed. It refuses to
+start without a bucket, before it dumps anything. Without that check, a
+misconfigured run would exit 0 after writing a dump to a disk that is discarded
+with the container.
+
+**1. Make the bucket outside Railway.** A bucket in the same Railway project
+does not survive losing the project, which is one of the things an off-site copy
+is for. Cloudflare R2 or AWS S3 both work. Create one private bucket and a key
+scoped to that bucket with read, write, list and delete permissions. Delete is
+needed for retention.
+
+**2. Create the service.**
+
+- New service from this repo, root directory `backend`, no public domain.
+- **Settings → Config-as-code → config file path: `/backend/railway.backup.json`.**
+  Do not skip this step. Without it the service reads `backend/railway.json`,
+  which is the API's config: it has no schedule, and its health check waits for
+  an HTTP server that a backup job never starts.
+
+[`backend/railway.backup.json`](../../backend/railway.backup.json) sets the
+start command, `restartPolicyType: NEVER` (a failed run should stay failed, not
+turn into a second dump), and the schedule `30 20 * * *`. Railway cron runs in
+UTC, so that is **02:00 Asia/Kolkata**, after closing. The earlier `0 2 * * *`
+here meant 07:30 IST.
+
+**3. Variables.** The job loads the backend's production configuration check,
+so it needs the same secrets the API does, or it exits before dumping. Use
+references so a rotated secret reaches both services:
+
+```ini
+# backup
+DATABASE_URL=${{postgres.DATABASE_URL}}
+JWT_SECRET=${{backend.JWT_SECRET}}
+LICENSE_SIGNING_SECRET=${{backend.LICENSE_SIGNING_SECRET}}
+INTEGRATION_SIGNING_SECRET=${{backend.INTEGRATION_SIGNING_SECRET}}
+METRICS_REQUIRE_TOKEN=true
+METRICS_TOKEN=${{backend.METRICS_TOKEN}}
+ALLOWED_ORIGINS=${{backend.ALLOWED_ORIGINS}}
+
+STORAGE_PROVIDER=r2                      # or s3
+STORAGE_BUCKET=<bucket>
+STORAGE_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com   # omit for AWS S3
+STORAGE_REGION=                          # R2 defaults to auto; set it for AWS S3
+STORAGE_ACCESS_KEY_ID=<bucket-scoped key>
+STORAGE_SECRET_ACCESS_KEY=<bucket-scoped secret>
+
+BACKUP_RETENTION_DAYS=30
+DATABASE_BACKUP_MIN_RETAINED=3
+```
+
+Any other production-only toggle turned on for the backend, such as
+`RAZORPAY_ENABLED` or `WHATSAPP_PROVIDER`, carries its own required variables.
+Either reference those too or leave the toggle unset on `backup`. Do **not** set
+`DATABASE_BACKUP_ENABLED` on the backend as well unless Redis and the worker
+are running. The npm script turns it on for this job alone.
+
+**4. Prove it before trusting the schedule.** Check the configuration from the
+service shell (`railway ssh --service backup`, or a one-off run) with
+`BACKUP_DRY_RUN=true npm run backup:postgres:offsite`. It exits non-zero on a
+missing bucket and connects to nothing. Then trigger one real run from the
+service's cron panel and confirm the last log line:
+
+```json
+{"type":"postgres_backup_offsite","status":"passed","verified":true, ...}
+```
+
+The object lands at `backups/database/<database>/kiranaos-<database>-<UTC timestamp>-<uuid>.dump`.
+
+**5. Know when it stops.** A failed cron run is visible only in the service's
+run history. Check it weekly, or have your bucket provider alert on no new
+object under `backups/database/` for 36 hours. An off-site copy that nobody has
+restored is still unproven. Pull one down and restore it with the
+[restore drill](#the-restore-drill-on-railway) before counting on it.
 
 ### The ephemeral filesystem
 
 **A container's disk does not survive a redeploy.** `BACKUP_DIR` defaults to
-`./backups`, so a nightly dump written there is gone the next time you ship —
-and gone entirely when the container that holds it is the one that died.
+`./backups`, so a dump written there is gone the next time you ship, and gone
+entirely when the container that holds it is the one that died. The scheduled
+service above never relies on it: its copy is the one in the bucket. A volume
+attached to the same project does not protect against losing the project.
 
-Mount a Railway **volume** on the `backup` service at `/data` and point
-`BACKUP_DIR` at `/data/backups`. Better still, once there is a bucket, copy each
-dump off-box: a volume attached to the same project does not protect against
-losing the project.
+The API's local object storage uses `/app/storage` in the Docker image. A volume
+attached to the API at `/var/lib/postgresql/data` does **not** persist those
+exports or its default `/app/backups` directory. The application service is
+separate from the Postgres service; each has its own volume and mount path.
+For local storage on the API, mount its volume at `/app/storage` and set
+`BACKUP_DIR=/app/storage/database-backups`. Before changing an existing mount,
+preserve and verify any current `/app/storage` and `/app/backups` contents;
+remounting does not move files out of the old container. Never change the
+Postgres service's data mount as part of this application-storage correction.
+
+### Checking and correcting the API mount
+
+The API reads `RAILWAY_VOLUME_MOUNT_PATH` from Railway and compares it with
+where local storage writes
+([`backend/src/lib/storageVolume.js`](../../backend/src/lib/storageVolume.js)).
+When `STORAGE_PROVIDER=local` in production:
+
+- `npm run prod:preflight` **fails** if the volume is missing, sits on a
+  PostgreSQL data path, or does not contain `/app/storage`. It warns when
+  `BACKUP_DIR` is outside the volume.
+- On startup the API logs the same finding as a `startup_error` line and keeps
+  serving. Refusing to boot would take the API down over a mount it has already
+  been serving with. Search the deploy logs for `startup_error` after every
+  change here.
+
+To correct it, on the **`backend`** service only:
+
+1. **Preserve what is there.** From the service shell (`railway ssh --service
+   backend`), run `ls -laR /app/storage /app/backups`. Anything listed exists only
+   in the running container and will be gone after the next step. Copy it
+   somewhere else first, and check the copy opens.
+2. **Settings → Volumes → the API's volume → mount path `/app/storage`.** Railway
+   redeploys the service.
+3. **Set `BACKUP_DIR=/app/storage/database-backups`** on `backend`.
+4. **Confirm.** The new deploy's logs contain no `startup_error` about storage.
+   `railway ssh --service backend` then `npm run prod:preflight` passes with no
+   volume error. Put back anything preserved in step 1 under `/app/storage`.
+
+Using object storage instead (`STORAGE_PROVIDER=r2` or `s3`, the same bucket as
+the [scheduled backups](#scheduled-off-site-backups)) removes the need for the
+API volume entirely. The check then reports a leftover PostgreSQL-path mount only
+as a warning.
+
+A persistent directory is not an automatic backup schedule. The built-in
+database-backup schedule requires `DATABASE_BACKUP_ENABLED=true`, a healthy
+Redis worker, and configured S3-compatible object storage. If relying on
+Railway-managed backups instead, verify the project's plan supports them and
+that a schedule and retained restore points exist; volume attachment alone
+does not establish backup coverage.
 
 Set `BACKUP_RETENTION_DAYS=30` and size the volume for thirty dumps of a café's
 database, which is small.
@@ -227,6 +361,51 @@ an empty business schema cannot pass. This command verifies a fresh snapshot,
 not the freshness or retention of scheduled Railway backups. See the
 [recovery runbook](../../backend/docs/DISASTER_RECOVERY.md) for verifying a
 particular retained dump.
+
+### Restoring a stored nightly backup
+
+`npm run drill:restore:offsite` restores a backup the
+[scheduled backup service](#scheduled-off-site-backups) actually stored. It is
+the only drill that proves those copies are usable. It never connects to the
+production database, and it needs no production secrets: only the bucket and the
+drill database.
+
+```bash
+cd backend
+export STORAGE_PROVIDER=r2 STORAGE_BUCKET=<bucket>
+export STORAGE_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com   # omit for AWS S3
+export STORAGE_ACCESS_KEY_ID=<key> STORAGE_SECRET_ACCESS_KEY=<secret>
+export RESTORE_TEST_DATABASE_URL="<postgres-drill public URL>"
+export ALLOW_RESTORE_TEST_DB=true
+npm run drill:restore:offsite
+```
+
+It takes the newest dump under `backups/database/`. If more than one database
+has backups there, set `BACKUP_SOURCE_DATABASE` (Railway's default is
+`railway`). To restore an older copy, set `BACKUP_KEY` to its full key. It then:
+
+1. **Refuses a stale copy.** The backup must be at most
+   `OFFSITE_BACKUP_MAX_AGE_HOURS` old (default 26: one nightly run plus slack).
+   An older newest copy means the schedule has missed a night.
+2. **Checks the download** against the size and SHA-256 recorded at upload,
+   **before** touching the drill database. A corrupt copy leaves the target
+   as it was.
+3. **Resets and restores** the drill database, under the same name guard as
+   above: its name must contain `drill` or `restore`, and must differ from the
+   backup's source database.
+4. **Checks the result.** A migration ledger and rows in the sales, stock,
+   payment and customer-balance tables must be present, and the read-only money
+   reconciliation must pass. It records the newest `createdAt`/`updatedAt` in
+   the copy: how much trade a restore would bring back.
+
+The dump is production data. It is written to a private temporary directory
+and deleted when the drill ends, pass or fail. The report,
+`backend/release-artifacts/offsite-restore-drill-latest.json`, holds the
+backup's key, age and checksum, row counts per table, and the stage results.
+It holds no rows. Exit code 0 means every stage passed.
+
+Run it after the first nightly backup, then monthly. A green nightly run proves
+a copy was stored; only this proves it can be restored.
 
 ---
 

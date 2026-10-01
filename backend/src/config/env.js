@@ -106,6 +106,16 @@ const envSchema = z.object({
   // {"LAUNCH25":{"percentOff":25,"plans":["growth","pro"],"billingCycles":["yearly"],"expiresAt":"2026-12-31T23:59:59.999Z"}}
   SUBSCRIPTION_COUPONS_JSON: z.string().default("{}"),
   ALLOW_MANUAL_SUBSCRIPTION_ACTIVATION: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  // Launch promotion: until this instant every shop runs on the full plan and no
+  // subscription checkout is accepted. Normal plan enforcement resumes by itself
+  // once it passes — nothing has to be redeployed. Default: 1 January 2027, IST,
+  // the hours the shops this serves actually keep.
+  FREE_ACCESS_UNTIL: z
+    .string()
+    .default("2027-01-01T00:00:00+05:30")
+    .refine((value) => Number.isFinite(Date.parse(value)), {
+      message: "FREE_ACCESS_UNTIL must be a parseable date",
+    }),
   REDIS_URL: z.string().optional(),
   QUEUES_ENABLED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   // auto keeps one-service deployments affordable: API + worker when queues
@@ -426,12 +436,12 @@ if (parsed.data.FLIPKART_SELLER_API_ENABLED) {
 }
 
 if (parsed.data.RETAIL_PAYMENT_CONFIRMATION_REQUIRED && parsed.data.RETAIL_PAYMENT_PROVIDER !== "razorpay") {
-  console.error("âŒ RETAIL_PAYMENT_PROVIDER=razorpay is required when retail payment confirmation is mandatory");
+  console.error("❌ RETAIL_PAYMENT_PROVIDER=razorpay is required when retail payment confirmation is mandatory");
   process.exit(1);
 }
 
 if (parsed.data.RETAIL_PAYMENT_PROVIDER === "razorpay" && !parsed.data.RAZORPAY_ENABLED) {
-  console.error("âŒ RAZORPAY_ENABLED=true is required when RETAIL_PAYMENT_PROVIDER=razorpay");
+  console.error("❌ RAZORPAY_ENABLED=true is required when RETAIL_PAYMENT_PROVIDER=razorpay");
   process.exit(1);
 }
 
@@ -485,15 +495,15 @@ if (parsed.data.GST_PROVIDER === "gsp_http") {
     ["GST_PROVIDER_LEGAL_NAME", parsed.data.GST_PROVIDER_LEGAL_NAME],
   ].filter(([, value]) => !value).map(([key]) => key);
   if (missing.length) {
-    console.error(`âŒ ${missing.join(", ")} required when GST_PROVIDER=gsp_http`);
+    console.error(`❌ ${missing.join(", ")} required when GST_PROVIDER=gsp_http`);
     process.exit(1);
   }
   if (parsed.data.NODE_ENV === "production" && !/^https:\/\//i.test(parsed.data.GST_PROVIDER_BASE_URL)) {
-    console.error("âŒ GST_PROVIDER_BASE_URL must use HTTPS in production");
+    console.error("❌ GST_PROVIDER_BASE_URL must use HTTPS in production");
     process.exit(1);
   }
   if (parsed.data.NODE_ENV === "production" && !parsed.data.GST_PROVIDER_CERTIFIED) {
-    console.error("âŒ GST_PROVIDER_CERTIFIED=true is required for production GSP submission");
+    console.error("❌ GST_PROVIDER_CERTIFIED=true is required for production GSP submission");
     process.exit(1);
   }
 }

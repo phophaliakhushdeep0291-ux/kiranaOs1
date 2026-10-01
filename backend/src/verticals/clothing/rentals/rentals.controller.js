@@ -1,9 +1,11 @@
+import { requestLocationId } from "../../../modules/stores/location-context.service.js";
 import * as svc from "./rentals.service.js";
 import { createAuditLog } from "../../../modules/audit/audit.service.js";
 
 export async function list(req, res, next) {
   try {
     const data = await svc.listRentals(req.shopId, {
+      locationId: requestLocationId(req), includeLegacy: req.operationalLocation?.isPrimary !== false,
       status: req.query.status,
       from: req.query.from,
       to: req.query.to,
@@ -14,13 +16,14 @@ export async function list(req, res, next) {
 }
 
 export async function summary(req, res, next) {
-  try { res.json({ success: true, data: await svc.getRentalSummary(req.shopId) }); }
+  try { res.json({ success: true, data: await svc.getRentalSummary(req.shopId, { locationId: requestLocationId(req), includeLegacy: req.operationalLocation?.isPrimary !== false }) }); }
   catch (err) { next(err); }
 }
 
 export async function availability(req, res, next) {
   try {
     const data = await svc.getAvailability(req.shopId, {
+      locationId: requestLocationId(req),
       from: req.query.from,
       to: req.query.to,
       excludeBookingId: req.query.excludeBookingId ? String(req.query.excludeBookingId) : null,
@@ -34,18 +37,14 @@ export async function detail(req, res, next) {
   catch (err) { next(err); }
 }
 
+export async function payments(req, res, next) {
+  try { res.json({ success: true, data: await svc.listRentalPayments(req.shopId, { from: req.query.from, to: req.query.to, locationId: requestLocationId(req) }) }); }
+  catch (error) { next(error); }
+}
+
 export async function create(req, res, next) {
   try {
-    const booking = await svc.createRental(req.shopId, req.body, { userId: req.user?.userId });
-    await createAuditLog({
-      shopId: req.shopId, userId: req.user?.userId, action: "RENTAL_BOOKED",
-      entityType: "RentalBooking", entityId: booking.id,
-      after: {
-        id: booking.id, bookingNumber: booking.bookingNumber, customerName: booking.customerName,
-        fromDate: booking.fromDateKey, toDate: booking.toDateKey, items: booking.items.length,
-      },
-      req,
-    });
+    const booking = await svc.createRental(req.shopId, req.body, { userId: req.user?.userId, req, locationId: requestLocationId(req) });
     res.status(201).json({ success: true, data: booking });
   } catch (err) { next(err); }
 }
@@ -62,29 +61,14 @@ export async function pickup(req, res, next) {
 
 export async function markReturned(req, res, next) {
   try {
-    const booking = await svc.markReturned(req.shopId, req.params.id, req.body ?? {});
-    await createAuditLog({
-      shopId: req.shopId, userId: req.user?.userId, action: "RENTAL_RETURNED",
-      entityType: "RentalBooking", entityId: booking.id,
-      after: {
-        id: booking.id, bookingNumber: booking.bookingNumber,
-        returnedAt: booking.returnedAt, lateFee: booking.lateFee, damageCharge: booking.damageCharge,
-      },
-      req,
-    });
+    const booking = await svc.markReturned(req.shopId, req.params.id, req.body ?? {}, { userId: req.user?.userId, req });
     res.json({ success: true, message: "Booking closed and items back in stock", data: booking });
   } catch (err) { next(err); }
 }
 
 export async function cancel(req, res, next) {
   try {
-    const booking = await svc.cancelRental(req.shopId, req.params.id, req.body ?? {});
-    await createAuditLog({
-      shopId: req.shopId, userId: req.user?.userId, action: "RENTAL_CANCELLED",
-      entityType: "RentalBooking", entityId: booking.id,
-      after: { id: booking.id, bookingNumber: booking.bookingNumber, status: booking.status },
-      req,
-    });
+    const booking = await svc.cancelRental(req.shopId, req.params.id, req.body ?? {}, { userId: req.user?.userId, req });
     res.json({ success: true, message: "Booking cancelled", data: booking });
   } catch (err) { next(err); }
 }
@@ -112,4 +96,9 @@ export async function remove(req, res, next) {
 export async function restore(req, res, next) {
   try { res.json({ success: true, message: "Booking restored", data: await svc.restoreRental(req.shopId, req.params.id) }); }
   catch (err) { next(err); }
+}
+
+export async function refund(req, res, next) {
+  try { res.json({ success: true, data: await svc.refundRental(req.shopId, req.params.id, req.body, { userId: req.user?.userId, req }) }); }
+  catch (error) { next(error); }
 }

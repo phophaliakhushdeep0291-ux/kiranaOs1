@@ -9,6 +9,7 @@ import {
   removeStaff,
   updateStaff,
   type StaffInviteRequest,
+  type StaffServerRole,
 } from "@/features/core/staff/api";
 import {
   POS_PERMISSIONS,
@@ -195,10 +196,11 @@ function ensureOwnerPin(ownerPin: string | undefined, reason: string, entityId?:
   });
 }
 
-function serverRole(role: StaffRole): "staff" | "admin" {
+function serverRole(role: StaffRole): StaffServerRole {
   if (role === "manager") return "admin";
   if (role === "cashier") return "staff";
-  throw new Error("Choose Manager or Cashier. Owner transfer and view-only accounts need a separate secured workflow.");
+  if (role === "viewer") return "viewer";
+  throw new Error("Choose Manager, Cashier or Viewer. Owner transfer needs a separate secured workflow.");
 }
 
 function mutationNetworkError(action: string) {

@@ -1,7 +1,9 @@
 import { roundMoney } from "@/lib/money";
 import { mergeSupplierPaymentHistory, supplierPurchaseKeys } from "./supplier-payment-history";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
-import type { Bill, Customer, Product, Supplier } from "@/types/api";
+import type { Bill, Customer, Expense, Product, Supplier } from "@/types/api";
+import { reportCalendarDay } from "@/features/core/reports/report-calendar";
+import { loadDrawerAdjustments } from "@/features/core/reports/cash-drawer";
 import {
   calculateLedgerBalance,
   dedupeLedgerEntries,
@@ -36,6 +38,7 @@ export interface FinancialAggregationInput {
   suppliers?: Supplier[];
   inventoryMovements?: LocalInventoryMovement[];
   purchaseBills?: LocalPurchaseBill[];
+  expenses?: (Expense & RecordLike)[];
   date?: string;
   range?: { from: string; to: string };
   generatedAt?: string;
@@ -43,7 +46,7 @@ export interface FinancialAggregationInput {
    * Till adjustments that do not flow through sales. Without these the expected drawer
    * only reflects money that moved through bills, so the over/short at closing is wrong
    * for any shop that keeps a float or pays anything out of the till.
-   * Expenses are server-backed (no offline table), so the caller supplies the cash total.
+   * A caller with an authoritative cash-expense total may override the cached rows.
    */
   openingCash?: number;
   cashIn?: number;
@@ -900,8 +903,27 @@ function purchaseIdentityKeys(row: RecordLike): string[] {
     readString(row, ["purchaseBillId", "purchase_bill_id"]),
     readString(row, ["localPurchaseHistoryId", "local_purchase_history_id"]),
     readString(row, ["localPurchaseBillId", "local_purchase_bill_id"]),
+    // One purchase writes TWO local rows — the bill, and the stock movement that
+    // received the goods — and the movement names its bill through `sourceId`,
+    // not through any of the ids above. Without it neither the identity keys nor
+    // the business keys can pair them: the bill carries `supplierId` and no
+    // `productId`, the movement the exact reverse, so every fallback key differs
+    // too. Both rows survived the dedupe and the owner's day-close screen read
+    // "Supplier due (unpaid) ₹960" for a single ₹480 bill.
+    purchaseSourceBillId(row),
   ].filter(Boolean);
   return purchaseIds.map((id) => `purchase-id:${id}`);
+}
+
+/**
+ * The purchase bill a stock movement was received against, when that is what
+ * `sourceId` points at. Guarded on `sourceType` so a movement of some other kind
+ * can never contribute a purchase identity it does not have.
+ */
+function purchaseSourceBillId(row: RecordLike): string {
+  const sourceType = readString(row, ["sourceType", "source_type"]).toLowerCase();
+  if (!sourceType.includes("purchase")) return "";
+  return readString(row, ["sourceId", "source_id"]);
 }
 
 function purchaseRowPriority(row: RecordLike, source: SupplierDueRow["source"]): number {
@@ -1042,14 +1064,25 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
   const openingCashToday = roundMoney(Math.max(0, Number(input.openingCash) || 0));
   const cashInToday = roundMoney(Math.max(0, Number(input.cashIn) || 0));
   const cashOutToday = roundMoney(Math.max(0, Number(input.cashOut) || 0));
-  const expensesToday = roundMoney(Math.max(0, Number(input.cashExpenses) || 0));
+  const expenses = (input.expenses ?? []).filter((row) => {
+    const day = reportCalendarDay(row.spentAt);
+    return !isDeleted(row) && day !== null && day >= range.from && day <= range.to;
+  });
+  const expenseAmount = (row: Expense) => Math.max(0, readNumber(row.amount));
+  const cachedCashExpenses = expenses
+    .filter((row) => row.status === "paid" && row.paymentMode === "cash")
+    .reduce((sum, row) => sum + expenseAmount(row), 0);
+  const cashExpensesToday = roundMoney(Math.max(0, Number(input.cashExpenses ?? cachedCashExpenses) || 0));
+  const expensesToday = input.expenses === undefined
+    ? cashExpensesToday
+    : roundMoney(expenses.reduce((sum, row) => sum + expenseAmount(row), 0));
   const ownerWithdrawalToday = 0;
   const cashDrawer: CashDrawerSummary = {
     openingCash: openingCashToday,
     cashSales: cashSalesToday,
     cashUdharRecovery: oldUdhar.cash,
     supplierCashPaid: supplierCashPaidToday,
-    expenses: expensesToday,
+    expenses: cashExpensesToday,
     ownerWithdrawals: ownerWithdrawalToday,
     cashIn: cashInToday,
     cashOut: cashOutToday,
@@ -1058,7 +1091,7 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
       + totalCashCollectedToday
       + cashInToday
       - supplierCashPaidToday
-      - expensesToday
+      - cashExpensesToday
       - cashOutToday
       - ownerWithdrawalToday,
     ),
@@ -1113,6 +1146,7 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
       ledger.length > 0 ||
       products.length > 0 ||
       customers.length > 0 ||
+      expenses.length > 0 ||
       supplierDueRows.length > 0,
     dataSourceLabel: "FinancialAggregationService",
   };
@@ -1136,6 +1170,8 @@ export async function buildFinancialAggregationSnapshot(date = todayInputValue()
     suppliers,
     inventoryMovements,
     purchaseBills,
+    expenses,
+    drawer,
   ] = await Promise.all([
     loadScopedRows<LocalBill>("bills"),
     loadScopedRows<LocalBillItem>("bill_items"),
@@ -1146,6 +1182,8 @@ export async function buildFinancialAggregationSnapshot(date = todayInputValue()
     loadScopedRows<Supplier>("suppliers"),
     loadScopedRows<LocalInventoryMovement>("inventory_movements"),
     loadScopedRows<LocalPurchaseBill>("purchase_bills"),
+    loadScopedRows<Expense & RecordLike>("expenses"),
+    loadDrawerAdjustments(date),
   ]);
 
   return aggregateFinancialRows({
@@ -1158,6 +1196,8 @@ export async function buildFinancialAggregationSnapshot(date = todayInputValue()
     suppliers,
     inventoryMovements,
     purchaseBills,
+    expenses,
+    ...drawer,
     date,
   });
 }

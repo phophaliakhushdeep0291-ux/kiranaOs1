@@ -102,7 +102,11 @@ The cafe report measures the fresh drill's age conservatively from its start
 time, not the dump's filesystem modification time. This is not evidence of
 scheduled production backup frequency or retention. Monitor and rehearse the
 retained production backups separately; use `proof:dr` with a trusted manifest
-to validate a particular existing dump.
+to validate a particular existing dump. For the dumps the scheduled service
+stores off-site, `npm run drill:restore:offsite` downloads one from the bucket,
+checks it against the SHA-256 recorded at upload, restores it into the drill
+database, and checks the workload and money. See `docs/deploy/railway.md`,
+"Restoring a stored nightly backup".
 
 The drill removes only its own freshly generated dump unless `DR_KEEP_BACKUP=true`.
 It never deletes a supplied `BACKUP_FILE`. To rehearse an existing dump, set

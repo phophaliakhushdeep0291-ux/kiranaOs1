@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useGetShop } from "@/lib/api/client";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useSubscriptionSnapshot } from "@/features/core/subscription";
+import { formatFreeAccessDate } from "@/features/core/subscription/free-access";
 import { useOfflineStatus } from "@/features/core/sync";
 import { offlineDB } from "@/lib/offline/db";
 import {
@@ -31,9 +32,10 @@ interface IntegrationOverview {
 }
 
 export default function SettingsPage() {
-  const { t } = useAppLanguage();
+  const { language, t } = useAppLanguage();
   const { user } = useAuth();
   const { snapshot } = useSubscriptionSnapshot();
+  const freeDate = snapshot?.freeAccessUntil ? formatFreeAccessDate(snapshot.freeAccessUntil, language) : null;
   const { isOnline, isSyncing, pendingCount, failedCount, conflictCount, queueStatus } = useOfflineStatus();
   const shop = useGetShop();
   const [printer, setPrinter] = useState<PrinterConfig>(DEFAULT_PRINTER_CONFIG);
@@ -167,7 +169,7 @@ export default function SettingsPage() {
           <div className="px-5 pb-4">
             <div className="mb-4 flex items-center gap-2">
               <Badge tone="amber">{t("settings.store.planBadge", { plan: planName })}</Badge>
-              <Badge tone="gray"><span className="capitalize">{snapshot?.status ?? "active"}</span></Badge>
+              <Badge tone="gray"><span className="capitalize">{freeDate ? t("plans.free.label") : snapshot?.status ?? "active"}</span></Badge>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <ul className="space-y-2">
@@ -179,7 +181,7 @@ export default function SettingsPage() {
               </ul>
               <div>
                 <p className="text-[11px] text-[#64748b]">{t("settings.hub.usageThisMonth")}</p>
-                <p className="font-display text-[18px] font-black text-[var(--brand-ink)]">{snapshot?.status === "active" ? t("settings.hub.subscriptionActive") : "—"}</p>
+                <p className="font-display text-[18px] font-black text-[var(--brand-ink)]">{freeDate ? t("plans.free.title", { date: freeDate }) : snapshot?.status === "active" ? t("settings.hub.subscriptionActive") : "—"}</p>
                 <p className="mt-1 text-[11px] text-[#64748b]">{t("settings.hub.managePlanAction")}</p>
                 <Link href="/subscription" className="mt-3 inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.hub.viewPlan")} <ChevronRight size={13} /></Link>
               </div>

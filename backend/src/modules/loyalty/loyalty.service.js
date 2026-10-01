@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 
@@ -61,11 +62,56 @@ async function expireOne(client, shopId, program, account) {
   return client.loyaltyAccount.findFirst({ where: { id: account.id, shopId } });
 }
 
+/**
+ * Expire everyone who has gone dormant, in one transaction rather than five hundred.
+ *
+ * This is a sweep, and it runs on a read path — every time someone opens the
+ * loyalty screen. It used to open a separate transaction per account, up to five
+ * hundred of them, each a round-trip the HTTP response waited on. A shop with a
+ * few hundred lapsed members paid that on every page view.
+ *
+ * The three statements below do the same work. The middle one carries the same
+ * guard `expireOne` used per row — still positive, still past the cutoff — so an
+ * account that earned a point since the read is not zeroed; an earn sets
+ * `lastEarnedAt` to now, which takes it out of the predicate.
+ *
+ * Serializable is what makes the ledger rows honest. The read and the update see
+ * one consistent snapshot, so the accounts read are exactly the accounts zeroed,
+ * and `createMany` can be built from the read without a second look. A
+ * concurrent earn aborts and re-runs the sweep instead of leaving an `expire`
+ * row for points that are still in someone's account — and re-running a sweep
+ * costs nothing, because the second pass simply finds less to do.
+ */
 async function expireDormantAccounts(shopId, program) {
-  if (Number(program.pointsExpireDays || 0) <= 0) return;
-  const cutoff = new Date(Date.now() - Number(program.pointsExpireDays) * 86_400_000);
-  const accounts = await db.loyaltyAccount.findMany({ where: { shopId, pointsBalance: { gt: 0 }, lastEarnedAt: { lte: cutoff } }, take: 500 });
-  for (const account of accounts) await db.$transaction((tx) => expireOne(tx, shopId, program, account));
+  const days = Number(program.pointsExpireDays || 0);
+  if (days <= 0) return;
+  const cutoff = new Date(Date.now() - days * 86_400_000);
+  const dormant = { shopId, pointsBalance: { gt: 0 }, lastEarnedAt: { lte: cutoff } };
+
+  // Read first, outside the transaction, so the common case — nothing to expire
+  // — costs one indexed lookup and opens no transaction at all. This is the
+  // path almost every page view takes.
+  const waiting = await db.loyaltyAccount.findFirst({ where: dormant, select: { id: true } });
+  if (!waiting) return;
+
+  await serializableTransaction(async (tx) => {
+    const accounts = await tx.loyaltyAccount.findMany({ where: dormant, take: 500, select: { id: true, pointsBalance: true } });
+    if (accounts.length === 0) return;
+    await tx.loyaltyAccount.updateMany({
+      where: { id: { in: accounts.map((account) => account.id) }, ...dormant },
+      data: { pointsBalance: 0 },
+    });
+    await tx.loyaltyTransaction.createMany({
+      data: accounts.map((account) => ({
+        shopId,
+        accountId: account.id,
+        type: "expire",
+        points: -account.pointsBalance,
+        source: "system",
+        note: `Expired after ${days} days without earning activity`,
+      })),
+    });
+  });
 }
 
 export async function getProgram(shopId) {

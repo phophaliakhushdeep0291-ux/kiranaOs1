@@ -5,9 +5,12 @@
 // write, and every entry point is safe to call again — evaluations are unique
 // per (run, entity) and findings are unique per (shop, entity).
 import crypto from "node:crypto";
+import { scheduledActivity } from "./scheduled-activity.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
-import { baseQtyToRateQty } from "../../utils/units.js";
+import { rateUnitToBase } from "../../utils/units.js";
+import { convertibleRateUnitFactorsFor } from "../inventory/rate-unit-factor.js";
 import {
   ACTIVE_FINDING_STATUSES,
   ENGINE_VERSION,
@@ -191,7 +194,7 @@ const DISCREPANCY_BY_RULE = {
   // Stock a cancellation should have put back and didn't, valued at cost.
   STOCK_CANCELLED_SALE_NOT_RESTORED: (d) => ({ baseQty: sumBaseQty(d.unrestoredBills, "netBaseQty") }),
   // Same gap seen from the bill side, where each line is a different product.
-  CANCELLED_BILL_STOCK_NOT_RESTORED: (d, ctx) => ({ paise: valueByProduct(d.unrestoredProducts, ctx, "netBaseQty") }),
+  CANCELLED_BILL_STOCK_NOT_RESTORED: (d, ctx, rateUnitFactors) => ({ paise: valueByProduct(d.unrestoredProducts, ctx, "netBaseQty", rateUnitFactors) }),
   // Credit that never reached the khata: the part that went missing.
   UDHAR_BILL_MISSING_LEDGER_DEBIT: (d) => ({ rupees: Math.abs(Number(d.billCreditAmount ?? 0) - Number(d.ledgerDebitSum ?? 0)) }),
   // A duplicate is money charged or paid twice — the duplicate itself is at risk.
@@ -223,26 +226,39 @@ function sumRupees(rows, key) {
   return rows.reduce((total, row) => total + Math.abs(Number(row?.[key]) || 0), 0);
 }
 
-function valueAtProductCost(baseQty, product) {
+/**
+ * `rateUnitFactors` is resolved by the caller, which can reach the database: a
+ * packaged product's rate unit is its pack's word ("bottle"), and only its
+ * packaging says how many base units that is. Without it the unit table decides,
+ * which is all a caller that has not resolved factors gets.
+ */
+function valueAtProductCost(baseQty, product, rateUnitFactors) {
   const qty = Math.abs(Number(baseQty) || 0);
   const cost = Number(product?.costPerRateUnit ?? 0);
   if (!qty || cost <= 0) return 0;
   try {
-    const rateQty = baseQtyToRateQty(qty, product.rateUnit, product.baseUnit);
+    const factor = rateUnitFactors ? rateUnitFactors.get(product.id) : rateUnitToBase(product.rateUnit, product.baseUnit);
+    if (!(factor > 0)) return 0; // unconvertible unit: no figure beats a wrong figure
+    const rateQty = qty / factor;
     return Math.round(Math.abs(rateQty * cost) * 100);
   } catch {
     return 0; // unsupported unit pair: no figure beats a wrong figure
   }
 }
 
-function valueStockAtCost(baseQty, ctx) {
-  return valueAtProductCost(baseQty, ctx.product);
+function valueStockAtCost(baseQty, ctx, rateUnitFactors) {
+  return valueAtProductCost(baseQty, ctx.product, rateUnitFactors);
 }
 
 /** Bill contexts carry a products map: value every line at its own product's cost. */
-function valueByProduct(rows, ctx, key) {
+function valueByProduct(rows, ctx, key, rateUnitFactors) {
   if (!Array.isArray(rows)) return 0;
-  return rows.reduce((paise, row) => paise + valueAtProductCost(row?.[key], ctx.products?.get(row?.productId)), 0);
+  return rows.reduce((paise, row) => paise + valueAtProductCost(row?.[key], ctx.products?.get(row?.productId), rateUnitFactors), 0);
+}
+
+/** Every product a context can value stock against: its own, or a bill's lines'. */
+function contextProducts(ctx) {
+  return [ctx.product, ...(ctx.products?.values() ?? [])].filter(Boolean);
 }
 
 /**
@@ -279,21 +295,21 @@ function valueAtPurchaseCost(rows, ctx) {
   }, 0);
 }
 
-function ruleDiscrepancyPaise(rule, details, ctx) {
+function ruleDiscrepancyPaise(rule, details, ctx, rateUnitFactors) {
   if (!details || typeof details !== "object") return 0;
 
   const explicit = DISCREPANCY_BY_RULE[rule.ruleCode];
   if (explicit) {
-    const { baseQty, rupees, paise } = explicit(details, ctx) ?? {};
+    const { baseQty, rupees, paise } = explicit(details, ctx, rateUnitFactors) ?? {};
     if (paise !== undefined) return Math.abs(Math.round(Number(paise) || 0));
-    if (baseQty !== undefined) return valueStockAtCost(baseQty, ctx);
+    if (baseQty !== undefined) return valueStockAtCost(baseQty, ctx, rateUnitFactors);
     if (rupees !== undefined) return Math.abs(Math.round((Number(rupees) || 0) * 100));
     return 0;
   }
 
   // Stock gaps are measured in base units; value them at the product's own cost.
   if (details.differenceBaseQty !== undefined && ctx.product) {
-    return valueStockAtCost(details.differenceBaseQty, ctx);
+    return valueStockAtCost(details.differenceBaseQty, ctx, rateUnitFactors);
   }
 
   for (const key of DISCREPANCY_PAISE_KEYS) {
@@ -316,12 +332,16 @@ function ruleDiscrepancyPaise(rule, details, ctx) {
   return 0;
 }
 
-/** Largest quantified gap across the triggered rules, or null if none measured one. */
-export function extractDiscrepancyPaise(triggeredRules, ctx) {
+/**
+ * Largest quantified gap across the triggered rules, or null if none measured one.
+ * `rateUnitFactors` (from convertibleRateUnitFactorsFor) values packaged stock
+ * through its pack; without it only the unit table can convert.
+ */
+export function extractDiscrepancyPaise(triggeredRules, ctx, rateUnitFactors) {
   let largest = 0;
   let measured = false;
   for (const { rule, details } of triggeredRules) {
-    const value = ruleDiscrepancyPaise(rule, details, ctx);
+    const value = ruleDiscrepancyPaise(rule, details, ctx, rateUnitFactors);
     if (value > 0) {
       measured = true;
       largest = Math.max(largest, value);
@@ -427,20 +447,27 @@ export async function evaluateEntity(shopId, entityType, entityId, options = {})
     inputHash: ctx.inputHash,
     events,
     rulesEvaluated: candidateRules.length,
+    evaluatedRuleCodes: candidateRules.map((rule) => rule.ruleCode),
     ruleErrors,
+    complete: ruleErrors.length === 0,
     triggered: triggeredRules.length > 0,
     ...score,
   };
 
-  const persisted = await persistEvaluation({
+  const persist = (transactionClient) => persistEvaluation({
     shopId,
     runId,
     ctx,
     result,
     triggeredRules,
     actorUserId,
-    client,
+    client: transactionClient,
   });
+  // A finding, its checks, evidence requirements and history must commit
+  // together. A retry must never encounter half of a prior assessment.
+  const persisted = typeof client.$transaction === "function"
+    ? await serializableTransaction(persist, { client })
+    : await persist(client);
 
   return { ...result, ...persisted };
 }
@@ -499,13 +526,26 @@ async function persistEvaluation({ shopId, runId, ctx, result, triggeredRules, a
     include: { rules: true },
   });
 
+  // A failed check is not proof that an existing problem was corrected.
+  // Keep its last complete assessment intact; the failed attempt remains in
+  // AuditEvaluation and makes its run partial, so it can be retried.
+  const uncheckedActiveRules = existing?.rules.filter((rule) => rule.active
+    && !result.evaluatedRuleCodes.includes(rule.ruleCode)) ?? [];
+  if (existing && (result.ruleErrors.length || uncheckedActiveRules.length)) {
+    return { evaluationId, findingId: existing.id, findingCreated: false,
+      findingUpdated: false, findingStatus: existing.status, assessmentPreserved: true };
+  }
+
   if (!triggeredRules.length) {
     const cleared = await autoResolveClearedFinding({ existing, shopId, runId, evaluationId, client });
     return { evaluationId, findingId: existing?.id ?? null, findingCreated: false, findingUpdated: cleared, findingStatus: cleared ? FINDING_STATUS.CORRECTED : existing?.status ?? null };
   }
 
   const meta = entityMetadata(ctx);
-  const discrepancyPaise = extractDiscrepancyPaise(triggeredRules, ctx);
+  // Resolved only here, for an evaluation that raised something: a clean one never
+  // needs a stock figure, and a whole-shop run evaluates thousands of those.
+  const rateUnitFactors = await convertibleRateUnitFactorsFor(client, shopId, contextProducts(ctx));
+  const discrepancyPaise = extractDiscrepancyPaise(triggeredRules, ctx, rateUnitFactors);
   const findingData = {
     sourceEntityType: result.sourceEntityType,
     sourceEntityId: result.sourceEntityId,
@@ -596,7 +636,8 @@ async function persistEvaluation({ shopId, runId, ctx, result, triggeredRules, a
   }
 
   const isActive = ACTIVE_FINDING_STATUSES.includes(existing.status);
-  const shouldReopen = !isActive && newRuleCodes.length > 0;
+  const recurred = existing.status === FINDING_STATUS.CORRECTED;
+  const shouldReopen = recurred || (!isActive && newRuleCodes.length > 0);
 
   const finding = await client.auditFinding.update({
     where: { id: existing.id },
@@ -624,7 +665,9 @@ async function persistEvaluation({ shopId, runId, ctx, result, triggeredRules, a
         newStatus: FINDING_STATUS.OPEN,
         changedByUserId: actorUserId,
         changedByRole: "system",
-        comment: `Reopened: new rule(s) triggered — ${newRuleCodes.join(", ")}.`,
+        comment: recurred
+          ? "Reopened: a previously corrected condition was detected again."
+          : `Reopened: new rule(s) triggered — ${newRuleCodes.join(", ")}.`,
       },
     });
   }
@@ -765,50 +808,57 @@ export async function finishRun(runId, { status, entitiesEvaluated, findingsCrea
  * type so a long period cannot exhaust memory; the truncation is reported in
  * the run summary rather than hidden.
  */
-export async function collectEntitiesForPeriod(shopId, { from, to, entityTypes = null, client = db }) {
+export async function collectEntitiesForPeriod(shopId, { from, to, entityTypes = null, includeRecentChanges = false, client = db }) {
   const range = { gte: new Date(from), lte: new Date(to) };
+  const activity = includeRecentChanges ? scheduledActivity(range) : null;
   const wanted = new Set(entityTypes && entityTypes.length ? entityTypes : Object.values(ENTITY_TYPES));
   const entities = [];
   const truncated = [];
 
   const push = (entityType, rows, idKey = "id") => {
-    if (rows.length >= MAX_RANGE_ENTITIES) truncated.push({ entityType, cap: MAX_RANGE_ENTITIES });
-    for (const row of rows) entities.push({ entityType, entityId: row[idKey] });
+    if (rows.length > MAX_RANGE_ENTITIES) truncated.push({ entityType, cap: MAX_RANGE_ENTITIES });
+    for (const row of rows.slice(0, MAX_RANGE_ENTITIES)) entities.push({ entityType, entityId: row[idKey] });
   };
 
   if (wanted.has(ENTITY_TYPES.BILL)) {
-    push(ENTITY_TYPES.BILL, await client.bill.findMany({ where: { shopId, createdAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES, orderBy: { createdAt: "asc" } }));
+    push(ENTITY_TYPES.BILL, await client.bill.findMany({ where: { shopId, ...(activity?.bills ?? { createdAt: range }) }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
   }
   if (wanted.has(ENTITY_TYPES.EXPENSE)) {
-    push(ENTITY_TYPES.EXPENSE, await client.expense.findMany({ where: { shopId, deletedAt: null, spentAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES, orderBy: { spentAt: "asc" } }));
+    push(ENTITY_TYPES.EXPENSE, await client.expense.findMany({ where: { shopId, ...(activity?.expenses ?? { deletedAt: null, spentAt: range }) }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { spentAt: "asc" } }));
   }
   if (wanted.has(ENTITY_TYPES.PURCHASE)) {
-    push(ENTITY_TYPES.PURCHASE, await client.purchaseReceipt.findMany({ where: { shopId, createdAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES, orderBy: { createdAt: "asc" } }));
-    push(ENTITY_TYPES.PURCHASE, await client.purchaseHistory.findMany({ where: { shopId, createdAt: range, purchaseReceiptId: null }, select: { id: true }, take: MAX_RANGE_ENTITIES, orderBy: { createdAt: "asc" } }));
+    push(ENTITY_TYPES.PURCHASE, await client.purchaseReceipt.findMany({ where: { shopId, ...(activity?.purchaseReceipts ?? { createdAt: range }) }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
+    push(ENTITY_TYPES.PURCHASE, await client.purchaseHistory.findMany({ where: { shopId, ...(activity?.purchaseHistory ?? { createdAt: range, purchaseReceiptId: null }) }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
   }
   if (wanted.has(ENTITY_TYPES.DAILY_CLOSING)) {
-    push(ENTITY_TYPES.DAILY_CLOSING, await client.dailyClosingSnapshot.findMany({ where: { shopId, date: range }, select: { id: true }, take: MAX_RANGE_ENTITIES, orderBy: { date: "asc" } }));
+    push(ENTITY_TYPES.DAILY_CLOSING, await client.dailyClosingSnapshot.findMany({ where: { shopId, ...(activity?.dailyClosingSnapshots ?? { date: range }) }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { date: "asc" } }));
   }
   if (wanted.has(ENTITY_TYPES.SYNC_EVENT)) {
-    push(ENTITY_TYPES.SYNC_EVENT, await client.offlineSyncEvent.findMany({ where: { shopId, createdAt: range }, select: { id: true }, take: MAX_RANGE_ENTITIES, orderBy: { createdAt: "asc" } }));
+    push(ENTITY_TYPES.SYNC_EVENT, await client.offlineSyncEvent.findMany({ where: { shopId, ...(activity?.offlineSyncEvents ?? { createdAt: range }) }, select: { id: true }, take: MAX_RANGE_ENTITIES + 1, orderBy: { createdAt: "asc" } }));
   }
   // Customers and products are evaluated when they were touched in the period:
   // their state is a running balance, so the trigger is ledger/movement activity.
-  if (wanted.has(ENTITY_TYPES.CUSTOMER)) {
+  if (wanted.has(ENTITY_TYPES.CUSTOMER) && activity) {
+    push(ENTITY_TYPES.CUSTOMER, await client.customer.findMany({ where: { shopId, ...activity.customers },
+      select: { id: true }, orderBy: { id: "asc" }, take: MAX_RANGE_ENTITIES + 1 }));
+  } else if (wanted.has(ENTITY_TYPES.CUSTOMER)) {
     const rows = await client.udharLedger.findMany({
       where: { shopId, createdAt: range },
       select: { customerId: true },
       distinct: ["customerId"],
-      take: MAX_RANGE_ENTITIES,
+      take: MAX_RANGE_ENTITIES + 1,
     });
     push(ENTITY_TYPES.CUSTOMER, rows, "customerId");
   }
-  if (wanted.has(ENTITY_TYPES.PRODUCT)) {
+  if (wanted.has(ENTITY_TYPES.PRODUCT) && activity) {
+    push(ENTITY_TYPES.PRODUCT, await client.product.findMany({ where: { shopId, ...activity.products },
+      select: { id: true }, orderBy: { id: "asc" }, take: MAX_RANGE_ENTITIES + 1 }));
+  } else if (wanted.has(ENTITY_TYPES.PRODUCT)) {
     const rows = await client.stockLedger.findMany({
       where: { shopId, createdAt: range },
       select: { productId: true },
       distinct: ["productId"],
-      take: MAX_RANGE_ENTITIES,
+      take: MAX_RANGE_ENTITIES + 1,
     });
     push(ENTITY_TYPES.PRODUCT, rows, "productId");
   }
@@ -828,12 +878,25 @@ export async function collectEntitiesForPeriod(shopId, { from, to, entityTypes =
  * Run the engine over a set of entities inside one AuditRun. Individual entity
  * failures are recorded and the run continues (status PARTIAL).
  */
-export async function executeRun(shopId, run, entities, { client = db, actorUserId = null } = {}) {
-  const overrides = await loadRuleOverrides(shopId, client);
+export async function executeRun(shopId, run, entities, { client = db, actorUserId = null, rules = null } = {}) {
+  let overrides;
+  try {
+    overrides = await loadRuleOverrides(shopId, client);
+  } catch (error) {
+    await finishRun(run.id, { status: RUN_STATUS.FAILED, entitiesEvaluated: 0,
+      findingsCreated: 0, findingsUpdated: 0,
+      summary: { complete: false, requestedEntities: entities.length, evaluated: 0,
+        failureCount: entities.length, setupFailed: true },
+      error: "Audit rule configuration could not be loaded" }, client);
+    throw error;
+  }
   let findingsCreated = 0;
   let findingsUpdated = 0;
   let evaluated = 0;
   const failures = [];
+  const ruleFailures = [];
+  const scope = JSON.parse(run.scopeJson || "{}");
+  const truncated = Array.isArray(scope.truncated) ? scope.truncated : [];
   const byCategory = {};
   const byRiskLevel = {};
   const byRuleCode = {};
@@ -845,8 +908,12 @@ export async function executeRun(shopId, run, entities, { client = db, actorUser
         client,
         overrides,
         actorUserId,
+        rules,
       });
       evaluated += 1;
+      for (const failure of outcome.ruleErrors ?? []) {
+        ruleFailures.push({ entityType: entity.entityType, entityId: entity.entityId, ...failure });
+      }
       if (outcome.findingCreated) findingsCreated += 1;
       if (outcome.findingUpdated) findingsUpdated += 1;
       if (outcome.triggered) {
@@ -862,7 +929,9 @@ export async function executeRun(shopId, run, entities, { client = db, actorUser
     }
   }
 
-  const status = failures.length === 0 ? RUN_STATUS.COMPLETED : evaluated > 0 ? RUN_STATUS.PARTIAL : RUN_STATUS.FAILED;
+  const incomplete = failures.length > 0 || ruleFailures.length > 0 || truncated.length > 0;
+  const status = !incomplete ? RUN_STATUS.COMPLETED
+    : failures.length > 0 && evaluated === 0 ? RUN_STATUS.FAILED : RUN_STATUS.PARTIAL;
   await finishRun(
     run.id,
     {
@@ -871,6 +940,10 @@ export async function executeRun(shopId, run, entities, { client = db, actorUser
       findingsCreated,
       findingsUpdated,
       summary: {
+        complete: !incomplete,
+        truncated,
+        ruleFailureCount: ruleFailures.length,
+        ruleFailures: ruleFailures.slice(0, 50),
         requestedEntities: entities.length,
         evaluated,
         failures: failures.slice(0, 50),
@@ -884,5 +957,5 @@ export async function executeRun(shopId, run, entities, { client = db, actorUser
     client
   );
 
-  return { runId: run.id, status, evaluated, findingsCreated, findingsUpdated, failures };
+  return { runId: run.id, status, evaluated, findingsCreated, findingsUpdated, failures, ruleFailures, truncated, complete: !incomplete };
 }

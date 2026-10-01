@@ -48,6 +48,8 @@ export interface DateRange {
  * float and movements are local.
  */
 export interface DrawerAdjustments {
+  rentalTenders?: { cash: number; upi: number; bank: number; other: number };
+  furnitureTenders?: { cash: number; upi: number; bank: number; other: number };
   openingCash?: number;
   cashIn?: number;
   cashOut?: number;
@@ -221,6 +223,8 @@ export interface LocalReportSnapshot {
 }
 
 export interface DailyClosingReport {
+  rentalTenders?: DrawerAdjustments["rentalTenders"];
+  furnitureTenders?: DrawerAdjustments["furnitureTenders"];
   date: string;
   totalSales: number;
   profitEstimate: number;
@@ -866,15 +870,17 @@ export async function buildDailyClosingReport(date: string, drawer?: DrawerAdjus
   const snapshot = await buildLocalReportSnapshot({ from: date, to: date }, drawer);
   return {
     date,
+    rentalTenders: drawer?.rentalTenders,
+    furnitureTenders: drawer?.furnitureTenders,
     totalSales: snapshot.selected.sales,
     profitEstimate: snapshot.selected.profitEstimate,
     billCount: snapshot.selected.bills,
     cashSales: snapshot.paymentBreakdown.cash,
     upiSales: snapshot.paymentBreakdown.upi,
     bankSales: snapshot.paymentBreakdown.bank,
-    cashReceived: snapshot.paymentBreakdown.cashIn,
-    upiReceived: snapshot.paymentBreakdown.upiIn,
-    bankReceived: snapshot.paymentBreakdown.bankIn,
+    cashReceived: roundMoney(snapshot.paymentBreakdown.cashIn + (drawer?.rentalTenders?.cash ?? 0) + (drawer?.furnitureTenders?.cash ?? 0)),
+    upiReceived: roundMoney(snapshot.paymentBreakdown.upiIn + (drawer?.rentalTenders?.upi ?? 0) + (drawer?.furnitureTenders?.upi ?? 0)),
+    bankReceived: roundMoney(snapshot.paymentBreakdown.bankIn + (drawer?.rentalTenders?.bank ?? 0) + (drawer?.furnitureTenders?.bank ?? 0)),
     udharGiven: snapshot.paymentBreakdown.udhar,
     oldUdharPaymentReceived: snapshot.paymentBreakdown.oldUdharReceived,
     oldUdharCashReceived: snapshot.paymentBreakdown.oldUdharCashReceived,
@@ -885,9 +891,9 @@ export async function buildDailyClosingReport(date: string, drawer?: DrawerAdjus
     purchaseBankPaid: snapshot.paymentBreakdown.purchaseBankPaid,
     purchasePaid: snapshot.paymentBreakdown.purchasePaid,
     purchaseDue: snapshot.paymentBreakdown.purchaseDue,
-    expectedCashInDrawer: snapshot.paymentBreakdown.netCashInHand,
-    expectedUpiInBank: snapshot.paymentBreakdown.netUpiInBank,
-    expectedBankInBank: snapshot.paymentBreakdown.netBankInBank,
+    expectedCashInDrawer: roundMoney(snapshot.paymentBreakdown.netCashInHand + (drawer?.rentalTenders?.cash ?? 0) + (drawer?.furnitureTenders?.cash ?? 0)),
+    expectedUpiInBank: roundMoney(snapshot.paymentBreakdown.netUpiInBank + (drawer?.rentalTenders?.upi ?? 0) + (drawer?.furnitureTenders?.upi ?? 0)),
+    expectedBankInBank: roundMoney(snapshot.paymentBreakdown.netBankInBank + (drawer?.rentalTenders?.bank ?? 0) + (drawer?.furnitureTenders?.bank ?? 0)),
     topSoldProducts: snapshot.topProducts.slice(0, 8),
     lowStockItems: snapshot.lowStock.slice(0, 8),
     pendingSyncCount: snapshot.pendingSyncCount,

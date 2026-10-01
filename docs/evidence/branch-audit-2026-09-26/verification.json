@@ -1,0 +1,126 @@
+{
+  "baseCommit": "1d487d8c62704d713e19fd635447d4bfd0704223",
+  "branch": "work/branch-audit-20260926",
+  "checks": {
+    "manufacturing-integration": {
+      "path": "backend/release-artifacts/branch-audit-20260926/manufacturing-integration.log",
+      "sha256": "5f7fb8d297ace513a212d1bc45ea983fdff7ef867a883d5496f24f9720a4c038",
+      "totals": {
+        "tests": 26,
+        "pass": 25,
+        "fail": 0,
+        "skipped": 1
+      }
+    },
+    "manufacturing-frontend": {
+      "path": "backend/release-artifacts/branch-audit-20260926/manufacturing-frontend.log",
+      "sha256": "4a5cb3c62847515c0a6d77c19d253a9680d9e0cec0ab03050e0cf5f795114787"
+    },
+    "autoparts-before-backend": {
+      "path": "backend/release-artifacts/branch-audit-20260926/autoparts-before-backend.log",
+      "sha256": "9843c99a0d2baa1ae048c69e09eadde5c49969372c4ec196221265e3e65f46da",
+      "totals": {
+        "tests": 7,
+        "pass": 5,
+        "fail": 2,
+        "skipped": 0
+      }
+    },
+    "autoparts-before-frontend": {
+      "path": "backend/release-artifacts/branch-audit-20260926/autoparts-before-frontend.log",
+      "sha256": "fca991e7b640235024d65281fd72193f9eb6067ae1791cc058b5d405ece8241e"
+    },
+    "autoparts-after-backend": {
+      "path": "backend/release-artifacts/branch-audit-20260926/autoparts-after-backend.log",
+      "sha256": "3da0795fbfaa68077c11cfd93f819f0858c007f8ec180843f896c62e04556ffd",
+      "totals": {
+        "tests": 19,
+        "pass": 19,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    "autoparts-after-frontend": {
+      "path": "backend/release-artifacts/branch-audit-20260926/autoparts-after-frontend.log",
+      "sha256": "662bfcae19b5e8965aab35081ebe777fb0ffde011c08961a09c7e6656e834302"
+    },
+    "furniture-integration": {
+      "path": "backend/release-artifacts/branch-audit-20260926/furniture-integration.log",
+      "sha256": "715972b9e8dfafc38097a759fcc11ada957936d7e64273b27cbfc5e988b9429f",
+      "totals": {
+        "tests": 49,
+        "pass": 49,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    "free-access-backend": {
+      "path": "backend/release-artifacts/branch-audit-20260926/free-access-backend.log",
+      "sha256": "e1300592bc006fb253695e511288c62c341e3b1a2933741cb44f86f5c52d2453"
+    },
+    "free-access-frontend": {
+      "path": "backend/release-artifacts/branch-audit-20260926/free-access-frontend.log",
+      "sha256": "69d2db55d13c060814a7cbd04b159eae5bdc599701550351c74fa21c13a8c576"
+    },
+    "frontend-production": {
+      "path": "backend/release-artifacts/branch-audit-20260926/frontend-production.log",
+      "sha256": "b42b1bbdcf78ba3eb1059d3ff09f7af948d26f9e8bb53ccb9cbcc489f9d6e16f"
+    },
+    "backend-tests": {
+      "path": "backend/release-artifacts/branch-audit-20260926/backend-tests.log",
+      "sha256": "60d6fb139391c6974ac57dc32335b2da2728fec2187a9d05f29145b5c9c204d5",
+      "totals": {
+        "tests": 144,
+        "pass": 144,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    "backend-production": {
+      "path": "backend/release-artifacts/branch-audit-20260926/backend-production.log",
+      "sha256": "c2c15401227790183209c68dda6f8eac92c59157692d613e3907da872b98a23f"
+    },
+    "migration-safety": {
+      "path": "backend/release-artifacts/branch-audit-20260926/migration-safety.log",
+      "sha256": "d65bbfc44bcfabf42736f71ca27b38c6f46405ffbf9a0bff1fbdb91670d7d0fe"
+    }
+  },
+  "sourceHashes": {
+    "backend/src/verticals/auto-parts/fitment/fitment.controller.js": "9d787e5d37e48501046949e6d869d1a836b3a8369db5184da4be83a7290ff60e",
+    "backend/src/verticals/auto-parts/fitment/fitment.service.js": "107b482f577c84ace4e4a674a06e2ffe22eca35f0755a9b2c32b0c2bac68e5da",
+    "backend/tests/integration/auto-parts-integrity.integration.test.js": "4501721898aef337f09c7b179ae8c7852d72f4abc3b0b4a7e94dedf5e493c267",
+    "backend/tests/part-fitment.examples.js": "1ce33de7e6d9f475d1ecd92d0d99e9a1d0cf9216203b611bca21c8ac20da43c3",
+    "frontend/src/features/core/billing/pages/BillingPage.tsx": "7a97c1817d21418e71e548cbcbcbcb2195834dc582b639675b79a33f79035ac3",
+    "frontend/src/features/core/billing/pending-cart-additions.ts": "a5ec049fd45c0527bad544fd1a26b29ead34849d033e74ac540bf2827d0e0ebb",
+    "frontend/src/features/core/products/pages/components/ProductFormPanel.tsx": "2e22378f29f7d7e860efae242fc38a9f0537fe01f0ca71d9a9307c0d667b69b9",
+    "frontend/src/features/core/settings/translations/shop-types.hi.ts": "944cda39412d3d755a852629cf7ab2d49131f60024a8d14dbf90951bd6b133f9",
+    "frontend/src/features/core/settings/translations/shop-types.ts": "82f342bc61691e20844bb1e5d888db292281000a2ac11d4a2adaafc17aa5acf6",
+    "frontend/src/features/verticals/auto-parts/fitment/api.ts": "7b2f1ebd27eba76f651c064416dd117f17d9911778fa63e92838dc0fc2b738cd",
+    "frontend/src/features/verticals/auto-parts/fitment/pages/FitmentPage.tsx": "84eeeed8c591a547899832e88fb5ceabe7595661a06a4102ff7e402b7bf58e47",
+    "frontend/src/tests/barcode-capture-on-scan.test.ts": "5c799c24f0953613eded865ae55f3a4e3363b6ab06f519482a74e435bfc35e9e",
+    "frontend/src/tests/billing-quantity-wiring.test.ts": "eee711e2436c2d32c6010663fe28d65d43627fd5bfe326ece07aed5bbf11a05e",
+    "frontend/src/tests/fitment-sell-part.test.ts": "814b0846cc658fcafe63de28912b78f4c14f61e6eb7172a4e8172e5b7cf3aaa0",
+    "frontend/src/types/api.ts": "5d7c8f5c62cf50e0bba256acb718e2a0e7182cb28b40d20c5cad3e21d46b4609",
+    "frontend/src/features/core/billing/cart-product.ts": "ab0f0a5e7c586893c70d9e95849d96c3ad47c242e6a96514dbdcd35a8fc67f3a",
+    "frontend/src/features/verticals/auto-parts/fitment/lookup-context.ts": "7ec5ace0b7dd0d7eb53a1cea50dded917699e079b7d0b2ead7268c64ef45fcc5",
+    "frontend/src/tests/fitment-cache-mutations.test.ts": "03c2fc204d1b218252497e7d1647e5f2cd605ed634c69e08af3b8733f8a2ec49",
+    "frontend/src/tests/fitment-lookup-context.test.ts": "f135565febcd8aa00ee25dd6c7f03760074b6219865fcb16a3a2b81f09e344e9",
+    "frontend/src/tests/pending-cart-recovery.test.ts": "7297b84e86c76a4693fb4d8a8bdadd9460d28c573dad77d10685b53d1a0b4fd1"
+  },
+  "browser": {
+    "build": "branch-audit-20260926",
+    "origin": "http://127.0.0.1:5500",
+    "api": "http://127.0.0.1:5371",
+    "syntheticData": true,
+    "confirmed": [
+      "OEM lookup; first handoff adds one item at INR 100",
+      "Reload preserves exactly one item at INR 100",
+      "SKU lookup shows 20 in stock at INR 100 after fixing synthetic stock fixture"
+    ],
+    "unverified": [
+      "Second handoff: automatic approval review usage limit blocked keyboard activation",
+      "Final screenshot: browser connection became unavailable"
+    ],
+    "saleCompleted": false
+  }
+}

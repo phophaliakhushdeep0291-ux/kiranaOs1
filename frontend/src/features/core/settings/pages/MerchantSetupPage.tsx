@@ -53,6 +53,7 @@ const STEP_ICONS: Record<MerchantSetupStepId, typeof Store> = {
 const EMPTY_FACTS: MerchantSetupFacts = {
   storeProfileReady: false,
   productCount: 0,
+  productsInStockCount: 0,
   customerCount: 0,
   supplierCount: 0,
   billCount: 0,
@@ -93,11 +94,17 @@ async function loadFacts(shop?: Shop | null, prefs?: Record<string, unknown>): P
     offlineDB.getAll("suppliers").catch(() => []),
     offlineDB.getAll("bills").catch(() => []),
   ]);
+  // Counted the way the catalogue screen counts, so the two never disagree:
+  // `mergeProducts` folds a server echo onto the device row it came from.
+  const liveProducts = mergeProducts([], products, true).filter(
+    (row) => (row as { deletedAt?: unknown }).deletedAt == null && (row as { deleted_at?: unknown }).deleted_at == null,
+  );
   return {
     storeProfileReady: isStoreProfileReady(shop, prefs),
-    // Counted the way the catalogue screen counts, so the two never disagree:
-    // `mergeProducts` folds a server echo onto the device row it came from.
     productCount: countLiveRows(mergeProducts([], products, true)),
+    // `stockBaseQty` is what the catalogue screen calls "Out of Stock" on, so the
+    // checklist and the product list can never disagree about the same shelf.
+    productsInStockCount: liveProducts.filter((row) => Number((row as { stockBaseQty?: unknown }).stockBaseQty ?? 0) > 0).length,
     customerCount: countLiveRows(customers),
     supplierCount: countLiveRows(suppliers),
     billCount: countLiveRows(bills),

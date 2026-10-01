@@ -10,6 +10,7 @@ export const whatsappBillSchema = z.object({
 });
 
 const billItemSchema = z.object({
+  trackedUnitId: z.string().trim().min(1).max(100).optional(),
   guestOrderId: z.string().min(1).max(120).optional(),
   guestOrderLineId: z.string().min(1).max(160).optional(),
   productId: z.string().optional(),
@@ -84,6 +85,11 @@ export const confirmBillSchema = z.object({
   gstMode: z.enum(["inclusive", "exclusive", "none"]).default("inclusive"),
   customerId: z.string().optional(),
   customerName: z.string().default("Walk-in"),
+  // The buyer's number as typed at the counter, kept only so a trade's own record
+  // of the sale can carry it (a serial register notes who has the handset). It is
+  // never a reason to refuse a bill: every till already sends this field and it
+  // used to be ignored, so anything unusable here is dropped rather than rejected.
+  customerMobile: z.string().trim().max(20).regex(/^[0-9+\-\s()]*$/).optional().catch(undefined),
   // The register entry authorising this sale. Required only when the bill holds a
   // Schedule H, H1 or X medicine; every other sale ignores it entirely.
   prescriptionId: z.string().optional(),
@@ -186,6 +192,18 @@ export const billQuerySchema = z.object({
   status: z.enum(["active", "cancelled", "all"]).default("active"),
   customerId: z.string().optional(),
   locationId: z.string().optional(),
-  page: z.coerce.number().default(1),
-  limit: z.coerce.number().default(50),
+  page: z.coerce.number().min(1).default(1),
+  // A guard rail, not a new policy: the app's recent-cache warm legitimately asks
+  // for 2000 (date-bounded, to fill IndexedDB for offline), and every bill carries
+  // its lines, so that answer is already megabytes. Unbounded, one client asking
+  // for 100000 would build the whole shop's trading history in memory and
+  // serialise it. 2000 is what the app actually requests, so nothing in the
+  // product changes; it only stops the number no caller has a reason to send.
+  limit: z.coerce.number().min(1).max(2000).default(50),
+  // "full" is the shop's offline copy — every bill with its lines, which is what
+  // cacheBills() replicates into IndexedDB and what the reprinted receipt, the
+  // WhatsApp share and the cancel dialog read when there is no internet.
+  // "list" is the bills SCREEN: the columns a row renders, and a count of the
+  // lines instead of the lines. Default stays "full" so no existing caller moves.
+  view: z.enum(["full", "list"]).default("full"),
 });

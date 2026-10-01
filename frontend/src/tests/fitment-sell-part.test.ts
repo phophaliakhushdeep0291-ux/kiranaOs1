@@ -20,34 +20,69 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const LINE = String.fromCharCode(10);
 const settings = new Map<string, unknown>();
+let transactionTail: Promise<unknown> = Promise.resolve();
 
 vi.mock("@/lib/offline/db", () => ({
   offlineDB: {
     getSetting: vi.fn(async (key: string) => (settings.has(key) ? settings.get(key) : null)),
     setSetting: vi.fn(async (key: string, value: unknown) => { settings.set(key, value); }),
     delete: vi.fn(async (_store: string, key: string) => { settings.delete(key); }),
+    transaction: async (_stores: string[], work: (tx: { setSetting: (key: string, value: unknown) => Promise<void> }) => Promise<unknown>) => {
+      const result = transactionTail.then(async () => {
+        const previous = new Map(settings);
+        try { return await work({ setSetting: async (key, value) => { await offlineDB.setSetting(key, value); } }); }
+        catch (error) { settings.clear(); previous.forEach((value, key) => settings.set(key, value)); throw error; }
+      });
+      transactionTail = result.catch(() => undefined);
+      return result;
+    },
   },
 }));
 
-const { PENDING_CART_KEY, queueProductsForBilling, takeQueuedProducts } =
+const { PENDING_CART_KEY, queueProductsForBilling } =
   await import("@/features/core/billing/pending-cart-additions");
+const { offlineDB } = await import("@/lib/offline/db");
 
-beforeEach(() => settings.clear());
+const readQueue = async () => (await offlineDB.getSetting<Array<{ productId: string; name: string }>>(PENDING_CART_KEY)) ?? [];
+
+beforeEach(() => { settings.clear(); transactionTail = Promise.resolve(); vi.clearAllMocks(); });
 
 describe("the hand-off queue", () => {
-  it("carries a part over and hands it back once", async () => {
-    await queueProductsForBilling([{ productId: "p-clutch", name: "Clutch plate 575 DI" }]);
-    expect(await takeQueuedProducts()).toEqual([{ productId: "p-clutch", name: "Clutch plate 575 DI" }]);
-    // Once. A part must land on the bill the counter walked over to, not on
-    // every bill after it.
-    expect(await takeQueuedProducts()).toEqual([]);
-    expect(settings.has(PENDING_CART_KEY)).toBe(false);
+  it("keeps the part queued until billing can save it", async () => {
+    const part = { productId: "p-clutch", name: "Clutch plate 575 DI" };
+    await queueProductsForBilling([part]);
+    expect(await readQueue()).toEqual([part]);
+    expect(await readQueue()).toEqual([part]);
   });
 
   it("appends, so a second part does not drop the first", async () => {
     await queueProductsForBilling([{ productId: "p-1", name: "Oil filter" }]);
     await queueProductsForBilling([{ productId: "p-2", name: "Air filter" }]);
-    expect((await takeQueuedProducts()).map((row) => row.productId)).toEqual(["p-1", "p-2"]);
+    expect((await readQueue()).map((row) => row.productId)).toEqual(["p-1", "p-2"]);
+  });
+
+  it("preserves both parts when two handoffs arrive together", async () => {
+    await Promise.all([
+      queueProductsForBilling([{ productId: "oil", name: "Oil filter" }]),
+      queueProductsForBilling([{ productId: "air", name: "Air filter" }]),
+    ]);
+    expect((await readQueue()).map((row) => row.productId)).toEqual(["oil", "air"]);
+  });
+
+  it("does not overwrite the existing queue after a read failure", async () => {
+    await queueProductsForBilling([{ productId: "oil", name: "Oil filter" }]);
+    vi.mocked(offlineDB.getSetting).mockRejectedValueOnce(new Error("Read failed"));
+    await expect(queueProductsForBilling([{ productId: "air", name: "Air filter" }])).rejects.toThrow("Read failed");
+    expect(await readQueue()).toEqual([{ productId: "oil", name: "Oil filter" }]);
+  });
+
+  it("reports failed saves and allows a successful retry without duplicating the part", async () => {
+    vi.mocked(offlineDB.setSetting).mockRejectedValueOnce(new Error("Storage full"));
+    const part = { productId: "oil", name: "Oil filter" };
+    await expect(queueProductsForBilling([part])).rejects.toThrow("Storage full");
+    expect(settings.has(PENDING_CART_KEY)).toBe(false);
+    await queueProductsForBilling([part]);
+    expect(await readQueue()).toEqual([part]);
   });
 
   it("ignores rows with nothing to look up", async () => {
@@ -55,13 +90,14 @@ describe("the hand-off queue", () => {
       { productId: "", name: "blank" },
       { productId: "p-3", name: "Brake shoe" },
     ] as never);
-    expect((await takeQueuedProducts()).map((row) => row.productId)).toEqual(["p-3"]);
+    expect((await readQueue()).map((row) => row.productId)).toEqual(["p-3"]);
   });
 
-  it("survives a storage that will not read", async () => {
-    // A queue is a convenience. It must never be the reason a till cannot bill.
+  it("replaces a malformed old queue when a valid part is requested", async () => {
     settings.set(PENDING_CART_KEY, "not an array");
-    expect(await takeQueuedProducts()).toEqual([]);
+    const part = { productId: "p-3", name: "Brake shoe" };
+    await queueProductsForBilling([part]);
+    expect(await readQueue()).toEqual([part]);
   });
 
   it("stays out of the billing draft", async () => {
@@ -91,20 +127,21 @@ describe("the two ends of it", () => {
   });
 
   it("rings it up through billing's own add, not a second pricing path", () => {
-    expect(billing).toContain("const product = productById.get(entry.productId);");
-    expect(billing).toContain("if (product) addToCart(product);");
+    expect(billing).toContain("mergeCartProduct(cart, product,");
+    expect(billing).toContain("mergeCartProduct(previous, product, resolveLine, options)");
   });
 
   it("waits for the cart it is joining", () => {
     // Landing before the draft restores would put the line on a workspace that
     // is about to be overwritten; landing before the catalogue loads would give
     // addToCart nothing to price.
-    expect(billing).toContain("if (!draftHydrated || productById.size === 0) return;");
+    expect(billing).toContain("shouldWaitForBillingCatalogue(products, productById.size)");
+    expect(billing).toContain("recoverQueuedBillingDraft(BILLING_DRAFT_KEY");
   });
 
   it("says so when the part is not in the loaded catalogue", () => {
     expect(billing).toContain('t("billing.pending.notFound")');
-    expect(billing).toContain("missing.push(entry.name || entry.productId)");
+    expect(billing).toContain("recovery.missing.join");
   });
 
   it("keeps the arrow pointing one way", () => {

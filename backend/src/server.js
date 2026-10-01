@@ -4,6 +4,7 @@ import db, { databaseEngine } from "./db.js";
 import { initErrorTracking, captureException, closeErrorTracking } from "./lib/errorTracking.js";
 import { closeRedis } from "./lib/redis.js";
 import { seedPlans } from "./modules/subscription/subscription.service.js";
+import { assessStorageVolume } from "./lib/storageVolume.js";
 import { recoverWebhookDeliveries } from "./modules/integrations/integrations.service.js";
 import { describeSyncFeedFailure, inspectSyncFeedTriggers, shouldRefuseStartup, SYNC_FEED_TABLES } from "./modules/sync/sync-feed-integrity.js";
 
@@ -38,6 +39,16 @@ async function main() {
     const detail = describeSyncFeedFailure(feed);
     if (shouldRefuseStartup(feed, env.NODE_ENV)) throw new Error(detail);
     console.error(JSON.stringify({ type: "startup_warn", message: detail, missing: feed.missing, time: new Date().toISOString() }));
+  }
+
+  // Loud, not fatal: refusing to boot would take the API down to report a
+  // mount that was already wrong while it served. The preflight fails on it.
+  const storageVolume = assessStorageVolume();
+  for (const message of storageVolume.errors) {
+    console.error(JSON.stringify({ type: "startup_error", message, storageRoot: storageVolume.storageRoot, volumeMountPath: storageVolume.mountPath, time: new Date().toISOString() }));
+  }
+  for (const message of storageVolume.warnings) {
+    console.warn(JSON.stringify({ type: "startup_warn", message, time: new Date().toISOString() }));
   }
 
   // Sync plan configs (device limits, features) to DB on every start so deployments

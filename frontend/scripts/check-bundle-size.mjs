@@ -93,6 +93,30 @@ const MAX_INITIAL_GZIP_BYTES = 300 * 1024;
 // Complete largest-shop install measured 4.34 MB / 1.223 MB gzip; keep bounded
 // headroom and verify boot coverage in check-production-app.mjs. Startup stays
 // at 259.3 kB gzip and its 300 kB limit does not move.
+//
+// 2026-09-25: tightening this to 4.45 MB was implemented, measured and REVERTED,
+// which is worth recording because the reasoning looked sound at the wrong moment.
+// Measured against the 2026-09-21 build it was right: this proxy had 4.1% slack
+// while the gzip line it accompanies sat at 97.5%, so it had stopped being able to
+// catch a duplicated dependency before gzip hid it, and the raw startup note above
+// says plainly to tighten back when the build shrinks.
+//
+// Four days of ordinary feature work deleted the premise. On 28144f96 the same
+// payload is 4476.3 kB with the cloud-string tier below already applied, so:
+//
+//   raw   4476.3 / 4608 -> 131.7 kB, 2.9% slack
+//   gzip  1261.4 / 1280 ->  18.6 kB, 1.5% slack
+//
+// 4.45 MB would leave raw at 1.8% — level with the user-facing metric rather than
+// looser than it — and raw is burning ~14 kB/day at the moment (4419 -> 4530 over
+// the four days), so it would have become the binding constraint within the week.
+// That is exactly the fault the RAW STARTUP note above was written about: the proxy
+// failing builds instead of the metric a merchant can perceive. A companion signal
+// is supposed to be the loose one.
+//
+// So: do not tighten this line while gzip is the tighter of the two. Re-measure
+// both slacks first; the instruction to tighten when the build shrinks assumes the
+// gzip line has room, and right now it does not.
 const MAX_SHOP_OFFLINE_JS_BYTES = 4.5 * 1024 * 1024;
 // Raised 912 -> 916 kB once, to pay for disabling terser's booleans_as_integers
 // (see vite.config.ts): that flag made `x === true` compile to `1 == x`, so a
@@ -254,6 +278,115 @@ const MAX_SHOP_OFFLINE_JS_BYTES = 4.5 * 1024 * 1024;
 // shell. Anything much below ~250 kB is a startup-sequencing change — booting
 // the till before the sync engine, settings and subscription — not a chunking
 // one.
+//
+// ── 2026-09-25: the cloud-only STRING tier, and a full audit of what is left ──
+// This row reached 99.5% of the gzip line (1274.1/1280, 5.9 kB left), having spent
+// 22.5 kB in eight days — 1251.7 on 09-17, 1259.8 on 09-21, 1274.1 on 09-25 — so
+// the payload was audited module by module from the sourcemaps rather than guessed
+// at. One leak was found and closed.
+//
+// Where that growth went, since the obvious suspicion is wrong: it is CORE, not any
+// one trade. Restaurant is the trade that defines this ceiling, so it looks causal;
+// it is not. Between 787af9ee and 4d82c917 the kirana payload rose 13.8 kB gzip and
+// restaurant 13.9 — every trade absorbed the same bytes. The sources were the tax
+// reconciliation/review panels under settings/pages, the subscription free-access
+// work in the shell, and ~380 lines of new copy in shop-types, settings-pages,
+// shell and reports. vite.config.ts did not change, so no precache entry was added;
+// restaurant is simply still the largest group. Do not go looking for a trade leak.
+//
+// The leak is the string half of a rule the build already applied to code.
+// Routes marked `onlineOnly` render the shell's internet-required state instead
+// of mounting, so their page chunks are deliberately kept out of CORE_ASSETS —
+// but their TRANSLATION tables were still in the two deferred halves, which ARE
+// precached. Every shop therefore installed copy that cannot appear on an offline
+// till by construction. Moved to a third tier (english-cloud.ts / hindi-cloud.ts)
+// that loads only when a cloud route opens:
+//
+//   restaurant 4531.4 -> 4476.3 kB raw, 1274.1 -> 1261.4 kB gzip (-12.7)
+//   startup unchanged at 869.0 kB / 262.5 kB gzip (+0.4 / +0.2)
+//
+// The two chunks removed are 13.9 kB gzip but the payload fell 12.7: splitting
+// tables out of the deferred halves cools their gzip dictionaries by ~1.2 kB.
+// Both sides measured with THIS script on 28144f96, per the warning above about
+// vite's console figure. The same change measured -12.3 kB against 787af9ee four
+// days earlier, so the saving is a property of the split and not of one build.
+//
+// Measured with KIRANA_BUILD_ID pinned to the same value on both sides, which
+// matters more than it sounds: the build id is embedded in the chunks, and an
+// unpinned build defaults to a timestamp, so back-to-back runs of the SAME tree
+// disagree by up to 0.3 kB gzip here. That is noise you can afford against a 300 kB
+// startup line and not against 18.6 kB of headroom. Pin it before comparing.
+//
+// It is the whole of what could be reclaimed without changing what works offline;
+// the rest of this note is why, and what the alternatives cost.
+//
+// Only two tables qualified, and the test is not "does this feature need the
+// cloud" — it is "can any offline screen read one of these keys":
+//
+//   assurance, devices -> read only under features/core/assurance/** and by
+//     DevicesPage, all onlineOnly. Moved.
+//   accounting -> REJECTED: Layout.tsx and MobileAppChrome.tsx read accounting.*
+//     for the nav, and ReportsPage reads it too.
+//   assistant -> REJECTED: BillingAssistantStrip reads assistant.* on the BILLING
+//     screen. Moving either would print a raw key on an offline till.
+//
+// ── What else was measured, and why none of it is available ────────────────
+// Recorded so the next person does not repeat the afternoon:
+//
+//   - Module duplication, RE-measured because the 0.0 kB finding above predates
+//     experimentalMinChunkSize dropping to 0: still exactly 0 across 1298
+//     modules. There is no waste to reclaim, only code some screen imports.
+//   - recharts is 113.3 kB gzip of this payload (7 chunks: the 91.5 kB
+//     generateCategoricalChart plus PieChart/YAxis/LineChart/AreaChart/
+//     CartesianGrid/BarChart), pulled in STATICALLY by 8 core pages that all
+//     draw real charts. Deferring it to a background asset group drops this
+//     number ~9% and is the single biggest lever here — and it is GAMING, not a
+//     saving: every shop opens a dashboard, so every shop still downloads it.
+//     Only move it as part of a decision that charts do not render offline.
+//   - Its lodash (15.3 kB gzip attributable) is already tree-shaken to the 191
+//     internal helpers that recharts' ~15 public functions reach. No alias win.
+//   - Per-LANGUAGE asset groups, the obvious mirror of the per-trade ones: the
+//     three translation chunks are 193.9 kB gzip that no single shop can render
+//     more than two thirds of. It does not move THIS number, because
+//     DEFAULT_LANGUAGE is "hi" — the typical shop is the Hindi shop, which is
+//     the largest payload. It would save an English shop 117.8 kB and is worth
+//     doing on its own merits; it is not a headroom fix for this line.
+//   - Per-TRADE translation modules, same idea: restaurant.* is read by
+//     CustomersPage, InventoryPage and OrdersReceivedPage, manufacturing.* by
+//     SettingsPage and TaxesSettingsPage. Splitting them shows raw keys on core
+//     screens for every other trade.
+//
+// So after this change the payload is app code that a real Hindi restaurant shop
+// genuinely needs offline, with no duplication in it. The ceiling was revisited
+// here, as the note above requires, and deliberately NOT moved in either
+// direction. 1261.4/1280 leaves 18.6 kB (1.5%).
+//
+// Raising it would be dodging a failure on the user-facing metric, which the notes
+// above forbid in terms. Ratcheting it down would hand back the 12.4 kB just
+// reclaimed and leave a gate that fails on the next legitimate feature rather than
+// on a regression — the exact fault the 912 kB and 950 kB notes were written about.
+//
+// Do not read 18.6 kB as comfort, and do not read the burn as a rate. It is lumpy,
+// and the lumps are what to watch:
+//
+//   09-17 -> 09-21   +8.1 kB gzip
+//   09-21 -> 09-25   +13.9 kB  (22 commits: tax panels, free-access, new copy)
+//   4d82c917 -> 28144f96  +0.4 kB  (5 commits: bill-line pairing, two-word product
+//                                   search, boot copy, empty-shelf guard)
+//
+// Those last five commits are real features and cost almost nothing, because what
+// moves this line is COPY and new precached panels, not logic. A change that adds
+// neither can be large and free; one that adds a settings panel in two languages
+// costs several kB. So "days of headroom" is the wrong model — ask what a change
+// adds, not how big it is.
+//
+// What is not lumpy is that this line has now been rescued twice by audits that
+// found real waste, and there is none left. The next time it binds, do not audit —
+// the answer is one of the three scoping decisions measured above (charts offline,
+// the atomic install's contents, or the Hindi shop's English fallback), argued on
+// what ships to a phone on a retail connection. That decision is a product call,
+// not a bundling one; the measurements for all three are recorded above so it can
+// be made without re-deriving them.
 const MAX_SHOP_OFFLINE_GZIP_BYTES = 1.25 * 1024 * 1024;
 
 

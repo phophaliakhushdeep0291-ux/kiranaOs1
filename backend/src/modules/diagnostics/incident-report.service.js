@@ -1,6 +1,5 @@
-import OpenAI from "openai";
 import db from "../../db.js";
-import { env } from "../../config/env.js";
+import { chatProviders, runChatCompletion } from "../ai/provider-gateway.js";
 import { getSyncDiagnostics } from "../sync/sync-diagnostics.service.js";
 import { getLatestHealthForDevice, listLatestHealthPerDevice } from "../devices/deviceHealth.service.js";
 
@@ -11,19 +10,24 @@ import { getLatestHealthForDevice, listLatestHealthPerDevice } from "../devices/
 // but the report is ALWAYS produced without one (graceful degradation).
 
 // ── Optional LLM provider (absence of a key is NOT an error here) ──────────────
-function getReportProvider() {
+// The gateway owns provider order, retries, failover and token accounting; this
+// module only needs to know whether ANY provider exists, because "no key" is a
+// reported status here rather than an error.
+function reportProviders() {
   try {
-    if (env.GROQ_API_KEY) {
-      return { client: new OpenAI({ apiKey: env.GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1" }), model: env.GROQ_MODEL || "openai/gpt-oss-20b", provider: "groq" };
-    }
-    if (env.OPENAI_API_KEY) {
-      return { client: new OpenAI({ apiKey: env.OPENAI_API_KEY }), model: env.OPENAI_MODEL || "gpt-4o-mini", provider: "openai" };
-    }
+    return chatProviders();
   } catch {
-    /* treat as "no provider" */
+    return []; /* treat as "no provider" */
   }
-  return null;
 }
+
+/**
+ * A support-path budget, not a counter-path one. Nobody is standing at a till
+ * waiting for this; it is generated while reading a diagnostic screen. But it
+ * still needs a ceiling — previously it had none at all, and a wedged provider
+ * held the diagnostics request open for the SDK's ten-minute default.
+ */
+const NARRATIVE_TIMEOUT_MS = 25_000;
 
 // ── Focus detection from the user's own words ─────────────────────────────────
 const FOCUS_RULES = [
@@ -306,8 +310,8 @@ function composeGroundedNarrative(report, catalog, selectedIds) {
  * facts or confidence, and malformed or unsupported output fails closed.
  */
 export async function generateGroundedNarrative(report, { providerOverride } = {}) {
-  const provider = providerOverride ?? getReportProvider();
-  if (!provider) {
+  const candidates = providerOverride ? [providerOverride] : reportProviders();
+  if (!candidates.length) {
     return {
       text: null,
       provider: null,
@@ -319,7 +323,8 @@ export async function generateGroundedNarrative(report, { providerOverride } = {
   if (!catalog.length) {
     return {
       text: null,
-      provider: provider.provider ?? "unknown",
+      // Nothing was asked, so this names who would have been asked first.
+      provider: candidates[0].provider ?? "unknown",
       grounding: {
         status: "insufficient_evidence",
         evidenceIds: [],
@@ -331,7 +336,6 @@ export async function generateGroundedNarrative(report, { providerOverride } = {
   const evidenceIds = catalog.map((row) => row.id);
   const schema = selectionSchema(evidenceIds);
   const request = {
-    model: provider.model,
     temperature: 0,
     messages: [
       {
@@ -350,22 +354,32 @@ export async function generateGroundedNarrative(report, { providerOverride } = {
       },
     ],
   };
-  request.response_format = provider.provider === "openai"
-    ? {
-        type: "json_schema",
-        json_schema: { name: "incident_evidence_selection", strict: true, schema },
-      }
-    : { type: "json_object" };
-
-  const completion = await provider.client.chat.completions.create(request);
+  const answered = await runChatCompletion({
+    purpose: "incident_narrative",
+    deadline: Date.now() + NARRATIVE_TIMEOUT_MS,
+    candidates,
+    // Only OpenAI enforces the schema; Groq is asked for plain JSON and the
+    // result is validated either way. Which one answers is settled by failover,
+    // so the choice is made here rather than before the call.
+    body: (candidate) => ({
+      ...request,
+      response_format: candidate.provider === "openai"
+        ? {
+            type: "json_schema",
+            json_schema: { name: "incident_evidence_selection", strict: true, schema },
+          }
+        : { type: "json_object" },
+    }),
+  });
+  const servedBy = answered.provider ?? "unknown";
   const selection = parseEvidenceSelection(
-    completion?.choices?.[0]?.message?.content,
+    answered.completion?.choices?.[0]?.message?.content,
     new Set(evidenceIds),
   );
   if (!selection.ok) {
     return {
       text: null,
-      provider: provider.provider ?? "unknown",
+      provider: servedBy,
       grounding: { status: "rejected", evidenceIds: [], rejectedReason: selection.reason },
     };
   }
@@ -373,7 +387,7 @@ export async function generateGroundedNarrative(report, { providerOverride } = {
   const narrative = composeGroundedNarrative(report, catalog, selection.evidenceIds);
   return {
     text: narrative.text,
-    provider: provider.provider ?? "unknown",
+    provider: servedBy,
     grounding: { status: "verified", evidenceIds: narrative.evidenceIds, rejectedReason: null },
   };
 }

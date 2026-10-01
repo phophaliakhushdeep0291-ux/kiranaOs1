@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { addMoney, moneyEquals, moneyShadows, multiplyMoney, round2, subtractMoney, sumMoney } from "../../utils/money.js";
 import { toBaseQty, baseQtyToRateQty } from "../../utils/units.js";
@@ -13,6 +14,7 @@ import {
   getLocationQuantitiesByProduct,
   getLocationQuantity,
   incrementLocationInventory,
+  locationAlreadyResolvedForRequest,
   resolveOperationalLocation,
 } from "../stores/location-context.service.js";
 import { sellingUnitCostPrice, sellingUnitMaxPrice } from "../products/selling-unit-pricing.js";
@@ -20,6 +22,7 @@ import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../pay
 import { reapplyBillLoyaltyInTransaction, recordBillLoyaltyInTransaction, recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption, reverseBillLoyaltyInTransaction } from "../loyalty/loyalty.service.js";
 import { issueReturnCreditInTransaction, reapplyGiftCardRedemptions, recordGiftCardRedemptions, reserveGiftCardPayments, reverseGiftCardRedemptions } from "../gift-cards/giftCards.service.js";
 import { evaluateSaleGuards } from "../../shared/sale-guards.js";
+import { runBillLifecycle } from "../../shared/bill-lifecycle.js";
 import { allocateLotsForBill, batchMrpCeilings, reapplyBillLotAllocations, restoreBillLotAllocations, restoreLotsForSaleReturn } from "../inventory-lots/inventoryLots.service.js";
 import { reapplyBillOfferRedemption, redeemOfferInTransaction, reverseBillOfferRedemption, validateOfferForBill } from "../offers/offers.service.js";
 import { sendTransactionalEmail } from "../../lib/authEmail.js";
@@ -27,10 +30,124 @@ import { createAuditLog } from "../audit/audit.service.js";
 import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
 import { assertSensitiveBillReason, deriveSensitiveBillActions } from "./bill-sensitive-approval.js";
 import { stockLedgerProvenance } from "../inventory/stock-ledger-provenance.js";
+import { rateUnitFactor } from "../inventory/rate-unit-factor.js";
 
 const OFFLINE_BILL_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
 const OFFLINE_BILL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 const BILL_ITEMS_WITH_OPTIONS = { include: { addons: true } };
+
+// What the bills LIST sends for each line.
+//
+// Every BillItem column except the seven *Paise mirrors, which no screen reads —
+// the client does its money in the Float columns and its own paise helpers. The
+// list is not a summary: its rows are written into IndexedDB and become the
+// receipt the shop prints, the text it shares on WhatsApp, the lines the cancel
+// dialog offers and the fallback the detail page renders when sync has not put
+// bill_items there yet. So this drops the provably unread and keeps everything
+// else, including the pricing provenance the detail page shows.
+//
+// Enumerated rather than omitted because Prisma 5.14 has no `omit`. A new column
+// therefore has to be added here deliberately, which is the safer failure: a
+// missing field shows up as undefined on screen, not as silently wrong money.
+/**
+ * What a Payment is for, on a bill the client has replicated.
+ *
+ * Audited column by column, by following the access path rather than grepping the
+ * name — which is how `amountPaise` was previously miscounted as having 49 readers
+ * when it has none here (all 49 are accounting rows, QR slips, assurance findings
+ * and checkouts).
+ *
+ *   id               paymentIdentityKeys(), rowId(), React keys
+ *   billId           paymentBillDisplaySignature / …EchoBaseSignature
+ *   clientPaymentId  paymentIdentityKeys()
+ *   idempotencyKey   paymentIdentityKeys()
+ *   mode, amount     billPaid, paymentModeOf, the money statement, receipts
+ *   createdAt        the dedupe sort, and the paid_at/paidAt/created_at chain
+ *   status           syncPriority() reads row.status when ordering the pair
+ *
+ * The eight left out have no reader that reaches them through a bill:
+ *   shopId               the offline scope guard matches tenant_id/store_id
+ *   amountPaise          nothing reads it off a payment
+ *   sourceDeviceId       read only off an OUTBOUND outbox payload, in
+ *                        sync-operation-normalizer, never off a listed bill
+ *   provider,            retail/card provenance. Read off RetailPaymentCheckout
+ *   providerReference,   and CardTerminalCharge objects, which come from the
+ *   confirmationSource,  payment-intent endpoints, not from a bill.
+ *   confirmedAt
+ *   retailPaymentIntentId  written when a bill is created; never read back
+ */
+export const BILL_REPLICA_PAYMENT_SELECT = {
+  select: {
+    id: true, billId: true,
+    clientPaymentId: true, idempotencyKey: true,
+    mode: true, amount: true, status: true, createdAt: true,
+  },
+};
+
+// Exported because /api/bills is not the only endpoint that fills the shop's
+// offline copy of a bill: /api/sync/pull writes the same rows into the same
+// IndexedDB tables, far more often. The audit above is a property of the client's
+// access paths, not of one route, so both paths send the same columns.
+export const BILL_REPLICA_ITEM_COLUMNS = {
+  id: true, billId: true, productId: true,
+  sellingUnitId: true, sellingUnitCode: true, sellingUnitLabel: true, conversionToBase: true,
+  name: true, quantity: true, enteredUnit: true, baseUnit: true, quantityInBaseUnit: true,
+  rateUnit: true, ratePerRateUnit: true, costPerRateUnit: true, gstRate: true, hsn: true,
+  originalBillItemId: true, trackedUnitId: true, note: true,
+  lineDiscount: true, lineTotal: true, lineCost: true, lineProfit: true, originalUnitPrice: true,
+  appliedPricingRuleId: true, appliedPricingRuleType: true, pricingExplanation: true,
+  pricingConfidence: true, pricingCalculationVersion: true,
+  wasPriceOverridden: true, priceOverrideReason: true, priceApprovedByUserId: true,
+};
+
+// `addons` is the one thing the two replica paths do NOT share. A bill item pulled
+// through /api/sync/pull has never carried its addons — the client's pull writer
+// does not read them — so adding them here would enlarge every pull with data
+// nothing consumes. Kept on the /api/bills shape, where the detail screen uses it.
+const BILL_LIST_ITEM_SELECT = {
+  select: { ...BILL_REPLICA_ITEM_COLUMNS, addons: true },
+};
+
+/**
+ * The bills SCREEN's shape, as opposed to the shop's offline copy.
+ *
+ * One endpoint was serving two jobs. The list screen renders a row per bill —
+ * number, date, customer, total, how it was paid, how many lines — and got the
+ * full offline replica to do it: every Bill column, every line with its pricing
+ * provenance, ~232KB for fifty bills. `view=list` sends the twenty columns that
+ * row actually reads, and a COUNT of the lines instead of the lines.
+ *
+ * Three of these look droppable and are not:
+ *   clientBillId / idempotencyKey — billIdentityKeys() collapses a pending local
+ *     bill against its synced twin on these. Without them the client falls back to
+ *     a content signature computed FROM THE ITEMS, which this shape does not send,
+ *     so the fallback silently does nothing and the shop sees the same sale twice.
+ *   refundMode — resolveReturnRefundMode reads it before looking at payments.
+ *   updatedAt — the display dedupe sorts on it to pick the newest of a pair.
+ *
+ * `payments` stays, narrowed to what the row computes with — billPaid sums the
+ * non-credit amounts, paymentModeOf reads the modes.
+ */
+const BILL_LIST_VIEW_SELECT = {
+  id: true, billNo: true, billType: true, status: true,
+  customerId: true, customerName: true,
+  grandTotal: true, paidAmount: true, buyerPaidAmount: true, creditAmount: true,
+  returnOfBillId: true, refundMode: true,
+  createdByUserId: true, locationId: true,
+  clientBillId: true, idempotencyKey: true, sourceDeviceId: true,
+  deletedAt: true, cancelledAt: true,
+  businessDate: true, createdAt: true, updatedAt: true,
+  // `id` so paymentIdentityKeys() has something durable to key on; without it
+  // two equal tenders on one bill fall through to a mode/amount signature.
+  payments: { select: { id: true, mode: true, amount: true } },
+  _count: { select: { items: true } },
+};
+
+// The screen reads `items.length` with an itemCount fallback; this makes the
+// fallback the answer rather than a guess, and keeps `_count` off the wire.
+function toListViewBill({ _count, ...bill }) {
+  return { ...bill, itemCount: _count?.items ?? 0 };
+}
 
 async function writeRequiredBillAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
@@ -44,8 +161,17 @@ async function writeRequiredBillAudit(entry, client) {
   return audit;
 }
 
-function resolveBillBusinessDate(actor = {}) {
+function resolveBillBusinessDate(actor = {}, historicalDate = null) {
   const receivedAt = new Date();
+  // A reviewed repair supplies this through server-side transaction composition,
+  // never through the bill request body or the offline replay permission path.
+  if (historicalDate !== null) {
+    const candidate = new Date(historicalDate);
+    if (!Number.isFinite(candidate.getTime()) || candidate > receivedAt) {
+      throw new AppError("Historical sale date is invalid or in the future", 400, "HISTORICAL_BILL_DATE_INVALID");
+    }
+    return candidate;
+  }
   if (actor?.isOfflineReplay !== true) return receivedAt;
 
   const candidate = actor?.businessDate instanceof Date
@@ -73,7 +199,7 @@ function resolveBillBusinessDate(actor = {}) {
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
 // ─────────────────────────────────────────────────────────────
-export async function listBills(shopId, { from, to, status, customerId, locationId, page, limit }) {
+export async function listBills(shopId, { from, to, status, customerId, locationId, page, limit, view = "full" }) {
   const where = {
     shopId,
     deletedAt: null,
@@ -85,10 +211,18 @@ export async function listBills(shopId, { from, to, status, customerId, location
     }),
   };
 
+  const listView = view === "list";
   const [bills, total] = await Promise.all([
     db.bill.findMany({
       where,
-      include: { items: BILL_ITEMS_WITH_OPTIONS, payments: true, location: true, giftCardTransactions: true },
+      // The full view is the shop's offline copy: every column an offline screen
+      // reads, and nothing else. What is left out — `location` (the same 16-column
+      // row repeated once per bill), `giftCardTransactions`, the seven BillItem
+      // *Paise mirrors and eight Payment columns — was each checked for a reader
+      // by following the access path, not by grepping the field name.
+      ...(listView
+        ? { select: BILL_LIST_VIEW_SELECT }
+        : { include: { items: BILL_LIST_ITEM_SELECT, payments: BILL_REPLICA_PAYMENT_SELECT } }),
       orderBy: { businessDate: "desc" },
       skip: (page - 1) * limit,
       take: limit,
@@ -96,7 +230,7 @@ export async function listBills(shopId, { from, to, status, customerId, location
     db.bill.count({ where }),
   ]);
 
-  return { bills, total, page, limit };
+  return { bills: listView ? bills.map(toListViewBill) : bills, total, page, limit, view };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -261,10 +395,12 @@ export async function restoreDeletedBill(shopId, billId, actor = {}) {
 // ─────────────────────────────────────────────────────────────
 // fulfilment is server-owned context for goods already dispatched. HTTP/sync
 // bodies never supply it; all accounting still runs in this transaction.
-export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
+// transactionContext composes a sale with another server-owned operation. Its
+// caller must dispatch returned integrations only after its transaction commits.
+export async function confirmBill(shopId, body, actor = {}, fulfilment = null, transactionContext = null) {
   const sensitiveActions = Array.isArray(actor.sensitiveBillActions)
     ? [...new Set(actor.sensitiveBillActions)]
-    : await deriveSensitiveBillActions(shopId, body);
+    : await deriveSensitiveBillActions(shopId, body, transactionContext?.tx ?? db);
   assertSensitiveBillReason(sensitiveActions, body.reason);
   if (sensitiveActions.length > 0 && actor.ownerPinVerified !== true) {
     throw new AppError("Owner PIN required for this sensitive bill action", 403, "OWNER_PIN_REQUIRED");
@@ -301,7 +437,8 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
   // never from frontend/offline payload attribution fields.
   const createdByUserId = actor?.userId ?? null;
   const deviceId = actor?.deviceId ?? null;
-  const businessDate = resolveBillBusinessDate(actor);
+  // Only trusted server composition may supply a reviewed historical date.
+  const businessDate = resolveBillBusinessDate(actor, transactionContext?.businessDate ?? null);
   // Offline-origin bills (replayed from a device's sync queue) represent sales that
   // already physically happened, so they must never be dropped for being stock-short.
   // The online counter path leaves this false and still rejects overselling live.
@@ -332,12 +469,20 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
   // Create/resolve the primary location before opening the sale transaction.
   // Recovering from a concurrent unique-key race inside a PostgreSQL transaction
   // leaves that transaction aborted, and SQLite cannot safely run both creates.
-  const operationalLocation = await resolveOperationalLocation(shopId, requestedLocationId);
+  //
+  // On the HTTP path requireLocationAccess("sell") has already resolved this exact
+  // location and checked the cashier may sell from it, so the row is in hand; the
+  // helper hands it back only when it answers the same question. A sync replay has
+  // no request and still resolves it here.
+  const operationalLocation =
+    locationAlreadyResolvedForRequest(actor?.req, shopId, requestedLocationId)
+    ?? await resolveOperationalLocation(shopId, requestedLocationId, transactionContext?.tx ?? db);
 
   let bill;
   let integrationDeliveries = [];
   try {
-    const transactionResult = await db.$transaction(async (tx) => {
+    const runTransaction = transactionContext ? (work) => work(transactionContext.tx) : (work) => serializableTransaction(work);
+    const transactionResult = await runTransaction(async (tx) => {
     const existingBill = await findExistingBillByIdentity(tx, shopId, billIdentity);
     if (existingBill) return { bill: existingBill, deliveries: [] };
     const fulfilledStock = fulfilment ? await fulfilment.prepare(tx) : null;
@@ -378,6 +523,7 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
       stockHandledProductIds,
     } = await evaluateSaleGuards({
       shopId, tx, body, items, productMap, isEstimate, location,
+      isOfflineReplay: actor?.isOfflineReplay === true,
     });
     if (saleRefusal) {
       const error = new AppError(saleRefusal.message, saleRefusal.status ?? 409, saleRefusal.code);
@@ -492,7 +638,7 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
       // it — removing it from either would start refusing ordinary counter sales of
       // an under-counted item, which is the failure this comment previously implied
       // was impossible.
-      if (product && !allowStockShortfall && !fulfilledStock) {
+      if (product && product.stockTrackingEnabled !== false && !stockHandledProductIds.has(product.id) && !allowStockShortfall && !fulfilledStock) {
         const availableAtLocation = locationStockByProduct.get(product.id) ?? 0;
         if (availableAtLocation < qtyInBase) {
           throw new AppError(
@@ -504,10 +650,14 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
 
       // Line totals must use quantity converted into the product's rate unit.
       // Example: rate ₹46/kg and quantity 500g => qtyInRateUnit 0.5 => lineTotal ₹23.
+      // A line gets here with no packaging when there was none to default to, or on
+      // a wholesale invoice for goods already dispatched in base units — and for a
+      // packaged product the rate unit is its pack's word ("jar"), which only the
+      // pack can size. The unit table still decides for kg and friends.
       const qtyInRateUnit = sellingUnit
         ? item.quantity
         : product
-          ? baseQtyToRateQty(qtyInBase, product.rateUnit, product.baseUnit)
+          ? qtyInBase / await rateUnitFactor(tx, shopId, product)
         : item.quantity;
 
       // Each packaging is measured against ITS OWN ceiling: the pack's MRP when it
@@ -821,6 +971,18 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
     await consumeRetailPaymentIntents(tx, retailIntents);
 
     // ── 5. Deduct stock + create stock ledger entries ─────────
+    //
+    // The decrements stay one at a time: each is an optimistic claim
+    // (`updateMany` under a `gte` guard) whose row count decides whether the sale
+    // is allowed, and it reads back its own committed result to reconstruct
+    // old + change = new. Batching those would change what a concurrent sale sees.
+    //
+    // The ledger rows are the opposite: values already computed, nothing reads the
+    // created row. Appending them one INSERT at a time only lengthened how long a
+    // sale held the write lock — a twenty-line bill cost twenty round trips inside
+    // the transaction. They are collected and written once, after the loop, in the
+    // same order and with the same values.
+    const saleLedgerEntries = [];
     for (const { product, qtyInBase, sellingUnitQtyById } of stockUpdatesByProduct.values()) {
       const stockResult = await decrementLocationInventory(tx, {
         shopId,
@@ -834,28 +996,32 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
       // Record the actual stock removed so the ledger stays internally consistent
       // (old + change == new), including negative after-stock.
       const removedBaseQty = round2(stockResult.oldStock - stockResult.newStock);
-      await tx.stockLedger.create({
-        data: {
-          shopId,
-          locationId: location.id,
-          productId: product.id,
-          productName: product.name,
-          ...stockLedgerProvenance(actor),
-          action: "sale",
-          changeBaseQty: -removedBaseQty,
-          oldStockBaseQty: stockResult.oldStock,
-          newStockBaseQty: stockResult.newStock,
-          billId: bill.id,
-          clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `stock:${product.id}`),
-          idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `stock:${product.id}`),
-          sourceDeviceId: billIdentity.sourceDeviceId,
-          sourceType: "bill",
-          sourceId: bill.id,
-          note: stockResult.shortfallBaseQty > 0
-            ? `Offline sale recorded with ${stockResult.shortfallBaseQty} ${product.baseUnit} stock shortfall — reconcile inventory`
-            : undefined,
-        },
+      saleLedgerEntries.push({
+        shopId,
+        locationId: location.id,
+        productId: product.id,
+        productName: product.name,
+        ...stockLedgerProvenance(actor),
+        action: "sale",
+        changeBaseQty: -removedBaseQty,
+        oldStockBaseQty: stockResult.oldStock,
+        newStockBaseQty: stockResult.newStock,
+        billId: bill.id,
+        clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `stock:${product.id}`),
+        idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `stock:${product.id}`),
+        sourceDeviceId: billIdentity.sourceDeviceId,
+        sourceType: "bill",
+        sourceId: bill.id,
+        // `note` is nullable with no default, so an explicit null is what leaving
+        // it out already meant. Stated here because createMany fills a column the
+        // same way for every row in the batch.
+        note: stockResult.shortfallBaseQty > 0
+          ? `Offline sale recorded with ${stockResult.shortfallBaseQty} ${product.baseUnit} stock shortfall — reconcile inventory`
+          : null,
       });
+    }
+    if (saleLedgerEntries.length > 0) {
+      await tx.stockLedger.createMany({ data: saleLedgerEntries });
     }
 
     // ── 6. Udhar: create ledger entry + update customer balance ─
@@ -1005,6 +1171,9 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
     bill = transactionResult.bill;
     integrationDeliveries = transactionResult.deliveries;
   } catch (error) {
+    // A failed PostgreSQL transaction cannot be queried for a duplicate. Let
+    // the composition owner retry the whole operation from a fresh snapshot.
+    if (transactionContext) throw error;
     if (isUniqueConstraintError(error) && hasBillIdentity(billIdentity)) {
       const existingBill = await findExistingBillByIdentity(db, shopId, billIdentity);
       if (!existingBill) throw error;
@@ -1014,6 +1183,7 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null) {
     }
   }
 
+  if (transactionContext) return { bill, deliveries: integrationDeliveries };
   await dispatchIntegrationDeliveries(integrationDeliveries);
 
   return {
@@ -1053,7 +1223,7 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
     throw err;
   }
 
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     // Atomic claim: only one concurrent request can transition active -> cancelled, so two
     // simultaneous cancels can't both restore stock / reverse udhar. The conditional update
     // locks the row until commit; a read-then-act status check (the outer guard above) does not.
@@ -1073,16 +1243,20 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
       throw err;
     }
 
+    await runBillLifecycle("cancel", { tx, shopId, bill });
+
     // ── 1. Restore stock for every item ───────────────────────
     // Only bills that actually deducted stock (they have "sale" stock-ledger rows) restore it.
     // Guards legacy quote-era estimates, which never moved stock at creation.
     const location = await resolveOperationalLocation(shopId, bill.locationId, tx, { allowInactive: true });
 
-    const saleLedgerRows = await tx.stockLedger.count({
+    const saleLedgerRows = await tx.stockLedger.findMany({
       where: { shopId, billId: bill.id, action: "sale" },
+      select: { productId: true },
     });
-    for (const item of saleLedgerRows > 0 ? bill.items : []) {
-      if (!item.productId) continue;
+    const soldStockIds = new Set(saleLedgerRows.map((row) => row.productId));
+    for (const item of bill.items) {
+      if (!item.productId || !soldStockIds.has(item.productId)) continue;
 
       const product = await tx.product.findFirst({ where: { id: item.productId, shopId } });
       if (!product) continue;
@@ -1224,7 +1398,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
   try {
     const runTransaction = transactionContext
       ? (work) => work(transactionContext.tx)
-      : (work) => db.$transaction(work);
+      : (work) => serializableTransaction(work);
     const transactionResult = await runTransaction(async (tx) => {
       const existing = await findExistingBillByIdentity(tx, shopId, billIdentity);
       if (existing) return { bill: existing, deliveries: [] };
@@ -1494,6 +1668,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
         billItems.push({
           productId: effectiveProductId,
           originalBillItemId: originalItem?.id ?? null,
+          trackedUnitId: originalItem?.trackedUnitId ?? null,
           name: originalItem?.name ?? product?.name ?? item.name ?? "Item",
           quantity: -Math.abs(item.quantity),
           enteredUnit,
@@ -1518,7 +1693,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
           ...moneyShadows({ ratePerRateUnit: authoritativeRate, costPerRateUnit, lineDiscount: -lineDiscount, lineTotal: -lineTotal, lineCost: -lineCost, lineProfit: -lineProfit }),
         });
 
-        if (product) {
+        if (product && product.stockTrackingEnabled !== false) {
           restockPlan.push({
             product,
             qtyInBase: round2(qtyInBase),
@@ -1611,6 +1786,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
         },
         include: { items: true, payments: true },
       });
+      await runBillLifecycle("return", { tx, shopId, bill: returnBill, original, requests: items });
       // Only the resellable part of the return goes back into its batch. The
       // damaged part is written off just below and never reaches the shelf, so
       // the batch ledger must not take it back either.
@@ -1818,7 +1994,7 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
   if (!bill) throw new AppError("Bill not found", 404);
   if (bill.status !== "cancelled") throw new AppError("Bill is already restored or not cancelled", 409);
 
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const location = await resolveOperationalLocation(shopId, bill.locationId, tx, { allowInactive: true });
     // Atomic claim: cancelled -> active, so only one concurrent restore wins (mirrors cancel).
     const restoredAt = new Date();
@@ -1832,13 +2008,17 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
       throw err;
     }
 
+    await runBillLifecycle("restore", { tx, shopId, bill });
+
     // Re-deduct only stock the cancellation actually restored ("cancel_reversal" rows exist);
     // legacy quote-era estimates never moved stock in either direction.
-    const cancelReversalRows = await tx.stockLedger.count({
+    const cancelReversalRows = await tx.stockLedger.findMany({
       where: { shopId, billId: bill.id, action: "cancel_reversal" },
+      select: { productId: true },
     });
-    for (const item of cancelReversalRows > 0 ? bill.items : []) {
-      if (!item.productId) continue;
+    const restoredStockIds = new Set(cancelReversalRows.map((row) => row.productId));
+    for (const item of bill.items) {
+      if (!item.productId || !restoredStockIds.has(item.productId)) continue;
 
       const product = await tx.product.findFirst({
         where: { id: item.productId, shopId, deletedAt: null },

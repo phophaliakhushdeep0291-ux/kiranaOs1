@@ -1,0 +1,174 @@
+{
+  "status": "ci-passed",
+  "repository": {
+    "commit": "1d487d8c62704d713e19fd635447d4bfd0704223",
+    "branch": "main",
+    "dirty": false
+  },
+  "summary": {
+    "passed": 20,
+    "failed": 0,
+    "blocked": 0,
+    "skipped": 6
+  },
+  "completedAt": "2026-09-26T08:05:10.604Z",
+  "url": "https://github.com/phophaliakhushdeep0291-ux/kiranaOs1/actions/runs/36227797645",
+  "stages": [
+    {
+      "id": "release-metadata",
+      "status": "skipped",
+      "required": false,
+      "reason": "set RELEASE_VERSION, RELEASE_APPROVER, RELEASE_APPROVED=true, and RELEASE_ROLLBACK_IMAGE"
+    },
+    {
+      "id": "prisma-sqlite-validate",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "prisma-postgres-validate",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "migration-safety",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "release-gate",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "prisma-postgres-generate",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "backend-source-db",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "backend-tests",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "backend-warehouse",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "backend-integration-sqlite",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "backend-production-check",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "ai-safety",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "api-contract",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "razorpay-fixtures",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "hardware-bridge-contracts",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "frontend-production-check",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "local-storage-proof",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "postgres-production-proof",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "redis-worker-runtime",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "worker-heartbeat",
+      "status": "skipped",
+      "required": false,
+      "reason": "start the production worker and set PROOF_REQUIRE_WORKER=true with Redis configured"
+    },
+    {
+      "id": "live-api-contract",
+      "status": "skipped",
+      "required": false,
+      "reason": "set PROOF_BASE_URL or CONTRACT_SMOKE_BASE_URL"
+    },
+    {
+      "id": "live-api-smoke",
+      "status": "skipped",
+      "required": false,
+      "reason": "set PROOF_BASE_URL or SMOKE_BASE_URL"
+    },
+    {
+      "id": "cloud-storage-proof",
+      "status": "skipped",
+      "required": false,
+      "reason": "configure a non-local STORAGE_PROVIDER and its bucket credentials"
+    },
+    {
+      "id": "disaster-recovery-proof",
+      "status": "passed",
+      "required": true,
+      "reason": null
+    },
+    {
+      "id": "docker-build",
+      "status": "skipped",
+      "required": false,
+      "reason": "deferred to the scheduled/manual certification run (RELEASE_CERT_SKIP_IMAGE)"
+    },
+    {
+      "id": "source-snapshot-stability",
+      "status": "passed",
+      "required": true,
+      "reason": ""
+    }
+  ]
+}

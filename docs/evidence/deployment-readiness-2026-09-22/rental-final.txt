@@ -1,0 +1,100 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Rentals" [level=1]
+  - generic: Release QA clothing · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: Rentals page loaded
+  - paragraph: Out with customers
+  - paragraph: "0"
+  - paragraph: Due back today
+  - paragraph: "0"
+  - paragraph: Overdue
+  - paragraph: "0"
+  - paragraph: Yet to collect
+  - paragraph: ₹0
+  - heading "Rental bookings" [level=3]
+  - paragraph: A booked outfit is hidden from customers for its dates and comes back the day it is returned.
+  - button "New Booking":
+    - text: New Booking
+  - button "Open"
+  - button "Booked"
+  - button "With customer"
+  - button "Returned" [active]
+  - button "Cancelled"
+  - button "All"
+  - textbox "Name, mobile, booking no."
+  - table:
+    - rowgroup:
+      - row "Renter Items Rented for Status Balance Actions":
+        - columnheader "Renter"
+        - columnheader "Items"
+        - columnheader "Rented for"
+        - columnheader "Status"
+        - columnheader "Balance"
+        - columnheader "Actions"
+    - rowgroup:
+      - row "QA Rental Finance 8779017499 QA Counter Jodhpur RNT-000002 1 × QA Trade Item 21 Sept – 21 Sept 1 day Returned ₹0 ₹0 deposit held":
+        - cell "QA Rental Finance 8779017499 QA Counter Jodhpur RNT-000002":
+          - paragraph: QA Rental Finance
+          - paragraph:
+            - text: "8779017499"
+          - paragraph:
+            - generic: QA Counter Jodhpur
+          - generic: RNT-000002
+        - cell "1 × QA Trade Item":
+          - list:
+            - generic: 1 × QA Trade Item
+        - cell "21 Sept – 21 Sept 1 day":
+          - paragraph:
+            - text: 21 Sept – 21 Sept
+          - paragraph: 1 day
+        - cell "Returned"
+        - cell "₹0 ₹0 deposit held":
+          - paragraph: ₹0
+          - paragraph: ₹0 deposit held
+        - cell
+      - row "QA Renter 8779017401 QA Counter Jodhpur RNT-000001 1 × QA Trade Item 18 Sept – 18 Sept 1 day Returned ₹0 ₹200 original deposit · needs review":
+        - cell "QA Renter 8779017401 QA Counter Jodhpur RNT-000001":
+          - paragraph: QA Renter
+          - paragraph:
+            - text: "8779017401"
+          - paragraph:
+            - generic: QA Counter Jodhpur
+          - generic: RNT-000001
+        - cell "1 × QA Trade Item":
+          - list:
+            - generic: 1 × QA Trade Item
+        - cell "18 Sept – 18 Sept 1 day":
+          - paragraph:
+            - text: 18 Sept – 18 Sept
+          - paragraph: 1 day
+        - cell "Returned"
+        - cell "₹0 ₹200 original deposit · needs review":
+          - paragraph: ₹0
+          - paragraph: ₹200 original deposit · needs review
+        - cell
+  - alert: Older bookings need their advance and deposit history reconciled before further financial changes. Their deposits are excluded from the verified total.
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

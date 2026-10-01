@@ -12,6 +12,9 @@ import type { Bill, BillListResult, Customer, Product } from "@/types/api";
 type AnyRecord = Record<string, unknown>;
 
 const DIRECT_IMPORT_LIMIT = 5000;
+/** The maximum `/bills` accepts; asking for more answers 400. */
+const BILL_IMPORT_PAGE_LIMIT = 2000;
+const BILL_IMPORT_MAX_PAGES = 10;
 const PURCHASE_PULL_LIMIT = 1000;
 const PURCHASE_PULL_MAX_PAGES = 10;
 const SYNC_SKIP_CURSOR = "2099-12-31T23:59:59.999Z|~";
@@ -171,17 +174,43 @@ async function importCustomers() {
   return customers.length;
 }
 
+/**
+ * Every bill in the window, a page at a time.
+ *
+ * `/bills` caps `limit` at BILL_IMPORT_PAGE_LIMIT, so the single 5,000-row request
+ * this used to make answered 400 on every hydration — and `safeFetch` swallowed it,
+ * so bills were the one table cloud hydration silently never filled while products,
+ * customers and udhar succeeded around it.
+ *
+ * `complete` matters as much as the rows: the caller treats this result as
+ * AUTHORITATIVE for the window and quarantines any synced bill missing from it, so
+ * handing back a truncated page would delete real history from the till. A window
+ * too large to page through is reported incomplete instead, and the caller leaves
+ * the local copy alone for the incremental pull to reconcile.
+ */
+async function fetchBillWindow(from: string, to: string): Promise<{ bills: unknown[]; complete: boolean }> {
+  const bills: unknown[] = [];
+  for (let page = 1; page <= BILL_IMPORT_MAX_PAGES; page++) {
+    const result = await apiRequest<BillListResult>(
+      `/bills?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&status=all&limit=${BILL_IMPORT_PAGE_LIMIT}&page=${page}`,
+      { method: "GET", cache: "no-store", background: true },
+    );
+    const batch = Array.isArray(result?.bills) ? result.bills : [];
+    bills.push(...batch);
+    const total = Number(result?.total);
+    const drained = batch.length < BILL_IMPORT_PAGE_LIMIT;
+    const counted = Number.isFinite(total) && bills.length >= total;
+    if (drained || counted) return { bills, complete: true };
+  }
+  return { bills, complete: false };
+}
+
 async function importBills() {
   const scope = getOfflineScope();
   const now = new Date();
   const from = toDateInput(addDays(now, -730));
   const to = toDateInput(addDays(now, 1));
-  const result = await apiRequest<BillListResult>(`/bills?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&status=all&limit=${DIRECT_IMPORT_LIMIT}`, {
-    method: "GET",
-    cache: "no-store",
-    background: true,
-  });
-  const bills = Array.isArray(result?.bills) ? result.bills : [];
+  const { bills, complete } = await fetchBillWindow(from, to);
   const billItems: AnyRecord[] = [];
   const payments: AnyRecord[] = [];
 
@@ -205,11 +234,19 @@ async function importBills() {
   assertCurrentOfflineScope(scope);
   const fromTime = new Date(`${from}T00:00:00.000Z`).getTime();
   const toTime = new Date(`${to}T23:59:59.999Z`).getTime();
-  await offlineDB.replaceSyncedSnapshot("bills", merged, scope, (row) => {
-    const raw = row.businessDate ?? row.business_date ?? row.createdAt ?? row.created_at;
-    const time = new Date(String(raw ?? "")).getTime();
-    return Number.isFinite(time) && time >= fromTime && time <= toTime;
-  });
+  // Only a COMPLETE window may quarantine: this call removes synced bills the result
+  // does not contain, so replacing from a truncated read would erase the shop's older
+  // history. An incomplete read still writes what it fetched (below) and leaves the
+  // existing rows for the incremental pull to reconcile.
+  if (complete) {
+    await offlineDB.replaceSyncedSnapshot("bills", merged, scope, (row) => {
+      const raw = row.businessDate ?? row.business_date ?? row.createdAt ?? row.created_at;
+      const time = new Date(String(raw ?? "")).getTime();
+      return Number.isFinite(time) && time >= fromTime && time <= toTime;
+    });
+  } else if (merged.length > 0) {
+    await offlineDB.putMany("bills", merged);
+  }
   assertCurrentOfflineScope(scope);
   writeInstantCache("bills", merged);
   if (billItems.length > 0) {
@@ -375,6 +412,68 @@ export interface CloudHydrationResult {
   errors: Array<{ label: string; error: string }>;
 }
 
+/**
+ * Cursors that claim data this device does not have.
+ *
+ * A cursor means "I have everything up to here". Two things could leave one
+ * ahead of the truth. Until fe1981de the server advanced the suppliers, expenses
+ * and purchase-history cursors on a CASHIER pull while sending [] for them, and
+ * cursors are keyed per device rather than per user — so an owner signing in on a
+ * counter machine a cashier had synced resumed after rows they never received.
+ * Nothing re-requested them. The supplier list and the expense history were empty
+ * offline, for good, while sync reported it was up to date.
+ *
+ * The server no longer does that. This is for the devices where it already
+ * happened, and for whatever else leaves the same mark, because the mark is what
+ * this checks rather than the cause: a cursor is set, and the table it speaks for
+ * is empty. Clearing it makes the next pull start from the beginning and fill the
+ * table, after which the condition is false and this does nothing again.
+ *
+ * It cannot misfire on a shop that genuinely has no suppliers: with no rows to
+ * return, the server hands back the prior cursor, which is null, so there is
+ * nothing set to clear.
+ *
+ * Only the two entities whose absence is visible are checked. Both are read all
+ * over the app offline — the supplier picker, the expense screens — and both have
+ * a Dexie table of their own to look at.
+ */
+const CURSOR_BACKED_TABLES = [
+  { entity: "suppliers", table: "suppliers" },
+  { entity: "expenses", table: "expenses" },
+] as const;
+
+async function repairCursorsAheadOfLocalData(): Promise<string[]> {
+  const repaired: string[] = [];
+  try {
+    await dexieDB.open();
+    const scope = getOfflineScope();
+    // Reached through table(name) rather than the typed dexieDB.sync_cursor
+    // accessor, and deliberately. This is a best-effort repair inside the
+    // recovery path: the imports above are what the user asked for, and a
+    // hydration that never settles is worse than one that does not repair. The
+    // typed accessor on a partially-stubbed database waits on an IndexedDB open
+    // that never completes, which no catch can rescue; table(name) raises
+    // instead, and raising is something this can handle.
+    const cursors = dexieDB.table("sync_cursor") as unknown as {
+      get(id: string): Promise<{ cursor?: unknown; tenant_id?: unknown; store_id?: unknown } | undefined>;
+      delete(id: string): Promise<void>;
+    };
+    for (const { entity, table } of CURSOR_BACKED_TABLES) {
+      const row = await cursors.get(`entity:${entity}`);
+      if (!row || row.tenant_id !== scope.tenant_id || row.store_id !== scope.store_id) continue;
+      if (!row.cursor) continue;
+      const held = await dexieDB.table(table).count();
+      if (held > 0) continue;
+      await cursors.delete(`entity:${entity}`);
+      repaired.push(entity);
+    }
+  } catch {
+    // A repair that cannot run must not take the recovery sync down with it.
+    return repaired;
+  }
+  return repaired;
+}
+
 export async function hydrateFromBackendSnapshot(): Promise<CloudHydrationResult> {
   const scope = getOfflineScope();
   await offlineDB.init();
@@ -408,6 +507,17 @@ export async function hydrateFromBackendSnapshot(): Promise<CloudHydrationResult
   };
 
   assertCurrentOfflineScope(scope);
+  // The imports above re-fetch products, customers, bills, the udhar ledger and
+  // purchase history over REST, so those repair themselves. Suppliers and expenses
+  // arrive only through the sync pull, which means a cursor sitting ahead of an
+  // empty table is the one thing this recovery could not otherwise fix — and
+  // repairing that is exactly what runManualSyncCycle promises in its own words:
+  // "incremental sync alone cannot repair a device whose cursor is current but
+  // whose local IndexedDB snapshot is incomplete".
+  const repairedCursors = await repairCursorsAheadOfLocalData();
+  if (repairedCursors.length > 0) {
+    console.warn(`[Artha] Reset sync cursors that were ahead of local data: ${repairedCursors.join(", ")}`);
+  }
   await refreshBusinessCaches().catch(() => undefined);
   assertCurrentOfflineScope(scope);
   emitLocalDataChanged(snapshotImport({ action: "direct-import", result }));

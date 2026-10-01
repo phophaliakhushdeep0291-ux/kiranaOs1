@@ -193,6 +193,36 @@ export async function getObjectStream({ key, filePath }) {
   throw error;
 }
 
+/**
+ * The user metadata an object was stored with (putObject's `metadata`). Local
+ * storage keeps none, so it answers with an empty object rather than inventing
+ * one; a caller that needs a recorded checksum has to treat that as missing.
+ */
+export async function getObjectMetadata({ key }) {
+  assertObjectStorageProductionSafe();
+  const safeKey = assertRelativeSafeKey(key);
+  if (env.STORAGE_PROVIDER === "local") return { metadata: {}, sizeBytes: null, lastModified: null };
+  if (S3_COMPATIBLE_PROVIDERS.has(env.STORAGE_PROVIDER)) {
+    try {
+      const { HeadObjectCommand } = await import("@aws-sdk/client-s3");
+      const client = await getS3Client();
+      const result = await client.send(new HeadObjectCommand({ Bucket: env.STORAGE_BUCKET, Key: safeKey }));
+      return {
+        metadata: result.Metadata || {},
+        sizeBytes: result.ContentLength ?? null,
+        lastModified: result.LastModified ? new Date(result.LastModified) : null,
+      };
+    } catch (error) {
+      recordStorageError(env.STORAGE_PROVIDER, "getObjectMetadata");
+      logger.error({ type: "storage_error", operation: "getObjectMetadata", provider: env.STORAGE_PROVIDER, errorCode: error?.code, message: error?.message, key: safeKey });
+      throw error;
+    }
+  }
+  const error = new Error(`${env.STORAGE_PROVIDER} object storage metadata is not implemented yet`);
+  error.code = "OBJECT_STORAGE_PROVIDER_NOT_IMPLEMENTED";
+  throw error;
+}
+
 export async function getObject({ key, filePath }) {
   const { stream } = await getObjectStream({ key, filePath });
   return streamToBuffer(stream instanceof Readable || stream?.[Symbol.asyncIterator] ? stream : Readable.from(stream));

@@ -83,4 +83,29 @@ describe("server-authoritative subscription refresh", () => {
     expect(writeOfflineLicenseToken).not.toHaveBeenCalled();
     expect(writeSubscriptionSnapshot).not.toHaveBeenCalled();
   });
+
+  it("accepts the full-plan licence the server signs while the launch promotion runs", async () => {
+    // The server keeps reporting the shop's own plan, which it returns to once the
+    // window shuts, while every licence it signs inside the window carries the free
+    // plan. Comparing them directly refused the refresh for every shop below it.
+    const subscription = { planCode: "starter", status: "expired", freeAccessUntil: "2026-12-31T18:30:00.000Z" };
+    const license = { plan: "pro", signature: "server-signature" };
+    getSubscriptionStatus.mockResolvedValue(subscription);
+    getOfflineLicense.mockResolvedValue({ planCode: "pro", signature: "server-signature" });
+    parseOfflineLicenseToken.mockReturnValue(license);
+
+    await expect(subscriptionRefreshLocalFirst("starter")).resolves.toEqual(expect.objectContaining({ success: true }));
+    expect(writeOfflineLicenseToken).toHaveBeenCalledWith(license, "subscription-refresh");
+    expect(writeSubscriptionSnapshot).toHaveBeenCalledWith(subscription);
+  });
+
+  it("still refuses a full-plan licence once the server says the promotion is over", async () => {
+    getSubscriptionStatus.mockResolvedValue({ planCode: "growth", status: "active", freeAccessUntil: null });
+    getOfflineLicense.mockResolvedValue({ planCode: "pro", signature: "server-signature" });
+    parseOfflineLicenseToken.mockReturnValue({ plan: "pro", signature: "server-signature" });
+
+    await expect(subscriptionRefreshLocalFirst("growth")).rejects.toThrow("inconsistent subscription and device licence plans");
+    expect(writeOfflineLicenseToken).not.toHaveBeenCalled();
+    expect(writeSubscriptionSnapshot).not.toHaveBeenCalled();
+  });
 });

@@ -2,7 +2,7 @@ import db from "../../../db.js";
 import { AppError } from "../../../middleware/error.js";
 import { round2 } from "../../../utils/money.js";
 import { dateRangeForDateOnly, formatDateInTimeZone } from "../../../utils/dates.js";
-import { HELD_STATUSES } from "./units.schema.js";
+import { HELD_STATUSES, SELLABLE_STATUSES } from "./units.schema.js";
 
 /**
  * Serialised electronics stock.
@@ -46,7 +46,8 @@ function normalizeIdentifier(value) {
   return text || null;
 }
 
-function normalizePhone(value) {
+/** Ten digits, however the buyer's number was typed — the register is searched by them. */
+export function normalizePhone(value) {
   const digits = String(value ?? "").replace(/[^\d]/g, "");
   return digits.length >= 10 ? digits.slice(-10) : digits;
 }
@@ -101,7 +102,7 @@ export function serializeUnit(unit) {
       Boolean(unit.soldAt) && warrantyDaysLeft !== null && warrantyDaysLeft >= 0 && warrantyDaysLeft <= WARRANTY_SOON_DAYS,
     /** Still physically on the shop's shelf or bench. */
     isHeld: HELD_STATUSES.includes(unit.status),
-    canSell: unit.status === "in_stock" || unit.status === "returned",
+    canSell: SELLABLE_STATUSES.includes(unit.status),
   };
 }
 
@@ -343,7 +344,7 @@ export async function sellUnit(shopId, id, data = {}) {
       "UNIT_ALREADY_SOLD",
     );
   }
-  if (!["in_stock", "returned"].includes(unit.status)) {
+  if (!SELLABLE_STATUSES.includes(unit.status)) {
     throw new AppError(`A unit marked "${unit.status}" cannot be sold`, 409, "UNIT_BAD_STATUS");
   }
 
@@ -381,6 +382,17 @@ export async function returnUnit(shopId, id, { condition = "open_box", reason } 
   const unit = await db.productUnit.findFirst({ where: { id, shopId, deletedAt: null } });
   if (!unit) throw new AppError("Unit not found", 404);
   if (unit.status !== "sold") throw new AppError("Only a sold unit can be taken back", 409, "UNIT_BAD_STATUS");
+  // A unit sold by a bill line comes back through that bill, which refunds the
+  // money and restocks the piece in one go and then marks the unit itself.
+  // Taking it back here would flip the register alone — the shelf would gain a
+  // handset the stock count never heard about. A unit recorded by hand against
+  // a typed bill number has no such line, and is still taken back here.
+  const soldByBillLine = unit.billId
+    ? await db.billItem.findFirst({ where: { billId: unit.billId, trackedUnitId: unit.id }, select: { id: true } })
+    : null;
+  if (soldByBillLine) {
+    throw new AppError("Return this unit from its bill so the refund and stock are recorded together.", 409, "UNIT_RETURN_FROM_BILL");
+  }
 
   const updated = await db.productUnit.update({
     where: { id: unit.id },
@@ -457,6 +469,99 @@ export async function getUnitsForProduct(shopId, productId, { status = "held" } 
   return listUnits(shopId, { productId, status });
 }
 
+/** Units offered per product while billing. More than this and the counter scans the box instead. */
+export const BILLING_UNITS_PER_PRODUCT = 200;
+
+/**
+ * What the billing screen has to know about the products on a bill: which of
+ * them this shop sells by serial, and which units of each are on the shelf.
+ *
+ * Asked per bill rather than read from the register list. That list is the
+ * newest 500 units of every product and every status, so in a shop that has
+ * been trading a few months the handset on the counter — received in an older
+ * box — is simply not in it, and a picker built on it has nothing to pick.
+ *
+ * There is no "serial-tracked" flag on a product. The register having ever
+ * recorded a unit of it is the only evidence there is, so that is what
+ * `registered` reports; a product the shop never registered is left out of the
+ * answer entirely and billing shows no control for it.
+ *
+ * Oldest stock first: that is the box a shopkeeper wants to clear.
+ */
+export async function getUnitBillingOptions(shopId, productIds) {
+  const ids = [...new Set((productIds ?? []).map((id) => String(id ?? "").trim()).filter(Boolean))];
+  if (ids.length === 0) return [];
+
+  const registered = await db.productUnit.groupBy({
+    by: ["productId"],
+    where: { shopId, deletedAt: null, productId: { in: ids } },
+    _count: { _all: true },
+  });
+  if (registered.length === 0) return [];
+
+  const sellableWhere = (productId) => ({ shopId, deletedAt: null, productId, status: { in: SELLABLE_STATUSES } });
+  return Promise.all(registered.map(async (row) => {
+    const [sellableCount, units] = await Promise.all([
+      db.productUnit.count({ where: sellableWhere(row.productId) }),
+      db.productUnit.findMany({
+        where: sellableWhere(row.productId),
+        orderBy: [{ receivedAt: "asc" }, { createdAt: "asc" }],
+        take: BILLING_UNITS_PER_PRODUCT,
+      }),
+    ]);
+    return {
+      productId: row.productId,
+      registered: row._count._all,
+      sellableCount,
+      units: units.map(serializeUnit),
+    };
+  }));
+}
+
+/** Mismatches reported at once. The screen names the first few; the rest are a count. */
+const SHELF_MISMATCH_LIMIT = 20;
+
+/**
+ * Products whose register says more units are on the shelf than stock does.
+ *
+ * A bill may be saved with no serial chosen — offline, from an older till, or
+ * because the cashier said so. Stock moves; the register does not know which
+ * handset went. This is how that shows up afterwards, without anyone having to
+ * remember it happened: three IMEIs "in stock" against a count of two means one
+ * of the three has left.
+ *
+ * Only that direction. Stock ahead of the register is ordinary — a box arrives,
+ * the count goes up with the purchase, and the serials are scanned when there is
+ * time.
+ */
+export async function getShelfMismatches(shopId) {
+  const onShelf = await db.productUnit.groupBy({
+    by: ["productId"],
+    where: { shopId, deletedAt: null, status: { in: SELLABLE_STATUSES } },
+    _count: { _all: true },
+  });
+  if (onShelf.length === 0) return [];
+
+  const products = await db.product.findMany({
+    where: { shopId, deletedAt: null, id: { in: onShelf.map((row) => row.productId) } },
+    select: { id: true, name: true, stockBaseQty: true, stockTrackingEnabled: true },
+  });
+  const productById = new Map(products.map((product) => [product.id, product]));
+
+  return onShelf
+    .map((row) => {
+      const product = productById.get(row.productId);
+      // A product the shop does not count has no stock figure to disagree with.
+      if (!product || product.stockTrackingEnabled === false) return null;
+      const stock = round2(Number(product.stockBaseQty) || 0);
+      const registered = row._count._all;
+      return registered > stock ? { productId: product.id, productName: product.name, registered, stock } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b.registered - b.stock) - (a.registered - a.stock))
+    .slice(0, SHELF_MISMATCH_LIMIT);
+}
+
 /** Counter-side headline numbers: what is on the shelf, what went out, what is away. */
 export async function getUnitSummary(shopId) {
   const key = todayKey();
@@ -464,15 +569,16 @@ export async function getUnitSummary(shopId) {
   const monthStart = dateRangeForDateOnly(`${key.slice(0, 7)}-01`).start;
   const soonEnd = new Date(dayEnd.getTime() + WARRANTY_SOON_DAYS * 86_400_000);
 
-  const [inStock, openBox, soldToday, soldThisMonth, atService, warrantyExpiringSoon] = await Promise.all([
-    db.productUnit.count({ where: { shopId, deletedAt: null, status: { in: ["in_stock", "returned"] } } }),
-    db.productUnit.count({ where: { shopId, deletedAt: null, status: { in: ["in_stock", "returned"] }, condition: { in: ["open_box", "refurbished"] } } }),
+  const [inStock, openBox, soldToday, soldThisMonth, atService, warrantyExpiringSoon, shelfMismatches] = await Promise.all([
+    db.productUnit.count({ where: { shopId, deletedAt: null, status: { in: SELLABLE_STATUSES } } }),
+    db.productUnit.count({ where: { shopId, deletedAt: null, status: { in: SELLABLE_STATUSES }, condition: { in: ["open_box", "refurbished"] } } }),
     db.productUnit.count({ where: { shopId, deletedAt: null, status: "sold", soldAt: { gte: dayStart, lte: dayEnd } } }),
     db.productUnit.count({ where: { shopId, deletedAt: null, status: "sold", soldAt: { gte: monthStart } } }),
     db.productUnit.count({ where: { shopId, deletedAt: null, status: "rma" } }),
     db.productUnit.count({
       where: { shopId, deletedAt: null, status: "sold", warrantyUntil: { gte: dayStart, lte: soonEnd } },
     }),
+    getShelfMismatches(shopId),
   ]);
 
   return {
@@ -484,5 +590,6 @@ export async function getUnitSummary(shopId) {
     atService,
     warrantyExpiringSoon,
     warrantySoonDays: WARRANTY_SOON_DAYS,
+    shelfMismatches,
   };
 }

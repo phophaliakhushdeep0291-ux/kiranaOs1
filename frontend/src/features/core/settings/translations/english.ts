@@ -1,4 +1,4 @@
-// The complete English dictionary, composed from the two halves the runtime
+// The complete English dictionary, composed from the three tiers the runtime
 // actually loads.
 //
 // This is the mirror of hindi.ts, and carries the same warning: nothing here may
@@ -10,10 +10,11 @@
 // It exists for the tests and for tooling — the things that need to see the
 // whole catalogue at once and do not care what it costs to download.
 import { EN_CRITICAL_MODULES, englishCriticalTranslations } from "./english-critical";
+import { EN_CLOUD_MODULES, englishCloudTranslations } from "./english-cloud";
 import { EN_DEFERRED_MODULES, englishDeferredTranslations } from "./english-deferred";
 
-/** Every English string, both halves. Not for shell code. */
-export const englishTranslations = { ...englishCriticalTranslations, ...englishDeferredTranslations };
+/** Every English string, all three tiers. Not for shell code. */
+export const englishTranslations = { ...englishCriticalTranslations, ...englishDeferredTranslations, ...englishCloudTranslations };
 
 /**
  * The same modules as HI_MODULES in hindi.ts, keyed identically. The completeness
@@ -23,4 +24,5 @@ export const englishTranslations = { ...englishCriticalTranslations, ...englishD
 export const EN_MODULES = {
   ...EN_CRITICAL_MODULES,
   ...EN_DEFERRED_MODULES,
+  ...EN_CLOUD_MODULES,
 } as const;

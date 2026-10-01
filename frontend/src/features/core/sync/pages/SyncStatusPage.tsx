@@ -59,6 +59,7 @@ import { tableNameForEntity } from "@/features/core/sync/sync-types";
 import { isSensitiveSyncKey, sanitizeSyncDiagnostic } from "@/features/core/sync/sensitive-data";
 import { PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
 import { useAppLanguage, type Translate, type TranslationKey } from "@/features/core/settings/i18n";
+import { userSafeSyncReason } from "@/features/core/sync/sync-reason";
 
 /**
  * What this page's pure helpers need to speak the owner's language. The context
@@ -227,40 +228,6 @@ function moneyLabel(value: number | null): string | null {
   return `Rs ${Math.abs(value).toLocaleString("en-IN")}`;
 }
 
-
-function userSafeSyncReason(t: Translate, rawReason: unknown, fallback?: string): string {
-  const fallbackText = fallback ?? t("sync.reason.fallback");
-  const text = typeof rawReason === "string" ? rawReason.trim() : "";
-  if (!text) return fallbackText;
-  const lower = text.toLowerCase();
-  if (lower.includes("purchase") || lower.includes("stockledgerid") || lower.includes("purchasehistoryid") || lower.includes("purchasebillid")) {
-    return t("sync.reason.purchase");
-  }
-  if (lower.includes("ledger") || (lower.includes("amount") && (lower.includes("too_small") || lower.includes("greater than or equal")))) {
-    return t("sync.reason.ledger");
-  }
-  if (lower.includes("payment") || lower.includes("udhar")) {
-    return t("sync.reason.payment");
-  }
-  if (lower.includes("server changed") || lower.includes("unsynced local changes")) {
-    return t("sync.reason.changedElsewhere");
-  }
-  if (
-    lower.includes("validation") ||
-    lower.includes("invalid_string") ||
-    lower.includes("too_small") ||
-    lower.includes("\"path\"") ||
-    lower.includes("\"code\"") ||
-    text.startsWith("[") ||
-    text.startsWith("{")
-  ) {
-    return fallbackText;
-  }
-  // Anything that survives to here is the server's own sentence, which arrives in
-  // English whatever the app language is. Showing it beats hiding the only clue the
-  // owner has; the classified cases above are what keep that rare.
-  return text.length > 160 ? fallbackText : text;
-}
 
 function recordPath(entityType: string | undefined, entityId?: string | null) {
   const entity = String(entityType ?? "").toLowerCase();

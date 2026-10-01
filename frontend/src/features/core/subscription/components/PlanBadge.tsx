@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { getPlan, getPlanForBusinessType, type PlanDefinition } from "@/features/core/subscription/plans";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i18n";
+import { formatFreeAccessDate } from "@/features/core/subscription/free-access";
 
 function compactStatus(status?: string | null) {
   if (!status || status === "active") return "";
@@ -30,31 +31,41 @@ export function PlanBadge({
   planCode,
   status,
   plan: snapshotPlan,
+  freeAccessUntil,
 }: {
   planCode?: string | null;
   status?: string | null;
   plan?: Pick<PlanDefinition, "code" | "name" | "price">;
+  /** While the launch promotion runs the plan costs nothing, so no price is shown. */
+  freeAccessUntil?: string | null;
 }) {
-  const { t } = useAppLanguage();
+  const { language, t } = useAppLanguage();
   const businessType = useBusinessTypeKey();
   const code = getPlan(planCode).code;
   const plan = snapshotPlan?.code === code ? snapshotPlan : getPlanForBusinessType(code, businessType);
   const statusLabel = compactStatus(status);
   const priceLabel = `Rs ${plan.price} ${plan.name}`;
-  const lapsedLabelKey = status ? LAPSED_STATUS_LABELS[status] : undefined;
-  const label = lapsedLabelKey ? `${plan.name} · ${t(lapsedLabelKey)}` : priceLabel;
-  const title = statusLabel ? `${priceLabel} - ${statusLabel}` : priceLabel;
-  const lapsed = status === "expired" || status === "payment_failed";
+  // While the launch promotion runs nothing is owed, so a lapsed status left in a
+  // stale cache is never worn as one.
+  const lapsedStatus = freeAccessUntil ? undefined : status;
+  const lapsedLabelKey = lapsedStatus ? LAPSED_STATUS_LABELS[lapsedStatus] : undefined;
+  const label = freeAccessUntil
+    ? t("plans.free.badge", { plan: plan.name })
+    : lapsedLabelKey ? `${plan.name} · ${t(lapsedLabelKey)}` : priceLabel;
+  const title = freeAccessUntil
+    ? t("plans.free.badgeTitle", { plan: plan.name, date: formatFreeAccessDate(freeAccessUntil, language) })
+    : statusLabel ? `${priceLabel} - ${statusLabel}` : priceLabel;
+  const lapsed = lapsedStatus === "expired" || lapsedStatus === "payment_failed";
 
   return (
     <Badge
       title={title}
-      variant={lapsed ? "destructive" : status === "grace" ? "outline" : plan.code === "starter" ? "secondary" : "default"}
+      variant={lapsed ? "destructive" : lapsedStatus === "grace" ? "outline" : plan.code === "starter" ? "secondary" : "default"}
       className={cn(
         "max-w-[7.5rem] shrink-0 truncate whitespace-nowrap px-2 text-[10px] leading-5",
         // Grace is a warning, not a fault: the plan has ended but nothing has
         // stopped yet. The primary fill it wore before read as "all fine".
-        status === "grace" && "border-amber-300 bg-amber-50 text-amber-900",
+        lapsedStatus === "grace" && "border-amber-300 bg-amber-50 text-amber-900",
       )}
     >
       {label}

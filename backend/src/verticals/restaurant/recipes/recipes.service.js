@@ -2,6 +2,7 @@ import db from "../../../db.js";
 import { AppError } from "../../../middleware/error.js";
 import { round2 } from "../../../utils/money.js";
 import { rateUnitToBase } from "../../../utils/units.js";
+import { convertibleRateUnitFactorsFor } from "../../../modules/inventory/rate-unit-factor.js";
 import { listProducts } from "../../../modules/products/products.service.js";
 
 /**
@@ -98,18 +99,25 @@ export function recipeCost(components, costPerBaseByProductId) {
  * this conversion would read ₹40,000. The selling unit that defines the
  * conversion is the product's own default, which is the same one the counter
  * prices against.
+ *
+ * That default is what `rateUnitFactor` carries, when the caller resolved one
+ * (getRecipe does). It matters for anything bottled or packed: the rate unit is
+ * then the pack's own word, the unit table does not know it, and costing that at
+ * par priced 50 g of a ₹250 bottle of mayonnaise at ₹12,500.
  */
-export function costPerBaseUnit(product) {
+export function costPerBaseUnit(product, rateUnitFactor) {
   const cost = Number(product?.costPerRateUnit ?? 0);
   if (!Number.isFinite(cost) || cost <= 0) return 0;
-  let conversion = 1;
-  try {
-    conversion = rateUnitToBase(product?.rateUnit ?? product?.baseUnit, product?.baseUnit);
-  } catch {
-    // An unrecognised unit pairing costs at par rather than throwing: a wrong
-    // costing figure on one screen is a smaller failure than a kitchen page
-    // that will not open.
-    conversion = 1;
+  let conversion = Number(rateUnitFactor);
+  if (!(conversion > 0)) {
+    try {
+      conversion = rateUnitToBase(product?.rateUnit ?? product?.baseUnit, product?.baseUnit);
+    } catch {
+      // An unrecognised unit pairing costs at par rather than throwing: a wrong
+      // costing figure on one screen is a smaller failure than a kitchen page
+      // that will not open.
+      conversion = 1;
+    }
   }
   return Number.isFinite(conversion) && conversion > 0 ? cost / conversion : cost;
 }
@@ -152,12 +160,17 @@ export async function getRecipe(shopId, dishProductId, { locationId } = {}) {
   const dish = index.get(dishProductId);
   if (!dish) throw new AppError("Dish not found", 404);
 
+  const factors = await convertibleRateUnitFactorsFor(
+    db,
+    shopId,
+    components.map((component) => index.get(component.ingredientProductId)),
+  );
   const stock = new Map();
   const costs = new Map();
   for (const component of components) {
     const ingredient = index.get(component.ingredientProductId);
     stock.set(component.ingredientProductId, Number(ingredient?.stockBaseQty ?? 0));
-    costs.set(component.ingredientProductId, costPerBaseUnit(ingredient));
+    costs.set(component.ingredientProductId, costPerBaseUnit(ingredient, factors.get(component.ingredientProductId)));
   }
 
   return {

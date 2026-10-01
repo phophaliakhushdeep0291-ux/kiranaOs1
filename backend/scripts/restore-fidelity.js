@@ -62,10 +62,20 @@ export function compareRestoreManifests(source, restored, { requireBusinessRows 
     error.details = { tables: mismatches };
     throw error;
   }
-  const count = (table) => BigInt(source.tables[table]?.rows || "0");
+  return { ...assessRestoredWorkload(source, { requireBusinessRows }), exactMatch: true, contentHashesMatched: true };
+}
+
+export const RESTORE_BUSINESS_TABLES = ["Shop", "Product", "Customer", "Bill", "BillItem", "Payment", "UdharLedger"];
+
+// A restore of an empty schema proves nothing about the shop's data, so a drill
+// needs a migration ledger and rows in the tables that carry sales, stock,
+// payments and customer balances.
+export function assessRestoredWorkload(manifest, { requireBusinessRows = true } = {}) {
+  validateManifest(manifest);
+  const tables = Object.keys(manifest.tables).sort();
+  const count = (table) => BigInt(manifest.tables[table]?.rows || "0");
   if (count("_prisma_migrations") === 0n) throw new Error("Restore manifest has no migration ledger");
-  const businessTables = ["Shop", "Product", "Customer", "Bill", "BillItem", "Payment", "UdharLedger"];
-  const missingBusinessTables = businessTables.filter((table) => count(table) === 0n);
+  const missingBusinessTables = RESTORE_BUSINESS_TABLES.filter((table) => count(table) === 0n);
   if (requireBusinessRows && missingBusinessTables.length) {
     const error = new Error("Restore proof needs non-empty sales, stock, payments and customer balances; an empty schema is insufficient");
     error.code = "RESTORE_WORKLOAD_EMPTY";
@@ -76,8 +86,6 @@ export function compareRestoreManifests(source, restored, { requireBusinessRows 
     tableCount: tables.length,
     totalRows: tables.reduce((sum, table) => sum + count(table), 0n).toString(),
     migrationRows: count("_prisma_migrations").toString(),
-    exactMatch: true,
-    contentHashesMatched: true,
     businessWorkloadVerified: missingBusinessTables.length === 0,
   };
 }

@@ -1,6 +1,6 @@
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
-import { createIntegrationContext, assertSuccess, resetDatabase } from "./setup.js";
+import { createIntegrationContext, assertSuccess, assertFailure, resetDatabase } from "./setup.js";
 import { createTenant, createProduct, login, billPayload } from "./factories.js";
 import { BUSINESS_TYPES, settingsForBusinessType } from "../../src/verticals/registry.js";
 import { availableAgentTools } from "../../src/modules/ai/agent/agent.service.js";
@@ -33,7 +33,7 @@ else {
         const rental = await post("/api/rentals", {
           customerName: "QA Renter", customerPhone: "9999999991", customerAddress: "QA counter",
           fromDate: day(), toDate: day(2), items: [{ productId: product.id, name: product.name, qty: 1, amount: 100 }],
-          rentAmount: 100, depositAmount: 200, advancePaid: 100,
+          rentAmount: 100, depositAmount: 200, advancePaid: 100, paymentMode: "cash", clientRequestId: `rental-${Date.now()}-${Math.random()}`,
         }, 201);
         assert.equal((await post(`/api/rentals/${rental.id}/pickup`)).status, "picked_up");
         assert.equal((await post(`/api/rentals/${rental.id}/return`, { damageCharge: 10 })).status, "returned");
@@ -50,10 +50,52 @@ else {
       if (trade === "auto_parts") {
         const fitment = await post("/api/fitment", { productId: product.id, make: "QA Make", model: "QA Model", yearFrom: 2020, yearTo: 2026 }, 201);
         assert.ok(fitment.id);
+        for (const invalidYear of ["abc", "2024.5", "205", "2101"]) {
+          assertFailure(await ctx.get(`/api/fitment/search?make=QA%20Make&year=${invalidYear}`, options), 400);
+        }
+        await ctx.db.product.update({ where: { id: product.id }, data: { attributesJson: JSON.stringify({ oemNumber: "OEM-ATTRIBUTE-42" }) } });
+        assert.equal((await get("/api/fitment/part-number/oem-attribute-42")).products[0]?.productId, product.id);
+        assert.equal((await get("/api/fitment/search?make=QA%20Make&search=OEM-ATTRIBUTE")).at(0)?.productId, product.id);
+        assert.equal((await get("/api/fitment/search?make=QA%20Make&year=2019")).length, 0);
+
         const matches = await get("/api/fitment/search?make=QA%20Make&model=QA%20Model&year=2024");
         assert.match(JSON.stringify(matches), new RegExp(product.id));
+        await ctx.db.product.update({ where: { id: product.id }, data: { name: "QA replacement clutch" } });
+        const renamed = await get("/api/fitment/search?make=QA%20Make&model=QA%20Model&search=replacement%20clutch");
+        assert.equal(renamed[0]?.productId, product.id, "search uses the current catalogue name after a rename");
+        await post("/api/fitment", { productId: product.id, make: "QA Make", model: "Other Model", variant: "Petrol" }, 201);
+        const vehicleOptions = await get("/api/fitment/vehicles?make=QA%20Make&model=QA%20Model");
+        assert.deepEqual(vehicleOptions.variants, [], "variants from another model are not suggested");
         const reference = await post("/api/fitment/references", { productId: product.id, partNumber: "QA-OEM-01", kind: "oem" }, 201);
         assert.equal(reference.partNumber, "QA-OEM-01");
+        const referenceLookup = await get("/api/fitment/part-number/QA-OEM-01");
+        assert.equal(referenceLookup.references[0]?.productId, product.id);
+        assert.equal(referenceLookup.products[0]?.productId, product.id, "a recorded number resolves to its billable catalogue part");
+        await ctx.db.product.update({ where: { id: product.id }, data: { sku: "QA-PART-42" } });
+        assert.equal((await get("/api/fitment/part-number/qa-part-42")).products[0]?.productId, product.id);
+        assert.equal((await get("/api/products?search=QA-PART-42"))[0]?.id, product.id, "the part picker can find catalogue items by SKU");
+        const branch = await ctx.db.storeLocation.create({
+          data: { shopId: tenant.shop.id, code: "AUTO-BRANCH", name: "Auto parts branch" },
+        });
+        await ctx.db.locationStock.create({
+          data: { shopId: tenant.shop.id, locationId: branch.id, productId: product.id, stockBaseQty: 3 },
+        });
+        const branchOptions = { token: auth.accessToken, headers: { "x-location-id": branch.id } };
+        const branchMatches = assertSuccess(await ctx.get("/api/fitment/search?make=QA%20Make&model=QA%20Model", branchOptions));
+        assert.equal(branchMatches[0]?.stockQty, 3, "fitment search shows stock at the active branch");
+        const branchNumber = assertSuccess(await ctx.get("/api/fitment/part-number/QA-PART-42", branchOptions));
+        assert.equal(branchNumber.products[0]?.stockQty, 3, "part-number lookup shows stock at the active branch");
+        const returnRequest = {
+          returnOfBillId: bill.id,
+          refundMode: "cash",
+          reason: "Wrong fitment, unopened",
+          idempotencyKey: `auto-return-${bill.id}`,
+          items: [{ ...billPayload(product).items[0], quantity: 1, originalBillItemId: bill.items[0].id }],
+        };
+        const returned = await post("/api/bills/returns", returnRequest, 201);
+        const replayedReturn = await post("/api/bills/returns", returnRequest, 201);
+        assert.equal(replayedReturn.id, returned.id, "a repeated auto-parts return cannot refund or restock twice");
+        assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 19, "one returned part is restored to company stock");
       }
       if (trade === "electronics") {
         const units = await post("/api/product-units", { productId: product.id, warrantyMonths: 12, units: [{ serialNumber: "QA-SERIAL-01" }] }, 201);
@@ -84,9 +126,13 @@ else {
         const order = await post("/api/furniture-orders", { customerName: "QA Buyer", items: [{ productId: product.id, name: product.name, qty: 1, rate: 100 }], deliveryCharge: 20, promisedOn: day(2) }, 201);
         assert.equal(order.grandTotal, 120);
         await post(`/api/furniture-orders/${order.id}/status`, { status: "confirmed" });
-        assert.equal((await post(`/api/furniture-orders/${order.id}/payments`, { amount: 40, mode: "cash" }, 201)).balanceDue, 80);
+        assert.equal((await post(`/api/furniture-orders/${order.id}/payments`, { amount: 40, mode: "cash", clientRequestId: "qa-advance-40" }, 201)).balanceDue, 80);
         await post(`/api/furniture-orders/${order.id}/status`, { status: "ready" });
-        await post(`/api/furniture-orders/${order.id}/status`, { status: "delivered", billId: bill.id });
+        assert.equal((await ctx.post(`/api/furniture-orders/${order.id}/status`, { status: "delivered", billId: bill.id }, options)).status, 409, "an unrelated counter bill cannot fulfil an order");
+        await post(`/api/furniture-orders/${order.id}/payments`, { amount: 80, mode: "cash", clientRequestId: "qa-balance-80" }, 201);
+        const sale = await post("/api/bills/confirm", billPayload(product, { quantity: 1, ratePerRateUnit: 120, customerName: "QA Buyer" }), 201);
+        await post(`/api/furniture-orders/${order.id}/status`, { status: "delivered", billId: sale.id });
+        assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 17, "linking delivery does not deduct the bill's stock twice");
         assert.equal((await post(`/api/furniture-orders/${order.id}/status`, { status: "installed" })).status, "installed");
       }
       if (trade === "cosmetics") {

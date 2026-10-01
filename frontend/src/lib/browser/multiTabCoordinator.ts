@@ -14,10 +14,20 @@ interface BrowserLockManager {
 interface LeaderRecord {
   tabId: string;
   updatedAt: number;
+  /**
+   * Whether the leader's document was visible when it last wrote the record.
+   * Absent on records written before this field existed; those read as visible,
+   * so an old leader is only replaced once its lease expires, as before.
+   */
+  visible?: boolean;
 }
 
 function now() {
   return Date.now();
+}
+
+function isDocumentVisible() {
+  return typeof document === "undefined" || document.visibilityState === "visible";
 }
 
 function safeSessionGet(key: string) {
@@ -61,7 +71,11 @@ function parseLeader(value: string | null): LeaderRecord | null {
   try {
     const parsed = JSON.parse(value) as Partial<LeaderRecord>;
     if (typeof parsed.tabId === "string" && typeof parsed.updatedAt === "number") {
-      return { tabId: parsed.tabId, updatedAt: parsed.updatedAt };
+      return {
+        tabId: parsed.tabId,
+        updatedAt: parsed.updatedAt,
+        ...(typeof parsed.visible === "boolean" ? { visible: parsed.visible } : {}),
+      };
     }
   } catch {
     // Corrupt leader records are treated as expired.
@@ -77,13 +91,29 @@ export function getTabId() {
   return generated;
 }
 
+/**
+ * A visible tab takes leadership from a hidden one.
+ *
+ * Scheduled sync runs only in a tab that is both visible AND the leader. The
+ * lease used to go to whichever tab claimed it first, and a hidden tab keeps
+ * renewing it — timers still fire in the background — so after the shopkeeper
+ * switched from one KiranaOS tab to another, the hidden tab held the lease but
+ * would not sync because it was hidden, and the visible tab would not sync
+ * because it was not the leader. Nobody pushed: bills sat on "Syncing" and the
+ * pending count never moved until the old tab was closed or Force sync pressed.
+ */
+function canTakeLeadership(current: LeaderRecord | null, tabId: string) {
+  if (!current || now() - current.updatedAt > LEADER_TTL_MS) return true;
+  if (current.tabId === tabId) return true;
+  return isDocumentVisible() && current.visible === false;
+}
+
 export function claimBackgroundLeadership() {
   if (typeof window === "undefined") return true;
   const tabId = getTabId();
   const current = parseLeader(safeLocalGet(LEADER_KEY));
-  const expired = !current || now() - current.updatedAt > LEADER_TTL_MS;
-  if (expired || current.tabId === tabId) {
-    safeLocalSet(LEADER_KEY, JSON.stringify({ tabId, updatedAt: now() }));
+  if (canTakeLeadership(current, tabId)) {
+    safeLocalSet(LEADER_KEY, JSON.stringify({ tabId, updatedAt: now(), visible: isDocumentVisible() }));
     return true;
   }
   return false;
@@ -93,8 +123,8 @@ export function isBackgroundLeader() {
   if (typeof window === "undefined") return true;
   const tabId = getTabId();
   const current = parseLeader(safeLocalGet(LEADER_KEY));
-  if (!current || now() - current.updatedAt > LEADER_TTL_MS) return claimBackgroundLeadership();
-  return current.tabId === tabId;
+  if (current?.tabId !== tabId && canTakeLeadership(current, tabId)) return claimBackgroundLeadership();
+  return current?.tabId === tabId;
 }
 
 /**
@@ -145,7 +175,10 @@ export function startBackgroundLeadershipHeartbeat() {
     if (isBackgroundLeader()) claimBackgroundLeadership();
   }, HEARTBEAT_MS);
   const onVisibility = () => {
-    if (document.visibilityState === "visible") claimBackgroundLeadership();
+    // Visible: take over from a hidden leader. Hidden: if this tab leads, record
+    // that now rather than at the next heartbeat, so a tab being switched to can
+    // take over on its own visibilitychange instead of waiting up to 5s.
+    if (document.visibilityState === "visible" || isBackgroundLeader()) claimBackgroundLeadership();
   };
   document.addEventListener("visibilitychange", onVisibility);
   return () => {

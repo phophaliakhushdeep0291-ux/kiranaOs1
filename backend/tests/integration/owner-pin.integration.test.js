@@ -1,5 +1,6 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
+import bcrypt from "bcryptjs";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
 import { createTenant, login, uniqueMobile } from "./factories.js";
 
@@ -63,15 +64,31 @@ if (ctx.skip) {
       assert.equal((await ctx.db.user.findUniqueOrThrow({ where: { id: tenant.owner.id } })).pinHash, tenant.owner.pinHash);
     });
 
-    test("competing PIN changes cannot both use the same credential version", async () => {
+    test("competing PIN changes cannot both use the same credential version", async (t) => {
       const tenant = await createTenant(ctx.db);
       const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
-      // Activate the test device before the concurrent requests so this tests
-      // credential writes, not competing device registrations.
-      assertSuccess(await ctx.get("/api/auth/pin/check", { token: auth.accessToken }));
-      const responses = await Promise.all(["5678", "6789"].map((pin) => ctx.post("/api/auth/pin/set", {
-        pin, currentPassword: tenant.ownerPassword,
-      }, { token: auth.accessToken })));
+      // Simultaneous HTTP sends can still reach the service sequentially. Hold
+      // after real password verification until both requests have read the old
+      // credentials; then let the transaction and guarded update race.
+      const compare = bcrypt.compare.bind(bcrypt);
+      let checks = 0;
+      let release;
+      const bothChecked = new Promise((resolve) => { release = resolve; });
+      const verification = t.mock.method(bcrypt, "compare", async (password, hash) => {
+        const valid = await compare(password, hash);
+        if (password === tenant.ownerPassword && hash === tenant.owner.passwordHash) {
+          if (++checks === 2) release();
+          await bothChecked;
+        }
+        return valid;
+      });
+      let responses;
+      try {
+        responses = await Promise.all(["5678", "6789"].map((pin) => ctx.post("/api/auth/pin/set", {
+          pin, currentPassword: tenant.ownerPassword,
+        }, { token: auth.accessToken })));
+      } finally { verification.mock.restore(); }
+      assert.equal(checks, 2);
       assert.deepEqual(responses.map((response) => response.status).sort(), [200, 409]);
       assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "PIN_CHANGED" } }), 1);
       assert.equal((await ctx.db.user.findUniqueOrThrow({ where: { id: tenant.owner.id } })).passwordHash, tenant.owner.passwordHash);

@@ -159,6 +159,10 @@ export type AuditRun = {
   findingsCreated: number;
   findingsUpdated: number;
   summary: {
+    complete?: boolean;
+    truncated?: Array<{ entityType: string; cap: number }>;
+    ruleFailureCount?: number;
+    ruleFailures?: Array<{ entityType: string; entityId: string; ruleCode: string; message: string }>;
     requestedEntities?: number;
     evaluated?: number;
     failureCount?: number;
@@ -177,6 +181,7 @@ export type AuditRun = {
 export type AuditRunDetail = AuditRun & {
   evaluations: Array<{
     evaluationId: string;
+    complete?: boolean;
     sourceEntityType: EntityType;
     sourceEntityId: string;
     riskScore: number;
@@ -245,7 +250,7 @@ export type AssuranceReport = {
   engineVersion: string;
   rulesetVersion: string;
   period: { from: string; to: string };
-  coverage: { auditRuns: number; runTypes: Record<string, number>; transactionsReviewed: number; entitiesByType: Record<string, number>; lastRunAt: string | null };
+  coverage: { incompleteRuns?: number; evaluationAttempts?: number; runsByStatus?: Record<string, number>; auditRuns: number; runTypes: Record<string, number>; transactionsReviewed: number; entitiesByType: Record<string, number>; lastRunAt: string | null };
   findings: {
     raised: number;
     resolved: number;

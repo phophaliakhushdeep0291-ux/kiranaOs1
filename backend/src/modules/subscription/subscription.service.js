@@ -16,7 +16,14 @@ import {
   getPlanConfigForBusinessType,
   offeredPlanCodesForBusinessType,
 } from "./planConfig.js";
+import {
+  freeAccessPlan,
+  freeAccessUntilIso,
+  isFreeAccessActive,
+  paidPeriodStart,
+} from "./freeAccess.js";
 import { businessTypeFromSettings, parseShopSettings } from "../shops/businessProfiles.js";
+import { isPlanCatalogueVerified, markPlanCatalogueVerified } from "./plan-catalogue-memo.js";
 import { createAuditLog } from "../audit/audit.service.js";
 
 export async function seedPlans(tx = db) {
@@ -69,6 +76,9 @@ export async function listPlans(businessType = "kirana") {
 }
 
 export async function ensurePlansSeeded(client = db) {
+  // One clean comparison per process is enough; plan-catalogue-memo.js says why,
+  // and owns the flag so the test reset can clear it without importing this file.
+  if (isPlanCatalogueVerified()) return;
   const existing = await client.plan.findMany({
     select: { code: true, name: true, priceMonthlyPaise: true, priceYearlyPaise: true, maxDevices: true, maxStores: true, maxStaff: true, featuresJson: true, isActive: true },
   });
@@ -86,10 +96,30 @@ export async function ensurePlansSeeded(client = db) {
       || stored.featuresJson !== JSON.stringify(expected.features)
       || stored.isActive !== (code !== "standard");
   });
-  if (catalogChanged) await seedPlans(client);
+  if (catalogChanged) {
+    await seedPlans(client);
+    // Deliberately not marked verified. `client` may be a transaction that later
+    // rolls back, which would undo the seed while leaving the memo claiming the
+    // catalogue is good. Only a clean comparison — a pure read that owes nothing
+    // to a transaction's outcome — is allowed to end the checking.
+    return;
+  }
+  markPlanCatalogueVerified();
 }
 
-export async function getCurrentSubscription(shopId, client = db) {
+/**
+ * The shop's subscription, and the catalogue row it was resolved against.
+ *
+ * Both public readers below want those same two things, and between them used to
+ * read the Plan row twice for one answer: getCurrentSubscription looks it up to
+ * build the entitled snapshot it returns, and getEffectivePlan looked it up again
+ * — same code, same row — to build its own. That second findUnique was paid on
+ * every gated request, which includes every sync pull from every device.
+ *
+ * `catalogPlan` is null only on the no-subscription path, where no row was read
+ * to begin with: a trial's shape comes from PLAN_CONFIGS, not from the table.
+ */
+async function resolveSubscriptionContext(shopId, client) {
   await ensurePlansSeeded(client);
   const subscription = await client.subscription.findUnique({ where: { shopId } });
   if (!subscription) {
@@ -99,32 +129,72 @@ export async function getCurrentSubscription(shopId, client = db) {
     });
     if (!shop) throw new AppError("Shop not found", 404);
     const businessType = businessTypeFromSettings(parseShopSettings(shop.settingsJson));
-    return fallbackSubscription(
-      shopId,
-      getPlanConfigForBusinessType(DEFAULT_TRIAL_PLAN_CODE, businessType),
-      shop.createdAt,
-    );
+    return {
+      subscription: fallbackSubscription(
+        shopId,
+        getPlanConfigForBusinessType(DEFAULT_TRIAL_PLAN_CODE, businessType),
+        shop.createdAt,
+      ),
+      catalogPlan: null,
+    };
   }
   const normalized = normalizeSubscriptionDates(subscription);
-  const plan = await getPlanByCode(normalized.planCode, client);
-  const entitledPlan = subscriptionPlanSnapshot(plan, normalized);
+  const catalogPlan = await getPlanByCode(normalized.planCode, client);
+  const entitledPlan = subscriptionPlanSnapshot(catalogPlan, normalized);
   return {
-    ...normalized,
-    active: isSubscriptionActive(normalized),
-    source: "subscription",
-    plan: serializePlan(entitledPlan),
-    foundingCustomer: normalized.provider === "founding",
-    foundingEndsAt: normalized.provider === "founding" ? normalized.trialEndsAt : null,
-    intendedPaidPlanCode: normalized.intendedPaidPlanCode ?? normalized.planCode,
-    warning: warningForSubscription(normalized),
+    subscription: {
+      ...normalized,
+      active: hasSubscriptionAccess(normalized),
+      freeAccessUntil: isFreeAccessActive() ? freeAccessUntilIso() : null,
+      source: "subscription",
+      plan: serializePlan(entitledPlan),
+      foundingCustomer: normalized.provider === "founding",
+      foundingEndsAt: normalized.provider === "founding" ? normalized.trialEndsAt : null,
+      intendedPaidPlanCode: normalized.intendedPaidPlanCode ?? normalized.planCode,
+      warning: warningForSubscription(normalized),
+    },
+    catalogPlan,
   };
 }
 
+export async function getCurrentSubscription(shopId, client = db) {
+  // Returns the subscription alone: this shape is served straight to the client
+  // by GET /api/subscription, so the raw catalogue row stays internal.
+  return (await resolveSubscriptionContext(shopId, client)).subscription;
+}
+
 export async function getEffectivePlan(shopId, client = db) {
-  const subscription = await getCurrentSubscription(shopId, client);
+  const { subscription, catalogPlan } = await resolveSubscriptionContext(shopId, client);
+  // Launch promotion: until the window closes every shop is entitled to the whole
+  // product (see freeAccessPlan), whatever its own row says. The row itself is
+  // untouched, so entitlement falls back to it by itself once the promotion ends.
+  //
+  // This costs one extra read of the shop, which resolveSubscriptionContext does not
+  // already hold on the path a real subscription takes — and getEffectivePlan is on
+  // the sync pull path, which is the cost the commit above this one just removed. It
+  // is paid only while the promotion runs. The features and limits no longer need
+  // it — the window grants the whole product to every trade alike — but the plan's
+  // name does: a restaurant calls it Dine-in, and the device endpoints report that
+  // name. It disappears on its own when the window shuts.
+  if (isFreeAccessActive()) {
+    const freePlan = freeAccessPlan(await getShopBusinessType(shopId, client));
+    return {
+      planCode: freePlan.code,
+      plan: serializePlan(freePlan),
+      features: freePlan.features,
+      limits: planLimits(freePlan),
+      subscription,
+    };
+  }
   const planCode = subscription.planCode || "starter";
-  const catalogPlan = await getPlanByCode(planCode, client);
-  const plan = subscriptionPlanSnapshot(catalogPlan, subscription);
+  // Already in hand whenever the shop has a subscription row. The code check is
+  // what keeps the reuse exact: the trial path carries no row, and a subscription
+  // whose planCode is empty falls back to "starter", which is a different plan
+  // from the one any row here was read for.
+  const resolvedPlan = catalogPlan?.code === planCode
+    ? catalogPlan
+    : await getPlanByCode(planCode, client);
+  const plan = subscriptionPlanSnapshot(resolvedPlan, subscription);
   return {
     planCode,
     plan: serializePlan(plan),
@@ -229,7 +299,9 @@ export async function activateSubscriptionAfterPayment({
   const startsAt = currentActive && samePlan && current.currentPeriodEnd && current.currentPeriodEnd > now
     ? new Date(current.currentPeriodEnd)
     : now;
-  const endsAt = addPeriod(startsAt, billingCycle);
+  // A plan bought in the promotion's last month starts when the window shuts.
+  const paidFrom = paidPeriodStart(startsAt, now);
+  const endsAt = addPeriod(paidFrom, billingCycle);
   const action = currentActive && samePlan ? "renewed" : current && current.planCode !== planCode ? "plan_changed" : "activated";
 
   const subscription = await tx.subscription.upsert({
@@ -239,7 +311,7 @@ export async function activateSubscriptionAfterPayment({
       status: "active",
       provider,
       providerSubscriptionId: providerPaymentId,
-      currentPeriodStart: startsAt,
+      currentPeriodStart: paidFrom,
       currentPeriodEnd: endsAt,
       trialEndsAt: null,
       graceEndsAt: addDays(endsAt, DEFAULT_GRACE_DAYS),
@@ -255,7 +327,7 @@ export async function activateSubscriptionAfterPayment({
       status: "active",
       provider,
       providerSubscriptionId: providerPaymentId,
-      currentPeriodStart: startsAt,
+      currentPeriodStart: paidFrom,
       currentPeriodEnd: endsAt,
       graceEndsAt: addDays(endsAt, DEFAULT_GRACE_DAYS),
       lockedPriceMonthlyPaise: paidPlan.priceMonthlyPaise,
@@ -281,7 +353,7 @@ export async function activateSubscriptionAfterPayment({
     req,
     before: current,
     after: subscription,
-    metadata: { provider, providerPaymentId, transactionId, planCode, billingCycle, currentPeriodStart: startsAt, currentPeriodEnd: endsAt },
+    metadata: { provider, providerPaymentId, transactionId, planCode, billingCycle, currentPeriodStart: paidFrom, currentPeriodEnd: endsAt },
   });
 
   return { subscription: normalizeSubscriptionDates(subscription), action };
@@ -516,6 +588,17 @@ export async function extendGrace(shopId, days, actor = {}) {
   });
 }
 
+/**
+ * Whether the shop may use the product right now — the question every gate asks.
+ *
+ * `isSubscriptionActive` below stays a truthful statement about the subscription
+ * row alone; the launch promotion is a separate answer laid over it, so that
+ * when the promotion ends the row underneath is already the right one to read.
+ */
+export function hasSubscriptionAccess(subscription, now = new Date()) {
+  return isFreeAccessActive(now) || isSubscriptionActive(subscription);
+}
+
 export function isSubscriptionActive(subscription) {
   if (!subscription) return true;
   const now = new Date();
@@ -598,9 +681,15 @@ function fallbackSubscription(shopId, trialPlan = getPlanConfig(DEFAULT_TRIAL_PL
     source: "fallback/trial",
     plan: serializePlan(trialPlan),
     intendedPaidPlanCode: "starter",
-    warning: "No persisted subscription found; the 30-day Business trial is anchored to the shop creation date.",
+    warning: isFreeAccessActive()
+      ? freeAccessNotice()
+      : "No persisted subscription found; the 30-day Business trial is anchored to the shop creation date.",
   };
-  return { ...fallback, active: isSubscriptionActive(fallback) };
+  return {
+    ...fallback,
+    active: hasSubscriptionAccess(fallback),
+    freeAccessUntil: isFreeAccessActive() ? freeAccessUntilIso() : null,
+  };
 }
 
 function serializePlan(plan) {
@@ -656,7 +745,13 @@ async function getShopBusinessType(shopId, client = db) {
   return businessTypeFromSettings(parseShopSettings(shop?.settingsJson));
 }
 
+function freeAccessNotice() {
+  return `Free until ${freeAccessUntilIso()}: every plan feature is unlocked and no payment is required.`;
+}
+
 function warningForSubscription(subscription) {
+  // While the product is free, "renew to keep working" is simply untrue.
+  if (isFreeAccessActive()) return freeAccessNotice();
   if (subscription.status === "grace") return "Subscription is in grace period.";
   if (subscription.status === "cancelled" && subscription.currentPeriodEnd > new Date()) {
     return `Subscription is cancelled; paid access continues until ${subscription.currentPeriodEnd.toISOString()}.`;

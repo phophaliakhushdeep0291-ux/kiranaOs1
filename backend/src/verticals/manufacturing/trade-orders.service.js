@@ -79,6 +79,12 @@ export async function allocateTradeOrder(shopId, id, input, actor = {}) {
     if (claimed.count !== 1) throw new AppError("This order changed. Refresh before allocating", 409, "TRADE_ORDER_NOT_CONFIRMABLE_FOR_ALLOCATION");
     // Serialize reservations sharing a batch, without changing its quantity.
     // Deterministic lock order also avoids opposite-order batch lock cycles.
+    //
+    // This loop stays one statement per batch on purpose — do not "optimise" it
+    // into a single updateMany with `id: { in: [...] }`. Taking the locks in
+    // sorted order is the entire point, and one statement covering every batch
+    // gives no such guarantee about the order it locks rows in, which is how two
+    // concurrent allocations sharing two batches deadlock.
     for (const lotId of [...new Set(input.allocations.map((row) => row.inventoryLotId))].sort()) {
       await tx.inventoryLot.updateMany({ where: { id: lotId, shopId, locationId: order.locationId }, data: { updatedAt: new Date() } });
     }
@@ -87,19 +93,56 @@ export async function allocateTradeOrder(shopId, id, input, actor = {}) {
     const requestedByLot = new Map();
     const sourceKeys = new Set();
     const next = [];
+
+    /*
+     * Everything the validation below needs, read once.
+     *
+     * It used to read the batch and then sum that batch's reservations inside
+     * the loop, so a two-hundred-line allocation ran four hundred sequential
+     * statements — inside a serializable transaction that had already taken row
+     * locks on every batch involved. The cost was not the statements; it was how
+     * long every one of those locks was held while they ran, which is what makes
+     * a second warehouse user wait.
+     *
+     * The loop below is untouched apart from where these two values come from,
+     * so the checks still happen in allocation order and the first offending row
+     * still decides which error the user sees.
+     */
+    const lotIds = [...new Set(input.allocations.map((row) => row.inventoryLotId))];
+    const lotById = new Map(
+      (lotIds.length
+        ? await tx.inventoryLot.findMany({ where: { id: { in: lotIds }, shopId, locationId: order.locationId, status: "active", expiresOn: { gte: today() } } })
+        : []
+      ).map((row) => [row.id, row]),
+    );
+    // Only OPEN reservations hold stock back. A shipped allocation already
+    // decremented the lot, so counting it again would hide real availability.
+    const reservedByLot = new Map();
+    if (lotIds.length) {
+      const grouped = await tx.tradeOrderAllocation.groupBy({
+        by: ["inventoryLotId"],
+        where: { shopId, inventoryLotId: { in: lotIds }, dispatchId: null, orderItem: { order: { status: { in: RESERVING_STATUSES }, id: { not: order.id } } } },
+        _sum: { quantityBaseQty: true },
+      });
+      for (const row of grouped) reservedByLot.set(row.inventoryLotId, Number(row._sum.quantityBaseQty || 0));
+    }
+
     for (const allocation of input.allocations) {
       const item = itemById.get(allocation.orderItemId);
       if (!item) throw new AppError("An allocation does not belong to this order", 422, "TRADE_ALLOCATION_ITEM_INVALID");
       const sourceKey = JSON.stringify([item.id, allocation.inventoryLotId]);
       if (sourceKeys.has(sourceKey)) throw new AppError("Combine duplicate allocations for the same order line and batch", 422, "TRADE_ALLOCATION_DUPLICATE");
       sourceKeys.add(sourceKey);
-      const lot = await tx.inventoryLot.findFirst({ where: { id: allocation.inventoryLotId, shopId, locationId: order.locationId, productId: item.productId, status: "active", expiresOn: { gte: today() } } });
+      const candidate = lotById.get(allocation.inventoryLotId);
+      // The per-allocation half of the old query's filter. `productId` could not
+      // go into the batched read because it varies by line, and a batch of the
+      // wrong product must still read as unavailable rather than as a packaging
+      // complaint — the order these two checks happen in is the difference
+      // between two different messages for the same mistake.
+      const lot = candidate && candidate.productId === item.productId ? candidate : null;
       if (!lot) throw new AppError(`A selected batch is unavailable for ${item.description}`, 422, "TRADE_ALLOCATION_BATCH_INVALID");
       if (lot.sellingUnitId && lot.sellingUnitId !== item.sellingUnitId) throw new AppError(`The selected batch uses different packaging for ${item.description}`, 422, "TRADE_ALLOCATION_PACKAGING_MISMATCH");
-      // Only OPEN reservations hold stock back. A shipped allocation already
-      // decremented the lot, so counting it again would hide real availability.
-      const reserved = await tx.tradeOrderAllocation.aggregate({ where: { shopId, inventoryLotId: lot.id, dispatchId: null, orderItem: { order: { status: { in: RESERVING_STATUSES }, id: { not: order.id } } } }, _sum: { quantityBaseQty: true } });
-      const available = round2(Number(lot.availableBaseQty) - Number(reserved._sum.quantityBaseQty || 0));
+      const available = round2(Number(lot.availableBaseQty) - (reservedByLot.get(lot.id) || 0));
       const requested = round2((requestedByLot.get(lot.id) || 0) + Number(allocation.quantityBaseQty));
       if (requested > available) throw new AppError(`Batch ${lot.batchNumber} has only ${available} unreserved base units`, 409, "TRADE_ALLOCATION_STOCK_SHORT");
       requestedByLot.set(lot.id, requested);
@@ -127,19 +170,70 @@ export async function autoAllocateTradeOrder(shopId, id, actor = {}) {
   if (!["confirmed", "allocated", "partially_dispatched"].includes(order.status)) throw new AppError("Confirm the order before allocating batches", 409, "TRADE_ORDER_NOT_CONFIRMABLE_FOR_ALLOCATION");
   const allocations = [];
   const usedByLot = new Map();
-  for (const item of order.items) {
-    let remaining = outstandingBaseQty(item);
-    if (remaining <= 0.001) continue;
-    const lots = await db.inventoryLot.findMany({
-      where: { shopId, locationId: order.locationId, productId: item.productId, status: "active", availableBaseQty: { gt: 0 }, expiresOn: { gte: today() }, OR: [{ sellingUnitId: null }, { sellingUnitId: item.sellingUnitId ?? null }] },
-      orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }],
+  const open = order.items.filter((item) => outstandingBaseQty(item) > 0.001);
+
+  /*
+   * Two queries for the whole order, not two per batch.
+   *
+   * This used to read the batches for one line, then ask the database what was
+   * already reserved against each of those batches, one batch at a time — so a
+   * twenty-line order over ten batches a line spent 210 round-trips deciding an
+   * allocation it then wrote in one statement. The arithmetic below is unchanged;
+   * only where the numbers come from is.
+   *
+   * The lots are fetched for every line at once and grouped in memory, and the
+   * reservations for all of them are summed in a single groupBy. Both are still
+   * scoped to this shop and this order's location, and the per-line packaging
+   * rule — a line takes a batch tied to its own selling unit, or an untagged one
+   * — is applied to the group rather than pushed into the query, because it
+   * differs per line and is a cheap comparison once the rows are here.
+   */
+  const unitIds = [...new Set(open.map((item) => item.sellingUnitId).filter(Boolean))];
+  const lots = open.length === 0 ? [] : await db.inventoryLot.findMany({
+    where: {
+      shopId,
+      locationId: order.locationId,
+      productId: { in: [...new Set(open.map((item) => item.productId))] },
+      status: "active",
+      availableBaseQty: { gt: 0 },
+      expiresOn: { gte: today() },
+      ...(unitIds.length ? { OR: [{ sellingUnitId: null }, { sellingUnitId: { in: unitIds } }] } : { sellingUnitId: null }),
+    },
+    // Unchanged, and load-bearing: first to expire is first to ship, so a batch
+    // near its date leaves before one that has months left.
+    orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }],
+  });
+
+  const lotsByProduct = new Map();
+  for (const lot of lots) {
+    const bucket = lotsByProduct.get(lot.productId);
+    if (bucket) bucket.push(lot);
+    else lotsByProduct.set(lot.productId, [lot]);
+  }
+
+  // What other live orders are already holding on these batches. One row per
+  // batch; a batch nobody has reserved is simply absent, which reads as zero.
+  const reservedByLot = new Map();
+  if (lots.length) {
+    const grouped = await db.tradeOrderAllocation.groupBy({
+      by: ["inventoryLotId"],
+      where: {
+        shopId,
+        inventoryLotId: { in: lots.map((lot) => lot.id) },
+        dispatchId: null,
+        orderItem: { order: { status: { in: RESERVING_STATUSES }, id: { not: order.id } } },
+      },
+      _sum: { quantityBaseQty: true },
     });
-    for (const lot of lots) {
-      const reserved = await db.tradeOrderAllocation.aggregate({
-        where: { shopId, inventoryLotId: lot.id, dispatchId: null, orderItem: { order: { status: { in: RESERVING_STATUSES }, id: { not: order.id } } } },
-        _sum: { quantityBaseQty: true },
-      });
-      const available = Math.max(0, round2(Number(lot.availableBaseQty) - Number(reserved._sum.quantityBaseQty || 0) - (usedByLot.get(lot.id) || 0)));
+    for (const row of grouped) reservedByLot.set(row.inventoryLotId, Number(row._sum.quantityBaseQty || 0));
+  }
+
+  for (const item of open) {
+    let remaining = outstandingBaseQty(item);
+    for (const lot of lotsByProduct.get(item.productId) ?? []) {
+      // The packaging rule, exactly as the per-line query expressed it.
+      if (lot.sellingUnitId !== null && lot.sellingUnitId !== (item.sellingUnitId ?? null)) continue;
+      const available = Math.max(0, round2(Number(lot.availableBaseQty) - (reservedByLot.get(lot.id) || 0) - (usedByLot.get(lot.id) || 0)));
       const quantityBaseQty = Math.min(remaining, available);
       if (quantityBaseQty > 0) {
         allocations.push({ orderItemId: item.id, inventoryLotId: lot.id, quantityBaseQty });

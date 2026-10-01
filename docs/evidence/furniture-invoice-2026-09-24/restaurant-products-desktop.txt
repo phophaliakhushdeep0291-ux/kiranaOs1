@@ -1,0 +1,221 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- complementary:
+  - button "Resize sidebar, 260 pixels. Use left and right arrow keys."
+  - link "Artha Restaurant & Café":
+    - /url: /dashboard
+    - generic: Artha
+    - generic: Restaurant & Café
+  - button "Collapse sidebar":
+  - navigation "Main navigation":
+    - link "Dashboard":
+      - /url: /dashboard
+      - generic: Dashboard
+    - link "New Order F2":
+      - /url: /billing
+      - generic: New Order
+      - generic: F2
+    - link "Tables":
+      - /url: /tables
+      - generic: Tables
+    - link "Kitchen":
+      - /url: /kitchen
+      - generic: Kitchen
+    - link "Store Room":
+      - /url: /inventory
+      - generic: Store Room
+    - button "Collapse Store Room menu" [expanded]:
+    - link "Dishes" [active]:
+      - /url: /products
+      - generic: Dishes
+    - link "Categories":
+      - /url: /categories
+      - generic: Categories
+    - link "Stock In":
+      - /url: /inventory/stock-in
+      - generic: Stock In
+    - link "Stock Out":
+      - /url: /inventory/stock-out
+      - generic: Stock Out
+    - link "Adjustments":
+      - /url: /inventory/adjustments
+      - generic: Adjustments
+    - link "Stock Transfers":
+      - /url: /inventory/stock-transfers
+      - generic: Stock Transfers
+    - link "Stock Counts":
+      - /url: /inventory/stock-counts
+      - generic: Stock Counts
+    - link "Batch & Expiry":
+      - /url: /inventory/batches
+      - generic: Batch & Expiry
+    - link "Menu":
+      - /url: /menu
+      - generic: Menu
+    - link "Kitchen stock":
+      - /url: /kitchen-stock
+      - generic: Kitchen stock
+    - link "Tabs":
+      - /url: /customers
+      - generic: Tabs
+    - link "Reservations":
+      - /url: /reservations
+      - generic: Reservations
+    - link "Purchases":
+      - /url: /purchase-bills
+      - generic: Purchases
+    - button "Sales":
+      - generic: Sales
+    - link "Returns":
+      - /url: /returns
+      - generic: Returns
+    - link "Reports":
+      - /url: /reports
+      - generic: Reports
+    - link "Cash & Payments":
+      - /url: /money-statement
+      - generic: Cash & Payments
+    - link "Accounting":
+      - /url: /accounting
+      - generic: Accounting
+    - button "Business Tools":
+      - generic: Business Tools
+    - link "Activity & Insights":
+      - /url: /activity-insights
+      - generic: Activity & Insights
+    - link "Offers & Discounts":
+      - /url: /offers
+      - generic: Offers & Discounts
+    - link "Loyalty":
+      - /url: /loyalty
+      - generic: Loyalty
+    - link "Gift Cards":
+      - /url: /gift-cards
+      - generic: Gift Cards
+    - link "Financial Assurance":
+      - /url: /assurance
+      - generic: Financial Assurance
+    - link "Expenses":
+      - /url: /expenses
+      - generic: Expenses
+    - link "Settings":
+      - /url: /settings
+      - generic: Settings
+  - button "DR Disposable restaurant QA Disposable restaurant QA - Main · Jodhpur":
+    - generic: DR
+    - generic: Disposable restaurant QA
+    - generic: Disposable restaurant QA - Main · Jodhpur
+- banner:
+  - button "Toggle sidebar":
+  - heading "Products" [level=1]
+  - button "Disposable restaurant QA - Main MAIN · Primary":
+    - generic: Disposable restaurant QA - Main
+    - generic: MAIN · Primary
+  - generic: Synced
+  - generic: Just now
+  - generic "Rs 999 Dine-in"
+  - link "Open sync alerts":
+    - /url: /sync-status
+  - button "DR":
+    - generic: DR
+- main:
+  - status: Products page loaded
+  - paragraph: Catalogue for your shop type
+  - paragraph: 🍽️ Restaurant & Café
+  - paragraph: The menu is the catalogue. Keep the allergen and onion-garlic answers on the dish so a server never has to walk back to the kitchen.
+  - link "Menu":
+    - /url: /menu
+    - text: Menu
+  - link "Categories":
+    - /url: /categories
+    - text: Categories
+  - link "Change shop type":
+    - /url: /settings/store-profile
+  - paragraph: Total Dishes
+  - paragraph: "2"
+  - paragraph: Dishes on the menu
+  - paragraph: Low Stock
+  - paragraph: "0"
+  - paragraph: Needs attention
+  - paragraph: Out of Stock
+  - paragraph: "1"
+  - paragraph: Unavailable
+  - paragraph: Categories
+  - paragraph: "1"
+  - paragraph: Active categories
+  - textbox "Search by dish or menu code"
+  - combobox "Filter products by category":
+    - generic: All Categories
+  - button "Filters":
+    - text: Filters
+  - button "Import":
+    - text: Import
+  - button "Export":
+    - text: Export
+  - button "Add Product":
+    - text: Add Product
+  - table:
+    - rowgroup:
+      - row "Select all products on this page Product Category SKU / Barcode Unit MRP Cost Price Selling Price Stock Action":
+        - columnheader "Select all products on this page":
+          - checkbox "Select all products on this page"
+        - columnheader "Product"
+        - columnheader "Category"
+        - columnheader "SKU / Barcode"
+        - columnheader "Unit"
+        - columnheader "MRP"
+        - columnheader "Cost Price"
+        - columnheader "Selling Price"
+        - columnheader "Stock"
+        - columnheader "Action"
+    - rowgroup:
+      - row "Select QA Bottled Water 💧 QA Bottled Water General — piece — ₹10.00 ₹20.00 0 Out of Stock Actions for QA Bottled Water":
+        - cell "Select QA Bottled Water":
+          - checkbox "Select QA Bottled Water"
+        - cell "💧 QA Bottled Water":
+          - generic: 💧
+          - paragraph: QA Bottled Water
+        - cell "General":
+          - generic: General
+        - cell "—"
+        - cell "piece"
+        - cell "—"
+        - cell "₹10.00"
+        - cell "₹20.00"
+        - cell "0 Out of Stock":
+          - generic: "0"
+          - generic: Out of Stock
+        - cell "Actions for QA Bottled Water":
+          - button "Actions for QA Bottled Water":
+      - row "Select QA Dal Fry 🫘 QA Dal Fry General — piece — ₹10.00 ₹180.00 — Not counted as stock Actions for QA Dal Fry":
+        - cell "Select QA Dal Fry":
+          - checkbox "Select QA Dal Fry"
+        - cell "🫘 QA Dal Fry":
+          - generic: 🫘
+          - paragraph: QA Dal Fry
+        - cell "General":
+          - generic: General
+        - cell "—"
+        - cell "piece"
+        - cell "—"
+        - cell "₹10.00"
+        - cell "₹180.00"
+        - cell "— Not counted as stock":
+          - generic: —
+          - generic: Not counted as stock
+        - cell "Actions for QA Dal Fry":
+          - button "Actions for QA Dal Fry":
+  - paragraph: Showing 1 to 2 of 2 products
+  - button "Previous page" [disabled]:
+  - button "1"
+  - button "Next page" [disabled]:
+  - generic: Rows per page
+  - combobox:
+    - generic: "10"
+- button "Voice assistant":
+  - generic: Voice assistant
+- button "Report a problem":
+  - generic: Report a problem
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

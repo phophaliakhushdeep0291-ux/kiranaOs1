@@ -435,6 +435,8 @@ export const inventoryHi: Record<keyof typeof inventoryEn, string> = {
   "inventory.page.inventoryItem": "स्टॉक का सामान",
   "inventory.page.pinRequiredNote": "{movement} के लिए मालिक का PIN चाहिए और सिंक में एक पेंडिंग एडजस्टमेंट बनता है।",
   "inventory.page.unitsTracked": "{count} यूनिट ट्रैक हो रही हैं",
+  "inventory.page.stockTrackedProducts": "स्टॉक में गिने जाने वाले उत्पाद",
+  "returns.findOriginalBill": "मूल बिल खोजें",
   "inventory.page.skuLabel": "SKU: {value}",
   "inventory.page.categoryLabel": "श्रेणी: {value}",
   "inventory.page.valueLabel": "कीमत: {value}",

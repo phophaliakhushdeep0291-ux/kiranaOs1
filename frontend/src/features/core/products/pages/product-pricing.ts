@@ -1,4 +1,5 @@
 import { roundMoney } from "@/lib/money";
+import { productTracksStock } from "@/features/core/inventory/stock-display";
 import type { Product, ProductSellingUnit } from "@/lib/api/client";
 
 export const UNITS = [
@@ -195,7 +196,11 @@ export function isLowStock(product: Product): boolean {
   // Both sides are base units. A product with no alert threshold (0) is never "low" —
   // matching the backend's low-stock filter — and zero stock is "out of stock", not "low".
   const threshold = Number(product.lowStockThreshold ?? 0);
-  return threshold > 0 && Number(product.stockBaseQty ?? 0) <= threshold;
+  return productTracksStock(product) && threshold > 0 && Number(product.stockBaseQty ?? 0) <= threshold;
+}
+
+export function isOutOfStock(product: Product): boolean {
+  return productTracksStock(product) && Number(product.stockBaseQty ?? 0) <= 0;
 }
 
 export function isDeletedProduct(product: Product): boolean {

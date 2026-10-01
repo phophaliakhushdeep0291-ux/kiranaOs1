@@ -11,6 +11,7 @@
     "moneyPrecision": "Money values are accepted only as finite numbers with max 2 decimal places unless a field explicitly uses integer paise.",
     "syncPagination": "New clients must persist response.sync.entityCursors and send them back as the cursors query JSON on the next pull.",
     "tenantScope": "The frontend must never send or trust body.shopId for tenant selection. Tenant context comes from the authenticated token; x-shop-id is reserved for future platform/admin flows.",
+    "roleAccess": "Roles are owner, admin (Manager), staff (Cashier) and viewer. The user object from login, refresh and /api/auth/me carries permissions[] from backend/src/core/permissions/rbac.js. A viewer is read-only: every write answers 403 ROLE_READ_ONLY except its own session upkeep (password, owner-PIN unlock, device activation/heartbeat/health, sync ack, activity, diagnostics, support-command ack, assistant chat), and each pushed sync event is refused with PERMISSION_DENIED.",
     "deviceActivationFlow": [
       "POST /api/auth/login",
       "POST /api/devices/activate with Authorization header",
@@ -38,7 +39,9 @@
       "DEVICE_REMOVED",
       "DEVICE_NOT_ACTIVE",
       "FEATURE_NOT_INCLUDED",
-      "PLAN_TOO_LOW"
+      "PLAN_TOO_LOW",
+      "ROLE_READ_ONLY",
+      "PERMISSION_DENIED"
     ],
     "409": [
       "CONCURRENT_STOCK_MODIFICATION_RETRY",

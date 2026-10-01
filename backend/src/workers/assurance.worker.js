@@ -9,6 +9,7 @@
 // Isolation rules, same as everywhere else in this module: read-only toward
 // canonical financial tables, and one shop's failure never stops the sweep.
 import db from "../db.js";
+import { scheduledActivity } from "../modules/assurance/scheduled-activity.js";
 import { JOB_NAMES } from "./queueNames.js";
 import { ENTITY_TYPES, RUN_TYPES } from "../modules/assurance/assurance.constants.js";
 import { collectEntitiesForPeriod, createRun, executeRun } from "../modules/assurance/evaluation.service.js";
@@ -22,9 +23,9 @@ export async function handleAssuranceJob(job) {
     case JOB_NAMES.RUN_TRANSACTION_ASSURANCE:
       return runTransactionTriggeredAssurance(job.data ?? {});
     case JOB_NAMES.RUN_SCHEDULED_ASSURANCE:
-      return runScheduledAssurance(job.data ?? {});
+      return requireCompleteSweep(await runScheduledAssurance({ ...job.data, to: job.timestamp ?? Date.now() }));
     case JOB_NAMES.RECOMPUTE_ASSURANCE_BASELINES:
-      return recomputeBaselinesForShops(job.data ?? {});
+      return requireCompleteSweep(await recomputeBaselinesForShops({ ...job.data, to: job.timestamp ?? Date.now() }));
     case JOB_NAMES.WORKER_HEALTHCHECK:
       return { status: "ok", jobName: JOB_NAMES.WORKER_HEALTHCHECK, time: new Date().toISOString() };
     default: {
@@ -70,6 +71,14 @@ export async function runTransactionTriggeredAssurance(payload = {}) {
     [{ entityType, entityId }],
     { actorUserId },
   );
+  // BullMQ retries rejected jobs. Returning a FAILED outcome would acknowledge
+  // the job and permanently lose the post-commit check.
+  if (outcome.status !== "COMPLETED") {
+    const error = new Error(`Audit run ${outcome.runId} did not complete`);
+    error.code = "ASSURANCE_EVALUATION_INCOMPLETE";
+    error.runId = outcome.runId;
+    throw error;
+  }
   return {
     jobName: JOB_NAMES.RUN_TRANSACTION_ASSURANCE,
     runId: outcome.runId,
@@ -95,21 +104,22 @@ function boundedInteger(value, fallback, min, max) {
 export async function runScheduledAssurance(payload = {}) {
   const lookbackHours = boundedInteger(payload.lookbackHours, DEFAULT_LOOKBACK_HOURS, 1, 24 * 30);
   const shopLimit = boundedInteger(payload.shopLimit, MAX_SHOPS_PER_JOB, 1, 5000);
-  const to = new Date();
+  const to = new Date(payload.to ?? Date.now());
+  if (!Number.isFinite(to.getTime())) throw new Error("Invalid assurance window end");
   const from = new Date(to.getTime() - lookbackHours * 60 * 60 * 1000);
 
-  const shops = payload.shopIds?.length
-    ? await db.shop.findMany({ where: { id: { in: payload.shopIds } }, select: { id: true }, take: shopLimit })
-    : await activeShopsSince(from, shopLimit);
+  const shops = activeShopPages({ from, to, pageSize: shopLimit, shopIds: payload.shopIds });
+  let shopsConsidered = 0;
 
   const results = [];
   let findingsCreated = 0;
   let findingsUpdated = 0;
   let evaluated = 0;
 
-  for (const shop of shops) {
+  for await (const shop of shops) {
+    shopsConsidered += 1;
     try {
-      const { entities, truncated } = await collectEntitiesForPeriod(shop.id, { from, to });
+      const { entities, truncated } = await collectEntitiesForPeriod(shop.id, { from, to, includeRecentChanges: true });
       if (!entities.length) {
         results.push({ shopId: shop.id, skipped: true, reason: "NO_ACTIVITY" });
         continue;
@@ -131,6 +141,8 @@ export async function runScheduledAssurance(payload = {}) {
         evaluated: outcome.evaluated,
         findingsCreated: outcome.findingsCreated,
         failures: outcome.failures.length,
+        ruleFailures: outcome.ruleFailures.length,
+        truncated: outcome.truncated,
       });
     } catch (error) {
       // One shop's data problem must never stop the sweep for every other shop.
@@ -141,7 +153,9 @@ export async function runScheduledAssurance(payload = {}) {
   return {
     jobName: JOB_NAMES.RUN_SCHEDULED_ASSURANCE,
     window: { from: from.toISOString(), to: to.toISOString(), lookbackHours },
-    shopsConsidered: shops.length,
+    shopsConsidered,
+    complete: results.every((row) => row.skipped || row.status === "COMPLETED"),
+    shopsPartial: results.filter((row) => row.status === "PARTIAL").length,
     shopsEvaluated: results.filter((row) => row.runId).length,
     shopsFailed: results.filter((row) => row.status === "FAILED").length,
     evaluated,
@@ -155,16 +169,30 @@ export async function runScheduledAssurance(payload = {}) {
  * Shops with any financial activity in the window. Cheaper and far kinder to a
  * multi-tenant database than sweeping every shop that has ever existed.
  */
-async function activeShopsSince(from, take) {
-  const range = { gte: from };
-  const [bills, expenses, stock, ledger] = await Promise.all([
-    db.bill.findMany({ where: { createdAt: range }, select: { shopId: true }, distinct: ["shopId"], take }),
-    db.expense.findMany({ where: { createdAt: range }, select: { shopId: true }, distinct: ["shopId"], take }),
-    db.stockLedger.findMany({ where: { createdAt: range }, select: { shopId: true }, distinct: ["shopId"], take }),
-    db.udharLedger.findMany({ where: { createdAt: range }, select: { shopId: true }, distinct: ["shopId"], take }),
-  ]);
-  const ids = [...new Set([...bills, ...expenses, ...stock, ...ledger].map((row) => row.shopId).filter(Boolean))];
-  return ids.slice(0, take).map((id) => ({ id }));
+async function* activeShopPages({ from, to, pageSize, shopIds }) {
+  // shopLimit is retained as an input name for compatibility; it now bounds
+  // one query's size, never the number of customers receiving their audit.
+  const activity = scheduledActivity({ gte: from, lte: to });
+  const where = shopIds?.length
+    ? { id: { in: [...new Set(shopIds)] } }
+    : { OR: Object.entries(activity).map(([relation, filter]) => ({ [relation]: { some: filter } })) };
+  let cursor;
+  while (true) {
+    const page = await db.shop.findMany({ where, select: { id: true }, take: pageSize,
+      orderBy: { id: "asc" }, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) });
+    for (const shop of page) yield shop;
+    if (page.length < pageSize) return;
+    cursor = page.at(-1).id;
+  }
+}
+
+function requireCompleteSweep(result) {
+  if (result.complete) return result;
+  const error = new Error("Scheduled assurance is incomplete; review failed or partial audit runs");
+  error.code = "ASSURANCE_SWEEP_INCOMPLETE";
+  // Finish other tenants first, then reject so queue retry and failed-job
+  // monitoring remain effective. Tenant failure details stay in audit records.
+  throw error;
 }
 
 /**
@@ -174,15 +202,17 @@ async function activeShopsSince(from, take) {
 export async function recomputeBaselinesForShops(payload = {}) {
   const shopLimit = boundedInteger(payload.shopLimit, MAX_SHOPS_PER_JOB, 1, 5000);
   const windowDays = boundedInteger(payload.windowDays, 90, 7, 365);
-  const from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const to = new Date(payload.to ?? Date.now());
+  if (!Number.isFinite(to.getTime())) throw new Error("Invalid assurance window end");
+  const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  const shops = payload.shopIds?.length
-    ? await db.shop.findMany({ where: { id: { in: payload.shopIds } }, select: { id: true }, take: shopLimit })
-    : await activeShopsSince(from, shopLimit);
+  const shops = activeShopPages({ from, to, pageSize: shopLimit, shopIds: payload.shopIds });
+  let shopsConsidered = 0;
 
   let baselinesWritten = 0;
   const failures = [];
-  for (const shop of shops) {
+  for await (const shop of shops) {
+    shopsConsidered += 1;
     try {
       baselinesWritten += await recomputeShopBaselines(shop.id, { windowDays });
     } catch (error) {
@@ -193,7 +223,8 @@ export async function recomputeBaselinesForShops(payload = {}) {
   return {
     jobName: JOB_NAMES.RECOMPUTE_ASSURANCE_BASELINES,
     windowDays,
-    shopsProcessed: shops.length,
+    shopsProcessed: shopsConsidered,
+    complete: failures.length === 0,
     baselinesWritten,
     failures: failures.slice(0, 50),
     failureCount: failures.length,

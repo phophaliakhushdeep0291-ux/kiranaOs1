@@ -1,0 +1,61 @@
+- link "मुख्य सामग्री पर जाएँ":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "ऑर्डर बुक" [level=1]
+  - generic: Disposable furniture QA · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: ऑर्डर बुक page loaded
+  - paragraph: Open orders
+  - paragraph: "0"
+  - paragraph: Past the promised date
+  - paragraph: "0"
+  - paragraph: Advances held
+  - paragraph: ₹0
+  - paragraph: Still to collect
+  - paragraph: ₹0
+  - heading "Order book" [level=3]
+  - paragraph: Quote, advance, make, deliver, install — and what is still owed at every step.
+  - button "New Order":
+    - text: New Order
+  - button "Open"
+  - button "Quotes"
+  - button "Being made"
+  - button "Ready"
+  - button "Delivered" [active]
+  - button "Everything"
+  - button "Late only"
+  - textbox "Customer, order no., item"
+  - button "QA Delivery Buyer SO-000001 1 item":
+    - paragraph: QA Delivery Buyer
+    - paragraph:
+      - generic: SO-000001
+      - generic: 1 item
+  - generic: Delivered
+  - paragraph: ₹100
+  - paragraph: paid up
+  - paragraph: "जुड़ा बिक्री बिल: KOS-2026-000001"
+  - button "Installed":
+    - text: Installed
+- navigation "Primary navigation":
+  - link "होम":
+    - /url: /dashboard
+    - generic: होम
+  - link "बिक्री":
+    - /url: /billing
+    - generic: बिक्री
+  - link "स्टॉक":
+    - /url: /inventory
+    - generic: स्टॉक
+  - link "ग्राहक":
+    - /url: /customers
+    - generic: ग्राहक
+  - button "ऐप के सभी हिस्से खोलें":
+    - generic: और
+- button "सहायक खोलें":
+- region "Notifications (F8)":
+  - list

@@ -19,6 +19,8 @@ import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import type { BillListResult } from "@/types/api";
 import { useFeature } from "@/features/core/subscription";
+import { TaxReviewPanel } from "./TaxReviewPanel";
+import { TaxReconciliationPanel } from "./TaxReconciliationPanel";
 
 interface TaxConfig {
   mode: "exclusive" | "inclusive" | "none";
@@ -333,6 +335,8 @@ export default function TaxesSettingsPage() {
   return (
     <SettingsShell>
       <div className="grid gap-4 lg:grid-cols-2">
+        {gstReportsFeature.allowed && <TaxReviewPanel />}
+        {gstReportsFeature.allowed && <TaxReconciliationPanel />}
         {/* GST Configuration */}
         <Card>
           <CardHead icon={<Receipt size={15} />} title={t("settings.tax.cfgTitle")} sub={t("settings.tax.cfgSub")} />

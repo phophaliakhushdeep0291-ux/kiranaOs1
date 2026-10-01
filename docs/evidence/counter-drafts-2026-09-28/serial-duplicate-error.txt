@@ -1,0 +1,155 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "IMEI & Serials" [level=1]
+  - generic: QA Electronics · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: IMEI & Serials page loaded
+  - generic: Check a handset
+  - textbox "Scan or type an IMEI or serial"
+  - button "Check" [disabled]:
+    - text: Check
+  - paragraph: On the shelf
+  - paragraph: "3"
+  - paragraph: Sold this month
+  - paragraph: "0"
+  - paragraph: At service
+  - paragraph: "0"
+  - paragraph: Warranty ending in 30 days
+  - paragraph: "0"
+  - heading "IMEI & serial register" [level=3]
+  - paragraph: Every unit you have handled, and where each one went.
+  - button "Add Units":
+    - text: Add Units
+  - button "Still ours"
+  - button "In stock"
+  - button "Sold"
+  - button "At service"
+  - button "Everything"
+  - textbox "IMEI, model, buyer, bill no."
+  - table:
+    - rowgroup:
+      - row "Unit Status Sold to Warranty Actions":
+        - columnheader "Unit"
+        - columnheader "Status"
+        - columnheader "Sold to"
+        - columnheader "Warranty"
+        - columnheader "Actions"
+    - rowgroup:
+      - row "Unit QA Handset S/N QA-DRAFT-002 Status In stock Sold to — Warranty 12 months once sold Actions Sell Send QA Handset to service Mark QA Handset lost Delete QA Handset":
+        - cell "Unit QA Handset S/N QA-DRAFT-002":
+          - text: Unit
+          - paragraph: QA Handset
+          - paragraph: S/N QA-DRAFT-002
+        - cell "Status In stock"
+        - cell "Sold to —"
+        - cell "Warranty 12 months once sold":
+          - text: Warranty
+          - paragraph: 12 months once sold
+        - cell "Actions Sell Send QA Handset to service Mark QA Handset lost Delete QA Handset":
+          - text: Actions
+          - button "Sell":
+            - text: Sell
+          - button "Send QA Handset to service":
+          - button "Mark QA Handset lost":
+          - button "Delete QA Handset":
+      - row "Unit QA Handset S/N QA-DRAFT-003 Status In stock Sold to — Warranty 12 months once sold Actions Sell Send QA Handset to service Mark QA Handset lost Delete QA Handset":
+        - cell "Unit QA Handset S/N QA-DRAFT-003":
+          - text: Unit
+          - paragraph: QA Handset
+          - paragraph: S/N QA-DRAFT-003
+        - cell "Status In stock"
+        - cell "Sold to —"
+        - cell "Warranty 12 months once sold":
+          - text: Warranty
+          - paragraph: 12 months once sold
+        - cell "Actions Sell Send QA Handset to service Mark QA Handset lost Delete QA Handset":
+          - text: Actions
+          - button "Sell":
+            - text: Sell
+          - button "Send QA Handset to service":
+          - button "Mark QA Handset lost":
+          - button "Delete QA Handset":
+      - row "Unit QA Handset S/N QA-SERIAL-001 Status In stock Sold to — Warranty 12 months once sold Actions Sell Send QA Handset to service Mark QA Handset lost Delete QA Handset":
+        - cell "Unit QA Handset S/N QA-SERIAL-001":
+          - text: Unit
+          - paragraph: QA Handset
+          - paragraph: S/N QA-SERIAL-001
+        - cell "Status In stock"
+        - cell "Sold to —"
+        - cell "Warranty 12 months once sold":
+          - text: Warranty
+          - paragraph: 12 months once sold
+        - cell "Actions Sell Send QA Handset to service Mark QA Handset lost Delete QA Handset":
+          - text: Actions
+          - button "Sell":
+            - text: Sell
+          - button "Send QA Handset to service":
+          - button "Mark QA Handset lost":
+          - button "Delete QA Handset":
+  - dialog "Register serial numbers":
+    - heading "Register serial numbers" [level=2]
+    - paragraph: Record the codes on your existing stock. To add product quantities, record a purchase or use Stock In separately.
+    - button "Close":
+    - paragraph: Your entries stay here while the counter is locked. Cancel discards them.
+    - heading "Which product" [level=3]
+    - paragraph: QA Handset
+    - button "Change"
+    - generic: Cost each (₹)
+    - spinbutton: "0"
+    - generic: Warranty (months)
+    - spinbutton: "12"
+    - generic: Purchase bill
+    - textbox "Optional"
+    - paragraph: The warranty clock starts when a unit is sold, not now — this is the cover the box promises.
+    - heading "Scan or paste the codes" [level=3]
+    - generic: Paste many at once
+    - textbox "351234567890123 351234567890125":
+      - /placeholder: "351234567890123\n351234567890125"
+    - paragraph: One per line. A 15-digit code is read as an IMEI, anything else as a serial.
+    - button "Add these as units" [disabled]:
+      - text: Add these as units
+    - textbox "IMEI for unit 1":
+      - /placeholder: IMEI
+    - button "Remove unit 1":
+    - textbox "Second IMEI for unit 1":
+      - /placeholder: IMEI 2 (dual SIM)
+    - textbox "Serial number for unit 1":
+      - /placeholder: Serial number
+      - text: QA-SERIAL-001
+    - combobox "Condition for unit 1":
+      - option "New" [selected]
+      - option "Open box"
+      - option "Refurbished"
+    - button "Add another unit":
+      - text: Add another unit
+    - button "Cancel"
+    - button "Add 1 Unit":
+      - text: Add 1 Unit
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list:
+    - generic: Could not add these units
+    - generic: QA-SERIAL-001 is already recorded against "QA Handset"
+    - button "Dismiss notification":
+- status: Notification Could not add these unitsQA-SERIAL-001 is already recorded against "QA Handset"

@@ -15,9 +15,12 @@ import { getPlanForBusinessType, type BillingCycle, type PlanCode } from "@/feat
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { subscriptionRefreshLocalFirst } from "@/features/core/subscription/local-actions";
 import {
+  useSubscriptionSnapshot,
   writeSubscriptionRequest,
   writeSubscriptionSnapshot,
 } from "@/features/core/subscription/access";
+import { formatFreeAccessDate, isFreeAccessPresale } from "@/features/core/subscription/free-access";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import {
   requestSubscriptionUpgrade,
   validateSubscriptionCoupon,
@@ -27,7 +30,6 @@ import {
 } from "@/features/core/subscription/api";
 import { ApiClientError } from "@/lib/api/http";
 import { useToast } from "@/hooks/use-toast";
-import { useAppLanguage } from "@/features/core/settings/i18n";
 import { safeRandomUUID } from "@/lib/safe-uuid";
 import { loadRazorpayCheckout } from "@/lib/razorpay-checkout-loader";
 
@@ -153,7 +155,6 @@ export function UpgradeModal({
   billingCycle?: BillingCycle;
   mode?: "upgrade" | "renew";
 }) {
-  const { t } = useAppLanguage();
   const renewing = mode === "renew";
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
@@ -165,6 +166,12 @@ export function UpgradeModal({
   const checkoutAttemptKeyRef = useRef<string | null>(null);
   const businessType = useBusinessTypeKey();
   const target = getPlanForBusinessType(targetPlanCode ?? "growth", businessType);
+  const { language, t } = useAppLanguage();
+  const { snapshot } = useSubscriptionSnapshot();
+  const freeUntil = snapshot?.freeAccessUntil ?? null;
+  // The promotion's last month sells the period that starts when the window shuts.
+  const presale = isFreeAccessPresale(freeUntil);
+  const paidFrom = presale && freeUntil ? formatFreeAccessDate(freeUntil, language) : null;
 
   useEffect(() => {
     setSelectedCycle(billingCycle);
@@ -240,6 +247,15 @@ export function UpgradeModal({
       });
       onOpenChange(false);
     } catch (error) {
+      // The server refuses checkout while the launch promotion runs. Nothing was
+      // charged and there is nothing to retry later, so no offline upgrade request
+      // is queued; refreshing lets this device learn the window it had not heard of.
+      if (error instanceof ApiClientError && error.data.code === "FREE_ACCESS_ACTIVE") {
+        toast({ title: t("plans.free.nothingToPay"), description: t("plans.free.refusedBody") });
+        onOpenChange(false);
+        void subscriptionRefreshLocalFirst(target.code).catch(() => undefined);
+        return;
+      }
       if (error instanceof ApiClientError && error.data.code?.startsWith("COUPON_")) {
         toast({ title: "Coupon not applied", description: error.message });
         return;
@@ -263,6 +279,24 @@ export function UpgradeModal({
     }
   }
 
+  if (freeUntil && !presale) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("plans.free.nothingToPay")}</DialogTitle>
+            <DialogDescription>
+              {t("plans.free.modalBody", { date: formatFreeAccessDate(freeUntil, language), plan: target.name })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => onOpenChange(false)}>{t("plans.free.close")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -284,6 +318,7 @@ export function UpgradeModal({
                 {selectedCycle === "yearly" ? `Rs ${target.annualPrice}/year` : `Rs ${target.price}/month`}
               </p>
               {selectedCycle === "yearly" && <p className="text-xs font-medium text-emerald-700">Rs {Math.round(target.annualPrice / 12)}/month, billed annually</p>}
+              {paidFrom && <p className="text-xs font-bold text-emerald-700">{t("plans.free.startsOn", { date: paidFrom })}</p>}
               <p className="text-sm text-muted-foreground">{target.headline}</p>
             </div>
             <Badge variant="secondary">

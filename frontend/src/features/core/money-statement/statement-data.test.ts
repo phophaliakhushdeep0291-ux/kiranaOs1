@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { buildMoneyStatement, normaliseMoneyMode } from "./statement-data";
+import { offlineDB } from "@/lib/offline/db";
+import { describe, expect, it, vi } from "vitest";
+import { buildMoneyStatement, normaliseMoneyMode, loadMoneyStatementInput } from "./statement-data";
 
 describe("money statement", () => {
   it("keeps unpaid expenses out of cash movement until payment is recorded", () => {
@@ -275,4 +276,40 @@ describe("money statement", () => {
     expect(result.rows[0]?.dateLabel).toBe("10 Jul 2026");
     expect(result.rows[0]?.timeLabel).toMatch(/10:45/);
   });
+});
+
+
+it("rental tender events retain their date, refund direction and payment mode without restating deposits", () => {
+  const rentalPayments = [
+    { id: "receipt", bookingNumber: "RNT-000001", customerName: "QA Renter", amount: 300, paymentMode: "cash", businessDate: "2026-09-21T12:00:00+05:30" },
+    { id: "refund", bookingNumber: "RNT-000001", customerName: "QA Renter", amount: -200, paymentMode: "cash", businessDate: "2026-09-22T12:00:00+05:30" },
+    { id: "collection", bookingNumber: "RNT-000001", customerName: "QA Renter", amount: 10, paymentMode: "upi", businessDate: "2026-09-22T12:00:00+05:30" },
+  ];
+  expect(buildMoneyStatement({ rentalPayments }, { from: "2026-09-21", to: "2026-09-21" }).totals.cashNet).toBe(300);
+  const today = buildMoneyStatement({ rentalPayments }, { from: "2026-09-22", to: "2026-09-22" });
+  expect(today.totals.cashNet).toBe(-200);
+  expect(today.totals.upiNet).toBe(10);
+  expect(today.totals.totalNet).toBe(-190);
+  expect(today.rows.find((row) => row.id === "rental:refund")).toMatchObject({ amount: 200, direction: "out", source: "Rental payment" });
+});
+
+it("cannot present an unreadable local ledger as an empty money statement", async () => {
+  const read = vi.spyOn(offlineDB, "getAll").mockRejectedValue(new Error("Ledger read failed"));
+  try { await expect(loadMoneyStatementInput()).rejects.toThrow("Ledger read failed"); }
+  finally { read.mockRestore(); }
+});
+
+it("keeps furniture receipts, refunds and applied invoice tenders on their economic dates", () => {
+  const input = {
+    payments: [{ id: "sale", billId: "bill", mode: "upi", amount: 60, paidAt: "2026-06-03T10:00:00Z" }],
+    furniturePayments: [
+      { id: "receipt", orderNumber: "SO-1", amount: 100, paymentMode: "upi", businessDate: "2026-06-01T10:00:00Z" },
+      { id: "refund", orderNumber: "SO-1", amount: -40, paymentMode: "upi", businessDate: "2026-06-02T10:00:00Z" },
+      { id: "applied", orderNumber: "SO-1", amount: -60, paymentMode: "upi", businessDate: "2026-06-03T10:00:00Z", event: "invoice_application" },
+    ],
+  };
+  expect(buildMoneyStatement(input).totals.upiNet).toBe(60);
+  expect(buildMoneyStatement(input, { from: "2026-06-01", to: "2026-06-01" }).totals.upiNet).toBe(100);
+  expect(buildMoneyStatement(input, { from: "2026-06-02", to: "2026-06-02" }).totals.upiNet).toBe(-40);
+  expect(buildMoneyStatement(input, { from: "2026-06-03", to: "2026-06-03" }).totals.upiNet).toBe(0);
 });

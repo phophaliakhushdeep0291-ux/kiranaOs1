@@ -82,6 +82,14 @@ describe("edit after finalize (void + recreate) orchestration", () => {
     }));
   });
 
+  it("refuses a serial-linked replacement before creating or cancelling any bill", async () => {
+    h.bills.push(activeBill());
+    const input = replacement(); input.items[0].trackedUnitId = "serial-1";
+    await expect(editFinalizedBillLocalFirst({ originalBillId: "bill_orig", ownerPin: "1234", reason: "Wrong price", replacement: input })).rejects.toThrow(/serial/);
+    expect(h.createBillLocalFirst).not.toHaveBeenCalled();
+    expect(h.cancelBillWithOwnerPinLocalFirst).not.toHaveBeenCalled();
+  });
+
   it("creates the corrected bill FIRST, then voids the original with the owner PIN", async () => {
     h.bills.push(activeBill());
     const result = await editFinalizedBillLocalFirst({

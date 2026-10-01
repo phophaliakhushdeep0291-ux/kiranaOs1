@@ -30,6 +30,7 @@
  *                      wrong.
  */
 import { AppError } from "../../../shared/errors/index.js";
+import { isReadOnlyRole } from "../../../core/permissions/rbac.js";
 
 /** Reused verbatim from ai.permissions.js so one vocabulary describes both paths. */
 export const TOOL_RISK = Object.freeze({
@@ -168,6 +169,9 @@ export function toProviderTool(tool) {
  */
 export function toolAvailableTo(tool, ctx) {
   if (tool.roles && !tool.roles.includes(ctx.role)) return false;
+  // A view-only login may ask, never propose: its confirm call would be refused
+  // anyway, and a model offered a write it cannot land keeps narrating it.
+  if (tool.kind === "write" && isReadOnlyRole(ctx.role)) return false;
   if (tool.feature && !ctx.features?.has(tool.feature)) return false;
   return true;
 }

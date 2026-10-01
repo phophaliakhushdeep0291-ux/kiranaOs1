@@ -38,8 +38,11 @@ export default function AuditRunsPage() {
       }),
     onSuccess: (result) => {
       toast({
-        title: t("assurance.runDone"),
-        description: t("assurance.runDoneDetail", { count: result.evaluated, created: result.findingsCreated }),
+        title: t(result.status === "COMPLETED" ? "assurance.runDone" : "assurance.runIncomplete"),
+        description: result.status === "COMPLETED"
+          ? t("assurance.runDoneDetail", { count: result.evaluated, created: result.findingsCreated })
+          : t("assurance.runIncompleteHint"),
+        variant: result.status === "COMPLETED" ? "default" : "destructive",
       });
       queryClient.invalidateQueries({ queryKey: ["assurance"] });
       setSelectedRunId(result.runId);
@@ -70,10 +73,10 @@ export default function AuditRunsPage() {
           </div>
           <Button onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>
             {startMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-            Run review
+            {t("assurance.run")}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Re-running a period is safe: evaluations are idempotent and will not create duplicate findings.
+            {t("assurance.runs.retrySafe")}
           </p>
         </div>
       </SectionCard>
@@ -82,7 +85,7 @@ export default function AuditRunsPage() {
         <SectionCard title={t("assurance.runs.recent")}>
           {runs.isLoading ? (
             <div className="flex h-32 items-center justify-center text-muted-foreground">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t("assurance.running")}
             </div>
           ) : (runs.data?.runs.length ?? 0) === 0 ? (
             <EmptyState title={t("assurance.runs.none")} hint={t("assurance.runs.noneHint")} />
@@ -98,12 +101,12 @@ export default function AuditRunsPage() {
                     }`}
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">{humanize(run.runType)}</p>
+                      <p className="text-sm font-medium">{words.runType(run.runType)}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        {fmtDateTime(run.startedAt)} · {run.entitiesEvaluated} reviewed · {run.findingsCreated} new
+                        {fmtDateTime(run.startedAt)} · {t("assurance.runDoneDetail", { count: run.entitiesEvaluated, created: run.findingsCreated })}
                       </p>
                     </div>
-                    <Chip>{humanize(run.status)}</Chip>
+                    <Chip>{words.runStatus(run.status)}</Chip>
                   </button>
                 </li>
               ))}
@@ -116,12 +119,12 @@ export default function AuditRunsPage() {
             <EmptyState title={t("assurance.runs.pick")} />
           ) : runDetail.isLoading ? (
             <div className="flex h-32 items-center justify-center text-muted-foreground">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t("assurance.running")}
             </div>
           ) : runDetail.data ? (
             <div className="space-y-3">
               <dl className="grid gap-1 text-xs sm:grid-cols-2">
-                <Row label={t("assurance.status.OPEN")} value={words.runStatus(runDetail.data.status)} />
+                <Row label={t("assurance.runs.status")} value={words.runStatus(runDetail.data.status)} />
                 <Row label={t("assurance.runs.checked")} value={String(runDetail.data.entitiesEvaluated)} />
                 <Row label={t("assurance.runs.newProblems")} value={String(runDetail.data.findingsCreated)} />
                 <Row label={t("assurance.runs.updated")} value={String(runDetail.data.findingsUpdated)} />
@@ -139,10 +142,14 @@ export default function AuditRunsPage() {
                 </div>
               ) : null}
 
-              {(runDetail.data.summary.failureCount ?? 0) > 0 ? (
-                <div className="rounded-md bg-[#fdf3e1] p-2 text-[11px] text-[#d97706]">
-                  {runDetail.data.summary.failureCount} transaction(s) could not be evaluated. The run continued; the
-                  next scheduled review will retry them.
+              {runDetail.data.status !== "COMPLETED" ? (
+                <div role="status" className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">
+                  <p>{t("assurance.runIncompleteHint")}</p>
+                  <p className="mt-1">{t("assurance.runCoverageDetail", {
+                    failed: runDetail.data.summary.failureCount ?? 0,
+                    rules: runDetail.data.summary.ruleFailureCount ?? 0,
+                    capped: runDetail.data.summary.truncated?.length ?? 0,
+                  })}</p>
                 </div>
               ) : null}
 
@@ -159,7 +166,7 @@ export default function AuditRunsPage() {
                     {runDetail.data.evaluations.map((evaluation) => (
                       <tr key={evaluation.evaluationId} className="border-b border-border/60">
                         <td className="py-1 pr-2">{humanize(evaluation.sourceEntityType)}</td>
-                        <td className="py-1 pr-2 text-right font-semibold tabular-nums">{evaluation.riskScore}</td>
+                        <td className="py-1 pr-2 text-right font-semibold tabular-nums">{evaluation.complete === false ? t("assurance.runIncomplete") : evaluation.riskScore}</td>
                         <td className="py-1 font-mono text-[10px]">
                           {evaluation.triggeredRuleCodes.length ? evaluation.triggeredRuleCodes.join(", ") : "—"}
                         </td>

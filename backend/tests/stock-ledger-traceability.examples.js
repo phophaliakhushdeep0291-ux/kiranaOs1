@@ -18,7 +18,20 @@ for (const schema of [sqliteSchema, postgresSchema]) {
 
 assert.match(auth, /select:\s*\{[^}]*name:\s*true[^}]*email:\s*true/);
 assert.match(auth, /userName:\s*user\.name/);
-assert.match(inventory, /include:\s*\{\s*product:\s*\{\s*select:\s*\{\s*baseUnit:\s*true/);
+// The ledger listing has to carry the product's own unit: a row saying "+100"
+// means nothing until you know whether that is packets or kilos.
+//
+// This used to require `baseUnit` to be the FIRST key in the select. Adding
+// `name: true` in front of it broke the assertion without changing anything it
+// cared about, and since nothing in package.json ran this file, the failure went
+// unnoticed. Match the select block and look inside it instead of pinning the
+// order its keys happen to be written in.
+{
+  const ledgerRead = inventory.match(/db\.stockLedger\.findMany\(\{[\s\S]*?\n\s*\}\)/)?.[0] ?? "";
+  assert.ok(ledgerRead, "the stock ledger listing must still be a stockLedger.findMany");
+  const productSelect = ledgerRead.match(/product:\s*\{\s*select:\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert.match(productSelect, /baseUnit:\s*true/, "the ledger listing must select the product's base unit");
+}
 
 const stockWriters = [
   "src/modules/bills/bills.service.js",

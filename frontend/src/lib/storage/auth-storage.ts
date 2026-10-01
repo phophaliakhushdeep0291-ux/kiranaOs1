@@ -1,5 +1,6 @@
 import type { Shop, User } from "@/types/api";
 import { clearDeviceUnlock } from "./device-unlock-storage";
+import { clearCounterDrafts } from "@/lib/counter-draft";
 
 export const AUTH_SESSION_STORAGE_KEY = "kiranaos.auth.session.v1";
 
@@ -86,6 +87,7 @@ export function saveAuthSession(session: AuthSession): void {
   if (typeof window === "undefined") return;
   const existing = loadAuthSession();
   const merged: AuthSession = { ...existing, ...session };
+  if (authSessionInstance(existing) !== authSessionInstance(merged)) clearCounterDrafts();
   // Never persist undefined fields (use null to explicitly clear).
   const clean: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(merged)) {
@@ -100,6 +102,7 @@ export function loadAuthSession(): AuthSession {
 }
 
 export function clearAuthSession(): void {
+  clearCounterDrafts();
   if (typeof window === "undefined") return;
   clearDeviceUnlock();
   safeRemove(window.localStorage, AUTH_SESSION_STORAGE_KEY);

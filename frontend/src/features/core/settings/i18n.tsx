@@ -4,6 +4,9 @@ import { englishCriticalTranslations } from "./translations/english-critical";
 // nine secondary-screen tables back into the startup chunk every merchant
 // downloads; a type import is erased and still gives `TranslationKey` every key.
 import type { englishDeferredTranslations } from "./translations/english-deferred";
+// TYPE ONLY, for the same reason. This tier is loaded only when an `onlineOnly`
+// route opens; see loadCloudTranslations below and english-cloud.ts.
+import type { englishCloudTranslations } from "./translations/english-cloud";
 
 export type AppLanguage = "en" | "hi";
 
@@ -13,10 +16,12 @@ const LANGUAGE_STORAGE_KEY = "kirana-os:ui-language:v1";
  * The complete key catalogue as a TYPE; only the boot half is a value.
  *
  * Every key in the product is still in this union, so a screen cannot call `t()`
- * with a key nobody wrote. What changed is that the STRINGS for the deferred half
- * arrive after mount instead of inside the startup download.
+ * with a key nobody wrote. What changed is that the STRINGS for the deferred and
+ * cloud tiers arrive after mount instead of inside the startup download.
  */
-type EnglishCatalogue = typeof englishCriticalTranslations & typeof englishDeferredTranslations;
+type EnglishCatalogue = typeof englishCriticalTranslations
+  & typeof englishDeferredTranslations
+  & typeof englishCloudTranslations;
 
 // `EN_MODULES` and the complete `englishTranslations` moved to
 // translations/english.ts. Both statically import the deferred half, so importing
@@ -81,9 +86,25 @@ let hindiDictionary: PartialDictionary | null = null;
 let hindiCriticalRequest: Promise<PartialDictionary | null> | null = null;
 let hindiFullRequest: Promise<PartialDictionary | null> | null = null;
 
+/**
+ * Notified whenever a Hindi stage lands, so the provider does not have to know
+ * how many stages there are or when they are requested.
+ *
+ * The provider used to await each stage by name, which was fine while both were
+ * requested at boot. The cloud tier broke that: it is requested when the owner
+ * opens an administration screen, so an effect that awaited it by name would
+ * request it for every Hindi shop at mount — defeating the point of keeping it out
+ * of the install — while an effect that did not would leave `hindi` state pointing
+ * at the object from before it landed, and a Hindi counter would read those
+ * screens in English. A subscription applies a stage that arrives without asking
+ * for one that has not.
+ */
+const hindiStageListeners = new Set<(dictionary: PartialDictionary) => void>();
+
 /** Merge a stage into the session dictionary without dropping an earlier one. */
 function absorbHindiStage(table: PartialDictionary): PartialDictionary {
   hindiDictionary = { ...(hindiDictionary ?? {}), ...table };
+  for (const listener of hindiStageListeners) listener(hindiDictionary);
   return hindiDictionary;
 }
 
@@ -123,6 +144,58 @@ function loadHindiDictionary(): Promise<PartialDictionary | null> {
       .catch(() => null);
   }
   return hindiFullRequest;
+}
+
+let cloudRequest: Promise<boolean> | null = null;
+
+/**
+ * Fetch the tables only an `onlineOnly` route can render.
+ *
+ * Unlike the deferred halves this is NOT kicked off at module scope, and that is
+ * the whole point: these tables are the only ones in the catalogue that no
+ * offline screen can reach, so precaching them made every shop pay at install
+ * time for copy it could never display. routes.tsx ties this to the lazy import
+ * of each cloud page, so React's Suspense holds the loading state until the
+ * strings are in — a cloud route can therefore never render a raw key, which a
+ * bare on-mount fetch could not promise. See english-cloud.ts for which tables
+ * qualify and which two were rejected for leaking into core copy.
+ *
+ * BOTH languages land together. The alternative — Hindi only when the stored
+ * preference is Hindi — needs a second request and a re-render on every language
+ * switch, to save ~6.8 kB gzip on an administration screen that is already
+ * online by definition. Not worth the edge case.
+ *
+ * A failed fetch is swallowed like the others: `resolve` degrades to the key, and
+ * a chunk that will not load must not stop the counter from selling.
+ */
+export function loadCloudTranslations(): Promise<boolean> {
+  if (!cloudRequest) {
+    cloudRequest = Promise.all([
+      import("./translations/english-cloud").then((module) => {
+        Object.assign(en, module.englishCloudTranslations);
+      }),
+      import("./translations/hindi-cloud").then((module) => {
+        absorbHindiStage(module.hindiCloudTranslations);
+      }),
+    ])
+      .then(() => true)
+      .catch(() => false);
+  }
+  return cloudRequest;
+}
+
+/**
+ * Every Hindi table, all three tiers, for the completeness test and tooling.
+ *
+ * Not for the app: it pulls the cloud tier, which the running app fetches only
+ * when a cloud route opens. It exists because `absorbHindiStage` rebuilds the
+ * dictionary object on each stage, so the reference `loadHindiDictionary()`
+ * resolved with does not grow when a later tier lands — a caller that wants the
+ * whole catalogue has to read it after the last one.
+ */
+export async function loadCompleteHindiDictionary(): Promise<PartialDictionary | null> {
+  const [full] = await Promise.all([loadHindiDictionary(), loadCloudTranslations()]);
+  return full ? hindiDictionary : null;
 }
 
 /** Values substituted into `{placeholder}` slots in a translated string. */
@@ -213,23 +286,33 @@ export function AppLanguageProvider({ children }: { children: ReactNode }) {
     if (typeof window !== "undefined") window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
   }, [language]);
 
-  // Both stages are applied, in the order they land. The guard is the language
-  // and NOT "do we already have a dictionary": the critical half satisfies that
-  // test on its own, and an effect that stopped there would leave a Hindi shop
+  // Every stage is applied, in the order it lands. The guard is the language and
+  // NOT "do we already have a dictionary": the critical half satisfies that test
+  // on its own, and an effect that stopped there would leave a Hindi shop
   // permanently reading English on every screen outside billing.
   //
   // Each stage resolves to a freshly built object, so React sees a new identity
   // and re-renders; a stage that fails resolves null and is skipped, leaving
   // whatever did arrive in place.
+  //
+  // The two boot stages are awaited by name because this effect is also what
+  // REQUESTS them on a switch into Hindi. The subscription covers the stages this
+  // effect must not request — today the cloud tier, which is fetched only when an
+  // administration screen opens. Subscribe before awaiting, so a stage that lands
+  // between the two lines is not missed.
   useEffect(() => {
     if (language !== "hi") return;
     let cancelled = false;
     const apply = (dictionary: PartialDictionary | null) => {
       if (!cancelled && dictionary) setHindi(dictionary);
     };
+    hindiStageListeners.add(apply);
     void loadCriticalHindiDictionary().then(apply);
     void loadHindiDictionary().then(apply);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      hindiStageListeners.delete(apply);
+    };
   }, [language]);
 
   const setLanguage = useCallback((nextLanguage: AppLanguage) => setLanguageState(nextLanguage), []);

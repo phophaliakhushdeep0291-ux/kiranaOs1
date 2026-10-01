@@ -8,7 +8,9 @@ export interface User {
   mobile?: string;
   email?: string;
   emailVerifiedAt?: string | null;
-  role: "owner" | "staff" | string;
+  role: "owner" | "admin" | "staff" | "viewer" | string;
+  /** From the server's role catalogue; absent on sessions cached by older builds. */
+  permissions?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -502,6 +504,7 @@ export interface BillPayment {
 }
 
 export interface BillInputItem {
+  trackedUnitId?: string;
   guestOrderId?: string;
   guestOrderLineId?: string;
   productId?: string;
@@ -1013,6 +1016,10 @@ export interface RentalBookingItem {
 }
 
 export interface RentalBooking {
+  financialVersion?: number;
+  depositRefunded?: number;
+  depositHeld?: number | null;
+  locationId?: string | null;
   id: string;
   bookingNumber: string;
   customerId?: string | null;
@@ -1045,6 +1052,8 @@ export interface RentalBooking {
 }
 
 export interface RentalBookingInput {
+  clientRequestId?: string;
+  paymentMode?: string;
   customerId?: string | null;
   customerName: string;
   customerPhone: string;
@@ -1273,6 +1282,31 @@ export interface ProductUnitSummary {
   atService: number;
   warrantyExpiringSoon: number;
   warrantySoonDays: number;
+  /**
+   * Products whose register shows more units on the shelf than stock does —
+   * how a sale made without its serial is noticed afterwards. Absent from a
+   * server that predates it.
+   */
+  shelfMismatches?: ProductUnitShelfMismatch[];
+}
+
+export interface ProductUnitShelfMismatch {
+  productId: string;
+  productName: string;
+  /** Units the register still counts as on the shelf. */
+  registered: number;
+  /** What the product's stock count says. */
+  stock: number;
+}
+
+/** One serial-tracked product on a bill, and the units of it that can be handed over. */
+export interface UnitBillingOption {
+  productId: string;
+  /** Units ever recorded for this product. Being above zero is what "sold by serial" means. */
+  registered: number;
+  /** Units on the shelf. May exceed `units.length`, which is capped — the rest are found by scanning. */
+  sellableCount: number;
+  units: ProductUnit[];
 }
 
 /* ── Auto parts: vehicle fitment ──────────────────────────────────────────── */
@@ -1280,6 +1314,8 @@ export interface ProductUnitSummary {
 export type PartCrossReferenceKind = "oem" | "alternative" | "supersedes" | "superseded_by";
 
 export interface PartFitment {
+  /** Current catalogue availability, when read from the server. */
+  inCatalogue?: boolean;
   id: string;
   productId: string;
   productName: string;
@@ -1317,6 +1353,8 @@ export interface BulkPartFitmentInput {
 
 /** A part that fits the vehicle being asked about, with what the shop holds of it. */
 export interface FittingPart {
+  /** False when only a cached fitment claim is available. */
+  stockKnown?: boolean;
   productId: string;
   productName: string;
   /** False when the fitment outlived the product it was recorded against. */
@@ -1330,6 +1368,10 @@ export interface FittingPart {
 }
 
 export interface PartCrossReference {
+  inCatalogue?: boolean;
+  stockKnown?: boolean;
+  alternateInCatalogue?: boolean | null;
+  alternateStockQty?: number | null;
   id: string;
   productId: string;
   productName: string;
@@ -1375,6 +1417,8 @@ export interface PartNumberLookup {
 }
 
 export interface FitmentSummary {
+  /** Inventory access at the selected store, confirmed by the server. */
+  canManage?: boolean;
   fitments: number;
   references: number;
   mappedParts: number;
@@ -1581,6 +1625,10 @@ export interface FurnitureOrderItem {
 }
 
 export interface FurnitureOrderPayment {
+  kind?: "receipt" | "refund" | "correction";
+  reversesPaymentId?: string | null;
+  reason?: string | null;
+  refundableAmount?: number;
   id: string;
   amount: number;
   mode: FurniturePaymentMode;
@@ -1591,6 +1639,10 @@ export interface FurnitureOrderPayment {
 }
 
 export interface FurnitureOrder {
+  needsHistoryReconciliation?: boolean;
+  unreconciledReceipts?: Array<{ id: string; amount: number; mode: string; paidOn: string; reference: string | null }>;
+  creditCollected?: number;
+  needsInvoiceReview?: boolean;
   id: string;
   orderNumber: string;
   customerId?: string | null;

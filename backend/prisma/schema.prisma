@@ -821,6 +821,7 @@ model Bill {
 model BillItem {
   id                        String  @id @default(cuid())
   billId                    String
+  trackedUnitId             String?
   productId                 String?
   sellingUnitId             String?
   sellingUnitCode           String?
@@ -1444,20 +1445,20 @@ model StockLedger {
   oldStockBaseQty         Float
   newStockBaseQty         Float
   purchaseBillAmount      Float     @default(0) // total bill amount if it's a purchase
-  purchaseBillAmountPaise BigInt?
+  purchaseBillAmountPaise BigInt?   @default(0)
   calculatedBuyRate       Float     @default(0) // per rateUnit cost computed from purchase
-  calculatedBuyRatePaise  BigInt?
+  calculatedBuyRatePaise  BigInt?   @default(0)
   invoiceNumber           String?
   purchasePaymentStatus   String    @default("paid") // paid | partial | due
   purchasePaymentMode     String?
   purchasePaidAmount      Float     @default(0)
-  purchasePaidAmountPaise BigInt?
+  purchasePaidAmountPaise BigInt?   @default(0)
   purchaseDueAmount       Float     @default(0)
-  purchaseDueAmountPaise  BigInt?
+  purchaseDueAmountPaise  BigInt?   @default(0)
   purchaseDueDate         DateTime?
   supplierName            String?
   damageLossValue         Float     @default(0) // cost value of damage, affects P&L
-  damageLossValuePaise    BigInt?
+  damageLossValuePaise    BigInt?   @default(0)
   billId                  String?
   clientMovementId        String?
   idempotencyKey          String?
@@ -1483,6 +1484,11 @@ model StockLedger {
   @@index([shopId, sellingUnitId])
   @@index([shopId, locationId, createdAt])
   @@index([shopId, sourceType, sourceId])
+  // Every read of "what stock did this bill move" — the cancel and restore guards,
+  // the sync echo's sale rows, the assurance context. `billId` was on no index at
+  // all, so each of those scanned the shop's whole movement history to find the
+  // handful of rows for one sale.
+  @@index([shopId, billId, action])
   @@index([shopId, actorUserId, createdAt])
   @@index([productId])
   // Sync pull keyset pagination (updatedAt == createdAt for append-only ledger)
@@ -1528,6 +1534,14 @@ model UdharLedger {
   @@index([shopId, locationId, createdAt])
   @@index([shopId, customerId, businessDate])
   @@index([shopId, locationId, businessDate])
+  // Every shop-wide report — daily closing, payment modes, P&L, payment summary —
+  // reads this table by shopId and a businessDate window with neither a customer
+  // nor a location to narrow it, and the two composites above cannot serve that:
+  // their second column is unconstrained. Without this index the planner fell back
+  // to the shopId prefix of a unique key and then filtered the shop's ENTIRE ledger
+  // history by date in the engine, so end-of-day got slower every day the shop
+  // traded. On a five-year ledger that read measured 4.7 ms; on this index, 0.008 ms.
+  @@index([shopId, businessDate])
   @@index([shopId, reversalOfLedgerId])
   @@index([shopId, sourceType, sourceId])
   // Sync pull keyset pagination
@@ -3755,6 +3769,11 @@ model RentalBooking {
   id            String @id @default(cuid())
   shopId        String
   bookingNumber String
+  // Existing bookings have no reliable tender history; never infer opening cash.
+  financialVersion Int @default(0)
+  locationId String?
+  clientRequestId String?
+  depositRefunded Float @default(0)
 
   // The renter is captured on the booking itself, not only through a Customer
   // row: a rental is usually a one-off walk-in the shop never bills again, and
@@ -3770,7 +3789,7 @@ model RentalBooking {
   fromDate   DateTime // first day the garment is out (inclusive)
   toDate     DateTime // day it is due back (inclusive)
   returnedAt DateTime?
-  // booked → picked_up → returned. cancelled is terminal from either open state.
+  // booked → picked_up → returned. cancelled is terminal only before pickup.
   status     String    @default("booked")
 
   rentAmount    Float @default(0)
@@ -3789,6 +3808,8 @@ model RentalBooking {
   items RentalBookingItem[]
 
   @@unique([shopId, bookingNumber])
+  @@unique([shopId, clientRequestId])
+  @@index([shopId, locationId])
   @@index([shopId, deletedAt])
   // The availability scan: active bookings whose window covers a date.
   @@index([shopId, status, fromDate, toDate])
@@ -4205,6 +4226,7 @@ model BookListItem {
 model FurnitureOrder {
   id          String @id @default(cuid())
   shopId      String
+  locationId  String?
   orderNumber String
 
   // The buyer is captured on the order itself, like a rental's renter: a
@@ -4255,6 +4277,7 @@ model FurnitureOrder {
 
   @@unique([shopId, orderNumber])
   @@index([shopId, deletedAt])
+  @@index([shopId, locationId])
   // "What is open, and what is due?" — the two questions a showroom asks daily.
   @@index([shopId, status, promisedOn])
   @@index([shopId, customerPhone])
@@ -4295,6 +4318,10 @@ model FurnitureOrderItem {
 model FurnitureOrderPayment {
   id      String @id @default(cuid())
   orderId String
+  // Adjustments preserve the original receipt and carry a negative amount.
+  kind String @default("receipt") // receipt | refund | correction
+  reversesPaymentId String?
+  reason String?
 
   amount    Float    @default(0)
   mode      String   @default("cash") // cash | upi | bank | card | other

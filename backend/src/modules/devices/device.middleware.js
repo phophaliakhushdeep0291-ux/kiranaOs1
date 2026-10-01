@@ -1,7 +1,7 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { env } from "../../config/env.js";
-import { getEffectivePlan, isSubscriptionActive } from "../subscription/subscription.service.js";
+import { getEffectivePlan, hasSubscriptionAccess } from "../subscription/subscription.service.js";
 import { activateDevice, assertDeviceHasActiveLoginSession } from "./devices.service.js";
 import { revokeDeviceLicense } from "./license.service.js";
 
@@ -19,7 +19,7 @@ export function requireDeviceAllowedForSync() {
     try {
       req.device = await assertRequestDevice(req);
       const effective = await getEffectivePlan(req.shopId);
-      if (!isSubscriptionActive(effective.subscription)) {
+      if (!hasSubscriptionAccess(effective.subscription)) {
         const err = new AppError("Active or grace subscription required for cloud sync", 402);
         err.code = "SYNC_SUBSCRIPTION_INACTIVE";
         err.meta = { status: effective.subscription.status, planCode: effective.planCode };
@@ -41,7 +41,7 @@ export function requireDeviceAllowedForPremiumAction() {
     try {
       req.device = await assertRequestDevice(req);
       const effective = await getEffectivePlan(req.shopId);
-      if (!isSubscriptionActive(effective.subscription)) {
+      if (!hasSubscriptionAccess(effective.subscription)) {
         const err = new AppError("Active subscription required for premium action", 402);
         err.code = "PREMIUM_SUBSCRIPTION_INACTIVE";
         throw err;
@@ -102,7 +102,7 @@ export async function assertRequestDevice(req) {
   if (req.user?.sessionVersion !== null && req.user?.sessionVersion !== undefined && req.user.sessionVersion !== device.sessionVersion) {
     throw new AppError("This device session was revoked.", 401, "DEVICE_SESSION_REVOKED");
   }
-  await assertDeviceHasActiveLoginSession(req.shopId, req.user, deviceId);
+  await assertDeviceHasActiveLoginSession(req.shopId, req.user, deviceId, db, { validatedSession: req.authSession });
   return device;
 }
 

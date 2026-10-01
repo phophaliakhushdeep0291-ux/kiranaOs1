@@ -28,6 +28,8 @@ function filterCachedProducts(products: Product[], params?: ListProductsParams):
     ? activeProducts.filter((p) =>
         p.name.toLowerCase().includes(q) ||
         p.category?.toLowerCase().includes(q) ||
+        p.sku?.toLowerCase().includes(q) ||
+        p.barcode?.toLowerCase().includes(q) ||
         p.aliases?.some((alias) => alias.toLowerCase().includes(q)),
       )
     : activeProducts;

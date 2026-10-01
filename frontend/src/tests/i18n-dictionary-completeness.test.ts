@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadHindiDictionary } from "@/features/core/settings/i18n";
+import { loadCompleteHindiDictionary } from "@/features/core/settings/i18n";
 import { EN_MODULES, englishTranslations } from "@/features/core/settings/translations/english";
 import { HI_MODULES } from "@/features/core/settings/translations/hindi";
 import { SHARED_TRANSLATION_VALUES } from "./i18n-shared-values";
@@ -13,7 +13,7 @@ import { SHARED_TRANSLATION_VALUES } from "./i18n-shared-values";
  */
 describe("Hindi dictionary completeness", () => {
   it("resolves the lazily loaded chunk", async () => {
-    const hindi = await loadHindiDictionary();
+    const hindi = await loadCompleteHindiDictionary();
     expect(hindi).not.toBeNull();
   });
 
@@ -33,7 +33,7 @@ describe("Hindi dictionary completeness", () => {
   });
 
   it("covers every English key in every registered module", async () => {
-    const hindi = await loadHindiDictionary();
+    const hindi = await loadCompleteHindiDictionary();
     const missing: string[] = [];
     for (const [moduleName, table] of Object.entries(EN_MODULES)) {
       for (const key of Object.keys(table)) {
@@ -47,7 +47,7 @@ describe("Hindi dictionary completeness", () => {
   });
 
   it("leaves no string untranslated in any registered module", async () => {
-    const hindi = await loadHindiDictionary();
+    const hindi = await loadCompleteHindiDictionary();
 
     // A Hindi value identical to its English one is how an untranslated string hides:
     // it satisfies the type, it satisfies "not missing", and it reads as English on a
@@ -68,7 +68,7 @@ describe("Hindi dictionary completeness", () => {
   it("keeps the shared-value allowlist honest", async () => {
     // An allowlist that outlives the strings it excused silently weakens the test
     // above. Every entry must still be a real English value that Hindi repeats.
-    const hindi = await loadHindiDictionary();
+    const hindi = await loadCompleteHindiDictionary();
     const stale = [...SHARED_TRANSLATION_VALUES].filter((value) => {
       const keys = Object.entries(englishTranslations).filter(([, english]) => english === value);
       if (keys.length === 0) return true;
@@ -78,7 +78,7 @@ describe("Hindi dictionary completeness", () => {
   });
 
   it("keeps every interpolation placeholder", async () => {
-    const hindi = await loadHindiDictionary();
+    const hindi = await loadCompleteHindiDictionary();
     const slots = (value: string) => (value.match(/\{(\w+)\}/g) ?? []).sort();
 
     const drifted: string[] = [];

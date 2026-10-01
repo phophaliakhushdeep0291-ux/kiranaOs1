@@ -1,0 +1,68 @@
+{
+  "verifiedAt": "2026-09-28T08:25:15.134Z",
+  "database": "isolated synthetic QA SQLite",
+  "products": [
+    {
+      "name": "QA Oil Filter",
+      "stockBaseQty": 9
+    },
+    {
+      "name": "QA Class 6 Maths",
+      "stockBaseQty": 9
+    },
+    {
+      "name": "QA Rose Lipstick",
+      "stockBaseQty": 9
+    },
+    {
+      "name": "QA Finished Pouch",
+      "stockBaseQty": 15
+    },
+    {
+      "name": "QA Gift Box",
+      "stockBaseQty": 9
+    },
+    {
+      "name": "QA Raw Mix",
+      "stockBaseQty": 90
+    }
+  ],
+  "runs": [
+    {
+      "runNumber": "QA-RUN-001",
+      "status": "completed",
+      "qcStatus": "passed",
+      "actualOutputBaseQty": 5
+    }
+  ],
+  "lots": [
+    {
+      "batchNumber": "QA-RAW-001",
+      "availableBaseQty": 90,
+      "status": "active"
+    },
+    {
+      "batchNumber": "QA-FINISHED-001",
+      "availableBaseQty": 5,
+      "status": "active"
+    }
+  ],
+  "customShop": {
+    "bills": [
+      {
+        "billNo": "KOS-2026-000001",
+        "grandTotal": 50
+      }
+    ],
+    "expenses": [
+      {
+        "title": "QA daily packing cost",
+        "amount": 5,
+        "paymentMode": "cash",
+        "status": "paid",
+        "spentAt": "2026-09-27T18:30:00.000Z"
+      }
+    ]
+  },
+  "assertions": "passed"
+}

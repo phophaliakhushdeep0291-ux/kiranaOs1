@@ -2,7 +2,8 @@
  * Unit conversion factors to base unit.
  * Base units: g (for weight), ml (for volume), piece/packet (count).
  *
- * Production rule: unknown units are rejected instead of silently assuming 1.
+ * Identical, non-empty unit labels need no conversion (e.g. strip to strip).
+ * Production rule: conversion between unknown units is rejected instead of assuming 1.
  * A silent fallback corrupts stock and profit, so unsupported units must be added
  * here intentionally before the frontend sends them.
  */
@@ -48,11 +49,20 @@ function factorFor(unit, fieldName) {
   return CONVERSION[normalizeUnit(unit, fieldName)];
 }
 
+// A catalogue can count its stock in strips or bottles without defining their
+// contents. Identity is exact after normalization; it never implies that a
+// strip contains one tablet, or that a bottle contains one ml.
+function sameUnit(left, right) {
+  const normalized = String(left ?? "").trim().toLowerCase();
+  return normalized.length > 0 && normalized === String(right ?? "").trim().toLowerCase();
+}
+
 /**
  * Convert a quantity in enteredUnit to baseUnit quantity.
  * e.g. toBaseQty(2, "kg", "g") → 2000
  */
 export function toBaseQty(qty, fromUnit, baseUnit) {
+  if (sameUnit(fromUnit, baseUnit)) return qty;
   const from = factorFor(fromUnit, "enteredUnit");
   const base = factorFor(baseUnit, "baseUnit");
   return (qty * from) / base;
@@ -63,6 +73,7 @@ export function toBaseQty(qty, fromUnit, baseUnit) {
  * e.g. fromBaseQty(2000, "g", "kg") → 2
  */
 export function fromBaseQty(baseQty, baseUnit, displayUnit) {
+  if (sameUnit(baseUnit, displayUnit)) return baseQty;
   const base = factorFor(baseUnit, "baseUnit");
   const disp = factorFor(displayUnit, "displayUnit");
   return (baseQty * base) / disp;
@@ -74,6 +85,7 @@ export function fromBaseQty(baseQty, baseUnit, displayUnit) {
  * e.g. rateUnitToBase("kg", "g") → 1000
  */
 export function rateUnitToBase(rateUnit, baseUnit) {
+  if (sameUnit(rateUnit, baseUnit)) return 1;
   const rate = factorFor(rateUnit, "rateUnit");
   const base = factorFor(baseUnit, "baseUnit");
   return rate / base;

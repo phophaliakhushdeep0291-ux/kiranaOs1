@@ -14,9 +14,13 @@ import type { VerticalPack } from "../types";
  * and reports still read `stockBaseQty`; this answers "which one, and where did
  * it go", which a count cannot.
  *
+ * The unit is chosen while billing, so a sale and its register entry are one act
+ * instead of two: the bill reserves the handset in its own transaction and
+ * starts the warranty. A bill may still be saved without a serial — offline, or
+ * for a box not yet scanned — and the counter is asked before it is.
+ *
  * Still to come here: repair tickets as documents of their own rather than a
- * unit parked in `rma`, and picking the specific unit from the billing screen so
- * a sale and its register entry happen in one action instead of two.
+ * unit parked in `rma`.
  */
 export const electronicsPack: VerticalPack = {
   id: "electronics",
@@ -35,6 +39,9 @@ export const electronicsPack: VerticalPack = {
       mobile: { group: "Sell", helper: "shopType.nav.serialUnits.helper" },
     },
   ],
+  // The serial control on the bill and the question asked when one is missing.
+  // Named rather than imported — see `VerticalSlotId`. Server twin: units.guard.js.
+  billingSlots: ["electronics/units", "electronics/serial-check"],
   capabilities: [
     "BASIC_INVENTORY", "SERIAL_TRACKING", "IMEI_TRACKING", "WARRANTY_TRACKING",
     "REPAIR_TICKETS", "OPEN_BOX_STOCK",

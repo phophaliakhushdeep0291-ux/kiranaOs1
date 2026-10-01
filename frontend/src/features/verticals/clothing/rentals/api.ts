@@ -1,3 +1,4 @@
+import { getActiveLocationId } from "@/features/core/stores/location-context";
 import { ApiClientError, apiRequest } from "@/lib/api/http";
 import { offlineDB } from "@/lib/offline/db";
 import type {
@@ -33,18 +34,19 @@ function query(filters: RentalListFilters) {
 }
 
 export async function listRentals(filters: RentalListFilters = {}) {
+  const cacheKey = `${RENTALS_CACHE_KEY}:${getActiveLocationId() ?? "primary"}`;
   try {
     const bookings = await apiRequest<RentalBooking[]>(`/rentals${query(filters)}`, { background: true });
     // Only the unfiltered list is worth caching — a cached filter would be a
     // confusing half-truth the next time the page opens offline.
     if (Object.keys(filters).length === 0) {
-      await offlineDB.setSetting(RENTALS_CACHE_KEY, bookings).catch(() => undefined);
+      await offlineDB.setSetting(cacheKey, bookings).catch(() => undefined);
     }
     return bookings;
   } catch (error) {
     // Never hide an auth/permission error behind stale data.
     if (error instanceof ApiClientError && error.status > 0 && error.status < 500 && ![408, 429].includes(error.status)) throw error;
-    const cached = await offlineDB.getSetting<RentalBooking[]>(RENTALS_CACHE_KEY).catch(() => undefined);
+    const cached = await offlineDB.getSetting<RentalBooking[]>(cacheKey).catch(() => undefined);
     if (cached) return cached;
     throw error;
   }
@@ -87,4 +89,8 @@ export function settleRental(id: string, data: { amount: number; expectedAdvance
 
 export function deleteRental(id: string) {
   return apiRequest<RentalBooking>(`/rentals/${id}`, { method: "DELETE" });
+}
+
+export function refundRental(id: string, data: { amount: number; paymentMode: string; reason: string }, ownerPin: string) {
+  return apiRequest<RentalBooking>(`/rentals/${id}/refund`, { method: "POST", body: JSON.stringify(data), ownerPin });
 }

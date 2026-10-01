@@ -42,8 +42,11 @@ export default function AssuranceDashboardPage() {
     mutationFn: () => startRun({ runType: "MANUAL", from: isoDaysAgo(rangeDays), to: new Date().toISOString() }),
     onSuccess: (result) => {
       toast({
-        title: t("assurance.runDone"),
-        description: t("assurance.runDoneDetail", { count: result.evaluated, created: result.findingsCreated }),
+        title: t(result.status === "COMPLETED" ? "assurance.runDone" : "assurance.runIncomplete"),
+        description: result.status === "COMPLETED"
+          ? t("assurance.runDoneDetail", { count: result.evaluated, created: result.findingsCreated })
+          : t("assurance.runIncompleteHint"),
+        variant: result.status === "COMPLETED" ? "default" : "destructive",
       });
       queryClient.invalidateQueries({ queryKey: ["assurance"] });
     },
@@ -207,7 +210,7 @@ export default function AssuranceDashboardPage() {
           {data?.latestRun ? (
             <dl className="space-y-2 text-sm">
               <Row label={t("assurance.dash.type")} value={words.runType(data.latestRun.runType)} />
-              <Row label={t("assurance.status.OPEN")} value={<Chip>{words.runStatus(data.latestRun.status)}</Chip>} />
+              <Row label={t("assurance.runs.status")} value={<Chip>{words.runStatus(data.latestRun.status)}</Chip>} />
               <Row label={t("assurance.runs.checked")} value={String(data.latestRun.entitiesEvaluated)} />
               <Row label={t("assurance.runs.newProblems")} value={String(data.latestRun.findingsCreated)} />
               <Row label={t("assurance.runs.finished")} value={fmtDateTime(data.latestRun.completedAt)} />

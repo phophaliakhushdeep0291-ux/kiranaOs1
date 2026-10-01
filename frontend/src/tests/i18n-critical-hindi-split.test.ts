@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { EN_MODULES } from "@/features/core/settings/translations/english";
 import { HI_CRITICAL_MODULES, hindiCriticalTranslations } from "@/features/core/settings/translations/hindi-critical";
 import { HI_DEFERRED_MODULES, hindiDeferredTranslations } from "@/features/core/settings/translations/hindi-deferred";
+import { HI_CLOUD_MODULES, hindiCloudTranslations } from "@/features/core/settings/translations/hindi-cloud";
+import { EN_CLOUD_MODULES } from "@/features/core/settings/translations/english-cloud";
 import { HI_MODULES, hindiTranslations } from "@/features/core/settings/translations/hindi";
 
 /**
@@ -42,16 +44,29 @@ describe("Hindi critical/deferred split", () => {
     expect(missing).toEqual([]);
   });
 
-  it("puts every registered module in exactly one half", () => {
+  it("puts every registered module in exactly one tier", () => {
     const critical = Object.keys(HI_CRITICAL_MODULES);
     const deferred = Object.keys(HI_DEFERRED_MODULES);
-    expect(critical.filter((name) => deferred.includes(name))).toEqual([]);
-    expect([...critical, ...deferred].sort()).toEqual(Object.keys(HI_MODULES).sort());
-    expect([...critical, ...deferred].sort()).toEqual(Object.keys(EN_MODULES).sort());
+    const cloud = Object.keys(HI_CLOUD_MODULES);
+    const tiers = [critical, deferred, cloud];
+    for (const [at, tier] of tiers.entries()) {
+      const others = tiers.filter((_, index) => index !== at).flat();
+      expect(tier.filter((name) => others.includes(name))).toEqual([]);
+    }
+    const all = [...critical, ...deferred, ...cloud].sort();
+    expect(all).toEqual(Object.keys(HI_MODULES).sort());
+    expect(all).toEqual(Object.keys(EN_MODULES).sort());
+  });
+
+  it("splits the cloud tier identically on both sides", () => {
+    // A table moved out of the deferred half on one side only would leave a
+    // cloud screen half-translated, and the completeness test could not see it:
+    // it walks EN_MODULES, which still contains the table either way.
+    expect(Object.keys(HI_CLOUD_MODULES).sort()).toEqual(Object.keys(EN_CLOUD_MODULES).sort());
   });
 
   it("recombines into the same dictionary the app used to load in one chunk", () => {
-    expect(hindiTranslations).toEqual({ ...hindiCriticalTranslations, ...hindiDeferredTranslations });
+    expect(hindiTranslations).toEqual({ ...hindiCriticalTranslations, ...hindiDeferredTranslations, ...hindiCloudTranslations });
   });
 
   it("keeps the deferred half off the critical path", () => {
@@ -75,5 +90,23 @@ describe("Hindi critical/deferred split", () => {
     expect(source).toContain("void loadCriticalHindiDictionary().then(apply)");
     expect(source).toContain("void loadHindiDictionary().then(apply)");
     expect(source).not.toMatch(/if \(language !== "hi" \|\| hindi\) return;/);
+  });
+
+  it("applies a Hindi stage the provider is not allowed to request", () => {
+    // The cloud tier lands when an administration screen opens, not at boot, so
+    // the provider cannot await it by name — doing so would request it for every
+    // Hindi shop and undo the reason it is kept out of the offline install. But
+    // `absorbHindiStage` rebuilds the dictionary object, so without a subscription
+    // `hindi` state keeps pointing at the one from before the tier landed and a
+    // Hindi counter reads every assurance and devices screen in English. The
+    // English fallback makes that failure quiet: no raw keys, just the wrong
+    // language on one group of screens.
+    const source = readFileSync("src/features/core/settings/i18n.tsx", "utf8");
+    expect(source).toContain("const hindiStageListeners = new Set<");
+    expect(source).toContain("for (const listener of hindiStageListeners) listener(hindiDictionary);");
+    expect(source).toContain("hindiStageListeners.add(apply)");
+    expect(source).toContain("hindiStageListeners.delete(apply)");
+    // The provider must NOT call the cloud loader: that is what makes it on-demand.
+    expect(source).not.toMatch(/void loadCloudTranslations\(\)\.then\(apply\)/);
   });
 });

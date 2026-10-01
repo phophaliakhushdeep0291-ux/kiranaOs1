@@ -338,6 +338,17 @@ describe("front office local-first cashier flow", () => {
     }).toEqual(countsAfterFirstCancel);
   });
 
+  it("cancels a cooked dish locally without inventing counted plates", async () => {
+    const dish = { ...rows("products")[0], stockBaseQty: -12, stockTrackingEnabled: false, trackStock: false };
+    dbState.committed.products = [dish];
+    dbState.instant.products = [dish];
+    const bill = await createBillLocalFirst(billInput());
+    await cancelBillWithOwnerPinLocalFirst(bill.id, "1234", "Wrong table");
+    expect(rows("products")[0]).toMatchObject({ stockBaseQty: -12, stockTrackingEnabled: false });
+    expect(rows("inventory_movements")).toEqual([]);
+    expect(rows("bills")[0]).toMatchObject({ status: "cancelled" });
+  });
+
   it("projects per-pack stock on offline sale and restores the same pack on cancellation", async () => {
     const packetProduct: Product & Record<string, unknown> = {
       ...rows("products")[0],

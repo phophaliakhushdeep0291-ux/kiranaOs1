@@ -189,6 +189,7 @@ function previousRange(from: string, to: string) {
 }
 
 export default function NewReturnPage() {
+  const { t } = useAppLanguage();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [location, navigate] = useLocation();
@@ -415,6 +416,9 @@ export default function NewReturnPage() {
       <Dialog open={builderOpen} onOpenChange={closeBuilder}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader><DialogTitle>New sales return</DialogTitle><DialogDescription>For an exact refund, open the original bill and use Return items. This form records a standalone return.</DialogDescription></DialogHeader>
+          <Button asChild variant="outline" className="min-h-11 justify-start gap-2">
+            <Link href="/bills"><Search size={16} />{t("returns.findOriginalBill")}</Link>
+          </Button>
           <div className="space-y-4">
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <div><Label className="text-xs">Add product</Label><select data-testid="return-product-select" value={productId} onChange={(event) => setProductId(event.target.value)} className="mt-1 h-10 w-full rounded-[8px] border bg-white px-2 text-sm"><option value="">Select a product...</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name} — {inr(sellPrice(product))}</option>)}</select></div>

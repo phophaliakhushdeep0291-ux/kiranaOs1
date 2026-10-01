@@ -1,0 +1,58 @@
+Products page loaded
+
+CATALOGUE FOR YOUR SHOP TYPE
+
+🍽️ Restaurant & Café
+
+The menu is the catalogue. Keep the allergen and onion-garlic answers on the dish so a server never has to walk back to the kitchen.
+
+Menu
+Categories
+Change shop type
+
+Total Dishes
+
+2
+
+Dishes on the menu
+
+Low Stock
+
+0
+
+Needs attention
+
+Out of Stock
+
+1
+
+Unavailable
+
+Categories
+
+1
+
+Active categories
+
+All Categories
+Filters
+1
+Import
+Export
+Add Product
+	PRODUCT	CATEGORY	SKU / BARCODE	UNIT	MRP	COST PRICE	SELLING PRICE	STOCK	ACTION
+	
+💧
+
+QA Bottled Water
+
+	General	—	Piece	—	₹10.00	₹20.00	
+0
+Out of Stock
+	
+
+Showing 1 to 1 of 1 products
+
+1
+Rows per page
+10

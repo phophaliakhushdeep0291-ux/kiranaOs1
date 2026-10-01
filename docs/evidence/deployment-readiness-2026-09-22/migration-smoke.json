@@ -1,0 +1,7 @@
+{
+  "status": "passed",
+  "legacyRowsPreserved": 1,
+  "verifiedFinancialVersionForLegacyRows": 0,
+  "inventedTenderRows": 0,
+  "notes": "Applied SQLite migration to an isolated copy of the pre-migration QA database; PostgreSQL execution still needs its production-like environment."
+}

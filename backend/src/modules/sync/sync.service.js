@@ -3,9 +3,10 @@ import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { verifyOwnerPinProof } from "../../middleware/permissions.js";
+import { isReadOnlyRole, roleHasPermission } from "../../core/permissions/rbac.js";
 import { confirmBillSchema } from "../bills/bills.schema.js";
 import { assertSensitiveBillReason, deriveSensitiveBillActions } from "../bills/bill-sensitive-approval.js";
-import { cancelBill, confirmBill, createSaleReturn, restoreCancelledBill, restoreDeletedBill, softDeleteBill } from "../bills/bills.service.js";
+import { BILL_REPLICA_ITEM_COLUMNS, BILL_REPLICA_PAYMENT_SELECT, cancelBill, confirmBill, createSaleReturn, restoreCancelledBill, restoreDeletedBill, softDeleteBill } from "../bills/bills.service.js";
 import { createCustomerSchema, updateCustomerSchema, udharPaymentSchema } from "../customers/customers.schema.js";
 import { createCustomer, getCustomer, recordUdharPayment, restoreCustomer, reverseUdharPayment, softDeleteCustomer, updateCustomer } from "../customers/customers.service.js";
 import { damageSchema, correctionSchema, purchaseSchema } from "../inventory/inventory.schema.js";
@@ -31,7 +32,9 @@ import {
   SYNC_EVENT_STATUSES,
   SYNC_EVENT_TYPES,
 } from "../../utils/syncRules.js";
+import { describeZodError } from "../../utils/validationMessage.js";
 import { decodeCursor, encodeCursor, PULL_DEFAULT_LIMIT, PULL_MAX_LIMIT } from "./sync.schema.js";
+import { compactFeedRows, PULL_COMPACTION_MAX_SCAN, PULL_COMPACTION_SCAN_FACTOR } from "./sync-feed-compaction.js";
 import { explainSyncFailure } from "./sync-explain.js";
 import { EVENT_TOPICS, publishEvent } from "../../lib/eventBus.js";
 import { moneyAmount, quantityAmount } from "../../utils/validationSchemas.js";
@@ -866,6 +869,28 @@ const SYNC_ENTITY_TYPES = Object.freeze({
 const SYNC_PROCESSING_STALE_MS = 2 * 60 * 1000;
 
 /**
+ * The lines and tenders a pulled bill carries.
+ *
+ * A pull is the same offline replica /api/bills serves, delivered far more often:
+ * every device, on a cadence that starts at 2.5s. So it sends the same columns —
+ * the ones a column-by-column audit found a reader for — rather than whole rows.
+ *
+ * What that leaves out, measured over 397 one-line bills (1136KB of payload,
+ * 99.9% of it bills): the seven BillItem *Paise mirrors, which no screen reads
+ * because the client does its money in the Float columns, and the eight Payment
+ * columns with no reader reachable through a bill. 156KB of that response, and
+ * the same share of every incremental pull after it.
+ *
+ * `items: true` is NOT the same thing as this, and going back to it would quietly
+ * put all fifteen columns back on every device's sync. Both pull protocols use
+ * this, and tests/sync-pull-carries-the-same-replica.examples.js holds them to it.
+ */
+const PULL_BILL_CHILDREN = {
+  items: { select: BILL_REPLICA_ITEM_COLUMNS },
+  payments: BILL_REPLICA_PAYMENT_SELECT,
+};
+
+/**
  * Pull all data changed on or after `since`, with optional cursor-keyset pagination.
  *
  * Pagination design:
@@ -990,6 +1015,25 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role, a
 
   const orderBy = [{ updatedAt: "asc" }, { id: "asc" }];
 
+  // A cashier device receives no suppliers, purchase history or expenses. That was
+  // already true of the RESPONSE — the rows were fetched and then replaced with []
+  // on the way out — but it was not true of the work, and it was not true of the
+  // cursor.
+  //
+  // The cursor is the part that mattered. It advanced off rows the device never
+  // got, and it is keyed `entity:<name>` against tenant/store/device — not against
+  // the user. So a cashier syncing on the counter machine moved the suppliers
+  // cursor past the shop's whole supplier history, and when the owner signed in on
+  // that same machine the next pull started AFTER it. Those rows were never
+  // delivered and nothing re-requests them: clearSyncCursors() only runs inside
+  // forceCloudSnapshotImport(), which has no callers. The device would show an
+  // empty supplier list and no expense history for good, while sync reported it
+  // was up to date.
+  //
+  // Not querying at all fixes both: no work, and the cursor stays where it is, so
+  // whoever signs in next with the role to see those rows gets them from there.
+  const privileged = role === "owner" || role === "admin";
+
   const [products, customers, rawBills, stockLedger, udharLedger, suppliers, purchaseHistory, expenses] = await Promise.all([
     db.product.findMany({
       where: buildWhere("products"),
@@ -998,12 +1042,12 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role, a
       take: limit,
     }),
     db.customer.findMany({ where: buildWhere("customers"), orderBy, take: limit }),
-    db.bill.findMany({ where: buildWhere("bills"), include: { items: true, payments: true }, orderBy, take: limit }),
+    db.bill.findMany({ where: buildWhere("bills"), include: PULL_BILL_CHILDREN, orderBy, take: limit }),
     db.stockLedger.findMany({ where: buildWhere("stockLedger"), orderBy, take: limit }),
     db.udharLedger.findMany({ where: buildWhere("udharLedger"), orderBy, take: limit }),
-    db.supplier.findMany({ where: buildWhere("suppliers"), orderBy, take: limit }),
-    db.purchaseHistory.findMany({ where: buildWhere("purchaseHistory"), orderBy, take: limit }),
-    db.expense.findMany({ where: buildWhere("expenses"), orderBy, take: limit }),
+    privileged ? db.supplier.findMany({ where: buildWhere("suppliers"), orderBy, take: limit }) : [],
+    privileged ? db.purchaseHistory.findMany({ where: buildWhere("purchaseHistory"), orderBy, take: limit }) : [],
+    privileged ? db.expense.findMany({ where: buildWhere("expenses"), orderBy, take: limit }) : [],
   ]);
   const bills = await backfillLegacyBillIdentity(shopId, rawBills);
 
@@ -1027,12 +1071,11 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role, a
   const nextCursor = lastRecord ? encodeCursor(lastRecord.updatedAt, lastRecord.id) : null;
   const returnedCount = Object.values(entitySets).reduce((sum, rows) => sum + rows.length, 0);
 
-  // Role-aware redaction: a cashier/staff device must not receive cost or profit data (it
-  // lives in inspectable IndexedDB even when the UI hides it). Cursors already advanced off
-  // the real rows above, so the device keeps syncing; it just never accumulates margins,
-  // supplier records, or purchase-cost history. The server stays authoritative on profit.
-  const privileged = role === "owner" || role === "admin";
-
+  // Role-aware redaction: a cashier/staff device must not receive cost or profit data
+  // (it lives in inspectable IndexedDB even when the UI hides it). Products and bills
+  // are still fetched whole and redacted here, because the device does need the rest
+  // of those rows; the three entity types it needs nothing from were not fetched at
+  // all, and their cursors stayed put with them.
   return {
     syncedAt: new Date().toISOString(),
     products: privileged ? products : products.map(redactProductCostForCashier),
@@ -1040,9 +1083,10 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role, a
     bills: privileged ? bills : bills.map(redactBillProfitForCashier),
     stockLedger,
     udharLedger,
-    suppliers: privileged ? suppliers : [],
+    // Already [] for an unprivileged role — it was never queried.
+    suppliers,
     purchaseHistory: privileged ? await attachSupplierPayments(shopId, purchaseHistory) : [],
-    expenses: privileged ? expenses : [],
+    expenses,
     sync: {
       hasMore,
       hasMoreByEntity,
@@ -1220,17 +1264,24 @@ export async function getDeviceSyncFleet(shopId) {
 async function pullBySequence(shopId, afterSeq, { limit, role } = {}) {
   const cursor = env.DATABASE_URL.startsWith("file:") ? Number(afterSeq || 0) : BigInt(afterSeq || "0");
   const pageLimit = Math.min(typeof limit === "number" ? limit : PULL_DEFAULT_LIMIT, PULL_MAX_LIMIT);
+  const scanLimit = Math.min(pageLimit * PULL_COMPACTION_SCAN_FACTOR, PULL_COMPACTION_MAX_SCAN);
   const logs = await db.changeLog.findMany({
     where: { shopId, seq: { gt: cursor } },
     orderBy: { seq: "asc" },
-    take: pageLimit + 1,
+    take: scanLimit + 1,
   });
-  const page = logs.slice(0, pageLimit);
-  const hasMore = logs.length > pageLimit;
+  const scanned = logs.slice(0, scanLimit);
+  const feedContinuesBeyondScan = logs.length > scanLimit;
+  const { winners, consumed, stoppedAtLimit } = compactFeedRows(scanned, pageLimit);
+  // Only rows the compaction actually consumed may be stepped over: the cursor
+  // this page returns is what the device acknowledges, and anything past it that
+  // was read but not sent would be skipped for good.
+  const page = scanned.slice(0, consumed);
+  const hasMore = stoppedAtLimit || feedContinuesBeyondScan;
   const privileged = role === "owner" || role === "admin";
-  const rowsByIdentity = await loadSequenceEntities(shopId, page);
+  const rowsByIdentity = await loadSequenceEntities(shopId, winners);
   const changes = [];
-  for (const log of page) {
+  for (const log of winners) {
     if (!privileged && (log.entityType === "supplier" || log.entityType === "purchase_history" || log.entityType === "expense")) continue;
     let entity = rowsByIdentity.get(`${log.entityType}:${log.entityId}`) ?? null;
     if (entity && !privileged && log.entityType === "product") entity = redactProductCostForCashier(entity);
@@ -1261,6 +1312,7 @@ async function pullBySequence(shopId, afterSeq, { limit, role } = {}) {
       limit: pageLimit,
       returnedCount: changes.length,
       scannedCount: page.length,
+      compactedCount: page.length - winners.length,
     },
   };
 }
@@ -1270,7 +1322,7 @@ async function loadSequenceEntities(shopId, logs) {
   const [products, customers, rawBills, stockLedger, udharLedger, suppliers, purchaseHistory, expenses] = await Promise.all([
     db.product.findMany({ where: { shopId, id: { in: ids("product") } }, include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } } }),
     db.customer.findMany({ where: { shopId, id: { in: ids("customer") } } }),
-    db.bill.findMany({ where: { shopId, id: { in: ids("bill") } }, include: { items: true, payments: true } }),
+    db.bill.findMany({ where: { shopId, id: { in: ids("bill") } }, include: PULL_BILL_CHILDREN }),
     db.stockLedger.findMany({ where: { shopId, id: { in: ids("stock_ledger") } } }),
     db.udharLedger.findMany({ where: { shopId, id: { in: ids("udhar_ledger") } } }),
     db.supplier.findMany({ where: { shopId, id: { in: ids("supplier") } } }),
@@ -1671,7 +1723,11 @@ async function processOneSyncEvent(shopId, event, user, context) {
     });
   } catch (error) {
     const classified = classifySyncError(error);
-    const message = error?.message || "Sync event failed";
+    // A ZodError's own `message` is the whole issue array re-serialised as
+    // JSON. This string is what the parked row shows the shopkeeper on the
+    // "needs review" card, so it has to be a sentence, not a payload.
+    const message = (error?.name === "ZodError" ? describeZodError(error, "This change was rejected") : error?.message)
+      || "Sync event failed";
     let durableConflict = null;
 
     if (classified.syncStatus === SYNC_EVENT_STATUSES.CONFLICT) {
@@ -1714,6 +1770,7 @@ async function processOneSyncEvent(shopId, event, user, context) {
 }
 
 async function applySyncEvent(shopId, event, user, context) {
+  assertSyncWriteAllowed(user);
   switch (event.type) {
     case SYNC_EVENT_TYPES.CREATE_BILL:
       // Static contract: applyCreateBill(shopId, event, user) receives authenticated sync user.
@@ -3960,29 +4017,66 @@ async function rememberMappingsFromResult(shopId, event, result, context) {
 
   for (const mapping of mappings) {
     rememberMappingInContext(context, mapping.entityType, mapping.localId, mapping.serverId);
-    await db.syncIdMapping.upsert({
-      where: {
-        shopId_entityType_localId: {
-          shopId,
-          entityType: mapping.entityType,
-          localId: String(mapping.localId),
-        },
-      },
-      create: {
+  }
+  if (mappings.length === 0) return;
+
+  /*
+   * One round-trip for the event's mappings, not one per mapping.
+   *
+   * A single bill on credit produces a mapping for the bill, one for the
+   * customer, and one for each distinct local id the till used for the ledger
+   * entry — the payload is read under a dozen different spellings, because
+   * different app versions named that field differently. Each of those was its
+   * own awaited upsert, inside a push loop that is already one event at a time,
+   * so a two-hundred-event batch from a till that had been offline all morning
+   * spent several hundred sequential round-trips just writing down which local
+   * id became which server id.
+   *
+   * The array form of `$transaction` sends them together and commits them
+   * together. Sequential awaits gave no atomicity anyway: a crash halfway
+   * through left an event's mappings partly written, and a resolver that found
+   * the bill but not its ledger entry is exactly the "cursor ahead of data"
+   * shape this module has been repairing elsewhere. So this is one fewer way to
+   * end up inconsistent as well as one fewer stall.
+   *
+   * Keys are unique within an event — each entity contributes at most one
+   * mapping, and the ledger's aliases are de-duplicated above — so no two
+   * statements here touch the same row.
+   */
+  const sourceEventId = getClientEventId(event) || null;
+  const deviceId = context?.user?.deviceId ?? null;
+  const write = (mapping) => db.syncIdMapping.upsert({
+    where: {
+      shopId_entityType_localId: {
         shopId,
         entityType: mapping.entityType,
         localId: String(mapping.localId),
-        serverId: String(mapping.serverId),
-        sourceEventId: getClientEventId(event) || null,
-        deviceId: context?.user?.deviceId ?? null,
       },
-      update: {
-        serverId: String(mapping.serverId),
-        sourceEventId: getClientEventId(event) || null,
-        deviceId: context?.user?.deviceId ?? null,
-      },
-    });
+    },
+    create: {
+      shopId,
+      entityType: mapping.entityType,
+      localId: String(mapping.localId),
+      serverId: String(mapping.serverId),
+      sourceEventId,
+      deviceId,
+    },
+    update: {
+      serverId: String(mapping.serverId),
+      sourceEventId,
+      deviceId,
+    },
+  });
+
+  // A single mapping goes on its own. Wrapping one statement in a transaction
+  // buys no atomicity it did not already have and costs a begin and a commit,
+  // which measured as a real regression on the commonest event of all — a cash
+  // sale, which maps only its bill.
+  if (mappings.length === 1) {
+    await write(mappings[0]);
+    return;
   }
+  await db.$transaction(mappings.map(write));
 }
 
 async function resolveBillBodyReferences(shopId, billBody, context) {
@@ -4154,6 +4248,18 @@ function getCreateBillIdentity(event, payload, billBody) {
 
 async function findExistingBillByCreateIdentity(shopId, identity) {
   if (!identity?.idempotencyKey && !(identity?.sourceDeviceId && identity?.clientBillId)) return null;
+  // Deliberately NOT PULL_BILL_CHILDREN, though this row is fed to the same
+  // buildCreateBillSyncPayload and reaches the same client.
+  //
+  // This is the answer to a REPLAYED create — a device pushing a sale the server
+  // already has. The first attempt was answered from confirmBill's own return,
+  // which includes whole BillItem and Payment rows, so narrowing only this one
+  // would make a retry reply in a different shape from the original. An idempotent
+  // operation answering two different ways is a worse bug than the bytes are a
+  // win: this path fires only on a duplicate, so there is no traffic in it.
+  //
+  // (The two already disagree about `addons`, which confirmBill includes and this
+  // does not. That is a latent inconsistency, not something to widen the gap on.)
   const include = { items: true, payments: true };
   if (identity.idempotencyKey) {
     const byKey = await db.bill.findFirst({
@@ -4299,8 +4405,17 @@ async function assertOwnerPermission(shopId, user, ownerPin, context = null) {
 }
 
 function assertProductManagementPermission(user) {
-  if (["owner", "admin"].includes(user?.role)) return;
+  if (roleHasPermission(user?.role, "manage_products")) return;
   throw new AppError("Product management requires an owner or manager account", 403, "PRODUCT_MANAGEMENT_PERMISSION_DENIED");
+}
+
+// Every sync event is a write, so a read-only role is refused before any of
+// them is looked at. The till never pushes from such a session; this is the
+// server holding the line if one does. The 403 classifies as PERMISSION_DENIED
+// and not retryable, so the row is parked rather than retried twelve times.
+function assertSyncWriteAllowed(user) {
+  if (!isReadOnlyRole(user?.role)) return;
+  throw new AppError("This is a view-only account. Ask the owner to make this change.", 403, "ROLE_READ_ONLY");
 }
 
 function stripKnownSyncPayloadKeys(payload) {

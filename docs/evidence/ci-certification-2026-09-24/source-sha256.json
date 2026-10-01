@@ -1,0 +1,10 @@
+{
+  "backend/prisma/schema.prisma": "bc8e61011517b23ba0432b2848a386205cc4f15d22f75b366b22fff023c86dc2",
+  "backend/prisma-postgres/schema.prisma": "30957ec2e5b8ec4d21866f1e9ceb91dbefa28107a880be9d81e1ba2f9bd818ab",
+  "backend/prisma-postgres/migrations/000140_stock_ledger_money_defaults/migration.sql": "da62938ded901243810632dd194dfb4e45ac63caef7a1a0b5e33f5e610a8943f",
+  "backend/src/verticals/furniture-home/orders/orders.service.js": "43207fac3c4cef3ffc45a1576d4633678bf7a050ad034b574f610473c63859bf",
+  "backend/tests/integration/furniture-delivery.integration.test.js": "e62d2407c8fa84de3c79ae362e259d381b704a647c85daf68e78a44cb4665416",
+  "backend/tests/integration/counter-lifecycle.integration.test.js": "0cf10360d0ddf6aaf0550aed26f864b163749a829ec08d9c75f18b343f56dbd0",
+  "backend/tests/integration/stock-ledger-money.integration.test.js": "9792f23a842d14d73e1db84519f06aaac7fcd11b5f8424559cb4374810e3b4dd",
+  "backend/tests/postgres-restore-runtime.examples.js": "dc53b699f7e1bf7da626ddf2853f8613227fef5863a632a4774c0ba708890b1f"
+}
