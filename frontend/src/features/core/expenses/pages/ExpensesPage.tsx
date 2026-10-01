@@ -20,8 +20,8 @@ import {
   Sparkles, Store, Thermometer, Trash2, Truck, Users, Utensils, Wallet, Wrench, X, Zap,
 } from "lucide-react";
 import { listExpenses } from "@/features/core/expenses/api";
-import { expenseOverview, expensesForLocation } from "@/features/core/expenses/overview";
-import { getActiveLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
+import { expenseLocationUnknown, expenseOverview, expensesForLocation } from "@/features/core/expenses/overview";
+import { getActiveLocationId, getPrimaryLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
 import { apiRequest } from "@/lib/api/http";
 import { expenseDateInput, expenseDateTimestamp } from "@/features/core/expenses/dates";
 import { cacheServerExpenses, createExpenseLocalFirst, deleteExpenseLocalFirst, listLocalExpenses, mergeExpenseSnapshots, updateExpenseLocalFirst } from "@/features/core/expenses/local-actions";
@@ -112,12 +112,13 @@ export default function ExpensesPage() {
   const [localReadError, setLocalReadError] = useState(false);
   const [summaryDate, setSummaryDate] = useState(() => new Date());
   const locationId = useSyncExternalStore(subscribeLocation, getActiveLocationId, () => null);
+  const cachedPrimaryLocationId = useSyncExternalStore(subscribeLocation, getPrimaryLocationId, () => null);
   const locationsQ = useQuery({
     queryKey: ["store-locations", "active-context"],
     queryFn: () => apiRequest<{ locations: { id: string; isPrimary: boolean }[] }>("/stores"),
     staleTime: 60_000,
   });
-  const primaryLocationId = locationsQ.data?.locations.find((row) => row.isPrimary)?.id;
+  const primaryLocationId = locationsQ.data?.locations.find((row) => row.isPrimary)?.id ?? cachedPrimaryLocationId ?? undefined;
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:expenses-panel-width", { defaultWidth: 420 });
 
   const range = useMemo(() => rangeFor(rangeOption), [rangeOption]);
@@ -181,9 +182,10 @@ export default function ExpensesPage() {
     if (range.to && new Date(expense.spentAt).getTime() > new Date(range.to).getTime()) return false;
     return true;
   });
-  const ov = useMemo(() => localLoaded && !localReadError
+  const locationUnknown = expenseLocationUnknown(allRows, locationId, primaryLocationId);
+  const ov = useMemo(() => localLoaded && !localReadError && !locationUnknown
     ? expenseOverview(allRows, summaryDate) : undefined,
-  [allRows, localLoaded, localReadError, summaryDate]);
+  [allRows, localLoaded, localReadError, locationUnknown, summaryDate]);
   const hasPendingExpenses = localExpenses.some((expense) => {
     const row = expense as Expense & { sync_status?: string; merged_into_id?: string; mergedIntoId?: string };
     return row.sync_status && row.sync_status !== "synced" && !row.merged_into_id && !row.mergedIntoId;
@@ -245,7 +247,7 @@ export default function ExpensesPage() {
         {(!ov || summaryMayBeStale) && (
           <div role="status" data-testid="expense-summary-status" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
             <Clock3 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-            <p>{t(!ov ? "expenses.summary.unavailable" : !isOnline ? "expenses.summary.offline" : "expenses.summary.updating")}</p>
+            <p>{t(locationUnknown ? "expenses.summary.locationUnknown" : !ov ? "expenses.summary.unavailable" : !isOnline ? "expenses.summary.offline" : "expenses.summary.updating")}</p>
           </div>
         )}
         {/* KPI row */}

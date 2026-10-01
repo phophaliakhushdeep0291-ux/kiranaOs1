@@ -4,6 +4,7 @@ import type { reportsEn } from "./reports";
 
 export const reportsHi: Record<keyof typeof reportsEn, string> = {
   "expenses.summary.unavailable": "खर्चों का कुल अभी उपलब्ध नहीं है। इस डिवाइस पर खर्च दर्ज करना और सहेजे गए खर्च देखना जारी रख सकते हैं।",
+  "expenses.summary.locationUnknown": "पुराने खर्चों में शाखा सहेजी नहीं गई थी। वे नीचे दिखते रहेंगे; शाखा के कुल की पुष्टि के लिए इंटरनेट से जुड़ें।",
   "expenses.summary.offline": "आप ऑफलाइन हैं। कुल में इस डिवाइस पर सहेजे गए खर्च और हाल के बदलाव शामिल हैं। दूसरे काउंटरों के अपडेट पाने के लिए इंटरनेट से जुड़ें।",
   "expenses.summary.updating": "कुल में इस डिवाइस पर सहेजे गए खर्च और हाल के बदलाव शामिल हैं। क्लाउड अपडेट अभी बाकी हैं।",
   "reports.read.checking": "पूरी रिपोर्ट लोड हो रही है…",

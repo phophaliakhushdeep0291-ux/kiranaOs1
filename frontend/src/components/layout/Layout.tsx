@@ -57,7 +57,7 @@ import { SyncAlertBanner } from "@/features/core/sync/SyncAlertBanner";
 import { CommandPalette } from "./CommandPalette";
 import { MobileBottomNav, MobileTopBar } from "./MobileAppChrome";
 import { apiRequest, getApiBaseUrl } from "@/lib/api/http";
-import { getActiveLocationId, LOCATION_CHANGED_EVENT, setActiveLocationId as persistActiveLocationId } from "@/features/core/stores/location-context";
+import { cachePrimaryLocationId, getActiveLocationId, LOCATION_CHANGED_EVENT, setActiveLocationId as persistActiveLocationId } from "@/features/core/stores/location-context";
 import { cn } from "@/lib/utils";
 import { normalizeStaffRole, routeAccessFor, serverPermissions } from "@/features/core/staff/role-access";
 import { preloadCoreRoute, scheduleCoreRoutePreload } from "@/app/route-preload";
@@ -466,6 +466,8 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
 
   useEffect(() => {
     if (!locations.length) return;
+    const primary = locations.find((row) => row.isPrimary);
+    if (primary) cachePrimaryLocationId(primary.id);
     if (activeLocationId && locations.some((row) => row.id === activeLocationId)) return;
     const fallback = locations.find((row) => row.isPrimary) ?? locations[0];
     persistActiveLocationId(fallback.id);

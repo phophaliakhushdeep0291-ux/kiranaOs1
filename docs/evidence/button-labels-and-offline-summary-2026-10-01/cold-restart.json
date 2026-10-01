@@ -1,0 +1,448 @@
+{
+  "generatedAt": "2026-10-01T08:43:34.013Z",
+  "buildId": "20261001083928",
+  "frontendUrl": "http://localhost:51977",
+  "cacheState": {
+    "keys": [
+      "kiranaos-shell-v11-20261001083928"
+    ],
+    "entryCount": 190,
+    "hasIndex": true,
+    "hasManifest": true,
+    "hasOffline": true,
+    "hasScript": true,
+    "hasStyles": true,
+    "hasCoreMarker": true
+  },
+  "coldRestart": true,
+  "networkDisabled": true,
+  "counterLockVerified": true,
+  "deviceUnlock": "Chrome virtual authenticator; not physical biometric certification",
+  "routeCount": 53,
+  "routes": [
+    {
+      "qaId": "OQA-DASH-01",
+      "route": "/dashboard",
+      "networkBlocked": true,
+      "readyMs": 364,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-BILL-01",
+      "route": "/billing",
+      "networkBlocked": true,
+      "readyMs": 606,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-IMPORT-01",
+      "route": "/import-order",
+      "networkBlocked": true,
+      "readyMs": 203,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-RETURN-01",
+      "route": "/returns/new",
+      "networkBlocked": true,
+      "readyMs": 227,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-HIST-01",
+      "route": "/bills",
+      "networkBlocked": true,
+      "readyMs": 259,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-BILL-DETAIL-01",
+      "route": "/bills/offline-missing-bill",
+      "networkBlocked": true,
+      "readyMs": 265,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-ORDER-01",
+      "route": "/orders-received",
+      "networkBlocked": true,
+      "readyMs": 215,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-SALES-01",
+      "route": "/sales-overview",
+      "networkBlocked": true,
+      "readyMs": 210,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-PROD-01",
+      "route": "/products",
+      "networkBlocked": true,
+      "readyMs": 215,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-CUST-01",
+      "route": "/customers",
+      "networkBlocked": true,
+      "readyMs": 171,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-CUST-DETAIL-01",
+      "route": "/customers/offline-missing-customer",
+      "networkBlocked": true,
+      "readyMs": 171,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-INV-01",
+      "route": "/inventory",
+      "networkBlocked": true,
+      "readyMs": 175,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-STOCK-IN-01",
+      "route": "/inventory/stock-in",
+      "networkBlocked": true,
+      "readyMs": 201,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-STOCK-OUT-01",
+      "route": "/inventory/stock-out",
+      "networkBlocked": true,
+      "readyMs": 170,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-ADJUST-01",
+      "route": "/inventory/adjustments",
+      "networkBlocked": true,
+      "readyMs": 192,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-COUNT-01",
+      "route": "/inventory/stock-counts",
+      "networkBlocked": true,
+      "readyMs": 174,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-CATEGORY-01",
+      "route": "/categories",
+      "networkBlocked": true,
+      "readyMs": 176,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-PUR-01",
+      "route": "/purchase-bills",
+      "networkBlocked": true,
+      "readyMs": 183,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-SUPPLIER-01",
+      "route": "/suppliers",
+      "networkBlocked": true,
+      "readyMs": 175,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-EXPENSE-01",
+      "route": "/expenses",
+      "networkBlocked": true,
+      "readyMs": 193,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-OFFER-01",
+      "route": "/offers",
+      "networkBlocked": true,
+      "readyMs": 186,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-LOYALTY-01",
+      "route": "/loyalty",
+      "networkBlocked": true,
+      "readyMs": 175,
+      "internetRequired": true,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-GIFT-01",
+      "route": "/gift-cards",
+      "networkBlocked": true,
+      "readyMs": 193,
+      "internetRequired": true,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-RPT-01",
+      "route": "/reports",
+      "networkBlocked": true,
+      "readyMs": 211,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-CHANNEL-01",
+      "route": "/channel-settlements",
+      "networkBlocked": true,
+      "readyMs": 178,
+      "internetRequired": true,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-MONEY-01",
+      "route": "/money-statement",
+      "networkBlocked": true,
+      "readyMs": 215,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-CLOSING-01",
+      "route": "/daily-closing",
+      "networkBlocked": true,
+      "readyMs": 179,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-SET-01",
+      "route": "/settings",
+      "networkBlocked": true,
+      "readyMs": 187,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-PROFILE-01",
+      "route": "/settings/store-profile",
+      "networkBlocked": true,
+      "readyMs": 411,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-MODULE-01",
+      "route": "/settings/modules",
+      "networkBlocked": true,
+      "readyMs": 229,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-PRINTER-01",
+      "route": "/settings/printer",
+      "networkBlocked": true,
+      "readyMs": 278,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-BILL-SET-01",
+      "route": "/settings/billing",
+      "networkBlocked": true,
+      "readyMs": 178,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-STAFF-SET-01",
+      "route": "/settings/staff",
+      "networkBlocked": true,
+      "readyMs": 178,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-DEVICE-SET-01",
+      "route": "/settings/devices",
+      "networkBlocked": true,
+      "readyMs": 173,
+      "internetRequired": true,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-SYNC-SET-01",
+      "route": "/settings/sync",
+      "networkBlocked": true,
+      "readyMs": 171,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-TAX-SET-01",
+      "route": "/settings/taxes",
+      "networkBlocked": true,
+      "readyMs": 172,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-SECURITY-01",
+      "route": "/settings/security",
+      "networkBlocked": true,
+      "readyMs": 200,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-NOTIFY-01",
+      "route": "/settings/notifications",
+      "networkBlocked": true,
+      "readyMs": 176,
+      "internetRequired": true,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-INTEGRATION-01",
+      "route": "/settings/integrations",
+      "networkBlocked": true,
+      "readyMs": 175,
+      "internetRequired": true,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-ADVANCED-01",
+      "route": "/settings/advanced",
+      "networkBlocked": true,
+      "readyMs": 176,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-SYNC-01",
+      "route": "/sync-status",
+      "networkBlocked": true,
+      "readyMs": 198,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-PLAN-01",
+      "route": "/plans",
+      "networkBlocked": true,
+      "readyMs": 181,
+      "internetRequired": true,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-SUBSCRIPTION-01",
+      "route": "/subscription",
+      "networkBlocked": true,
+      "readyMs": 175,
+      "internetRequired": true,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-DEVICE-01",
+      "route": "/devices",
+      "networkBlocked": true,
+      "readyMs": 176,
+      "internetRequired": true,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-HELP-01",
+      "route": "/help",
+      "networkBlocked": true,
+      "readyMs": 180,
+      "internetRequired": true,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-ACTIVITY-01",
+      "route": "/activity-insights",
+      "networkBlocked": true,
+      "readyMs": 190,
+      "internetRequired": true,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-STAFF-01",
+      "route": "/staff",
+      "networkBlocked": true,
+      "readyMs": 175,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-AUDIT-01",
+      "route": "/audit-logs",
+      "networkBlocked": true,
+      "readyMs": 185,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-ASSURANCE-01",
+      "route": "/assurance",
+      "networkBlocked": true,
+      "readyMs": 199,
+      "internetRequired": true,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-RECYCLE-01",
+      "route": "/recycle-bin",
+      "networkBlocked": true,
+      "readyMs": 220,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-SMART-01",
+      "route": "/smart-tools",
+      "networkBlocked": true,
+      "readyMs": 176,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-REC-01",
+      "route": "/recovery-mode",
+      "networkBlocked": true,
+      "readyMs": 181,
+      "internetRequired": false,
+      "runtimeErrors": []
+    },
+    {
+      "qaId": "OQA-CUST-ACCOUNT-01",
+      "route": "/customers/cmupadfj600acql6khfgyvsnj",
+      "networkBlocked": true,
+      "readyMs": 172,
+      "internetRequired": false,
+      "runtimeErrors": []
+    }
+  ]
+}

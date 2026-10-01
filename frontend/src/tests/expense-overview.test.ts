@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expenseOverview, expensesForLocation } from "@/features/core/expenses/overview";
+import { expenseLocationUnknown, expenseOverview, expensesForLocation } from "@/features/core/expenses/overview";
 import type { Expense } from "@/types/api";
 
 const now = new Date("2026-09-30T19:00:00Z"); // 1 October in the shop, still September in UTC.
@@ -47,7 +47,9 @@ describe("expense totals on the offline device", () => {
       row("b", 20, now.toISOString(), { locationId: "branch-b" }), row("legacy", 30, now.toISOString())];
     expect(expenseOverview(expensesForLocation(rows, "primary", "primary"), now).today).toBe(40);
     expect(expenseOverview(expensesForLocation(rows, "branch-b", "primary"), now).today).toBe(20);
-    expect(expensesForLocation(rows, "branch-b")).toHaveLength(1);
+    expect(expensesForLocation(rows, "branch-b")).toHaveLength(2);
+    expect(expenseLocationUnknown(expensesForLocation(rows, "branch-b"), "branch-b")).toBe(true);
+    expect(expenseLocationUnknown(rows, "branch-b", "primary")).toBe(false);
   });
 
   it("rolls December/January buckets across years without using the device clock zone", () => {

@@ -3,9 +3,9 @@
   "worktree": "/private/tmp/kirana-pos-optimization-audit-20260930",
   "frontend": {
     "command": "npm run prod:check",
-    "passed": 3189,
+    "passed": 3191,
     "skipped": 1,
-    "filesPassed": 418,
+    "filesPassed": 419,
     "filesSkipped": 1,
     "typecheck": true,
     "translations": true,
@@ -56,5 +56,18 @@
     "Physical printers/scanners/scales and biometric device",
     "Approved payment provider sandbox",
     "Approved offsite storage credentials and monitoring project"
-  ]
+  ],
+  "legacyBranchCache": {
+    "primaryPersistedPerShop": true,
+    "unknownLegacyRowsRetained": true,
+    "unknownBranchTotalsUnavailable": true,
+    "regressionTestsPassed": 7
+  },
+  "coldRestart": {
+    "buildId": "20261001083928",
+    "passed": 53,
+    "failed": 0,
+    "networkDisabled": true,
+    "physicalBiometricsTested": false
+  }
 }

@@ -14,7 +14,14 @@ function dayKey(date: Date): string {
 export function expensesForLocation(rows: Expense[], locationId: string | null, primaryLocationId?: string): Expense[] {
   if (!locationId) return rows;
   // Old offline rows omitted locationId; the server assigns those to primary.
-  return rows.filter((row) => (row.locationId || primaryLocationId) === locationId);
+  // Never make older financial rows disappear when the branch catalogue has
+  // not been cached yet. The page marks totals unavailable in this case.
+  return rows.filter((row) => row.locationId ? row.locationId === locationId
+    : !primaryLocationId || primaryLocationId === locationId);
+}
+
+export function expenseLocationUnknown(rows: Expense[], locationId: string | null, primaryLocationId?: string | null): boolean {
+  return Boolean(locationId && !primaryLocationId && rows.some((row) => !row.locationId));
 }
 
 /** Aggregate the same unfiltered, merged rows used by the device's ledger.
