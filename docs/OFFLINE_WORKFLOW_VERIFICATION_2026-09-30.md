@@ -1,5 +1,8 @@
 # Offline workflow verification — 30 September 2026
 
+> Update, 1 October: live offline expense totals and button label fixes are verified in [the follow-up report](BUTTON_LABELS_AND_OFFLINE_SUMMARY_2026-10-01.md).
+
+
 **Follow-up:** [1 October PostgreSQL and two-counter verification](OFFLINE_POSTGRES_TWO_COUNTER_VERIFICATION_2026-10-01.md)
 adds the concurrent-write results, full PostgreSQL shop cycle and payment-conflict
 wording fix. The results below describe the earlier build.

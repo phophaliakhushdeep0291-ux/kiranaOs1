@@ -1,0 +1,190 @@
+{
+  "generatedAt": "2026-10-01T08:18:45.427Z",
+  "passed": true,
+  "shopCycle": {
+    "passed": true,
+    "expense": {
+      "created": 200,
+      "edited": 225,
+      "offlineReloadPreservedEditedRow": true,
+      "liveOfflineSummary": {
+        "afterCreate": 200,
+        "afterEdit": 225,
+        "afterReload": 225,
+        "afterDelete": 0,
+        "afterDeleteReload": 0
+      },
+      "summaryFreshnessNotice": true,
+      "screenshot": "expense-summary-offline.png",
+      "deletedLocallyAndOnServer": true
+    },
+    "stock": {
+      "opening": 20,
+      "creditSale": -1,
+      "purchase": 3,
+      "cashSale": -1,
+      "return": 1,
+      "finalLocalAndServer": 22
+    },
+    "queuedOperations": [
+      "AUDIT_LOG_APPEND",
+      "AUDIT_LOG_APPEND",
+      "AUDIT_LOG_APPEND",
+      "AUDIT_LOG_APPEND",
+      "CREATE_BILL",
+      "CREATE_SALE_RETURN",
+      "STOCK_PURCHASE",
+      "UPDATE_PRODUCT"
+    ],
+    "serverSales": 2,
+    "serverReturns": 1,
+    "screenshot": "inventory-after-offline-cycle.png"
+  },
+  "scenario": "offline udhar bill -> reconnect/navigation acknowledgement recovery -> offline partial payment -> immediate repaint -> offline SPA return -> offline document reload -> sync -> server reconciliation",
+  "creditAmount": 200,
+  "partialPaymentAmount": 75,
+  "expectedRemainder": 125,
+  "pending": {
+    "billId": "bill_3230ee69-13c8-4909-9ab4-20366a567a9a",
+    "billEventId": "create_bill_6d0d8fe1-6aed-48e3-8608-879b296091a9",
+    "billServerId": null,
+    "billEventStatus": "PENDING",
+    "billEventSyncStatus": "pending_sync",
+    "activeBillCount": 1,
+    "activeLedgerCount": 1,
+    "activeLedgerTotal": 200,
+    "activeLedgerRows": [
+      {
+        "id": "ledger_bill_3230ee69-13c8-4909-9ab4-20366a567a9a_credit",
+        "local_id": "ledger_bill_3230ee69-13c8-4909-9ab4-20366a567a9a_credit",
+        "server_id": null,
+        "customer_id": "customer_8d91e3f8-5c10-46d9-bf3e-a7deb401edd1",
+        "bill_id": "bill_3230ee69-13c8-4909-9ab4-20366a567a9a",
+        "amount": 200,
+        "sync_status": "pending_sync"
+      }
+    ],
+    "pendingOperations": [
+      "AUDIT_LOG_APPEND",
+      "CREATE_BILL",
+      "CREATE_CUSTOMER"
+    ],
+    "customerCount": 1,
+    "activeCustomers": [
+      {
+        "id": "customer_8d91e3f8-5c10-46d9-bf3e-a7deb401edd1",
+        "local_id": "customer_8d91e3f8-5c10-46d9-bf3e-a7deb401edd1",
+        "server_id": null,
+        "name": "Offline Sync 599749",
+        "sync_status": "pending_sync"
+      }
+    ]
+  },
+  "synced": {
+    "billId": "bill_3230ee69-13c8-4909-9ab4-20366a567a9a",
+    "billEventId": null,
+    "billServerId": "cmup9igh60036y7xakoe3aye9",
+    "billEventStatus": null,
+    "billEventSyncStatus": null,
+    "activeBillCount": 1,
+    "activeLedgerCount": 1,
+    "activeLedgerTotal": 200,
+    "activeLedgerRows": [
+      {
+        "id": "cmup9ighi003by7xak3bkpzn0",
+        "local_id": "cmup9ighi003by7xak3bkpzn0",
+        "server_id": "cmup9ighi003by7xak3bkpzn0",
+        "customer_id": "cmup9igg9002vy7xaqgt8kj3r",
+        "bill_id": "cmup9igh60036y7xakoe3aye9",
+        "amount": 200,
+        "sync_status": "synced"
+      }
+    ],
+    "pendingOperations": [],
+    "customerCount": 1,
+    "activeCustomers": [
+      {
+        "id": "cmup9igg9002vy7xaqgt8kj3r",
+        "local_id": "customer_8d91e3f8-5c10-46d9-bf3e-a7deb401edd1",
+        "server_id": "cmup9igg9002vy7xaqgt8kj3r",
+        "name": "Offline Sync 599749",
+        "sync_status": "synced"
+      }
+    ]
+  },
+  "server": {
+    "customerId": "cmup9igg9002vy7xaqgt8kj3r",
+    "customerBalance": 200,
+    "matchingLedgerCount": 1,
+    "matchingLedgerTotal": 200,
+    "ledgerIds": [
+      "cmup9ighi003by7xak3bkpzn0"
+    ],
+    "clientLedgerIds": [
+      "ledger_bill_3230ee69-13c8-4909-9ab4-20366a567a9a_credit"
+    ]
+  },
+  "immediateUi": {
+    "path": "/customers",
+    "search": "?filter=udhar",
+    "selectedCustomerId": "cmup9igg9002vy7xaqgt8kj3r",
+    "outstanding": 125,
+    "rowBalance": 125,
+    "paymentInput": ""
+  },
+  "pendingPayment": {
+    "paymentId": "payment_2d55d964-0fdb-40f7-b3f2-f0ba0c91a4b5",
+    "paymentEventId": "record_payment_7e2a2010-f572-497b-8722-5f68c09ddebe",
+    "paymentEventStatus": "PENDING",
+    "paymentEventSyncStatus": "pending_sync",
+    "paymentCount": 1,
+    "paymentAmount": 75,
+    "ledgerCount": 1,
+    "ledgerAmount": 75,
+    "customerId": "cmup9igg9002vy7xaqgt8kj3r",
+    "customerServerId": "cmup9igg9002vy7xaqgt8kj3r",
+    "customerBalance": 125,
+    "pendingOperations": [
+      "AUDIT_LOG_APPEND",
+      "RECORD_PAYMENT"
+    ]
+  },
+  "offlineReturnUi": {
+    "path": "/customers",
+    "search": "?filter=udhar",
+    "outstanding": 125,
+    "rowBalance": 125,
+    "activeFilter": "true"
+  },
+  "offlineReloadUi": {
+    "path": "/customers",
+    "search": "?filter=udhar",
+    "controlled": true,
+    "outstanding": 125,
+    "rowBalance": 125,
+    "runtimeErrors": []
+  },
+  "syncedPayment": {
+    "paymentId": "cmup9ikga007vy7xaz78thi7h",
+    "paymentEventId": "record_payment_7e2a2010-f572-497b-8722-5f68c09ddebe",
+    "paymentEventStatus": "SYNCED",
+    "paymentEventSyncStatus": "synced",
+    "paymentCount": 1,
+    "paymentAmount": 75,
+    "ledgerCount": 1,
+    "ledgerAmount": 75,
+    "customerId": "cmup9igg9002vy7xaqgt8kj3r",
+    "customerServerId": "cmup9igg9002vy7xaqgt8kj3r",
+    "customerBalance": 125,
+    "pendingOperations": []
+  },
+  "serverAfterPayment": {
+    "customerId": "cmup9igg9002vy7xaqgt8kj3r",
+    "customerBalance": 125,
+    "debitCount": 1,
+    "paymentCount": 1,
+    "debitTotal": 200,
+    "paymentTotal": 75
+  },
+  "screenshot": "udhar-after-partial-payment.png"
+}

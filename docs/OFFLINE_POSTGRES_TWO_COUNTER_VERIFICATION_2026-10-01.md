@@ -1,5 +1,8 @@
 # Offline PostgreSQL and two-counter verification — 1 October 2026
 
+> Update, 1 October: live offline expense totals and button label fixes are verified in [the follow-up report](BUTTON_LABELS_AND_OFFLINE_SUMMARY_2026-10-01.md).
+
+
 **The tested core shop workflow and two independent counter profiles passed on
 an isolated PostgreSQL 18.4 API. Competing collections preserve the rejected
 payment for owner review and cannot over-credit the customer.**
