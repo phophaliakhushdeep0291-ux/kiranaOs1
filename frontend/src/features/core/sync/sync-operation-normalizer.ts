@@ -2,15 +2,9 @@ import { roundMoney } from "@/lib/money";
 import { dexieDB, rowMatchesCurrentScope, type PendingSyncEvent } from "@/lib/offline/db";
 import { getOfflineScope } from "@/lib/offline/context";
 import { tableNameForEntity } from "@/features/core/sync/sync-types";
+import { LOCAL_ONLY_SYNC_OPERATION_TYPES } from "@/features/core/sync/local-only-operations";
 
-export const LOCAL_ONLY_SYNC_OPERATION_TYPES = new Set([
-  "AUDIT_LOG_APPEND",
-  "SUBSCRIPTION_REFRESH",
-  "UPDATE_SETTINGS",
-  "STAFF_ACTION",
-  "DEVICE_ADD_PENDING",
-  "DEVICE_REMOVE_PENDING",
-]);
+export { LOCAL_ONLY_SYNC_OPERATION_TYPES };
 
 const BACKEND_OPERATION_TYPE_MAP: Record<string, string> = {
   CANCEL_BILL_PENDING: "CANCEL_BILL",

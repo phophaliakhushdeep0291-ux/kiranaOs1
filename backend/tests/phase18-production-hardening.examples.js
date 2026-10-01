@@ -1,5 +1,6 @@
 import assert from "assert";
 import fs from "fs";
+import { ASSIGNABLE_STAFF_ROLES } from "../src/core/permissions/rbac.js";
 
 function read(file) { return fs.readFileSync(file, "utf8"); }
 
@@ -52,7 +53,11 @@ assert(authRoutes.includes('requireFeature("staff_login")'), "staff management r
 assert(authService.includes("STAFF_LIMIT_EXCEEDED"), "staff invite must enforce plan staff limit in service layer");
 assert(authService.includes("OWNER_ROLE_NOT_INVITABLE"), "staff invite must not create another owner");
 assert(authService.includes("OWNER_ROLE_TRANSFER_REQUIRED"), "role update must not silently transfer owner role");
-assert(featureGateService.includes('role: { in: ["staff", "admin"] }'), "staff limit must count staff and admin users");
+// Every login the owner can hand out takes a seat — cashier, manager and the view-only role.
+assert(featureGateService.includes("role: { in: [...ASSIGNABLE_STAFF_ROLES] }"), "staff limit must count every assignable staff role");
+for (const role of ["staff", "admin", "viewer"]) {
+  assert(ASSIGNABLE_STAFF_ROLES.includes(role), `staff limit must count ${role} users`);
+}
 
 for (const file of protectedRoutes) {
   const source = read(file);

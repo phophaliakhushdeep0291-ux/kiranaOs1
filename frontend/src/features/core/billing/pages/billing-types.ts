@@ -128,6 +128,8 @@ export interface AppliedOffer {
 }
 
 export interface BillingDraft {
+  handoffSource?: string;
+  billingSlotValues?: Record<string, unknown>;
   /** Stable id of the bill currently in the workspace (for the open-bills switcher). */
   activeBillId?: string;
   /**

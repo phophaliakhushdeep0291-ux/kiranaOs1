@@ -1,5 +1,6 @@
 import { formatDistanceToNow } from "date-fns";
 import { AlertTriangle, CheckCircle2, CloudOff, CreditCard, Database, RefreshCcw } from "lucide-react";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +8,6 @@ import { getPlanForBusinessType, offeredPlanCodes, type PlanCode } from "@/featu
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
 import { formatFreeAccessDate, isFreeAccessPresale } from "@/features/core/subscription/free-access";
-import { useAppLanguage } from "@/features/core/settings/i18n";
 import { CancelSubscriptionDialog, PlanBadge, UpgradeModal } from "@/features/core/subscription/components";
 import { subscriptionRefreshLocalFirst } from "@/features/core/subscription/local-actions";
 import { useToast } from "@/hooks/use-toast";
@@ -73,6 +73,24 @@ export default function SubscriptionPage() {
   const nextPlan = snapshot.planCode === "standard"
     ? "growth"
     : currentIndex < offeredPlans.length - 1 ? offeredPlans[currentIndex + 1] : null;
+  /**
+   * A lapsed plan always gets a way to pay, as the first thing in the row.
+   *
+   * The row was built from two optional buttons — upgrade, when a higher plan
+   * exists, and cancel, when the plan is active — so a shop on the top plan whose
+   * subscription had expired got neither, and was left with "Check payment
+   * status" as its only control. Renewing meant finding the small "tap to renew"
+   * line inside the comparison grid below. Grace belongs here too: the period has
+   * ended, and paying before grace runs out is the whole point of having one.
+   *
+   * Only a plan this trade is still sold can be renewed as itself. A legacy one
+   * moves to its replacement through "Compare and upgrade", which then leads the
+   * row — a "Renew Growth" button for a shop that never had Growth, opening a
+   * dialog titled "Upgrade to Growth", would have been two names for one step.
+   */
+  const needsRenewal = snapshot.isExpired || snapshot.isPaymentFailed || snapshot.graceActive;
+  // Nothing is owed while the launch promotion runs, so there is nothing to renew.
+  const showRenew = !freeDate && needsRenewal && (offeredPlans as readonly PlanCode[]).includes(snapshot.planCode);
   const periodEndLabel = snapshot.currentPeriodEnd ? new Date(snapshot.currentPeriodEnd).toLocaleDateString("en-IN") : null;
   const planMessage = freeDate
     ? presale
@@ -117,16 +135,26 @@ export default function SubscriptionPage() {
         <Card className="border-amber-300 bg-amber-50">
           <CardContent className="p-4 flex gap-3 text-sm text-amber-900">
             <Database className="h-5 w-5 shrink-0" />
+            {/* This card used to close with "New billing may be restricted after
+                offline grace ends". Nothing restricts it: canCreateNewBills never
+                reads expiry, on purpose, because a counter that cannot sell is
+                worse than any unpaid invoice. A shop was being warned it might
+                lose the till over a rule that does not exist. */}
             <div>
-              <p className="font-semibold">Local-only warning after expiry</p>
-              <p>Old data remains viewable. Cloud sync and premium actions are blocked until renewal. New billing may be restricted after offline grace ends.</p>
+              <p className="font-semibold">{t("plans.lapsed.title")}</p>
+              <p>{t(snapshot.graceActive ? "plans.grace.body" : "plans.lapsed.body")}</p>
             </div>
           </CardContent>
         </Card>
       )}
 
       <div className="grid gap-2 sm:flex sm:flex-wrap">
-        {nextPlan && (!freeDate || presale) && <Button className="h-11 rounded-xl px-5 font-bold shadow-[0_10px_24px_rgba(7,95,255,0.2)]" onClick={() => setTargetPlan(nextPlan)}>Compare and upgrade</Button>}
+        {showRenew && (
+          <Button className="h-11 rounded-xl px-5 font-bold shadow-[0_10px_24px_rgba(7,95,255,0.2)]" onClick={() => setTargetPlan(snapshot.planCode)}>
+            <CreditCard className="mr-1.5 h-4 w-4" />{t("plans.renew", { plan: snapshot.plan.name })}
+          </Button>
+        )}
+        {nextPlan && (!freeDate || presale) && <Button variant={showRenew ? "outline" : "default"} className={`h-11 rounded-xl px-5 font-bold ${showRenew ? "" : "shadow-[0_10px_24px_rgba(7,95,255,0.2)]"}`} onClick={() => setTargetPlan(nextPlan)}>Compare and upgrade</Button>}
         {canCancel && (
           <Button variant="outline" className="h-11 rounded-xl text-destructive hover:text-destructive" onClick={() => setCancelOpen(true)}>
             Cancel plan
@@ -169,7 +197,12 @@ export default function SubscriptionPage() {
         </CardContent>
       </Card>
 
-      <UpgradeModal open={targetPlan !== null} onOpenChange={(open) => !open && setTargetPlan(null)} targetPlanCode={targetPlan ?? undefined} />
+      <UpgradeModal
+        open={targetPlan !== null}
+        onOpenChange={(open) => !open && setTargetPlan(null)}
+        targetPlanCode={targetPlan ?? undefined}
+        mode={targetPlan !== null && targetPlan === snapshot.planCode ? "renew" : "upgrade"}
+      />
       <CancelSubscriptionDialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}

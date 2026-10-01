@@ -61,7 +61,7 @@ const LINE_FIELDS_THE_COUNTER_READS = [
   "id", "billId", "productId", "name", "quantity", "enteredUnit", "baseUnit",
   "quantityInBaseUnit", "rateUnit", "ratePerRateUnit", "costPerRateUnit", "gstRate", "hsn",
   "conversionToBase", "sellingUnitId", "sellingUnitCode", "sellingUnitLabel",
-  "originalBillItemId", "note",
+  "originalBillItemId", "trackedUnitId", "note",
   "lineDiscount", "lineTotal", "lineCost", "lineProfit", "originalUnitPrice",
   "appliedPricingRuleId", "appliedPricingRuleType", "pricingExplanation",
   "pricingConfidence", "pricingCalculationVersion",

@@ -45,7 +45,7 @@ export async function unslippedScheduleLines(context: SettleCheckContext): Promi
   // The pharmacy's own control holds the attached slip. Anything truthy there is
   // a prescription the chemist has picked, which is exactly what satisfies the
   // server guard too.
-  if (context.slotValues?.["pharmacy/prescription"]) return null;
+  if (context.slotValues?.prescriptionId || context.slotValues?.["pharmacy/prescription"]) return null;
 
   const strictest = restricted
     .map((row) => row.schedule)

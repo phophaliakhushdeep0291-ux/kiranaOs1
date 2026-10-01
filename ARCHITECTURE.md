@@ -266,6 +266,20 @@ the retries answers 503, never 409, because the till's sync engine parks any 4xx
 for a human. `tests/serializable-transaction.examples.js` fails on a raw
 Serializable `$transaction`.
 
+**Roles are one catalogue, enforced in more than one place.** Four fixed roles —
+`owner`, `admin` (Manager), `staff` (Cashier), `viewer` (read-only) — and what
+each may do live in `backend/src/core/permissions/rbac.js`; the user object from
+login and `/auth/me` carries that role's `permissions`. Owner/manager boundaries
+are still drawn by `requireRole` on each route, and `tests/rbac-catalogue.examples.js`
+fails if a bound route and the catalogue disagree. A viewer is refused every write
+once, in `requireAuth` (a small allowlist keeps its session alive), and again per
+event in sync push. On the till, `features/core/staff/role-access.ts` is the copy
+(parity-tested against the server) that gates screens and the menus; the offline
+outbox refuses to queue a viewer's change, and a viewer's sync pulls but never
+pushes — the outbox outlives a logout, so pushing would strand the previous
+cashier's sales. Adding a write route? The viewer gate already covers it. Adding a
+screen only some roles may use? Add a rule to `ROUTE_ACCESS_RULES`.
+
 **Tests passing is not the feature working.** The suites are large and green, and
 the bugs that reached a shop were all found by driving the real screen or probing
 a parser directly with what a shopkeeper would actually say. When you finish a

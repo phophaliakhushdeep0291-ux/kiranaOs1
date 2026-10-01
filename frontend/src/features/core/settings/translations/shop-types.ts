@@ -425,6 +425,14 @@ export const shopTypesEn = {
   "shopType.pharmacy.settle.noPrescriptionTitle": "Schedule {schedule} with no prescription",
   "shopType.pharmacy.settle.noPrescriptionBody": "{items} may not be handed over without a doctor's slip, and the sale has to be recorded. Attach one, or go ahead if you are filing it yourself.",
   "shopType.pharmacy.settle.noPrescriptionConfirm": "Sell anyway",
+  // Asked at the counter when a serial-tracked product is about to go out with
+  // no serial chosen. The bill still saves; what is lost is the register's
+  // record of who has that handset and when its warranty began.
+  "shopType.electronics.settle.noSerialTitle": "No serial number chosen",
+  "shopType.electronics.settle.noSerialBody": "{items} will be billed without an IMEI or serial, so the register will not show it as sold and its warranty will not start. Go back and choose one, or sell it and record the serial from the Serial register afterwards.",
+  "shopType.electronics.settle.noSerialConfirm": "Sell without serial",
+  "shopType.electronics.settle.offlineTitle": "Offline — the serial cannot be recorded",
+  "shopType.electronics.settle.offlineBody": "{items} will be saved without an IMEI or serial, because a serial cannot be reserved without a connection. Record it from the Serial register when you are back online.",
   "shopType.nav.prescriptions.helper": "Record what was dispensed, and on whose slip",
   "shopType.nav.tables": "Tables",
   "shopType.nav.tables.helper": "Seat a table and open its order",

@@ -1,11 +1,13 @@
+import "./units.guard.js";
 import { Router } from "express";
 import { requireAuth } from "../../../middleware/auth.js";
 import { requireDeviceActivated } from "../../../modules/devices/device.middleware.js";
 import { requireShop } from "../../../middleware/permissions.js";
 import { requireFeature } from "../../../modules/feature-gates/featureGate.middleware.js";
 import { requireCapability } from "../../../modules/shops/businessProfile.middleware.js";
-import { validate } from "../../../middleware/validate.js";
+import { validate, validateQuery } from "../../../middleware/validate.js";
 import {
+  billingOptionsQuerySchema,
   receiveUnitsSchema,
   returnUnitSchema,
   sellUnitSchema,
@@ -23,6 +25,7 @@ router.use(requireAuth, requireShop, requireDeviceActivated(), requireFeature("s
 
 // Static paths first — "/summary" and "/lookup" must not be swallowed by "/:id".
 router.get("/summary", ctrl.summary);
+router.get("/billing-options", validateQuery(billingOptionsQuerySchema), ctrl.billingOptions);
 router.get("/lookup/:code", ctrl.lookup);
 router.get("/for-product/:productId", ctrl.forProduct);
 router.get("/", ctrl.list);

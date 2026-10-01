@@ -50,8 +50,10 @@ import { gstStateCode } from "@/lib/gstin";
 import { toInventoryBaseQty } from "@/features/core/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
-import { billingSlotsFor } from "@/features/core/billing/billing-slots";
+import { billingSlotsFor, prepareBillingItems } from "@/features/core/billing/billing-slots";
 import { recoverQueuedBillingDraft, type QueuedProductMerger } from "@/features/core/billing/pending-cart-additions";
+import { recoverSpecialistBill } from "@/features/core/billing/specialist-handoff";
+import { useBusinessTypeKey } from "@/features/core/settings/business-type-store";
 import { activeSellingUnits, defaultSellingUnit, mergeCartProduct, type CartProductOptions } from "../cart-product";
 import { productConfiguratorFor, type ProductConfigurator } from "@/features/core/billing/product-configurators";
 import { SPLIT_PAYMENT, addonUnitPrice, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceNewProductLine, type VoiceParsedDraft } from "./billing-types";
@@ -132,12 +134,18 @@ function readBillingDraft(): BillingDraft {
 }
 
 async function loadBillingDraft(products: Map<string, Product>, mergeProduct: QueuedProductMerger, shouldRecover: () => boolean) {
+  // A register entry's bill goes first: it parks whatever is open and becomes
+  // the draft, so the two queues below add to the right cart. It reports a
+  // request it could not honour instead of throwing — a throw here is the retry
+  // screen, and a request that fails the same way every time would keep the
+  // till on that screen for good.
+  const handoff = await recoverSpecialistBill(products, mergeProduct, shouldRecover);
   const assistant = await recoverAssistantBillingDraft(BILLING_DRAFT_KEY, products, shouldRecover);
   if (!assistant || !shouldRecover()) return null;
   const pending = await recoverQueuedBillingDraft(BILLING_DRAFT_KEY, products, mergeProduct, shouldRecover);
   if (!pending || !shouldRecover()) return null;
   billingDraftCache = pending.draft;
-  return { ...assistant, draft: pending.draft, added: assistant.added + pending.added, missing: pending.missing, remaining: assistant.remaining + pending.remaining };
+  return { ...assistant, draft: pending.draft, added: assistant.added + pending.added, missing: pending.missing, remaining: assistant.remaining + pending.remaining, handoff };
 }
 
 function writeBillingDraft(draft: BillingDraft) {
@@ -177,6 +185,11 @@ export default function Billing() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { shop, user } = useAuth();
+  const businessType = useBusinessTypeKey();
+  // The register entry this bill was started from, when it was. Kept on the
+  // draft so a second "Create bill" on the same entry reopens this bill rather
+  // than starting another.
+  const [handoffSource, setHandoffSource] = useState<string | undefined>(() => readBillingDraft().handoffSource);
   const [location, setLocation] = useLocation();
   const { isOnline } = useOfflineStatus();
   const newBillingFeature = useFeature("new_billing");
@@ -195,6 +208,11 @@ export default function Billing() {
 
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  // Values contributed by the active trade's billing slots, keyed by slot id. A
+  // pharmacy puts the authorising prescription here and an electronics shop the
+  // serials it chose; every other shop keeps an empty object and renders
+  // nothing. Part of the draft, so a parked bill keeps its own.
+  const [billingSlotValues, setBillingSlotValues] = useState<Record<string, unknown>>(() => readBillingDraft().billingSlotValues ?? {});
   const [cart, setCart] = useState<CartItem[]>(() => readBillingDraft().cart ?? []);
   const [pendingProductConfiguration, setPendingProductConfiguration] = useState<{
     product: Product;
@@ -459,14 +477,47 @@ export default function Billing() {
   const effectiveLoyaltyPoints = Math.min(Math.max(0, Math.floor(loyaltyPointsToRedeem)), loyaltyMaxPoints);
   const loyaltyDiscount = roundMoney((effectiveLoyaltyPoints * redemptionPaisePerPoint) / 100);
   const totalDiscount = roundMoney(safeDiscount + loyaltyDiscount);
+  // Keyed on the cart rather than recomputed per render: this page re-renders on
+  // every keystroke in the search box, and nine of the eleven trades register no
+  // slot at all — so all of this walking is thrown away almost every time.
+  const { slotProducts, slotProductIds } = useMemo(() => {
+    const products = cart.filter((item) => !item.isCustom).map((item) => item.product as unknown as Record<string, unknown>);
+    return { slotProducts: products, slotProductIds: products.map((product) => String(product.id)) };
+  }, [cart]);
+  const activeBillingSlots = useMemo(
+    () => billingSlotsFor({ productIds: slotProductIds, products: slotProducts, businessType, values: billingSlotValues }),
+    [slotProductIds, slotProducts, businessType, billingSlotValues],
+  );
+  // The bill's lines as they will be SENT, which a slot may have rewritten — an
+  // electronics shop splits "2 × handset" into one line per serial. GST is
+  // rounded per line, so the payable shown here has to be worked out on those
+  // lines and not on the cart's: on the cart's it comes out a paisa different
+  // about half the time in exclusive mode, and the server refuses a payment
+  // that does not equal its own total. With no slot rewriting anything this is
+  // the cart, line for line.
+  const gstLines = useMemo(
+    () => prepareBillingItems(
+      activeBillingSlots,
+      billingSlotValues,
+      cart.map((item) => ({
+        productId: item.isCustom ? undefined : item.product.id,
+        price: cartItemUnitRate(item),
+        quantity: item.quantity,
+        gstRate: item.product.gstRate ?? 0,
+        lineDiscount: cartItemLineDiscount(item),
+      })),
+      { online: isOnline },
+    ),
+    [activeBillingSlots, billingSlotValues, cart, isOnline],
+  );
   const gstBreakdown = useMemo(
     () => computeGstBreakdown(
-      cart.map((item) => ({ price: cartItemUnitRate(item), quantity: item.quantity, gstRate: item.product.gstRate ?? 0, lineDiscount: cartItemLineDiscount(item) })),
+      gstLines,
       getTaxConfigSync().mode,
       { sellerStateCode, buyerStateCode },
       totalDiscount,
     ),
-    [cart, sellerStateCode, buyerStateCode, totalDiscount],
+    [gstLines, sellerStateCode, buyerStateCode, totalDiscount],
   );
   const payableBase = roundMoney(gstBreakdown.discountedLineTotal + gstBreakdown.gstToAdd);
   const rawGrandTotal = payableBase;
@@ -772,8 +823,9 @@ export default function Billing() {
     if (draftHydrated || shouldWaitForBillingCatalogue(products, productById.size)) return;
     let active = true;
     setDraftLoadError(false);
-    void Promise.all([loadBillingDraft(productById, (cart, product, draft) =>
-      productConfiguratorFor(product) ? null : mergeCartProduct(cart, product, (item, quantity, unit) => resolveLine(item, quantity, unit, draft)), () => active), loadSettingList<HeldBill>(HELD_BILLS_KEY, [])])
+    void loadBillingDraft(productById, (cart, product, draft, options) =>
+      productConfiguratorFor(product) ? null : mergeCartProduct(cart, product, (item, quantity, unit) => resolveLine(item, quantity, unit, draft), options), () => active)
+      .then(async (recovery) => [recovery, await loadSettingList<HeldBill>(HELD_BILLS_KEY, [])] as const)
       .then(([recovery, held]) => {
         if (!active || !recovery) return;
         const { draft } = recovery;
@@ -787,6 +839,8 @@ export default function Billing() {
           setSourceOrderId(draft.sourceOrderId);
           setSourceOrderFingerprint(draft.sourceOrderFingerprint);
           setCart(draft.cart ?? []);
+          setBillingSlotValues(draft.billingSlotValues ?? {});
+          setHandoffSource(draft.handoffSource);
           setDiscount(draft.discount ?? 0);
           setDiscountReason(draft.discountReason ?? "");
           setAppliedOffer(draft.appliedOffer ?? null);
@@ -819,6 +873,14 @@ export default function Billing() {
         if (recovery.missing.length > 0) {
           toast({ title: t("billing.pending.notFound"), description: t("billing.pending.notFoundDetail", { names: recovery.missing.join(", ") }), variant: "destructive" });
         }
+        // A register entry that could not be billed says why, here, where the
+        // cashier landed expecting its bill — and the till opens regardless.
+        const handoff = recovery.handoff;
+        if (handoff?.rejected) {
+          toast({ title: t("workflow.register.handoff.rejectedTitle"), description: t(handoff.rejected.key, handoff.rejected.vars), variant: "destructive" });
+        } else if (handoff && handoff.unlisted.length > 0) {
+          toast({ title: t("workflow.register.handoff.unlistedTitle"), description: t("workflow.register.handoff.unlisted", { names: handoff.unlisted.join(", ") }) });
+        }
         setDraftHydrated(true);
       })
       .catch(() => {
@@ -831,8 +893,8 @@ export default function Billing() {
 
   useEffect(() => {
     if (!draftHydrated) return;
-    writeBillingDraft({ activeBillId, tableId: activeTableId, sourceOrderId, sourceOrderFingerprint, cart, discount: safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, upiReference, allowAdvancePayment });
-  }, [draftHydrated, activeBillId, activeTableId, sourceOrderId, sourceOrderFingerprint, cart, safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, upiReference, allowAdvancePayment]);
+    writeBillingDraft({ handoffSource, billingSlotValues, activeBillId, tableId: activeTableId, sourceOrderId, sourceOrderFingerprint, cart, discount: safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, upiReference, allowAdvancePayment });
+  }, [draftHydrated, handoffSource, billingSlotValues, activeBillId, activeTableId, sourceOrderId, sourceOrderFingerprint, cart, safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, upiReference, allowAdvancePayment]);
 
   // Re-price the cart when a pricing input changes (customer, group, payment
   // mode, or the shop's rules). Manual/custom lines keep the cashier's price;
@@ -960,7 +1022,10 @@ export default function Billing() {
         const pendingPrint = pendingAutoPrintRef.current;
         const receipt = pendingReceiptRef.current;
         const printableForSavedBill = receipt
-          ? { ...receipt, billId: data.id, billNo, createdAt: data.createdAt ?? receipt.createdAt }
+          ? { ...receipt, billId: data.id, billNo, createdAt: data.createdAt ?? receipt.createdAt, items: receipt.items.map((item) => {
+              const notes = (data.items ?? []).filter((line): line is Record<string, unknown> => Boolean(line) && typeof line === "object").filter((line) => line.productId === item.product.id && line.trackedUnitId).map((line) => String(line.note ?? "")).filter(Boolean);
+              return notes.length ? { ...item, note: [...new Set(notes)].join(" · ") } : item;
+            }) }
           : null;
         pendingReceiptRef.current = null;
         // Rejected online settlements must not emit a sale/payment success event.
@@ -1061,6 +1126,8 @@ export default function Billing() {
     setSourceOrderId(undefined);
     setSourceOrderFingerprint(undefined);
     setCart([]);
+    setBillingSlotValues({});
+    setHandoffSource(undefined);
     setDiscount(0);
     setDiscountReason("");
     setAppliedOffer(null);
@@ -1598,22 +1665,6 @@ export default function Billing() {
    * rewrites the key. Matching on the OLD key first is therefore required —
    * after the change the line no longer answers to the key that was clicked.
    */
-  // Values contributed by the active trade's billing slots, keyed by slot id.
-  // A pharmacy puts the authorising prescription here; every other shop keeps an
-  // empty object and renders nothing.
-  const [billingSlotValues, setBillingSlotValues] = useState<Record<string, unknown>>({});
-  // Keyed on the cart rather than recomputed per render: this page re-renders on
-  // every keystroke in the search box, and ten of the eleven trades register no
-  // slot at all — so all of this walking is thrown away almost every time.
-  const { slotProducts, slotProductIds } = useMemo(() => {
-    const products = cart.filter((item) => !item.isCustom).map((item) => item.product as unknown as Record<string, unknown>);
-    return { slotProducts: products, slotProductIds: products.map((product) => String(product.id)) };
-  }, [cart]);
-  const activeBillingSlots = useMemo(
-    () => billingSlotsFor({ productIds: slotProductIds, products: slotProducts }),
-    [slotProductIds, slotProducts],
-  );
-
   function updateLineBatch(lineKey: string, batch?: SellableBatch) {
     if (protectGuestLine(lineKey)) return;
     setCart((previous) => previous.map((item) => (
@@ -1886,7 +1937,7 @@ export default function Billing() {
     const acknowledged = settleAckRef.current?.billId === activeBillId
       && settleAckRef.current.lines === cart.length;
     if (!acknowledged) {
-      void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart, slotValues: billingSlotValues }).then((warning) => {
+      void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart, slotValues: billingSlotValues, online: isOnline, businessType }).then((warning) => {
         if (warning) {
           setSettleWarning({ warning, billType: overrideBillType, printDecision, approval: approvalOverride });
           return;
@@ -1959,6 +2010,9 @@ export default function Billing() {
     billingCommitLockRef.current = true;
     billingCommitLockAtRef.current = Date.now();
     confirmBill.mutate({
+      // A trade's control can ask for the bill to be saved on the server rather
+      // than queued — billing does not know which trade, or why.
+      requiresOnline: activeBillingSlots.some((slot) => slot.requiresOnline === true),
       data: {
         // Both local and online saves preserve this identity through retries.
         // A fresh id is set only after success, so distinct sales never collide.
@@ -1989,7 +2043,7 @@ export default function Billing() {
         allowAdvancePayment: allowAdvancePayment === true,
         advanceAmount,
         prescriptionId: (billingSlotValues.prescriptionId as { id?: string } | undefined)?.id,
-        items: cart.map((item) => ({
+        items: prepareBillingItems(activeBillingSlots, billingSlotValues, cart.map((item) => ({
           guestOrderId: item.guestOrderId,
           guestOrderLineId: item.guestOrderLineId,
           productId: item.isCustom ? undefined : item.product.id,
@@ -2020,7 +2074,7 @@ export default function Billing() {
           wasPriceOverridden: item.manualRate === true,
           gstRate: item.product.gstRate ?? 0,
           hsn: item.product.hsn ?? undefined,
-        })),
+        })), { online: isOnline }),
         payments,
         ownerPin: sensitiveActions.length > 0 ? effectiveSensitiveApproval?.ownerPin : undefined,
         reason: sensitiveActions.length > 0 ? effectiveSensitiveApproval?.reason : undefined,
@@ -2033,6 +2087,8 @@ export default function Billing() {
   function serializeActiveBill(): HeldBill {
     return {
       id: activeBillId,
+      billingSlotValues,
+      handoffSource,
       tableId: activeTableId,
       sourceOrderId,
       sourceOrderFingerprint,
@@ -2061,6 +2117,8 @@ export default function Billing() {
     setSourceOrderId(bill.sourceOrderId);
     setSourceOrderFingerprint(bill.sourceOrderFingerprint);
     setCart(bill.cart ?? []);
+    setBillingSlotValues(bill.billingSlotValues ?? {});
+    setHandoffSource(bill.handoffSource);
     setDiscount(bill.discount ?? 0);
     setDiscountReason(bill.discountReason ?? "");
     setAppliedOffer(bill.appliedOffer ?? null);
@@ -2451,6 +2509,7 @@ export default function Billing() {
               <Component
                 key={id}
                 productIds={slotProductIds}
+                cart={cart}
                 value={billingSlotValues[id]}
                 onChange={(value) => setBillingSlotValues((previous) => ({ ...previous, [id]: value }))}
               />

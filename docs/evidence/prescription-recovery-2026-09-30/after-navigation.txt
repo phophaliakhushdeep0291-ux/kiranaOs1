@@ -1,0 +1,144 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Prescriptions" [level=1]
+  - generic: QA Pharmacy · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: Prescriptions page loaded
+  - paragraph: Waiting to dispense
+  - paragraph: "0"
+  - paragraph: Dispensed today
+  - paragraph: "1"
+  - paragraph: Repeats available
+  - paragraph: "0"
+  - paragraph: Older than 90 days
+  - paragraph: "0"
+  - heading "Prescription register" [level=3]
+  - paragraph: 1 Schedule H/H1/X entry this month, out of 2 recorded.
+  - button "Record Prescription" [disabled]:
+    - text: Record Prescription
+  - button "To dispense"
+  - button "Dispensed"
+  - button "Cancelled"
+  - button "Whole register"
+  - combobox "Filter by schedule":
+    - option "Every schedule" [selected]
+    - option "Schedule H"
+    - option "Schedule H1"
+    - option "Schedule X"
+    - option "Over the counter"
+    - option "Other"
+  - textbox "Patient, doctor, entry no."
+  - paragraph: Nothing matches this filter
+  - paragraph: Try another status, another schedule, or clear the search.
+  - dialog "New prescription entry":
+    - heading "Record a prescription" [level=2]
+    - paragraph: Who prescribed it, for whom, and what is being handed over
+    - button "Close":
+    - paragraph: This entry stays here while you use other screens or unlock the counter. Record or cancel it before refreshing, closing this tab or signing out.
+    - heading "Prescribing doctor" [level=3]
+    - generic: Doctor's name *
+    - textbox "Doctor's name *":
+      - /placeholder: E.g., Dr A. Sharma
+      - text: QA Recovery Doctor
+    - generic: Registration no.
+    - textbox "Registration no. What an inspection checks first":
+      - /placeholder: E.g., MCI-45231
+    - generic: What an inspection checks first
+    - generic: Clinic / hospital
+    - textbox "Clinic / hospital":
+      - /placeholder: E.g., City Clinic
+    - heading "Patient" [level=3]
+    - generic: Patient's name *
+    - textbox "Patient's name *":
+      - /placeholder: E.g., Ramesh Kumar
+      - text: QA Interruption Patient
+    - generic: Mobile
+    - textbox "Mobile":
+      - /placeholder: 10-digit
+      - text: <redacted>
+    - generic: Age
+    - textbox "Age Or “6 months”":
+      - /placeholder: E.g., 42
+    - generic: Or “6 months”
+    - generic: Gender
+    - combobox "Gender":
+      - option "—" [selected]
+      - option "Male"
+      - option "Female"
+      - option "Other"
+    - generic: Address
+    - textbox "Address Required in the register for Schedule H1 and X":
+      - /placeholder: House / street, area, city
+      - text: QA Test Address
+    - generic: Required in the register for Schedule H1 and X
+    - heading "The prescription" [level=3]
+    - generic: Dated *
+    - textbox "Dated * The date written on the slip": 2026-09-30
+    - generic: The date written on the slip
+    - generic: Repeats allowed
+    - spinbutton "Repeats allowed Times it may be dispensed again": "0"
+    - generic: Times it may be dispensed again
+    - generic: Schedule
+    - combobox "Schedule":
+      - option "Schedule H" [selected]
+      - option "Schedule H1"
+      - option "Schedule X"
+      - option "Over the counter"
+      - option "Other"
+    - paragraph: Prescription-only. The register must be kept.
+    - heading "Medicines dispensed" [level=3]
+    - textbox "Search your medicines…"
+    - textbox "Medicine 1":
+      - /placeholder: Medicine name
+      - text: QA Unlisted Medicine
+    - button "Remove medicine 1":
+    - textbox "Strength for medicine 1":
+      - /placeholder: 500 mg
+    - spinbutton "Quantity for medicine 1": "1"
+    - textbox "Unit for medicine 1":
+      - /placeholder: strip
+      - text: strip
+    - textbox "Batch number for medicine 1":
+      - /placeholder: Batch no.
+    - textbox "Dosage for medicine 1":
+      - /placeholder: Dosage — 1-0-1 for 5 days
+      - text: QA dosage copied from slip
+    - textbox "Substituted brand for medicine 1":
+      - /placeholder: Substituted for (brand on slip)
+    - button "Add another medicine":
+      - text: Add another medicine
+    - heading "Notes" [level=3]
+    - generic: Anything to remember (optional)
+    - textbox "Anything to remember (optional)":
+      - /placeholder: Allergies, counselling given, follow-up date…
+      - text: Recover after checking another screen
+    - checkbox "Continue to billing Record the slip, then collect payment. Leave this off for collection later."
+    - generic: Continue to billing
+    - generic: Record the slip, then collect payment. Leave this off for collection later.
+    - button "Cancel"
+    - button "Record Entry":
+      - text: Record Entry
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

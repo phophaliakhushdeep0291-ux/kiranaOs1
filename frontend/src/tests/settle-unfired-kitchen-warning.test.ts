@@ -99,7 +99,10 @@ describe("the check registry core billing consults", () => {
 
   it("is wired into the confirm path ahead of the PIN and printer gates", () => {
     const page = readFileSync("src/features/core/billing/pages/BillingPage.tsx", "utf8");
-    expect(page).toContain("void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart, slotValues: billingSlotValues })");
+    // Told what billing itself knows — whether the bill can reach the server, and
+    // the shop's trade — so a check agrees with what the save will then do, and
+    // one registered for another trade can stand down without asking anything.
+    expect(page).toContain("void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart, slotValues: billingSlotValues, online: isOnline, businessType })");
     // The gate can be re-entered from the PIN dialog, so answering the warning
     // must hand back everything that confirm was already carrying — otherwise
     // the approval just collected is dropped and the PIN is asked for twice.

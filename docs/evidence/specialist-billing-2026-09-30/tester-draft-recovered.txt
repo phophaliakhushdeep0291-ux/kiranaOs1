@@ -1,0 +1,28 @@
+Browser tab: 2, Title: "Testers · Artha", URL: "http://localhost:5501/testers".
+0 AXWebArea Testers · Artha, URL: localhost:5501/testers
+	1 container
+		2 text Testers page loaded
+		3 container Open a tester, ID: radix-:rf:
+			4 heading Open a tester, Value: 2, ID: radix-:rg:
+				5 text Open a tester
+			6 container
+				7 text Your draft stays on this device for up to 7 days, including after a restart. Cancel or sign out to discard it.
+				8 image
+				9 text QA Rose Lipstick 8  in stock · costs  ₹30
+				10 button Change
+				11 text Shade
+				12 text field (settable) QA Restart Recovery
+				13 text Lasts about (days)
+				14 stepper (settable, integer) 90
+				15 checkbox (settable, integer) Value: 1, Description: Take one out of stock now Leave this on unless you already took the unit off the shelf by hand — otherwise it would come off twice.
+				16 text Take one out of stock now Leave this on unless you already took the unit off the shelf by hand — otherwise it would come off twice. Notes (optional)
+				17 text entry area (settable) Draft should survive a closed tab
+				18 button Cancel
+				19 button Open
+					20 image
+					21 text Open
+			22 button Close
+				23 image
+				24 text Close
+
+The focused UI element is 3 container Open a tester, ID: radix-:rf:

@@ -417,6 +417,12 @@ export const shopTypesHi: Record<keyof typeof shopTypesEn, string> = {
   "shopType.pharmacy.settle.noPrescriptionTitle": "शेड्यूल {schedule} — पर्चा नहीं लगा",
   "shopType.pharmacy.settle.noPrescriptionBody": "{items} बिना डॉक्टर के पर्चे के नहीं दी जा सकती, और बिक्री दर्ज होनी चाहिए। पर्चा लगाएं, या खुद दर्ज कर रहे हों तो आगे बढ़ें।",
   "shopType.pharmacy.settle.noPrescriptionConfirm": "फिर भी बेचें",
+  // सीरियल वाला सामान बिना सीरियल चुने जा रहा हो — काउंटर पर ही पूछा जाता है।
+  "shopType.electronics.settle.noSerialTitle": "सीरियल नंबर नहीं चुना",
+  "shopType.electronics.settle.noSerialBody": "{items} का बिल बिना IMEI या सीरियल के बनेगा, इसलिए रजिस्टर में यह बिका हुआ नहीं दिखेगा और वारंटी शुरू नहीं होगी। वापस जाकर सीरियल चुनें, या बेच दें और बाद में सीरियल रजिस्टर से दर्ज करें।",
+  "shopType.electronics.settle.noSerialConfirm": "बिना सीरियल बेचें",
+  "shopType.electronics.settle.offlineTitle": "ऑफ़लाइन — सीरियल दर्ज नहीं हो सकता",
+  "shopType.electronics.settle.offlineBody": "{items} बिना IMEI या सीरियल के सहेजा जाएगा, क्योंकि बिना कनेक्शन के सीरियल सुरक्षित नहीं किया जा सकता। ऑनलाइन होने पर इसे सीरियल रजिस्टर से दर्ज करें।",
   "shopType.nav.prescriptions.helper": "किसके पर्चे पर क्या दवा दी, वह दर्ज करें",
   "shopType.nav.tables": "टेबल",
   "shopType.nav.reservations": "रिज़र्वेशन",

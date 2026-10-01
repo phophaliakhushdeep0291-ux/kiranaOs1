@@ -1,0 +1,23 @@
+{
+  "environment": "synthetic local QA",
+  "date": "2026-09-30",
+  "pharmacy": [
+    {
+      "registerNumber": "RX-000002",
+      "status": "dispensed",
+      "billNumber": "KOS-2026-000001",
+      "grandTotal": 50.0,
+      "stockBaseQty": 9.0,
+      "quantity": 1.0,
+      "quantityInBaseUnit": 1.0,
+      "lineCost": 30.0
+    }
+  ],
+  "tester": [
+    {
+      "variant": "QA Restart Recovery",
+      "count": 1,
+      "stockBaseQty": 7.0
+    }
+  ]
+}

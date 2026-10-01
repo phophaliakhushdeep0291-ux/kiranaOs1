@@ -1,8 +1,8 @@
+import { CounterDraftNotice } from "@/components/CounterDraftNotice";
 import { useEffect, useMemo, useState } from "react";
 import { Boxes, Loader2, Plus, Search, Smartphone, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { useCounterDraft } from "@/hooks/use-counter-draft";
@@ -135,11 +135,12 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
           <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{t("workflow.electronics.register.title")}</h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">{t("workflow.electronics.register.stockHint")}</p>
         </div>
-        <button disabled={saving} onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
+        <button disabled={saving || draft.recoveryRequired} onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
       </div>
 
+      <CounterDraftNotice draft={draft} />
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
-        <fieldset disabled={saving} className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+        <fieldset disabled={saving || draft.recoveryRequired} className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <p className="text-[12px] text-[#6d7c98]">{t("workflow.register.draftHint")}</p>
           {/* ── Which product ── */}
           <section className="space-y-3">
@@ -158,7 +159,14 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
             ) : (
               <div className="relative">
                 <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-                <Input className="h-11 pl-8 lg:mouse:h-10" placeholder="Search your catalogue…" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
+                <Input
+                  className="h-11 pl-8 lg:mouse:h-10"
+                  placeholder="Search your catalogue…"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  // No caption is drawn above this box, and a placeholder is not a name.
+                  aria-label={t("workflow.electronics.register.productSearch")}
+                />
                 {productSearch.trim() && (
                   <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 max-h-[220px] overflow-y-auto rounded-[10px] border border-[#e2e8f0] bg-white shadow-[0_12px_30px_rgba(15,35,80,0.10)]">
                     {productsQ.isLoading ? (
@@ -268,10 +276,10 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
 
         <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
           <div className="grid grid-cols-2 gap-2.5">
-            <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" disabled={saving} onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" disabled={saving || draft.recoveryRequired} onClick={onClose}>Cancel</Button>
             <Button
               type="submit"
-              disabled={saving}
+              disabled={saving || draft.recoveryRequired}
               style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
               className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95"
             >
@@ -290,11 +298,19 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="text-[11px] font-black uppercase tracking-wider text-[#8492ac]">{children}</h3>;
 }
 
+/**
+ * A caption and its field. The caption wraps the field, so a screen reader
+ * names the box that has focus — drawn beside it, "Cost each (₹)" was read as
+ * nothing more than a number box holding "0". The hint stays outside, so it is
+ * not read as part of the name.
+ */
 function Fld({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
-      <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{label}</Label>
-      {children}
+      <label className="block">
+        <span className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{label}</span>
+        {children}
+      </label>
       {hint && <p className="mt-1 text-[11px] text-[#9aa6bb]">{hint}</p>}
     </div>
   );

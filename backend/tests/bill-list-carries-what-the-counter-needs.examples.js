@@ -97,7 +97,7 @@ for (const field of [
   "id", "billId", "productId", "name", "quantity", "enteredUnit", "baseUnit",
   "quantityInBaseUnit", "rateUnit", "ratePerRateUnit", "costPerRateUnit", "gstRate", "hsn",
   "conversionToBase", "sellingUnitId", "sellingUnitCode", "sellingUnitLabel",
-  "originalBillItemId", "note",
+  "originalBillItemId", "trackedUnitId", "note",
   "lineDiscount", "lineTotal", "lineCost", "lineProfit", "originalUnitPrice",
   // The detail page explains WHY a price was what it was; that needs its provenance.
   "appliedPricingRuleId", "appliedPricingRuleType", "pricingExplanation",

@@ -1,3 +1,4 @@
+import { apiRequest } from "@/lib/api/http";
 import { offlineDB } from "@/lib/offline/db";
 import { emitLocalDataChanged, readInstantCache, upsertCachedListItem, writeInstantCache } from "@/lib/offline/instant-cache";
 import { buildOutboxOperation } from "@/features/core/sync/outbox";
@@ -241,6 +242,17 @@ export async function cancelBillWithOwnerPinLocalFirst(id: string, ownerPin: str
     (candidate.returnOfBillId === existing.id || candidate.return_of_bill_id === existing.id),
   );
   if (hasActiveReturn) throw new Error("This bill has completed returns and can no longer be cancelled");
+
+  if ((await cancellationItemsFor(existing)).some((item) => item.trackedUnitId || item.tracked_unit_id)) {
+    if (!navigator.onLine) throw new Error("Reconnect to cancel this serial-linked bill. Its sale is still active.");
+    const serverId = String(existing.server_id ?? existing.id);
+    const confirmed = await apiRequest<Bill>(`/bills/${encodeURIComponent(serverId)}/cancel`, { method: "POST", ownerPin, body: JSON.stringify({ reason }) });
+    const saved = { ...existing, ...confirmed, sync_status: "synced", isSynced: true, is_synced: true };
+    await offlineDB.transaction(["bills"], async (tx) => { await tx.put("bills", saved); });
+    updateBillCache(saved);
+    emitLocalDataChanged({ type: "bill", id: saved.id, action: "cancelled" });
+    return saved;
+  }
 
   const now = new Date().toISOString();
   const updated = {

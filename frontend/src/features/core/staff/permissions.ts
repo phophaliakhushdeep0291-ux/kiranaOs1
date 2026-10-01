@@ -1,28 +1,31 @@
 import { useMemo } from "react";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useFeature } from "@/features/core/subscription";
+import {
+  POS_PERMISSIONS,
+  ROLE_PERMISSIONS,
+  STAFF_ROLES,
+  effectivePermissions,
+  hasPermission,
+  isReadOnlyRole,
+  normalizeStaffRole,
+  serverPermissions,
+  type PermissionName,
+  type StaffRole,
+} from "@/features/core/staff/role-access";
 
-export const STAFF_ROLES = ["owner", "manager", "cashier", "viewer"] as const;
-export type StaffRole = typeof STAFF_ROLES[number];
-
-export const POS_PERMISSIONS = [
-  "create_bill",
-  "cancel_bill",
-  "record_payment",
-  "reverse_payment",
-  "view_reports",
-  "manage_products",
-  "manage_customers",
-  "manage_inventory",
-  "manage_staff",
-  "export_data",
-  "change_settings",
-  "view_profit",
-  "apply_discount",
-  "sell_below_minimum_price",
-] as const;
-
-export type PermissionName = typeof POS_PERMISSIONS[number];
+// The catalogue itself lives in role-access.ts, which has no React in it so the
+// offline write path can read it. Everything a screen needs is re-exported here.
+export {
+  POS_PERMISSIONS,
+  ROLE_PERMISSIONS,
+  STAFF_ROLES,
+  hasPermission,
+  isReadOnlyRole,
+  normalizeStaffRole,
+  type PermissionName,
+  type StaffRole,
+};
 
 export const PERMISSION_LABELS: Record<PermissionName, string> = {
   create_bill: "Create bill",
@@ -48,47 +51,6 @@ export const ROLE_LABELS: Record<StaffRole, string> = {
   viewer: "Viewer",
 };
 
-/**
- * What each role can actually do, as the server enforces it.
- *
- * The Staff screen prints this as a role x permission matrix under the heading
- * "Role access enforced by the server", so every cell is a promise about the
- * API. Two cells were not true, and both were checked by asking the server as
- * each role (backend: tests/integration/staff-report-access.integration.test.js):
- *
- *   - A cashier CAN read the operational reports. Sales summary, daily closing,
- *     payment modes, inventory health and GST are open to every shop user by
- *     design: a cashier closing the till has to see the day's takings. The
- *     matrix showed a dash and told the owner otherwise.
- *
- *   - A manager CANNOT see profit. /reports/pnl, /top-products and
- *     /monthly-breakdown are requireRole("owner") — "profit/cost-sensitive
- *     reports remain owner-only". The matrix showed a tick.
- *
- * The owner PIN, not the role, is what stands between a cashier and stock
- * corrections, cancellations and shop settings; without it the server answers
- * "Owner PIN required" to all of them. Those stay dashes here because that is
- * what the cashier experiences.
- */
-export const ROLE_PERMISSIONS: Record<StaffRole, PermissionName[]> = {
-  owner: [...POS_PERMISSIONS],
-  manager: [
-    "create_bill",
-    "cancel_bill",
-    "record_payment",
-    "reverse_payment",
-    "view_reports",
-    "manage_products",
-    "manage_customers",
-    "manage_inventory",
-    "export_data",
-    "change_settings",
-    "apply_discount",
-  ],
-  cashier: ["create_bill", "record_payment", "manage_customers", "apply_discount", "view_reports"],
-  viewer: ["view_reports"],
-};
-
 export const OWNER_PIN_REQUIRED_PERMISSIONS: PermissionName[] = [
   "cancel_bill",
   "reverse_payment",
@@ -98,35 +60,8 @@ export const OWNER_PIN_REQUIRED_PERMISSIONS: PermissionName[] = [
   "sell_below_minimum_price",
 ];
 
-export function normalizeStaffRole(role: string | null | undefined): StaffRole {
-  const normalized = String(role ?? "owner").trim().toLowerCase();
-  if (normalized === "owner") return "owner";
-  if (normalized === "manager" || normalized === "admin") return "manager";
-  if (normalized === "cashier" || normalized === "staff") return "cashier";
-  if (normalized === "viewer" || normalized === "read_only" || normalized === "readonly") return "viewer";
-  return "cashier";
-}
-
-function readStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function userOverrides(user: unknown): PermissionName[] {
-  if (typeof user !== "object" || user === null || Array.isArray(user)) return [];
-  const record = user as Record<string, unknown>;
-  return readStringArray(record.permissions).filter((item): item is PermissionName => POS_PERMISSIONS.includes(item as PermissionName));
-}
-
-export function permissionsForRole(role: StaffRole, overrides?: PermissionName[]): PermissionName[] {
-  if (role === "owner") return [...POS_PERMISSIONS];
-  const base = ROLE_PERMISSIONS[role] ?? [];
-  return Array.from(new Set([...(overrides ?? base)]));
-}
-
-export function hasPermission(role: StaffRole, permission: PermissionName, overrides?: PermissionName[]): boolean {
-  if (role === "owner") return true;
-  const effective = overrides && overrides.length > 0 ? overrides : ROLE_PERMISSIONS[role];
-  return effective.includes(permission);
+export function permissionsForRole(role: StaffRole, granted?: PermissionName[]): PermissionName[] {
+  return Array.from(new Set(effectivePermissions(role, granted)));
 }
 
 export interface PermissionDecision {
@@ -146,9 +81,8 @@ export function usePermission(permission: PermissionName): PermissionDecision {
 
   return useMemo(() => {
     const role = normalizeStaffRole(user?.role);
-    const overrides = userOverrides(user);
     const subscriptionAllowed = role === "owner" || staffFeature.allowed;
-    const roleAllowed = hasPermission(role, permission, overrides);
+    const roleAllowed = hasPermission(role, permission, serverPermissions(user));
     const allowed = subscriptionAllowed && roleAllowed;
     const reason = allowed
       ? "Allowed"

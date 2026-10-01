@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -9,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CounterDraftNotice } from "@/components/CounterDraftNotice";
 import { createCounterDraft } from "@/lib/counter-draft";
 import { useCounterDraft } from "@/hooks/use-counter-draft";
 import { useAppLanguage } from "@/features/core/settings/i18n";
@@ -40,9 +42,13 @@ const FILTERS: Array<{ key: string; label: string }> = [
   { key: "all", label: "Everything" },
 ];
 
+const testerDraftSchema = z.object({
+  open: z.boolean(), productId: z.string().max(200), pick: z.string().max(500), variant: z.string().max(500),
+  expectedDays: z.string().max(20), moveStock: z.boolean(), notes: z.string().max(10_000),
+});
 const testerDraft = createCounterDraft(() => ({
   open: false, productId: "", pick: "", variant: "", expectedDays: "90", moveStock: true, notes: "",
-}));
+}), { key: "open-tester", parse: (value) => testerDraftSchema.parse(value) });
 
 export default function TestersPage() {
   const { t } = useAppLanguage();
@@ -412,7 +418,8 @@ function OpenTesterDialog({ open, saving, onClose, onSubmit }: {
     <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
       <DialogContent className="max-w-[440px]">
         <DialogHeader><DialogTitle className="font-display text-[16px] font-black text-[var(--brand-ink)]">Open a tester</DialogTitle></DialogHeader>
-        <fieldset disabled={saving} className="min-w-0 space-y-3">
+        <CounterDraftNotice draft={draft} />
+        <fieldset disabled={saving || draft.recoveryRequired} className="min-w-0 space-y-3">
           <DialogDescription className="text-[12px] text-[#6d7c98]">{t("workflow.register.draftHint")}</DialogDescription>
           {chosen ? (
             <div className="flex items-center gap-2.5 rounded-[10px] border border-[#e7edf7] bg-[#f7f9fd] px-3.5 py-2.5">

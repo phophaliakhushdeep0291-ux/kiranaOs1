@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { validate } from "../../middleware/validate.js";
 import { requireFeature } from "../feature-gates/featureGate.middleware.js";
-import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { requireAuth, requirePermission, requireRole } from "../../middleware/auth.js";
+import { ASSIGNABLE_STAFF_ROLES } from "../../core/permissions/rbac.js";
 import { requireOwnerPin, requireShop } from "../../middleware/permissions.js";
 import {
   registerSchema, loginSchema, setPinSchema,
@@ -35,16 +36,16 @@ router.post("/pin/set",    requireAuth, requireRole("owner"), validate(setPinSch
 router.post("/pin/verify", requireAuth, validate(verifyPinSchema), ctrl.verifyPin);
 router.get("/pin/check",   requireAuth, ctrl.checkPin);
 
-// Staff management is Growth+ only and owner-only.
-router.get("/staff",          requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), ctrl.listStaff);
-router.post("/staff",         requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), requireOwnerPin, validate(inviteStaffSchema), ctrl.inviteStaff);
-router.patch("/staff/:id", requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), requireOwnerPin,
+// Staff management is Growth+ only and owner-only (`manage_staff` in the role catalogue).
+router.get("/staff",          requireAuth, requireShop, requirePermission("manage_staff"), requireFeature("staff_login"), ctrl.listStaff);
+router.post("/staff",         requireAuth, requireShop, requirePermission("manage_staff"), requireFeature("staff_login"), requireOwnerPin, validate(inviteStaffSchema), ctrl.inviteStaff);
+router.patch("/staff/:id", requireAuth, requireShop, requirePermission("manage_staff"), requireFeature("staff_login"), requireOwnerPin,
   validate(updateStaffSchema), ctrl.updateStaff);
-router.patch("/staff/:id/role", requireAuth, requireShop, requireRole("owner"), requireFeature("role_based_access"), requireOwnerPin,
-  validate(z.object({ role: z.enum(["staff","admin"]) })), ctrl.updateStaffRole);
-router.delete("/staff/:id",   requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), requireOwnerPin, ctrl.removeStaff);
-router.get("/staff/:id/locations", requireAuth, requireShop, requireRole("owner"), requireFeature("role_based_access"), ctrl.getStaffLocations);
-router.put("/staff/:id/locations", requireAuth, requireShop, requireRole("owner"), requireFeature("role_based_access"), requireOwnerPin, validate(staffLocationAssignmentsSchema), ctrl.updateStaffLocations);
+router.patch("/staff/:id/role", requireAuth, requireShop, requirePermission("manage_staff"), requireFeature("role_based_access"), requireOwnerPin,
+  validate(z.object({ role: z.enum(ASSIGNABLE_STAFF_ROLES) })), ctrl.updateStaffRole);
+router.delete("/staff/:id",   requireAuth, requireShop, requirePermission("manage_staff"), requireFeature("staff_login"), requireOwnerPin, ctrl.removeStaff);
+router.get("/staff/:id/locations", requireAuth, requireShop, requirePermission("manage_staff"), requireFeature("role_based_access"), ctrl.getStaffLocations);
+router.put("/staff/:id/locations", requireAuth, requireShop, requirePermission("manage_staff"), requireFeature("role_based_access"), requireOwnerPin, validate(staffLocationAssignmentsSchema), ctrl.updateStaffLocations);
 
 // Self-service
 router.post("/change-password", requireAuth, validate(changePasswordSchema), ctrl.changePassword);

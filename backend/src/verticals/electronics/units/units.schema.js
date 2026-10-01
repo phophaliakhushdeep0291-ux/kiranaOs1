@@ -18,6 +18,9 @@ export const UNIT_CONDITIONS = ["new", "open_box", "refurbished"];
 /** Statuses in which the shop still physically holds the unit. */
 export const HELD_STATUSES = ["in_stock", "returned", "rma"];
 
+/** Held AND on the shelf — a unit away at the service centre cannot be handed to a buyer. */
+export const SELLABLE_STATUSES = ["in_stock", "returned"];
+
 const unitIdentity = z
   .object({
     imei: identifier,
@@ -87,6 +90,20 @@ export const returnUnitSchema = z.object({
 
 export const serviceUnitSchema = z.object({
   reason: z.string().trim().max(500).nullish(),
+});
+
+/**
+ * The products on a bill, as a comma-separated list — a bill is a GET-sized
+ * question, and a query string keeps it cacheable by the device when offline.
+ */
+export const billingOptionsQuerySchema = z.object({
+  productIds: z
+    .string()
+    .trim()
+    .max(8_000)
+    .transform((value) => [...new Set(value.split(",").map((id) => id.trim()).filter(Boolean))])
+    .refine((ids) => ids.length <= 100, "A bill can be checked for at most 100 products at a time")
+    .default(""),
 });
 
 export const writeOffUnitSchema = z.object({

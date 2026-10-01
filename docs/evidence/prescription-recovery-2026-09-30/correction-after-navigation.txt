@@ -1,0 +1,171 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Prescriptions" [level=1]
+  - generic: QA Pharmacy · Checking local data
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status
+  - paragraph: Waiting to dispense
+  - paragraph: "1"
+  - paragraph: Dispensed today
+  - paragraph: "1"
+  - paragraph: Repeats available
+  - paragraph: "0"
+  - paragraph: Older than 90 days
+  - paragraph: "0"
+  - heading "Prescription register" [level=3]
+  - paragraph: 2 Schedule H/H1/X entries this month, out of 3 recorded.
+  - button "Record Prescription" [disabled]:
+    - text: Record Prescription
+  - button "To dispense"
+  - button "Dispensed"
+  - button "Cancelled"
+  - button "Whole register"
+  - combobox "Filter by schedule":
+    - option "Every schedule" [selected]
+    - option "Schedule H"
+    - option "Schedule H1"
+    - option "Schedule X"
+    - option "Over the counter"
+    - option "Other"
+  - textbox "Patient, doctor, entry no."
+  - table:
+    - rowgroup:
+      - row "Patient Prescribed by Medicines Status Actions":
+        - columnheader "Patient"
+        - columnheader "Prescribed by"
+        - columnheader "Medicines"
+        - columnheader "Status"
+        - columnheader "Actions"
+    - rowgroup:
+      - row "QA Interruption Patient 6999996433 RX-000003 QA Recovery Doctor 30 Sept 26 1 × QA Unlisted Medicine · QA dosage copied from slip To dispense Schedule H Dispense Correct RX-000003 Cancel RX-000003 Delete RX-000003":
+        - cell "QA Interruption Patient 6999996433 RX-000003":
+          - paragraph: QA Interruption Patient
+          - paragraph:
+            - text: "6999996433"
+          - generic: RX-000003
+        - cell "QA Recovery Doctor 30 Sept 26":
+          - paragraph: QA Recovery Doctor
+          - paragraph:
+            - text: 30 Sept 26
+        - cell "1 × QA Unlisted Medicine · QA dosage copied from slip":
+          - list:
+            - text: 1 × QA Unlisted Medicine
+            - generic: · QA dosage copied from slip
+        - cell "To dispense Schedule H":
+          - text: To dispense
+          - generic: Schedule H
+        - cell "Dispense Correct RX-000003 Cancel RX-000003 Delete RX-000003":
+          - button "Dispense":
+            - text: Dispense
+          - button "Correct RX-000003" [disabled]:
+          - button "Cancel RX-000003":
+          - button "Delete RX-000003":
+  - dialog "Correct prescription entry":
+    - heading "Correct RX-000003" [level=2]
+    - paragraph: Corrections are kept in the audit trail alongside what the entry said before.
+    - button "Close":
+    - paragraph: This entry stays here while you use other screens or unlock the counter. Record or cancel it before refreshing, closing this tab or signing out.
+    - heading "Prescribing doctor" [level=3]
+    - generic: Doctor's name *
+    - textbox "Doctor's name *":
+      - /placeholder: E.g., Dr A. Sharma
+      - text: QA Recovery Doctor
+    - generic: Registration no.
+    - textbox "Registration no. What an inspection checks first":
+      - /placeholder: E.g., MCI-45231
+    - generic: What an inspection checks first
+    - generic: Clinic / hospital
+    - textbox "Clinic / hospital":
+      - /placeholder: E.g., City Clinic
+    - heading "Patient" [level=3]
+    - generic: Patient's name *
+    - textbox "Patient's name *":
+      - /placeholder: E.g., Ramesh Kumar
+      - text: QA Interruption Patient
+    - generic: Mobile
+    - textbox "Mobile":
+      - /placeholder: 10-digit
+      - text: <redacted>
+    - generic: Age
+    - textbox "Age Or “6 months”":
+      - /placeholder: E.g., 42
+    - generic: Or “6 months”
+    - generic: Gender
+    - combobox "Gender":
+      - option "—" [selected]
+      - option "Male"
+      - option "Female"
+      - option "Other"
+    - generic: Address
+    - textbox "Address Required in the register for Schedule H1 and X":
+      - /placeholder: House / street, area, city
+      - text: QA Test Address
+    - generic: Required in the register for Schedule H1 and X
+    - heading "The prescription" [level=3]
+    - generic: Dated *
+    - textbox "Dated * The date written on the slip": 2026-09-30
+    - generic: The date written on the slip
+    - generic: Repeats allowed
+    - spinbutton "Repeats allowed Times it may be dispensed again": "0"
+    - generic: Times it may be dispensed again
+    - generic: Schedule
+    - combobox "Schedule":
+      - option "Schedule H" [selected]
+      - option "Schedule H1"
+      - option "Schedule X"
+      - option "Over the counter"
+      - option "Other"
+    - paragraph: Prescription-only. The register must be kept.
+    - heading "Medicines dispensed" [level=3]
+    - textbox "Search your medicines…"
+    - textbox "Medicine 1":
+      - /placeholder: Medicine name
+      - text: QA Unlisted Medicine
+    - button "Remove medicine 1":
+    - textbox "Strength for medicine 1":
+      - /placeholder: 500 mg
+    - spinbutton "Quantity for medicine 1": "2"
+    - textbox "Unit for medicine 1":
+      - /placeholder: strip
+      - text: strip
+    - textbox "Batch number for medicine 1":
+      - /placeholder: Batch no.
+    - textbox "Dosage for medicine 1":
+      - /placeholder: Dosage — 1-0-1 for 5 days
+      - text: QA dosage copied from slip
+    - textbox "Substituted brand for medicine 1":
+      - /placeholder: Substituted for (brand on slip)
+    - button "Add another medicine":
+      - text: Add another medicine
+    - heading "Notes" [level=3]
+    - generic: Anything to remember (optional)
+    - textbox "Anything to remember (optional)":
+      - /placeholder: Allergies, counselling given, follow-up date…
+      - text: QA correction survives navigation and idle lock
+    - button "Cancel"
+    - button "Save Correction":
+      - text: Save Correction
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

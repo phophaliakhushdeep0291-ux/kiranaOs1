@@ -72,11 +72,28 @@ export function SubscriptionStatusBanner() {
 
   const isDanger = snapshot.isExpired || snapshot.isPaymentFailed;
   const Icon = snapshot.cloudSyncAllowed ? ShieldCheck : snapshot.isPaymentFailed ? CreditCard : CloudOff;
-  const plainMessage = snapshot.graceActive
-    ? "Billing is available. New bills stay safe on this device and cloud backup will resume after renewal."
-    : snapshot.localOnlyAfterExpiry
-      ? "Your saved records are available on this device. Renew to resume cloud backup."
-      : snapshot.message;
+  // A lapsed plan leads with the fact. The desktop strip used to open with
+  // "Your saved records are available on this device" — true, reassuring, and
+  // silent on the one thing the owner needed to learn, that the plan had run out.
+  // The phone's short form already said "Subscription expired"; the wide form
+  // now says it too, and says what still works in the same breath.
+  const plainMessage = snapshot.isPaymentFailed
+    ? t("chrome.subscription.paymentFailedLong")
+    : snapshot.isExpired
+      ? t("chrome.subscription.expiredLong")
+      : snapshot.graceActive
+        // Not "cloud backup will resume after renewal": it never stopped. The
+        // server honours the grace window and accepts every push until it ends
+        // (isSubscriptionActive), so a grace-period queue drains as normal. What
+        // grace threatens is the future, and that is what this says.
+        ? t("chrome.subscription.graceLong")
+        : snapshot.localOnlyAfterExpiry
+          ? "Your saved records are available on this device. Renew to resume cloud backup."
+          : snapshot.message;
+  // Once the plan has run out, the strip's link is the way to pay, and says so.
+  // "Owner details" was the only door out of this strip and gave no hint that
+  // renewing lay behind it.
+  const needsRenewal = snapshot.isExpired || snapshot.isPaymentFailed || snapshot.graceActive;
   /**
    * The same standing not-quite-a-problem, told in a phone's worth of words.
    *
@@ -105,11 +122,18 @@ export function SubscriptionStatusBanner() {
           <span className="min-w-0 flex-1 leading-snug sm:hidden">{shortMessage}</span>
           <span className="hidden min-w-0 flex-1 sm:inline">{plainMessage}</span>
         </div>
-        <Link href="/subscription" className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 font-black text-current hover:bg-black/5">
-          <span className="hidden sm:inline">{t("chrome.subscription.ownerDetails")}</span>
-          <span className="sm:hidden">{t("chrome.subscription.details")}</span>
-          <ChevronRight size={14} aria-hidden="true" />
-        </Link>
+        {needsRenewal ? (
+          <Link href="/subscription" className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-current/30 bg-white/70 px-3 font-black text-current hover:bg-white">
+            <CreditCard size={14} aria-hidden="true" />
+            {t("chrome.subscription.renew")}
+          </Link>
+        ) : (
+          <Link href="/subscription" className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 font-black text-current hover:bg-black/5">
+            <span className="hidden sm:inline">{t("chrome.subscription.ownerDetails")}</span>
+            <span className="sm:hidden">{t("chrome.subscription.details")}</span>
+            <ChevronRight size={14} aria-hidden="true" />
+          </Link>
+        )}
       </div>
     </div>
   );
