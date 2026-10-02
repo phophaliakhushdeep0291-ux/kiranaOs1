@@ -1,0 +1,396 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- complementary:
+  - button "Resize sidebar, 260 pixels. Use left and right arrow keys."
+  - link "Artha Built for busy Indian stores":
+    - /url: /dashboard
+    - generic: Artha
+    - generic: Built for busy Indian stores
+  - button "Collapse sidebar":
+  - navigation "Main navigation":
+    - link "Dashboard":
+      - /url: /dashboard
+      - generic: Dashboard
+    - link "Billing F2":
+      - /url: /billing
+      - generic: Billing
+      - generic: F2
+    - link "Inventory":
+      - /url: /inventory
+      - generic: Inventory
+    - button "Collapse Inventory menu" [expanded]:
+    - link "Products":
+      - /url: /products
+      - generic: Products
+    - link "Categories":
+      - /url: /categories
+      - generic: Categories
+    - link "Stock In":
+      - /url: /inventory/stock-in
+      - generic: Stock In
+    - link "Stock Out":
+      - /url: /inventory/stock-out
+      - generic: Stock Out
+    - link "Adjustments":
+      - /url: /inventory/adjustments
+      - generic: Adjustments
+    - link "Stock Transfers":
+      - /url: /inventory/stock-transfers
+      - generic: Stock Transfers
+    - link "Stock Counts":
+      - /url: /inventory/stock-counts
+      - generic: Stock Counts
+    - link "Batch & Expiry":
+      - /url: /inventory/batches
+      - generic: Batch & Expiry
+    - link "Customers / Udhar":
+      - /url: /customers
+      - generic: Customers / Udhar
+    - link "Purchases":
+      - /url: /purchase-bills
+      - generic: Purchases
+    - button "Sales":
+      - generic: Sales
+    - link "Billing History":
+      - /url: /bills
+      - generic: Billing History
+    - link "Orders Received":
+      - /url: /orders-received
+      - generic: Orders Received
+    - link "Sales Overview":
+      - /url: /sales-overview
+      - generic: Sales Overview
+    - link "Returns":
+      - /url: /returns
+      - generic: Returns
+    - link "Reports":
+      - /url: /reports
+      - generic: Reports
+    - link "Cash & Payments":
+      - /url: /money-statement
+      - generic: Cash & Payments
+    - link "Accounting":
+      - /url: /accounting
+      - generic: Accounting
+    - button "Business Tools":
+      - generic: Business Tools
+    - link "Activity & Insights":
+      - /url: /activity-insights
+      - generic: Activity & Insights
+    - link "Offers & Discounts":
+      - /url: /offers
+      - generic: Offers & Discounts
+    - link "Loyalty":
+      - /url: /loyalty
+      - generic: Loyalty
+    - link "Gift Cards":
+      - /url: /gift-cards
+      - generic: Gift Cards
+    - link "Financial Assurance":
+      - /url: /assurance
+      - generic: Financial Assurance
+    - link "Expenses":
+      - /url: /expenses
+      - generic: Expenses
+    - link "Settings":
+      - /url: /settings
+      - generic: Settings
+  - button "QF QA Full Shop Day QA Full Shop Day - Main · Jodhpur":
+    - generic: QF
+    - generic: QA Full Shop Day
+    - generic: QA Full Shop Day - Main · Jodhpur
+- banner:
+  - button "Toggle sidebar":
+  - heading "Reports & Analytics" [level=1]
+  - button "QA Full Shop Day - Main MAIN · Primary":
+    - generic: QA Full Shop Day - Main
+    - generic: MAIN · Primary
+  - link "Open sync alerts":
+    - /url: /sync-status
+  - button "QF":
+    - generic: QF
+- main:
+  - status: Reports & Analytics page loaded
+  - heading "Business overview" [level=2]
+  - paragraph: Sales, collections, profit and stock performance in one clear view
+  - generic: Synced · Local reports ready
+  - button "01 Jan 2026 - 02 Oct 2026" [active]:
+    - text: 01 Jan 2026 - 02 Oct 2026
+  - button "Filters":
+    - text: Filters
+  - button "Export":
+    - text: Export
+  - button "Refresh reports":
+  - paragraph: Reports for your shop type
+  - paragraph: 🛒 Kirana / General Store
+  - paragraph: "Read the fast movers against stock cover: a shelf that empties mid-week costs more than the stock it saved."
+  - link "Batch and expiry":
+    - /url: /inventory/batches
+    - text: Batch and expiry
+  - link "Change shop type":
+    - /url: /settings/store-profile
+  - article:
+    - paragraph: Total Sales
+    - paragraph: ₹798.50
+    - text: 100%
+    - generic: vs last period
+  - article:
+    - paragraph: Cash Collection
+    - paragraph: ₹299.75
+    - text: 100%
+    - generic: vs last period
+  - article:
+    - paragraph: UPI Collection
+    - paragraph: ₹250.50
+    - text: 100%
+    - generic: vs last period
+  - article:
+    - paragraph: Bank Collection
+    - paragraph: ₹0
+    - text: 0%
+    - generic: vs last period
+  - article:
+    - paragraph: Profit (Est.)
+    - paragraph: ₹318
+    - text: 100%
+    - generic: vs last period
+  - article:
+    - paragraph: Outstanding Udhar
+    - paragraph: ₹248.25
+    - text: 100%
+    - generic: vs last period
+  - article:
+    - paragraph: Expense Total
+    - paragraph: ₹50.50
+    - text: 100%
+    - generic: vs last period
+  - article:
+    - paragraph: Net Profit
+    - paragraph: ₹267.50
+    - text: 100%
+    - generic: vs last period
+  - article:
+    - heading "Sales Trend" [level=2]
+    - button "Custom":
+      - text: Custom
+    - generic: Total Sales
+    - strong: ₹798.50
+    - text: 100%
+    - emphasis: vs last period
+  - article:
+    - heading "Category Performance" [level=2]
+    - button "Custom":
+      - text: Custom
+  - article:
+    - heading "Payment Mode Breakdown" [level=2]
+    - button "Custom":
+      - text: Custom
+    - strong: ₹798.50
+    - text: Total Sales
+    - generic: Cash
+    - text: ₹299.75
+    - emphasis: (37.5%)
+    - generic: UPI
+    - text: ₹200
+    - emphasis: (25.0%)
+    - generic: Udhar
+    - text: ₹298.75
+    - emphasis: (37.4%)
+  - article:
+    - heading "Top Products" [level=2]
+    - link "View all":
+      - /url: /products
+    - region "Top Products":
+      - table:
+        - rowgroup:
+          - row "Product Category Qty Sold Sales (₹) Margin (%)":
+            - columnheader "Product"
+            - columnheader "Category"
+            - columnheader "Qty Sold"
+            - columnheader "Sales (₹)"
+            - columnheader "Margin (%)"
+        - rowgroup:
+          - row "QA Day Tea 250g General 4 ₹798 40.0%":
+            - cell "QA Day Tea 250g"
+            - cell "General"
+            - cell "4"
+            - cell "₹798"
+            - cell "40.0%"
+          - row "Total — ₹798":
+            - cell "Total"
+            - cell
+            - cell "—"
+            - cell "₹798"
+            - cell
+  - article:
+    - heading "Top Customers (Udhar)" [level=2]
+    - link "View all":
+      - /url: /customers
+    - region "Top Customers (Udhar)":
+      - table:
+        - rowgroup:
+          - row "Customer Total Due (₹) Last Purchase Risk":
+            - columnheader "Customer"
+            - columnheader "Total Due (₹)"
+            - columnheader "Last Purchase"
+            - columnheader "Risk"
+        - rowgroup:
+          - row "Walk-in ₹0 02 Oct 2026 Low":
+            - cell "Walk-in"
+            - cell "₹0"
+            - cell "02 Oct 2026"
+            - cell "Low":
+              - generic: Low
+          - row "QA Day Customer ₹248.25 01 Oct 2026 Low":
+            - cell "QA Day Customer"
+            - cell "₹248.25"
+            - cell "01 Oct 2026"
+            - cell "Low":
+              - generic: Low
+          - row "Total Outstanding ₹248.25":
+            - cell "Total Outstanding"
+            - cell "₹248.25"
+            - cell
+            - cell
+  - article:
+    - heading "Sales by Staff" [level=2]
+    - link "Manage staff":
+      - /url: /staff
+    - region "Sales by Staff":
+      - table:
+        - rowgroup:
+          - row "Staff Bills Sales (₹) Avg bill (₹)":
+            - columnheader "Staff"
+            - columnheader "Bills"
+            - columnheader "Sales (₹)"
+            - columnheader "Avg bill (₹)"
+        - rowgroup:
+          - row "Owner / main counter 8 ₹798.50 ₹99.81":
+            - cell "Owner / main counter"
+            - cell "8"
+            - cell "₹798.50"
+            - cell "₹99.81"
+          - row "Total 8 ₹798.50":
+            - cell "Total"
+            - cell "8"
+            - cell "₹798.50"
+            - cell
+  - article:
+    - heading "Discounts Given" [level=2]
+    - link "View bills":
+      - /url: /bills
+    - generic: No records in this period
+  - article:
+    - heading "Daily Closing Summary" [level=2]
+    - link "View all":
+      - /url: /daily-closing
+    - region "Daily Closing Summary":
+      - table:
+        - rowgroup:
+          - row "Date Sales (₹) Collection (₹) Expense (₹) Net Profit (₹)":
+            - columnheader "Date"
+            - columnheader "Sales (₹)"
+            - columnheader "Collection (₹)"
+            - columnheader "Expense (₹)"
+            - columnheader "Net Profit (₹)"
+        - rowgroup:
+          - row "02 Oct 2026 ₹0 ₹0 ₹0 ₹0":
+            - cell "02 Oct 2026"
+            - cell "₹0"
+            - cell "₹0"
+            - cell "₹0"
+            - cell "₹0"
+          - row "01 Oct 2026 ₹798.50 ₹550.25 ₹50.50 ₹267.50":
+            - cell "01 Oct 2026"
+            - cell "₹798.50"
+            - cell "₹550.25"
+            - cell "₹50.50"
+            - cell "₹267.50"
+          - row "30 Sept 2026 ₹0 ₹0 ₹0 ₹0":
+            - cell "30 Sept 2026"
+            - cell "₹0"
+            - cell "₹0"
+            - cell "₹0"
+            - cell "₹0"
+          - row "29 Sept 2026 ₹0 ₹0 ₹0 ₹0":
+            - cell "29 Sept 2026"
+            - cell "₹0"
+            - cell "₹0"
+            - cell "₹0"
+            - cell "₹0"
+          - row "28 Sept 2026 ₹0 ₹0 ₹0 ₹0":
+            - cell "28 Sept 2026"
+            - cell "₹0"
+            - cell "₹0"
+            - cell "₹0"
+            - cell "₹0"
+          - row "27 Sept 2026 ₹0 ₹0 ₹0 ₹0":
+            - cell "27 Sept 2026"
+            - cell "₹0"
+            - cell "₹0"
+            - cell "₹0"
+            - cell "₹0"
+          - row "26 Sept 2026 ₹0 ₹0 ₹0 ₹0":
+            - cell "26 Sept 2026"
+            - cell "₹0"
+            - cell "₹0"
+            - cell "₹0"
+            - cell "₹0"
+  - article:
+    - heading "Sales by Hour" [level=2]
+    - generic: Peak 2pm • ₹998 (4 bills)
+    - button "Custom":
+      - text: Custom
+  - article:
+    - heading "Busy Hours Insight" [level=2]
+    - paragraph:
+      - strong: 2pm
+      - text: is your busiest hour — ₹998 across 4 bills in this period.
+    - paragraph: Counted from every non-cancelled bill in the selected period using its own local time. Refunds are deducted from the hour they were recorded in, so these hours add up to Total Sales; the bill count stays the number of sales you rang up.
+  - article:
+    - heading "Stock Movement Snapshot" [level=2]
+    - button "Custom":
+      - text: Custom
+    - paragraph: Total Stock In
+    - paragraph: ₹600
+    - paragraph: Value received
+    - paragraph: Total Stock Out
+    - paragraph: ₹1,080
+    - paragraph: Value issued
+    - paragraph: New Products Added
+    - paragraph: "1"
+    - paragraph: In selected period
+    - paragraph: Low Stock Items
+    - paragraph: "0"
+    - paragraph: Require attention
+  - article:
+    - heading "Stock Movement Trend" [level=2]
+    - generic: (Value)
+    - button "Custom":
+      - text: Custom
+    - generic: → Stock In
+    - generic: → Stock Out
+  - article:
+    - heading "Report Insights" [level=2]
+    - paragraph: Sales increased by 100% compared to the previous period.
+    - paragraph: Cash currently leads the payment mode mix.
+    - paragraph: General contributes 100% of total sales.
+    - paragraph: Review product margins and stock depth in this category.
+    - paragraph: 1 customers have outstanding dues.
+    - paragraph: Follow up from Customers / Udhar to improve cash flow.
+    - link "View Detailed Insights →":
+      - /url: /daily-closing
+      - text: View Detailed Insights
+      - generic: →
+  - button "Financial controls Accounting integrity and bank reconciliation for owners and finance review Open controls":
+    - generic: Financial controls
+    - generic: Accounting integrity and bank reconciliation for owners and finance review
+    - text: Open controls
+- button "Voice assistant":
+  - generic: Voice assistant
+- button "Report a problem":
+  - generic: Report a problem
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list
+- generic: "17"
