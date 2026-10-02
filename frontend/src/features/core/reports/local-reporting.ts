@@ -867,7 +867,22 @@ export async function buildLocalReportSnapshot(range: DateRange, drawer?: Drawer
 }
 
 export async function buildDailyClosingReport(date: string, drawer?: DrawerAdjustments): Promise<DailyClosingReport> {
-  const snapshot = await buildLocalReportSnapshot({ from: date, to: date }, drawer);
+  // Closing needs one trading day. Building the overview here also calculated
+  // four unused comparison windows, trends, staff sales and discount charts.
+  const rows = await loadLocalFinanceRows();
+  const financials = aggregate(rows, { from: date, to: date }, drawer);
+  const counters = calculateSyncQueueCounts(rows.outbox, rows.conflicts);
+  const snapshot = {
+    selected: toMetricWindow(financials),
+    paymentBreakdown: toPaymentBreakdown(financials),
+    topProducts: topProductsFromSnapshot(financials, rows.products),
+    lowStock: calculateLowStock(rows.products),
+    pendingSyncCount: counters.pending,
+    failedSyncCount: counters.failed,
+    conflictCount: counters.conflict,
+    hasUnsyncedOperations: counters.totalBlocking > 0,
+    generatedAt: financials.generatedAt,
+  };
   return {
     date,
     rentalTenders: drawer?.rentalTenders,

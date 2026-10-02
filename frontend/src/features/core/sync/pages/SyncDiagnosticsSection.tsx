@@ -29,7 +29,7 @@ function Metric({ label, value, danger }: { label: string; value: number; danger
   );
 }
 
-function IssueRow({ item, t }: { item: SyncFailureExplanation; t: Translate }) {
+function IssueRow({ item, t, localQueueClear }: { item: SyncFailureExplanation; t: Translate; localQueueClear: boolean }) {
   return (
     <li className="rounded-lg border bg-background p-3">
       <div className="flex items-start justify-between gap-3">
@@ -41,12 +41,12 @@ function IssueRow({ item, t }: { item: SyncFailureExplanation; t: Translate }) {
           {item.retryable ? t("settings.sync.autoRetry") : t("settings.sync.needsAttention")}
         </Badge>
       </div>
-      <p className="mt-1 text-xs text-muted-foreground">{item.action}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{localQueueClear ? t("settings.sync.reviewServerRecord") : item.action}</p>
     </li>
   );
 }
 
-export function SyncDiagnosticsSection({ refreshKey = "" }: { refreshKey?: string }) {
+export function SyncDiagnosticsSection({ refreshKey = "", localQueueClear = false }: { refreshKey?: string; localQueueClear?: boolean }) {
   const { t, language } = useAppLanguage();
   const [data, setData] = useState<SyncDiagnostics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,6 +107,12 @@ export function SyncDiagnosticsSection({ refreshKey = "" }: { refreshKey?: strin
               <span className="ml-auto text-xs text-muted-foreground">{t("settings.sync.lastSuccessful", { when: timeAgo(data.lastSuccessfulSyncAt, t, language) })}</span>
             </div>
 
+            {localQueueClear && data.counts.needsAttention > 0 ? (
+              <p className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                {t("settings.sync.serverRecordsRemain")}
+              </p>
+            ) : null}
+
             {pullFailure ? (
               <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -141,7 +147,7 @@ export function SyncDiagnosticsSection({ refreshKey = "" }: { refreshKey?: strin
             ) : issues.length === 0 ? null : (
               <ul className="space-y-2">
                 {issues.map((item, index) => (
-                  <IssueRow key={item.eventId ?? item.id ?? `${item.code}-${index}`} item={item} t={t} />
+                  <IssueRow key={item.eventId ?? item.id ?? `${item.code}-${index}`} item={item} t={t} localQueueClear={localQueueClear} />
                 ))}
               </ul>
             )}
