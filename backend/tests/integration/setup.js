@@ -9,6 +9,7 @@ import {
   shouldGracefullySkipPrismaRuntime,
 } from "../../scripts/test-db-utils.js";
 import { formatDateInTimeZone } from "../../src/utils/dates.js";
+import { retryDatabaseReset } from "./reset-retry.js";
 // Imports nothing itself, so this cannot pull src/db.js in ahead of the
 // buildTestEnv() call below. See plan-catalogue-memo.js.
 import { forgetVerifiedPlanCatalogue } from "../../src/modules/subscription/plan-catalogue-memo.js";
@@ -249,7 +250,7 @@ export async function resetDatabase(db) {
     // The assurance module is optional for a reset; never block cleanup on it.
   }
 
-  await db.$transaction([
+  await retryDatabaseReset(() => db.$transaction([
     // Assurance tables first: they reference findings/runs which reference shops.
     db.auditCaseFinding.deleteMany(),
     db.auditCase.deleteMany(),
@@ -347,7 +348,7 @@ export async function resetDatabase(db) {
     // tombstones only in the test reset, after every sync-visible root is gone.
     db.changeLog.deleteMany(),
     db.shop.deleteMany(),
-  ]);
+  ]));
 
   // Plan rows have just been deleted, and subscription.service.js only checks the
   // catalogue until it has seen it once per process — otherwise every gated read

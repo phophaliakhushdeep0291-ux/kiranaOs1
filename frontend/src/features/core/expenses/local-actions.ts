@@ -1,6 +1,6 @@
 import { buildOutboxOperation } from "@/features/core/sync/outbox";
-import { offlineDB } from "@/lib/offline/db";
-import { getOfflineScope, nowIso } from "@/lib/offline/context";
+import { assertCurrentOfflineScope, offlineDB } from "@/lib/offline/db";
+import { getOfflineScope, nowIso, type OfflineScope } from "@/lib/offline/context";
 import { createLocalId, emitLocalDataChanged } from "@/lib/offline/instant-cache";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
 import type { Expense, ExpenseInput } from "@/types/api";
@@ -162,6 +162,12 @@ export interface ServerExpenseCoverage {
   from?: string;
 }
 
+// Server cache writes use version 1, so version alone cannot distinguish an
+// overlapping refresh. Retain the captured row state for both pruning and writes.
+function cachedExpenseRevision(row: object): string {
+  return JSON.stringify(row);
+}
+
 /**
  * Fetch the branch's server list and make this device's cache agree with it.
  *
@@ -173,22 +179,26 @@ export async function refreshServerExpenses(
   fetchRows: () => Promise<Expense[]>,
   coverage: ServerExpenseCoverage,
 ): Promise<Expense[]> {
+  const scope = getOfflineScope();
   // Only rows already synced before the request can be judged by its answer.
   // A create whose sync lands mid-request is legitimately missing from it.
   const syncedBefore = new Map((await offlineDB.getAll<LocalExpense>("expenses").catch(() => []))
     .filter((row) => row.sync_status === "synced")
-    .map((row) => [row.id, row.version]));
+    .map((row) => [row.id, cachedExpenseRevision(row)]));
+  assertCurrentOfflineScope(scope);
   const rows = await fetchRows();
-  await cacheServerExpenses(rows, coverage, syncedBefore);
+  assertCurrentOfflineScope(scope);
+  await cacheServerExpenses(rows, coverage, syncedBefore, scope);
+  assertCurrentOfflineScope(scope);
   return rows;
 }
 
 async function cacheServerExpenses(
   rows: Expense[],
   coverage: ServerExpenseCoverage,
-  syncedBefore: ReadonlyMap<string, number>,
+  syncedBefore: ReadonlyMap<string, string>,
+  scope: OfflineScope,
 ): Promise<void> {
-  const scope = getOfflineScope();
   const now = nowIso();
   const local = await offlineDB.getAll<LocalExpense>("expenses").catch(() => []);
   const pendingIds = new Set(local
@@ -203,7 +213,7 @@ async function cacheServerExpenses(
     const row = candidate as unknown as LocalExpense;
     return Boolean(coverage.locationId)
       && row.locationId === coverage.locationId
-      && syncedBefore.get(row.id) === row.version
+      && syncedBefore.get(row.id) === cachedExpenseRevision(candidate)
       && typeof row.server_id === "string"
       && !serverIds.has(row.id) && !serverIds.has(row.server_id)
       && !row.deletedAt && !row.deleted_at && !row.merged_into_id && !row.mergedIntoId
@@ -225,7 +235,12 @@ async function cacheServerExpenses(
       sync_status: "synced" as const,
     }));
   // One transaction: unsynced rows always survive, stale copies go, fresh rows land.
-  await offlineDB.replaceSyncedSnapshot("expenses", safeRows, scope, isStaleServerCopy);
+  await offlineDB.replaceSyncedSnapshot("expenses", safeRows, scope, isStaleServerCopy, {
+    preserveUnsynced: true,
+    // A local edit can finish syncing after this request started. Its current
+    // row is then "synced" too, but the older response still must not replace it.
+    canReplaceExisting: (row) => syncedBefore.get(String(row.id)) === cachedExpenseRevision(row),
+  });
 }
 
 export function mergeExpenseSnapshots(server: Expense[], local: Expense[]): Expense[] {
