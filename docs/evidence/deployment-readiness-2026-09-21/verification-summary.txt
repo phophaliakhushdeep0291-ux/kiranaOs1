@@ -1,0 +1,87 @@
+Verification date: 2026-09-21
+Base commit: 54912196
+Frontend: base + payment UI/net settlement display working-tree changes
+Backend: base unchanged
+Frontend command: npm run prod:check
+Frontend runtime: Node 26.1.0, installed dependencies from frozen pnpm 9.15.9 lockfile
+Frontend final exit code: 0
+Translations: 6185 key(s) compared across 18 module(s)
+Initial JS: 865.0 kB (261.3 kB gzip) across 5 files
+Total JS: 5336.1 kB (1482.5 kB gzip) — product-wide, reported only
+Largest shop offline payload (restaurant): 4475.3 kB (1260.3 kB gzip) across 185 files
+Offline boot coverage: 32 entries and 178 installed assets verified.
+Production app check passed.
+Test Files  391 passed | 1 skipped (392)
+Tests  2927 passed | 1 skipped (2928)
+
+Backend runtime: Node 22.23.2
+Backend command: npm test
+Backend final exit code: 0
+Backend production command: npm run prod:check
+Backend production final exit code: 0
+Backend groups (includes runner and pre/post hooks):
+pretest
+test
+test:isolated-suite
+test:billing
+test:compliance
+test:tally
+test:loyalty
+test:atomic-offers
+test:ai-safety
+test:retail-payment
+test:card-terminal
+test:channel-settlement
+test:flipkart
+test:report-documents
+test:event-bus
+test:event-bus-redis
+test:activity
+test:rentals
+test:prescriptions
+test:serial-units
+test:fitment
+test:size-runs
+test:book-lists
+test:furniture-orders
+test:testers
+test:restaurant
+test:verticals
+test:manufacturing
+test:sync-conflicts
+test:barcode
+test:trade-attributes
+test:batch-mrp
+test:pack-pricing
+test:purchase-lot
+test:near-expiry
+test:schedule-h
+test:restore-drill
+test:devices-signed-in
+test:shop-onboarding
+test:stock-traceability
+test:sync-rejection
+test:sync-feed
+test:source-contracts
+posttest
+test:packaging-db
+test:reports-db
+test:general-ledger-db
+test:accounting-documents
+test:entitlements-db
+
+Full isolated integration final exit code: 0
+Integration files: 44
+{"tests": 405, "pass": 402, "fail": 0, "skipped": 3}
+Skipped PostgreSQL proofs:
+ok 7 - concurrent whole-order returns refund and restore each consignment only once # SKIP PostgreSQL is required to prove concurrent returns
+ok 1 - production concurrency integration tests skipped on SQLite # SKIP SQLite cannot prove production concurrent write behavior; run npm run test:postgres for the PostgreSQL proof.
+    ok 1 - the losing transaction runs again and neither write is lost # SKIP SQLite has one writer, so two open transactions cannot be forced to overlap; PostgreSQL proves this in CI.
+
+Focused reports + sync: 75 passed, 0 failed, 0 skipped.
+Hardware bridge: not rerun; historical 2026-09-17 software result 32/32.
+This is local QA; PostgreSQL/Redis/deployment/hardware certification is not claimed.
+
+Baseline regression: closing dates supplier cash settlements and reversals without restating the original purchase tender.
+Before fix: later payments cannot inflate the initial cash purchase; expected 2000 paise, actual 9000 paise.
+After fix: reports suite 14/14 and sync suite 61/61.

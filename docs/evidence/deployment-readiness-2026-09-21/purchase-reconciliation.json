@@ -1,0 +1,60 @@
+{
+  "checks": "passed",
+  "date": "2026-09-21",
+  "invoice": "QA-PURCHASE-003",
+  "purchase": 30,
+  "paid": 30,
+  "due": 0,
+  "stockBefore": 36,
+  "stockAfter": 39,
+  "netCashPaidToday": 10,
+  "payments": [
+    {
+      "sourceType": "supplier_payment",
+      "amountPaise": 1000,
+      "paymentMode": "cash",
+      "businessDate": "2026-09-21T14:26:22.858Z"
+    },
+    {
+      "sourceType": "supplier_payment",
+      "amountPaise": 2000,
+      "paymentMode": "cash",
+      "businessDate": "2026-09-21T14:26:56.904Z"
+    },
+    {
+      "sourceType": "supplier_payment_reversal",
+      "amountPaise": -2000,
+      "paymentMode": "cash",
+      "businessDate": "2026-09-21T14:29:46.946Z"
+    },
+    {
+      "sourceType": "supplier_payment",
+      "amountPaise": 2000,
+      "paymentMode": "upi",
+      "businessDate": "2026-09-21T14:31:11.551Z"
+    },
+    {
+      "sourceType": "supplier_payment_reversal",
+      "amountPaise": -2000,
+      "paymentMode": "upi",
+      "businessDate": "2026-09-21T14:36:03.988Z"
+    },
+    {
+      "sourceType": "supplier_payment",
+      "amountPaise": 2000,
+      "paymentMode": "upi",
+      "businessDate": "2026-09-21T14:37:27.346Z"
+    }
+  ],
+  "openConflicts": [
+    {
+      "entityType": "stock_ledger",
+      "detectedAt": "2026-09-18T07:21:41.384Z"
+    },
+    {
+      "entityType": "stock_ledger",
+      "detectedAt": "2026-09-18T07:21:41.384Z"
+    }
+  ],
+  "note": "The original cash 20 was reversed with an owner PIN and audit reason, then corrected to UPI. Historical stock conflicts predate this purchase."
+}

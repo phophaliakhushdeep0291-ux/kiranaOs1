@@ -1,0 +1,28 @@
+{
+  "checks": "passed",
+  "creditSale": 40,
+  "collection": 20,
+  "returnToUdhar": 20,
+  "cashRefund": 20,
+  "outstanding": 0,
+  "returnedUnits": 2,
+  "finishedStock": 36,
+  "expectedFinishedStock": 36,
+  "purchases": [
+    {
+      "invoiceNumber": "QA-PURCHASE-001",
+      "billAmount": 50.0,
+      "purchasePaidAmount": 50.0,
+      "purchaseDueAmount": 0.0
+    },
+    {
+      "invoiceNumber": "QA-PURCHASE-002",
+      "billAmount": 20.0,
+      "purchasePaidAmount": 20.0,
+      "purchaseDueAmount": 0.0
+    }
+  ],
+  "historicalRepairRows": 1,
+  "newRepairRows": 0,
+  "note": "Historical repair belongs to the earlier defect reproduction on KOS-2026-000002. Fresh KOS-2026-000003 cycle creates none. QA-PURCHASE-001 settlement is UPI; QA-PURCHASE-002 settlement is cash."
+}

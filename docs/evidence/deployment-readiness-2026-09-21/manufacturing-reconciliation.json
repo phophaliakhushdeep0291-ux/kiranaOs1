@@ -1,0 +1,67 @@
+{
+  "orderStatus": "returned",
+  "shipments": [
+    "DSP-QA-ORDER-SPLIT",
+    "DSP-QA-ORDER-SPLIT-2"
+  ],
+  "bills": [
+    {
+      "type": "normal_sale",
+      "total": 200,
+      "quantities": [
+        10
+      ]
+    },
+    {
+      "type": "normal_sale",
+      "total": 40,
+      "quantities": [
+        2
+      ]
+    },
+    {
+      "type": "sales_return",
+      "total": -200,
+      "quantities": [
+        -10
+      ]
+    },
+    {
+      "type": "sales_return",
+      "total": -40,
+      "quantities": [
+        -2
+      ]
+    }
+  ],
+  "stock": [
+    {
+      "name": "QA Raw Material",
+      "stockBaseQty": 76
+    },
+    {
+      "name": "QA Finished Bags",
+      "stockBaseQty": 24
+    }
+  ],
+  "packs": [
+    {
+      "name": "Bag of 2",
+      "onHandQty": 12
+    }
+  ],
+  "lots": [
+    {
+      "batchNumber": "QA-BATCH-A",
+      "availableBaseQty": 20,
+      "status": "active"
+    },
+    {
+      "batchNumber": "QA-BATCH-B",
+      "availableBaseQty": 4,
+      "status": "active"
+    }
+  ],
+  "netPayments": 0,
+  "checks": "passed"
+}
