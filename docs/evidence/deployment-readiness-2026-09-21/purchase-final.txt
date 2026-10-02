@@ -1,0 +1,158 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Purchases" [level=1]
+  - generic: Release QA kirana · Review sync
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+    - generic: "2"
+- generic: 2 changes need review
+- generic: Your data is safe on this device. Retry, or open Sync Status to review.
+- button "Retry now":
+  - text: Retry now
+- link "View":
+  - /url: /sync-status
+- main:
+  - status: Purchases page loaded
+  - paragraph: After receiving, for your shop type
+  - paragraph: 🛒 Kirana / General Store
+  - button "After receiving, for your shop type":
+  - paragraph: Total Purchase Value
+  - paragraph: ₹100.00
+  - paragraph: 3 purchase bills
+  - paragraph: Unpaid Purchase Dues
+  - paragraph: ₹0.00
+  - paragraph: All bills settled
+  - paragraph: Today's Purchases
+  - paragraph: ₹30.00
+  - paragraph: 1 bill today
+  - paragraph: Stock Added (This Month)
+  - paragraph: ₹100.00
+  - paragraph: first month of data
+  - region "Purchase workflow":
+    - generic: 1. Order
+    - generic: 2. Receive stock
+    - generic: 3. Record bill
+    - generic: 4. Settle due
+    - button "Planning insights":
+      - text: Planning insights
+  - heading "Purchase orders" [level=2]
+  - paragraph: Plan, approve and receive supplier stock without losing the audit trail
+  - text: 0 evidence-backed suggestions
+  - button "Supplier return" [disabled]:
+    - text: Supplier return
+  - button "New order":
+    - text: New order
+  - paragraph: No open purchase orders
+  - paragraph: Use reorder suggestions or add products manually to create one.
+  - heading "Purchase Bills" [level=2]
+  - textbox "Search purchase bills":
+    - /placeholder: Search by bill no., supplier or product…
+  - button "Filters":
+    - text: Filters
+  - button "Columns":
+    - text: Columns
+  - button "Export":
+    - text: Export
+  - button "Add Purchase":
+    - text: Add Purchase
+  - article:
+    - paragraph: QA-PURCHASE-003
+    - paragraph: QA Supply Co
+    - paragraph: 21 Sep 2026 • 3 items
+    - paragraph: ₹30.00
+    - generic: Paid
+    - paragraph: Paid
+    - paragraph: ₹30.00
+    - paragraph: Due
+    - paragraph: ₹0.00
+    - paragraph: Mode
+    - paragraph: Mixed
+    - button "Payments"
+    - button "Edit"
+    - button "Actions for QA-PURCHASE-003":
+  - article:
+    - paragraph: QA-PURCHASE-002
+    - paragraph: QA Supply Co
+    - paragraph: 17 Sep 2026 • 2 items
+    - paragraph: ₹20.00
+    - generic: Paid
+    - paragraph: Paid
+    - paragraph: ₹20.00
+    - paragraph: Due
+    - paragraph: ₹0.00
+    - paragraph: Mode
+    - paragraph: Cash
+    - button "Payments"
+    - button "Edit"
+    - button "Actions for QA-PURCHASE-002":
+  - article:
+    - paragraph: QA-PURCHASE-001
+    - paragraph: QA Supply Co
+    - paragraph: 17 Sep 2026 • 5 items
+    - paragraph: ₹50.00
+    - generic: Paid
+    - paragraph: Paid
+    - paragraph: ₹50.00
+    - paragraph: Due
+    - paragraph: ₹0.00
+    - paragraph: Mode
+    - paragraph: UPI
+    - button "Payments"
+    - button "Edit"
+    - button "Actions for QA-PURCHASE-001":
+  - generic: Showing 1 to 3 of 3 bills
+  - button "‹" [disabled]
+  - button "1"
+  - button "›" [disabled]
+  - text: Rows per page
+  - combobox:
+    - generic: "10"
+  - heading "Top Suppliers" [level=3]
+  - combobox "Top Suppliers":
+    - generic: This Month
+  - generic: "1"
+  - paragraph: QA Supply Co
+  - text: ₹100.00
+  - generic: (100%)
+  - link "View all suppliers":
+    - /url: /suppliers
+  - heading "Recent Purchase Activity" [level=3]
+  - link "View all":
+    - /url: "#purchase-table"
+  - paragraph:
+    - text: QA-PURCHASE-003
+    - generic: from QA Supply Co
+  - paragraph: ₹30.00 • Paid • 21 Sep 2026
+  - paragraph:
+    - text: QA-PURCHASE-002
+    - generic: from QA Supply Co
+  - paragraph: ₹20.00 • Paid • 17 Sep 2026
+  - paragraph:
+    - text: QA-PURCHASE-001
+    - generic: from QA Supply Co
+  - paragraph: ₹50.00 • Paid • 17 Sep 2026
+  - heading "Purchase Due Alerts" [level=3]
+  - button "View all"
+  - paragraph: No supplier dues — all settled. 🎉
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

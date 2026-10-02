@@ -1,0 +1,230 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Cloud Backup" [level=1]
+  - generic: Release QA kirana · Review sync
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+    - generic: "2"
+- main:
+  - status: Cloud Backup page loaded
+  - heading "Sync Status" [level=2]:
+    - text: Sync Status
+  - generic: Backup needs retry or review
+  - generic: Backup needs retry or review
+  - button "Retry failed":
+    - text: Retry failed
+  - button "Force sync":
+    - text: Force sync
+  - generic: Needs attention
+  - generic: Local changes are safe on this device. Retry backup when ready.
+  - generic: review needed x 2
+  - generic: Backup review
+  - generic: Retry / review
+  - generic: QA Finished Bags
+  - generic: This record changed on another device before backup finished. Review it when you are free.
+  - link "Open record":
+    - /url: /inventory
+    - text: Open record
+  - generic: Correction required
+  - button "Ignore"
+  - generic: Backup review
+  - generic: Retry / review
+  - generic: QA Finished Bags
+  - generic: This record changed on another device before backup finished. Review it when you are free.
+  - link "Open record":
+    - /url: /inventory
+    - text: Open record
+  - generic: Correction required
+  - button "Ignore"
+  - generic: Internet
+  - paragraph: Online
+  - paragraph: Internet available.
+  - generic: Backend
+  - paragraph: Online
+  - paragraph: Cloud backup can run.
+  - generic: Last backup
+  - paragraph: less than a minute ago
+  - paragraph: Last successful cloud backup.
+  - generic: Pending
+  - paragraph: "0"
+  - paragraph: 0 changes pending cloud backup.
+  - generic: Retry / review
+  - paragraph: 0 / 2
+  - paragraph: Retry failed backup items. Review only if it remains blocked.
+  - text: Device sync health
+  - generic: Server-confirmed progress for every active terminal in this shop.
+  - generic: 1 current
+  - generic: Fleet healthy
+  - paragraph: Chrome on macOS
+  - paragraph: 2f45e9bf-15b8-4a9f-8f70-c689421f2871
+  - generic: Current
+  - paragraph: Sequence lag
+  - paragraph: "0"
+  - paragraph: Presence
+  - paragraph: Online
+  - generic: Applied less than a minute ago
+  - generic: This device
+  - paragraph: A terminal becomes current only after it applies data locally and acknowledges sequence 131.
+  - generic: Sync diagnostics
+  - generic: Plain-language explanations for anything that could not back up.
+  - button "Refresh sync diagnostics":
+  - generic: "Pending: 0"
+  - generic: "Failed: 0"
+  - generic: "Conflicts: 2"
+  - generic: "Retries: 0"
+  - generic: Last successful sync less than a minute ago
+  - list:
+    - paragraph: "Updating inventory failed because of an error: Server changed an entity that has unsynced local changes (Product \"QA Finished Bags\")."
+    - generic: Needs attention
+    - paragraph: This needs attention — fix the cause, then make the change again.
+    - paragraph: "Updating inventory failed because of an error: Server changed an entity that has unsynced local changes (Product \"QA Finished Bags\")."
+    - generic: Needs attention
+    - paragraph: This needs attention — fix the cause, then make the change again.
+  - generic: Device and cloud settings
+  - generic: Useful for checking which shop device is backing up data.
+  - text: Device ID
+  - generic: 2f45e9bf-15b8-4a9f-8f70-c689421f2871
+  - text: Server URL
+  - button "Edit"
+  - generic: http://127.0.0.1:5317/api
+  - text: Subscription sync
+  - generic: Sync allowed
+  - generic "Show server status details"
+  - generic: Pending operations
+  - generic: No pending changes. Cloud backup queue is clear.
+  - generic: No pending changes. Cloud backup queue is clear.
+  - generic: Failed operations
+  - generic: No failed changes right now.
+  - generic: No failed changes right now.
+  - generic: Backup review
+  - generic: These items are safe locally and need a retry or quick review.
+  - generic: Backup needs attention
+  - generic: QA Finished Bags
+  - generic: stock_ledger - cmu5tdfxm000avg3gfd7t7edz
+  - generic: Retry / review
+  - link "Open":
+    - /url: /inventory
+    - text: Open
+  - generic: Use reversal / correction workflow
+  - paragraph: This record changed on another device before backup finished. Review it when you are free. You can keep billing; local data has not been deleted.
+  - paragraph: Financial and stock history is immutable. Open the record and use its reversal, return, or correction action instead of overwriting either version.
+  - generic: Field
+  - generic: This device
+  - generic: Cloud
+  - generic: product_id
+  - generic: "\"cmu585iic000lkxftodbf2zon\""
+  - generic: type
+  - generic: "\"purchase\""
+  - generic: actor_user_id
+  - generic: "\"cmu585ii7000fkxftfejuzl1t\""
+  - generic: actor_name
+  - generic: "\"QA Owner\""
+  - generic: source_type
+  - generic: "\"manual_purchase\""
+  - generic: source_id
+  - generic: "\"cmu5tdfxm000avg3gfd7t7edz\""
+  - generic: quantityDelta
+  - generic: "5"
+  - generic: quantity_delta
+  - generic: "5"
+  - generic: stockBefore
+  - generic: "29"
+  - generic: stock_before
+  - generic: "29"
+  - generic: stockAfter
+  - generic: "34"
+  - generic: stock_after
+  - generic: "34"
+  - generic: unit
+  - generic: "\"piece\""
+  - generic: enteredUnit
+  - generic: "\"piece\""
+  - generic: entered_unit
+  - generic: "\"piece\""
+  - generic: displayUnit
+  - generic: "\"piece\""
+  - generic: display_unit
+  - generic: "\"piece\""
+  - generic: invoice_number
+  - generic: "\"QA-PURCHASE-001\""
+  - generic: billAmount
+  - generic: "50"
+  - generic: bill_amount
+  - generic: "50"
+  - generic "Show technical details"
+  - generic: Backup needs attention
+  - generic: QA Finished Bags
+  - generic: stock_ledger - cmu5tolsz0019j3rfj3yd8t6v
+  - generic: Retry / review
+  - link "Open":
+    - /url: /inventory
+    - text: Open
+  - generic: Use reversal / correction workflow
+  - paragraph: This record changed on another device before backup finished. Review it when you are free. You can keep billing; local data has not been deleted.
+  - paragraph: Financial and stock history is immutable. Open the record and use its reversal, return, or correction action instead of overwriting either version.
+  - generic: Field
+  - generic: This device
+  - generic: Cloud
+  - generic: product_id
+  - generic: "\"cmu585iic000lkxftodbf2zon\""
+  - generic: type
+  - generic: "\"purchase\""
+  - generic: actor_user_id
+  - generic: "\"cmu585ii7000fkxftfejuzl1t\""
+  - generic: actor_name
+  - generic: "\"QA Owner\""
+  - generic: source_type
+  - generic: "\"manual_purchase\""
+  - generic: source_id
+  - generic: "\"cmu5tolsz0019j3rfj3yd8t6v\""
+  - generic: quantityDelta
+  - generic: "2"
+  - generic: quantity_delta
+  - generic: "2"
+  - generic: stockBefore
+  - generic: "34"
+  - generic: stock_before
+  - generic: "34"
+  - generic: stockAfter
+  - generic: "36"
+  - generic: stock_after
+  - generic: "36"
+  - generic: unit
+  - generic: "\"piece\""
+  - generic: enteredUnit
+  - generic: "\"piece\""
+  - generic: entered_unit
+  - generic: "\"piece\""
+  - generic: displayUnit
+  - generic: "\"piece\""
+  - generic: display_unit
+  - generic: "\"piece\""
+  - generic: invoice_number
+  - generic: "\"QA-PURCHASE-002\""
+  - generic: billAmount
+  - generic: "20"
+  - generic: bill_amount
+  - generic: "20"
+  - generic "Show technical details"
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

@@ -1,0 +1,8 @@
+{
+  "checks": "passed",
+  "bills": 1,
+  "total": 20,
+  "payments": 20,
+  "finishedStock": 29,
+  "expectedFinishedStock": 29
+}

@@ -1,5 +1,7 @@
 # Deployment readiness — 17 September 2026
 
+Historical report. See the [21 September update](DEPLOYMENT_READINESS_2026-09-21.md) for current local checks and the subsequent browser exercise.
+
 ## Candidate
 
 Branch: `work/deployment-manufacturing-readiness`, based on refreshed `origin/main` at `f6ffc9da` (PR #341). The offline/startup readiness changes from `fd347a3e` and `db10c66e` are now in main and were included in local verification. This candidate adds the manufacturing corrections below. Production deployment is not part of this local review.
