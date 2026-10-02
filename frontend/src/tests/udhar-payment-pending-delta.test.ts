@@ -117,6 +117,8 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 
 import { AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY } from "@/features/core/ledger/authoritative-balances";
 import { recordPaymentLocalFirst } from "@/features/core/payments/local-actions";
+import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 
 /** The bill was raised, and synced, before any of this. */
 const BILL_AT = "2026-08-20T10:00:00.000Z";
@@ -201,6 +203,8 @@ function seedShopThatOwes200() {
     },
   });
 }
+
+withTargetedReads(offlineDB);
 
 describe("udhar payment with an unsynced earlier payment", () => {
   beforeEach(() => {

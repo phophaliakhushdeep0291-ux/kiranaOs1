@@ -35,6 +35,8 @@ import {
   computeBillInputTotal,
   editFinalizedBillLocalFirst,
 } from "@/features/core/bills/edit-actions";
+import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 
 function activeBill(overrides: Record<string, unknown> = {}) {
   return {
@@ -65,6 +67,8 @@ function replacement(overrides: Partial<BillInput> = {}): BillInput {
     ...overrides,
   };
 }
+
+withTargetedReads(offlineDB);
 
 describe("edit after finalize (void + recreate) orchestration", () => {
   beforeEach(() => {

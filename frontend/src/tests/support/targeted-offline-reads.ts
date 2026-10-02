@@ -1,6 +1,9 @@
 type ReadableMock = { getAll: (table: string) => Promise<unknown[]> };
 type Row = Record<string, unknown>;
 
+// getMany reads by primary key, which is not `id` for every table (lib/offline/db.ts).
+const PRIMARY_KEY: Record<string, string> = { id_mappings: "local_id", settings: "key", sync_outbox: "clientEventId" };
+
 /**
  * Give a hand-written `offlineDB` mock the by-id and by-index reads the real
  * facade has (`getMany`, `getWhere`), answered from the mock's own `getAll`.
@@ -16,7 +19,8 @@ export function withTargetedReads<T extends object>(db: T): T {
     new Set([...values].filter((value): value is string => typeof value === "string" && value.length > 0));
   mock.getMany = async (table: string, ids: Iterable<string | null | undefined>) => {
     const keys = keySet(ids);
-    return keys.size ? (await rows(table)).filter((row) => keys.has(row.id as string)) : [];
+    const key = PRIMARY_KEY[table] ?? "id";
+    return keys.size ? (await rows(table)).filter((row) => keys.has(row[key] as string)) : [];
   };
   mock.getWhere = async (table: string, field: string, values: Iterable<string | null | undefined>) => {
     const keys = keySet(values);

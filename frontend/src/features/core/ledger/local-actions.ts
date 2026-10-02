@@ -5,7 +5,7 @@ import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/off
 import { buildOutboxOperation } from "@/features/core/sync/outbox";
 import { ownerPinRequiredActionSchema } from "@/lib/validation";
 import type { Customer } from "@/types/api";
-import { calculateLedgerBalance, dedupeLedgerEntries, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
+import { calculateLedgerBalance, dedupeLedgerEntries, isManualAdjustmentEntry, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 import { buildAuditLogOutboxInput, buildAuditLogRow } from "@/features/core/audit-logs/local-actions";
 import { withCustomerFinancialLock } from "@/features/core/ledger/customer-financial-lock";
 import { authoritativeOutstandingWithPendingLedger, loadCachedAuthoritativeSummary } from "@/features/core/ledger/authoritative-balances";
@@ -52,25 +52,70 @@ function expandIdsWithMappings(ids: Set<string>, mappings: Array<Record<string, 
   return expanded;
 }
 
+/**
+ * expandIdsWithMappings over every mapping the ids can reach, found through
+ * the id_mappings key (local_id) and server_id index instead of reading the
+ * whole table, which gains a row for every record the device ever synced.
+ * Mappings link ids in both directions, so following them from the ids
+ * outwards reaches exactly the set the full scan reaches.
+ */
+async function expandIdsThroughMappingIndexes(ids: Set<string>): Promise<Set<string>> {
+  const expanded = new Set(ids);
+  let frontier = [...ids];
+  while (frontier.length > 0) {
+    const [byLocalId, byServerId] = await Promise.all([
+      offlineDB.getMany<Record<string, unknown>>("id_mappings", frontier),
+      offlineDB.getWhere<Record<string, unknown>>("id_mappings", "server_id", frontier),
+    ]).catch(() => [[], []] as Array<Record<string, unknown>>[]);
+    const reached = expandIdsWithMappings(expanded, [...byLocalId, ...byServerId]);
+    frontier = [...reached].filter((id) => !expanded.has(id));
+    for (const id of frontier) expanded.add(id);
+  }
+  return expanded;
+}
+
+/** The stored customer any of whose ids is linked to `customerId`, first in id order as before. */
+async function findLinkedCustomer(
+  customers: Array<Customer & Record<string, unknown>>,
+  customerId: string,
+): Promise<(Customer & Record<string, unknown>) | undefined> {
+  // "customerId is among the ids linked to this customer" is the same test as
+  // "this customer has an id linked to customerId": links run both ways.
+  const linked = await expandIdsThroughMappingIndexes(new Set([customerId]));
+  return customers.find((row) => [...customerIdentitySet(row)].some((id) => linked.has(id)));
+}
+
 async function resolveCustomerIdentitySet(customerId: string): Promise<Set<string>> {
-  const [customers, mappings] = await Promise.all([
-    offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []),
-    offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []),
-  ]);
-  const customer = customers.find((row) => {
-    const ids = expandIdsWithMappings(customerIdentitySet(row), mappings);
-    return ids.has(customerId);
-  });
-  return new Set([customerId, ...expandIdsWithMappings(customerIdentitySet(customer), mappings)]);
+  const customers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []);
+  const customer = await findLinkedCustomer(customers, customerId);
+  return new Set([customerId, ...await expandIdsThroughMappingIndexes(customerIdentitySet(customer))]);
 }
 
 export async function readCustomerLedgerEntries(customerId: string): Promise<CustomerLedgerEntry[]> {
   const customerIds = await resolveCustomerIdentitySet(customerId);
-  const rows = await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []);
-  return dedupeLedgerEntries(rows).filter((row) => {
+  const belongs = (row: CustomerLedgerEntry) => {
     const id = row.customerId ?? row.customer_id;
     return typeof id === "string" && customerIds.has(id);
-  });
+  };
+  // The ledger gains a row with every credit sale and payment and is never
+  // pruned; read this customer's rows through the customerId/customer_id
+  // indexes. Duplicates are collapsed by keys that carry the same customer id
+  // this filter uses, so they are all among these rows, except manual
+  // adjustments: they collapse by ids not tied to a customer, so a copy filed
+  // under another id can decide which survives. Those are rare; for them, read
+  // the whole ledger exactly as before.
+  const ids = [...customerIds];
+  const [byCamel, bySnake] = await Promise.all([
+    offlineDB.getWhere<CustomerLedgerEntry>("customer_ledger", "customerId", ids),
+    offlineDB.getWhere<CustomerLedgerEntry>("customer_ledger", "customer_id", ids),
+  ]).catch(() => [[], []] as CustomerLedgerEntry[][]);
+  const own = [...new Map([...byCamel, ...bySnake].map((row) => [row.id, row])).values()]
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .filter(belongs);
+  const rows = own.some(isManualAdjustmentEntry)
+    ? await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => [])
+    : own;
+  return dedupeLedgerEntries(rows).filter(belongs);
 }
 
 export interface CreateLedgerAdjustmentInput {
@@ -100,15 +145,12 @@ async function createLedgerAdjustmentLocalFirstUnlocked(
   });
   const amount = roundMoney(readNumber(input.amount, 0));
   if (amount === 0) throw new Error("Adjustment amount cannot be zero");
-  const [existingLedgerEntries, customers, mappings, cached] = await Promise.all([
+  const [existingLedgerEntries, customers, cached] = await Promise.all([
     readCustomerLedgerEntries(input.customerId),
     offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []),
-    offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []),
     loadCachedAuthoritativeSummary(),
   ]);
-  const customer = customers.find((row) =>
-    expandIdsWithMappings(customerIdentitySet(row), mappings).has(input.customerId),
-  );
+  const customer = await findLinkedCustomer(customers, input.customerId);
   if (!customer) throw new Error("Customer not found in local records");
 
   const ledgerBalance = roundMoney(Math.max(0, calculateLedgerBalance(existingLedgerEntries)));
@@ -123,7 +165,7 @@ async function createLedgerAdjustmentLocalFirstUnlocked(
   const authoritativeBalance = cached
     ? authoritativeOutstandingWithPendingLedger(
       cached.summary,
-      [...expandIdsWithMappings(customerIdentitySet(customer), mappings)],
+      [...await expandIdsThroughMappingIndexes(customerIdentitySet(customer))],
       existingLedgerEntries,
     )
     : null;

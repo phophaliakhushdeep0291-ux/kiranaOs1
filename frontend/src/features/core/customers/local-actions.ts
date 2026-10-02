@@ -169,9 +169,13 @@ export async function deleteCustomerLocalFirst(input: DeleteCustomerLocalFirstIn
   });
 
   const now = new Date().toISOString();
-  const existing = await offlineDB
-    .getAll<CustomerLocalRecord>("customers")
-    .then((rows) => rows.find((row) => row.id === id || row.local_id === id || row.server_id === id))
+  // By its three indexed ids, not by reading every customer.
+  const existing = await Promise.all([
+    offlineDB.getMany<CustomerLocalRecord>("customers", [id]),
+    offlineDB.getWhere<CustomerLocalRecord>("customers", "local_id", [id]),
+    offlineDB.getWhere<CustomerLocalRecord>("customers", "server_id", [id]),
+  ])
+    .then((groups) => groups.flat().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0])
     .catch(() => undefined);
 
   const deletedCustomer: CustomerLocalRecord = existing
