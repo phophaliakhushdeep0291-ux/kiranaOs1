@@ -188,6 +188,8 @@ export const shellEn = {
   "setup.step.products.title": "Products and stock",
   "setup.step.products.description": "Import or add sellable products with price, unit, pack size, and stock.",
   "setup.step.products.action": "Import products",
+  "setup.step.products.addStock": "Add opening stock",
+  "setup.step.products.manage": "Manage products",
   "setup.step.products.todo": "No products added yet",
   "setup.step.products.noStock": "{count} products, none in stock yet — add opening stock before billing",
   "setup.step.customers.title": "Customers and udhar",

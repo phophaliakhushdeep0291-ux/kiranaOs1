@@ -177,6 +177,8 @@ export const shellHi: Record<keyof typeof shellEn, string> = {
   "setup.step.products.title": "माल और स्टॉक",
   "setup.step.products.description": "बेचने का माल भाव, यूनिट, पैक साइज़ और स्टॉक के साथ जोड़ें या इम्पोर्ट करें।",
   "setup.step.products.action": "माल इम्पोर्ट करें",
+  "setup.step.products.addStock": "शुरुआती स्टॉक भरें",
+  "setup.step.products.manage": "माल प्रबंधित करें",
   "setup.step.products.todo": "अभी कोई माल नहीं जुड़ा",
   "setup.step.products.noStock": "{count} सामान हैं, पर किसी का स्टॉक नहीं — बिलिंग से पहले खुलता स्टॉक भरें",
   "setup.step.customers.title": "ग्राहक और उधार",
