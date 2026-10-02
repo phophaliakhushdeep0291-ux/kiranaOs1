@@ -101,6 +101,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 import { readInstantCache } from "@/lib/offline/instant-cache";
 import { AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY } from "@/features/core/ledger/authoritative-balances";
 import { createBillLocalFirst } from "@/features/core/billing/local-actions";
@@ -178,6 +179,8 @@ function seedLedger(row: Record<string, unknown>) {
     ...row,
   });
 }
+
+withTargetedReads(offlineDB);
 
 describe("customer ledger correctness", () => {
   it("keeps credit follow-up fields in the offline record and sync payload, including explicit clears", async () => {

@@ -87,9 +87,10 @@ export function createSaleReturnLocalFirst(input: SaleReturnInput): Promise<Bill
 
 async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bill> {
   // Persisted quantities win over an older in-memory snapshot after navigation.
+  // Only the returned lines' products are read, not the whole catalogue.
   const productsById = new Map([
     ...readInstantCache<Product[]>("products", []),
-    ...await offlineDB.getAll<Product>("products"),
+    ...await offlineDB.getMany<Product>("products", (input.items ?? []).map((item) => item.productId)),
   ].map((product) => [product.id, product]));
   const findCachedProduct = (id: string | undefined) => id ? productsById.get(id) : undefined;
   const items = (input.items ?? [])

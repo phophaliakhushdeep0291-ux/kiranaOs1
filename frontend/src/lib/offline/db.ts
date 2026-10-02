@@ -521,6 +521,15 @@ function isScopedRecord<T>(row: T): boolean {
   return rowMatchesCurrentScope(row);
 }
 
+function distinctKeys(values: Iterable<string | null | undefined>): string[] {
+  return [...new Set([...values].filter((value): value is string => typeof value === "string" && value.length > 0))];
+}
+
+function sortByPrimaryKey<T>(rows: T[]): T[] {
+  const key = (row: T) => String((row as { id?: unknown }).id ?? "");
+  return rows.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+}
+
 function isOutboxPendingOrRetryable(event: PendingSyncEvent): boolean {
   return (
     event.status === "PENDING" ||
@@ -772,6 +781,28 @@ class OfflineDBFacade {
       .equals([scope.tenant_id, scope.store_id])
       .toArray()
       .catch(() => table.filter(isScopedRecord).toArray());
+  }
+
+  /**
+   * Rows with these primary keys, without reading the rest of the table.
+   * Missing keys and other shops' rows are left out, as getAll leaves them out.
+   * Rows come back ordered by id, which is getAll's order for id-keyed tables.
+   */
+  async getMany<T>(storeName: string, ids: Iterable<string | null | undefined>): Promise<T[]> {
+    const keys = distinctKeys(ids);
+    if (keys.length === 0) return [];
+    await this.init();
+    const rows = (await this.table<T>(storeName).bulkGet(keys)).filter((row): row is T => row != null);
+    return sortByPrimaryKey(isScopedTableName(storeName) ? rows.filter(isScopedRecord) : rows);
+  }
+
+  /** Rows whose indexed `field` equals any of `values`, scoped and ordered like getMany. */
+  async getWhere<T>(storeName: string, field: string, values: Iterable<string | null | undefined>): Promise<T[]> {
+    const keys = distinctKeys(values);
+    if (keys.length === 0) return [];
+    await this.init();
+    const rows = await this.table<T>(storeName).where(field).anyOf(keys).toArray();
+    return sortByPrimaryKey(isScopedTableName(storeName) ? rows.filter(isScopedRecord) : rows);
   }
 
   async put<T>(storeName: string, value: T): Promise<void> {

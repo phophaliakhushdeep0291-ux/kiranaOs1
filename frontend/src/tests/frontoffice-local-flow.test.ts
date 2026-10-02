@@ -88,6 +88,8 @@ import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@
 import { recordPurchaseBatchLocalFirst, recordPurchaseLocalFirst } from "@/features/core/inventory/local-actions";
 import { markPurchasePaidLocal, recordPurchasePaymentLocal, reverseSupplierPaymentLocal, updatePurchaseLocal } from "@/features/core/purchases/local-actions";
 import { calculateLedgerBalance } from "@/features/core/ledger/accounting";
+import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 
 function seedFrontOffice() {
   dbState.failTransactionBeforeCommit = false;
@@ -184,6 +186,8 @@ function purchaseDisplayRow(overrides: Partial<SupplierDueRow> = {}): SupplierDu
     ...overrides,
   } as SupplierDueRow;
 }
+
+withTargetedReads(offlineDB);
 
 describe("front office local-first cashier flow", () => {
   it.each(["synced", "pending_sync", "failed", undefined])("keeps product edit status %s while a purchase awaits sync", async (status) => {

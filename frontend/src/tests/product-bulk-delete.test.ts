@@ -69,6 +69,8 @@ import {
   summariseBulkDelete,
   type SelectedProduct,
 } from "@/features/core/products/bulk-delete";
+import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 
 type Row = Record<string, unknown>;
 
@@ -98,6 +100,8 @@ beforeEach(() => {
   mockState.failIds = new Set();
   mockState.committed = { products: [], local_audit_logs: [], sync_outbox: [] };
 });
+
+withTargetedReads(offlineDB);
 
 describe("what the shopkeeper is told before deleting", () => {
   it("groups the selection by category, largest first", () => {

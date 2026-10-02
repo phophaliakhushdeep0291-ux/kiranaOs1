@@ -273,6 +273,7 @@ vi.mock("@/features/core/subscription/access", () => ({
 }));
 
 import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 import { createBillLocalFirst } from "@/features/core/billing/local-actions";
 import { syncPush } from "@/features/core/sync/api";
 import { pushPendingOutboxOperations } from "@/features/core/sync/engine";
@@ -452,6 +453,8 @@ function createServerSuccessResult(event: Row, localBillId: string) {
     },
   };
 }
+
+withTargetedReads(offlineDB);
 
 describe("bill sync behavior", () => {
   beforeEach(() => {

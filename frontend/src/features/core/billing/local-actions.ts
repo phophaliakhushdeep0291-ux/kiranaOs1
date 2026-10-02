@@ -121,16 +121,36 @@ function matchesCustomer(customer: Customer & Record<string, unknown>, id: strin
   return customer.id === id || customer.local_id === id || customer.server_id === id;
 }
 
+/**
+ * The stored customer a credit bill names, looked up by its three indexed
+ * identities instead of reading (and pairwise-comparing) every customer.
+ * The durable balance can have changed in another tab since the cache painted,
+ * so a stored row always wins, and a cached row only counts when no stored row
+ * shares its id.
+ */
+async function findCreditCustomer(customerId: string): Promise<(Customer & Record<string, unknown>) | undefined> {
+  type Row = Customer & Record<string, unknown>;
+  const [byId, byLocalId, byServerId] = await Promise.all([
+    offlineDB.getMany<Row>("customers", [customerId]),
+    offlineDB.getWhere<Row>("customers", "local_id", [customerId]),
+    offlineDB.getWhere<Row>("customers", "server_id", [customerId]),
+  ]);
+  // getAll returned rows in id order and the first match won; keep that choice.
+  const stored = [...byId, ...byLocalId, ...byServerId].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0];
+  if (stored) return stored;
+  const cached = (readInstantCache<Customer[]>(CUSTOMER_CACHE_KEY, []).map(normaliseLocalCustomer) as Row[])
+    .filter((customer) => matchesCustomer(customer, customerId));
+  if (cached.length === 0) return undefined;
+  const storedIds = new Set((await offlineDB.getMany<Row>("customers", cached.map((row) => row.id))).map((row) => row.id));
+  return cached.find((row) => !storedIds.has(row.id));
+}
+
 async function prepareCustomerForCreditBill(data: BillInput, creditAmount: number): Promise<CreditCustomerPreparation> {
   if (creditAmount <= 0) return { billData: data, previousCustomerBalance: 0 };
   const now = new Date().toISOString();
-  const cachedCustomers = readInstantCache<Customer[]>(CUSTOMER_CACHE_KEY, []).map(normaliseLocalCustomer) as Array<Customer & Record<string, unknown>>;
-  const dbCustomers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers");
-  // The durable balance can have changed in another tab since this cache painted.
-  const customers = [...dbCustomers, ...cachedCustomers.filter((row) => !dbCustomers.some((stored) => stored.id === row.id))];
 
   if (data.customerId) {
-    const existing = customers.find((customer) => matchesCustomer(customer, data.customerId!));
+    const existing = await findCreditCustomer(data.customerId);
     if (existing) {
       const previousCustomerBalance = readNumber(existing.udharAmount ?? existing.totalUdhar, 0);
       const nextUdhar = roundMoney(previousCustomerBalance + creditAmount);
@@ -349,7 +369,8 @@ async function loadBillProducts(items: BillInputItem[]) {
   if (ids.length === 0) return new Map<string, Product>();
 
   const cached = readInstantCache<Product[]>(PRODUCT_CACHE_KEY, []);
-  const dbRows = await offlineDB.getAll<Product>("products");
+  // Only the bill's own products: every sale used to read the whole catalogue.
+  const dbRows = await offlineDB.getMany<Product>("products", ids);
   const byId = new Map<string, Product>();
   for (const product of [...dbRows, ...cached]) {
     if (ids.includes(product.id) && !byId.has(product.id)) byId.set(product.id, product);

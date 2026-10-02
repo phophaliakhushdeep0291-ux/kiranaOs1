@@ -70,6 +70,8 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { createBillLocalFirst } from "@/features/core/billing/local-actions";
+import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 
 const product = (id: string) => (dbState.committed.products as Array<Record<string, unknown>>)
   .find((row) => row.id === id)!;
@@ -83,6 +85,8 @@ const sell = (productId: string, name: string, quantity: number, rate: number): 
   buyerPaidAmount: quantity * rate,
   payments: [{ mode: BillPaymentMode.cash, amount: quantity * rate }],
 });
+
+withTargetedReads(offlineDB);
 
 describe("a cooked dish is not decremented on the till", () => {
   beforeEach(() => {
