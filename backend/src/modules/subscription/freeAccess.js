@@ -27,6 +27,14 @@ import {
  */
 export const FREE_ACCESS_UNTIL = new Date(env.FREE_ACCESS_UNTIL);
 
+/**
+ * When the promotion began serving shops — the day it reached production.
+ *
+ * Only the credit below needs it. Access never asks when the window opened,
+ * because a shop either has it now or does not.
+ */
+export const FREE_ACCESS_FROM = new Date(env.FREE_ACCESS_FROM);
+
 /** The plan code every shop holds while the promotion runs. */
 export const FREE_ACCESS_PLAN_CODE = "pro";
 
@@ -50,6 +58,62 @@ export function isFreeAccessPresale(now = new Date()) {
 /** When buying ahead opens, for the clients that have to say so on screen. */
 export function freeAccessPresaleFromIso() {
   return FREE_ACCESS_PRESALE_FROM.toISOString();
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Prisma hands these back as Date objects and a JSON body as strings; both are
+// dates a shop was sold, so read either rather than trusting one shape.
+function asTime(value) {
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(value ?? "");
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+/**
+ * A row that stands for money a shop actually paid for a period.
+ *
+ * A founding grant is excluded: it carries a locked price so it can be renewed
+ * later, but nothing was paid for the period it is running now, so nothing was
+ * given away when the promotion made that period free.
+ */
+export function isFreeWindowCreditEligible(subscription) {
+  if (!subscription || subscription.provider === "founding") return false;
+  return subscription.lockedPriceMonthlyPaise !== null || subscription.lockedPriceYearlyPaise !== null;
+}
+
+/**
+ * What a shop that was paying through the free window is owed back.
+ *
+ * Its paid period kept running while the product was free for everyone, so those
+ * days were bought and then given away. The credit is the overlap between the
+ * period and the window — and it is added AFTER the window shuts, because days
+ * handed back inside it would be days the shop already has for nothing.
+ *
+ * A shop whose period ended mid-window is therefore owed paid time that starts in
+ * January, and a shop paid well past the window simply ends later. Part days round
+ * up, in the shop's favour.
+ *
+ * Returns null when nothing is owed: no dated period, or none of it in the window.
+ */
+export function freeWindowCredit(subscription) {
+  const paidFrom = asTime(subscription?.currentPeriodStart);
+  const paidUntil = asTime(subscription?.currentPeriodEnd);
+  if (!Number.isFinite(paidFrom) || !Number.isFinite(paidUntil)) return null;
+
+  const overlapFrom = Math.max(paidFrom, FREE_ACCESS_FROM.getTime());
+  const overlapUntil = Math.min(paidUntil, FREE_ACCESS_UNTIL.getTime());
+  const givenAwayMs = overlapUntil - overlapFrom;
+  if (givenAwayMs <= 0) return null;
+
+  const days = Math.ceil(givenAwayMs / DAY_MS);
+  const creditFrom = Math.max(paidUntil, FREE_ACCESS_UNTIL.getTime());
+  return {
+    days,
+    givenAwayMs,
+    previousPeriodEnd: new Date(paidUntil),
+    periodEnd: new Date(creditFrom + days * DAY_MS),
+  };
 }
 
 /**
