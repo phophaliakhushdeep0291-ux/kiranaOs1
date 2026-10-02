@@ -19,11 +19,23 @@ function fakeTable(rows: Row[]) {
   return {
     reads,
     bulkGet: vi.fn(async (keys: string[]) => { reads.push(`bulkGet:${keys.join(",")}`); return keys.map((key) => rows.find((row) => row.id === key)); }),
-    where: vi.fn((field: string) => ({
-      anyOf: (values: string[]) => ({
-        toArray: async () => { reads.push(`where:${field}`); return rows.filter((row) => values.includes(row[field] as string)); },
-      }),
-    })),
+    failIndex: undefined as string | undefined,
+    where: vi.fn(function (this: { failIndex?: string }, field: string) {
+      const failing = this.failIndex === field;
+      return {
+        anyOf: (values: string[]) => ({
+          toArray: async () => {
+            reads.push(`where:${field}`);
+            if (failing) throw new Error(`index ${field} unavailable`);
+            return rows.filter((row) => values.includes(row[field] as string));
+          },
+        }),
+        // getAll's own read: every row of the current shop.
+        equals: ([tenant, store]: [string, string]) => ({
+          toArray: async () => { reads.push(`scan:${field}`); return rows.filter((row) => row.tenant_id === tenant && row.store_id === store); },
+        }),
+      };
+    }),
     toArray: vi.fn(async () => { reads.push("toArray"); return rows; }),
   };
 }
@@ -56,10 +68,32 @@ describe("targeted offline reads", () => {
     expect(table.reads).toEqual(["where:local_id"]);
   });
 
+  it("falls back to a scan of this shop's rows when an index read fails, as getAll does", async () => {
+    table.failIndex = "local_id";
+    const rows = await offlineDB.getWhere<Row>("products", "local_id", ["local-3"]);
+    expect(rows.map((row) => row.id)).toEqual(["p-3"]);
+    expect(table.reads).toEqual(["where:local_id", "scan:[tenant_id+store_id]"]);
+  });
+
   it("does not touch storage for an empty request", async () => {
     expect(await offlineDB.getMany("products", [])).toEqual([]);
     expect(await offlineDB.getWhere("customers", "server_id", [null, undefined])).toEqual([]);
     expect(table.reads).toEqual([]);
+  });
+});
+
+describe("bill identity index", () => {
+  it("version 7 indexes both spellings of the open-bill identity", () => {
+    expect(dexieDB.verno).toBe(7);
+    const indexes = dexieDB.table("bills").schema.idxByName;
+    expect(Object.keys(indexes)).toEqual(expect.arrayContaining(["clientBillId", "client_bill_id"]));
+  });
+
+  it("a Save looks its open bill up through the index, not the whole bill history", () => {
+    const billing = readFileSync("src/features/core/billing/local-actions.ts", "utf8");
+    expect(billing).not.toMatch(/getAll<[^>]*>\("bills"\)/);
+    expect(billing).toContain('offlineDB.getWhere<Row>("bills", "clientBillId", [clientBillId])');
+    expect(billing).toContain('offlineDB.getWhere<Row>("bills", "client_bill_id", [clientBillId])');
   });
 });
 

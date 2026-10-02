@@ -643,9 +643,18 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   const checkoutFingerprint = JSON.stringify({ ...validated, ownerPin: undefined, reason: undefined, sensitiveActions: undefined });
   const committed = await offlineDB.transaction(BILL_CREATION_TRANSACTION_TABLES, async (tx) => {
     if (clientBillId) {
-      const bills = await offlineDB.getAll<Bill & Record<string, unknown>>("bills");
-      const matches = bills.filter((bill) => bill.clientBillId === clientBillId || bill.client_bill_id === clientBillId)
-        .map((bill) => bills.find((row) => row.id === bill.merged_into_id) ?? bill);
+      // Through the v7 indexes: this check used to read the device's entire bill
+      // history, which is never pruned, inside the write transaction of every Save.
+      type Row = Bill & Record<string, unknown>;
+      const [byCamel, bySnake] = await Promise.all([
+        offlineDB.getWhere<Row>("bills", "clientBillId", [clientBillId]),
+        offlineDB.getWhere<Row>("bills", "client_bill_id", [clientBillId]),
+      ]);
+      const direct = [...new Map([...byCamel, ...bySnake].map((bill) => [bill.id, bill])).values()]
+        .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      const survivors = new Map((await offlineDB.getMany<Row>("bills", direct.map((bill) => bill.merged_into_id as string | undefined)))
+        .map((row) => [row.id, row]));
+      const matches = direct.map((bill) => survivors.get(bill.merged_into_id as string) ?? bill);
       const existing = matches.find((bill) => isSyncedBillRecord(bill) && !bill.merged_into_id) ?? matches[0];
       if (existing) {
         if (existing.status === "cancelled" || existing.deletedAt || (existing.deleted_at && !existing.merged_into_id)) {
