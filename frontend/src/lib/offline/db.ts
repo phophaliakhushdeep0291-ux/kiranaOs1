@@ -813,6 +813,10 @@ class OfflineDBFacade {
     values: T[],
     expectedScope: Pick<OfflineScope, "tenant_id" | "store_id"> = getOfflineScope(),
     shouldReconcileExisting: (row: Record<string, unknown>) => boolean = () => true,
+    options: {
+      preserveUnsynced?: boolean;
+      canReplaceExisting?: (row: Record<string, unknown>) => boolean;
+    } = {},
   ): Promise<void> {
     if (!BUSINESS_TABLES.has(storeName)) throw new Error(`Unsupported snapshot table: ${storeName}`);
     assertCurrentOfflineScope(expectedScope);
@@ -840,8 +844,21 @@ class OfflineDBFacade {
         )
         .map((row) => row.id)
         .filter((id): id is string => typeof id === "string" && id.length > 0);
+      // A local edit/delete may land after the caller read its cache but before
+      // this transaction. Expense snapshots must protect those current rows and
+      // their aliases here, where no concurrent local write can intervene.
+      const protectedIds = options.preserveUnsynced || options.canReplaceExisting
+        ? new Set(current
+          .filter((row) => (options.preserveUnsynced && keepStatuses.has(String(row.sync_status ?? "synced").toLowerCase()))
+            || options.canReplaceExisting?.(row) === false)
+          .flatMap((row) => [row.id, row.local_id, row.server_id])
+          .filter((id): id is string => typeof id === "string" && id.length > 0))
+        : null;
+      const incomingRows = protectedIds
+        ? rows.filter((row) => ![row.id, row.local_id, row.server_id].some((id) => typeof id === "string" && protectedIds.has(id)))
+        : rows;
       if (syncedKeys.length > 0) await table.bulkDelete(syncedKeys);
-      if (rows.length > 0) await table.bulkPut(rows);
+      if (incomingRows.length > 0) await table.bulkPut(incomingRows);
     });
   }
 

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Expense } from "@/types/api";
 
 type Row = Expense & Record<string, unknown>;
-const state = vi.hoisted(() => ({ rows: [] as Row[] }));
+const state = vi.hoisted(() => ({ rows: [] as Row[], shop: "shop" }));
 vi.mock("@/lib/offline/db", () => ({ offlineDB: {
   getAll: vi.fn(async () => state.rows.map((row) => ({ ...row }))),
   // Mirrors the real primitive: unsynced rows always survive, matching synced
@@ -12,13 +12,16 @@ vi.mock("@/lib/offline/db", () => ({ offlineDB: {
     state.rows = state.rows.filter((row) => keep.has(String(row.sync_status ?? "synced")) || !shouldReconcile(row));
     for (const value of values) state.rows = [...state.rows.filter((row) => row.id !== value.id), value];
   }),
+}, assertCurrentOfflineScope: (scope: { tenant_id: string; store_id: string }) => {
+  if (scope.tenant_id !== state.shop || scope.store_id !== state.shop) throw new Error("Offline scope changed");
 } }));
 vi.mock("@/features/core/sync/outbox", () => ({ buildOutboxOperation: (input: unknown) => input }));
-vi.mock("@/lib/offline/context", () => ({ getOfflineScope: () => ({ tenant_id: "shop", store_id: "store", device_id: "device" }), nowIso: () => "2026-09-30T10:00:00Z" }));
+vi.mock("@/lib/offline/context", () => ({ getOfflineScope: () => ({ tenant_id: state.shop, store_id: state.shop, device_id: "device" }), nowIso: () => "2026-09-30T10:00:00Z" }));
 vi.mock("@/lib/offline/instant-cache", () => ({ createLocalId: () => "local", emitLocalDataChanged: vi.fn() }));
 vi.mock("@/features/core/stores/location-context", () => ({ getActiveLocationId: () => "branch-a" }));
 import { mergeExpenseSnapshots, refreshServerExpenses } from "@/features/core/expenses/local-actions";
 import { expenseOverview } from "@/features/core/expenses/overview";
+import { offlineDB } from "@/lib/offline/db";
 
 const at = new Date("2026-09-30T12:00:00Z");
 function serverRow(id: string, extra: Partial<Row> = {}): Row {
@@ -29,7 +32,7 @@ function cached(id: string, extra: Partial<Row> = {}): Row {
 }
 const ids = () => state.rows.map((row) => row.id).sort();
 
-beforeEach(() => { state.rows = []; });
+beforeEach(() => { vi.clearAllMocks(); state.rows = []; state.shop = "shop"; });
 
 describe("server expense refresh on a device that sync pull skips", () => {
   it("drops a cached expense deleted elsewhere, from the list and the totals", async () => {
@@ -83,5 +86,25 @@ describe("server expense refresh on a device that sync pull skips", () => {
     state.rows = [cached("edited", { title: "Local edit", sync_status: "pending_sync", version: 2 })];
     await refreshServerExpenses(async () => [serverRow("edited", { title: "Server copy" })], { locationId: "branch-a" });
     expect(state.rows).toEqual([expect.objectContaining({ id: "edited", title: "Local edit" })]);
+  });
+
+  it("does not label a late response with the shop that signed in after it started", async () => {
+    state.rows = [cached("old-shop-expense")];
+    await expect(refreshServerExpenses(async () => {
+      state.shop = "next-shop";
+      return [serverRow("old-shop-expense")];
+    }, { locationId: "branch-a" })).rejects.toThrow("Offline scope changed");
+    expect(state.rows[0]).not.toHaveProperty("tenant_id", "next-shop");
+  });
+
+  it("does not start an old shop request when the shop changes during the initial cache read", async () => {
+    vi.mocked(offlineDB.getAll).mockImplementationOnce(async () => {
+      state.shop = "next-shop";
+      return [];
+    });
+    const fetchRows = vi.fn(async () => [serverRow("old-shop-expense")]);
+    await expect(refreshServerExpenses(fetchRows, { locationId: "branch-a" })).rejects.toThrow("Offline scope changed");
+    expect(fetchRows).not.toHaveBeenCalled();
+    expect(offlineDB.replaceSyncedSnapshot).not.toHaveBeenCalled();
   });
 });
