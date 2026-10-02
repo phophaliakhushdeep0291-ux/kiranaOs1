@@ -1,0 +1,106 @@
+Browser tab: 5, Title: "Billing History · Artha", URL: "http://localhost:51977/bills/cmupb4ppt004814or79b2t5c9".
+1 AXWebArea Billing History · Artha, URL: localhost:51977/bills/cmupb4ppt004814or79b2t5c9
+	2 container root
+		3 link Description: Skip to main content, Value: localhost:51977/bills/cmupb4ppt004814or79b2t5c9#main-content
+		4 container
+			5 link Description: Artha home, Value: localhost:51977/dashboard
+			6 heading Billing History, Value: 1
+				7 text Billing History
+			8 text QA Full Shop Day  ·  Synced
+			9 button Search products, bills, and customers
+			10 link Description: Open backup and sync status, Value: localhost:51977/sync-status
+		11 container main-content
+			12 text Billing History page loaded
+			13 link Description: Back, Value: localhost:51977/bills
+			14 heading KOS-2026-000002, Value: 1
+				15 text KOS-2026-000002
+			16 text Duplicate copy, audit trail, ledger impact, and sync status.
+			17 button WhatsApp
+				18 image
+				19 text WhatsApp
+			20 button Print duplicate
+				21 image
+				22 text Print duplicate
+			23 text Not sent
+			24 button Email receipt
+				25 image
+				26 text Email receipt
+			27 button Edit bill
+				28 image
+				29 text Edit bill
+			30 button Add items
+				31 image
+				32 text Add items
+			33 button Return items
+				34 image
+				35 text Return items
+			36 button Cancel with PIN
+				37 image
+				38 text Cancel with PIN
+			39 button Recycle bin
+				40 image
+				41 text Recycle bin
+			42 text TOTAL
+			43 text ₹200
+			44 text PAID
+			45 text ₹200
+			46 text UDHAR
+			47 text ₹0
+			48 text STATUS
+			49 text Paid
+			50 text synced
+			51 text Bill summary
+			52 text Date
+			53 text 1/10/2026, 2:33:49 pm
+			54 text Bill type
+			55 text normal sale
+			56 text Subtotal
+			57 text ₹199.50
+			58 text Discount
+			59 text ₹0
+			60 text Deleted
+			61 text No
+			62 text Record identity
+			63 text Device: Merged after backup
+			64 text Cloud: cmupb4ppt004814or79b2t5c9
+			65 text Customer details
+			66 container
+				67 text Name: Walk-in
+			68 container
+				69 text Mobile: Not available
+			70 container
+				71 text Current udhar: ₹0
+			72 text Items
+			73 container
+				74 text QA Day Tea 250g Portion: piece
+				75 definition list
+					76 container QTY
+						77 text QTY
+					78 container
+						79 text 1 piece
+					80 container RATE
+						81 text RATE
+					82 text ₹199.50
+					83 container TOTAL
+						84 text TOTAL
+					85 text ₹199.50
+			86 text Payment details
+			87 text UPI
+			88 text ₹200
+			89 text Total paid
+			90 text ₹200
+			91 text Customer ledger impact
+			92 text No ledger rows found for this bill.
+			93 text Audit trail
+			94 text No local audit actions yet.
+		95 container Primary navigation
+			96 link Description: Home, Value: localhost:51977/dashboard
+			97 link Description: Stock, Value: localhost:51977/inventory
+			98 link Description: Customers, Value: localhost:51977/customers
+			99 pop up button (collapsed) Description: Open all app areas, Secondary Actions: Expand
+		100 button Open assistant
+			101 image
+		102 container Notifications (F8)
+			103 content list
+
+The focused UI element is 36 button Cancel with PIN

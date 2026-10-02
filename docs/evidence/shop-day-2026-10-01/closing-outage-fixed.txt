@@ -1,0 +1,191 @@
+Browser tab: 5, Title: "Daily Closing · Artha", URL: "http://localhost:51977/daily-closing".
+1 AXWebArea Daily Closing · Artha, URL: localhost:51977/daily-closing
+	2 container root
+		3 link Description: Skip to main content, Value: localhost:51977/daily-closing#main-content
+		4 container
+			5 link Description: Artha home, Value: localhost:51977/dashboard
+			6 heading Daily Closing, Value: 1
+				7 text Daily Closing
+			8 text QA Full Shop Day  ·  Cloud paused
+			9 button Search products, bills, and customers
+			10 link Description: Open backup and sync status, Value: localhost:51977/sync-status
+		11 text Cloud backup is paused because the backend is not reachable. Local billing still works. 
+		12 link Description: Open Sync Status ->, Value: localhost:51977/sync-status
+		13 text 2 changes waiting to back up
+		14 text Will retry automatically when the connection is healthy.
+		15 button Retry now
+		16 link Description: View, Value: localhost:51977/sync-status
+		17 container main-content
+			18 text Daily Closing page loaded
+			19 image
+			20 heading Daily Closing, Value: 1
+				21 text Daily Closing
+			22 text Cash drawer and business summary from local data.
+			23 image
+			24 text Local estimate — 
+			25 text 2
+			26 text  changes pending cloud backup.
+			27 link Description: Reports, Value: localhost:51977/reports
+			28 button Print
+				29 image
+				30 text Print
+			31 button Share
+				32 image
+				33 text Share
+			34 button Refresh
+				35 image
+				36 text Refresh
+			37 text Expense totals include saved changes on this device. Cloud updates are pending; check sync before finalising the day.
+			38 text CLOSING DATE
+			39 date field (settable) Description: Closing date, Value: 2026-10-01
+				40 container
+					41 stepper
+					42 stepper
+					43 stepper
+				44 pop up button Show date picker Show date picker
+			45 image
+			46 text EXPECTED CASH IN DRAWER TONIGHT
+			47 text ₹749.25
+			48 text Opening float + cash sales + old udhar cash recovery + cash in - supplier cash paid - cash expenses - cash out
+			49 image
+			50 text Cash in 
+			51 text ₹299.75
+			52 image
+			53 text UPI in 
+			54 text ₹250.50
+			55 image
+			56 text Bank in 
+			57 text ₹0
+			58 text CASH, UPI, AND BANK SPLIT
+			59 text Cash in
+			60 text ₹299.75
+			61 container
+				62 text 54 %
+			63 text UPI in
+			64 text ₹250.50
+			65 container
+				66 text 46 %
+			67 text Bank in
+			68 text ₹0
+			69 container
+				70 text Old udhar recovered  ₹50.50
+			71 text OPENING FLOAT & CASH IN / OUT
+			72 container
+				73 text OPENING FLOAT FOR  2026-10-01
+			74 stepper (settable, integer) OPENING FLOAT FOR 2026-10-01, Value: 500, ID: opening-float
+			75 button Save
+			76 container
+				77 text The change you put in the drawer this morning. Declared each day rather than carried over, so yesterday's shortage never hides inside today's expected cash.  Currently ₹500.
+			78 text Cash expenses today
+			79 text ₹50.50
+			80 text Cash-paid expenses only — UPI and bank expenses never leave the drawer.
+			81 text RECORD CASH IN / OUT
+			82 stepper (settable)
+			83 text field (settable)
+			84 button Cash in
+				85 image
+				86 text Cash in
+			87 button Cash out
+				88 image
+				89 text Cash out
+			90 container
+				91 text Nothing recorded for  2026-10-01 . Log money you add to or take from the till so the count at closing can actually match.
+			92 text COUNT THE DRAWER — OVER / SHORT
+			93 container
+				94 text COUNTED CASH FOR  2026-10-01
+			95 stepper (settable, float) COUNTED CASH FOR 2026-10-01, Value: 749.25, ID: counted-cash
+			96 button Update
+			97 text Drawer matches expected — perfect close.
+			98 text Saved on this device and kept for 90 days — repeated shorts on the same weekday are worth investigating.
+			99 text OVER / SHORT HISTORY
+			100 content list
+				101 container
+					102 text 01 Oct counted  ₹749.25  / expected  ₹749.25 Exact
+			103 image
+			104 heading Income today, Value: 2
+				105 text Income today
+			106 text Everything that came in
+			107 image
+			108 text Total sales
+			109 text All bills for the day
+			110 text ₹798.50
+			111 image
+			112 text Cash sales
+			113 text ₹299.75
+			114 image
+			115 text UPI sales
+			116 text ₹200
+			117 image
+			118 text Bank sales
+			119 text ₹0
+			120 image
+			121 text Old udhar recovered
+			122 text Cash ₹0 / UPI ₹50.50 / Bank ₹0
+			123 text ₹50.50
+			124 image
+			125 heading Credit & outgoing, Value: 2
+				126 text Credit & outgoing
+			127 text What went out or remains due
+			128 image
+			129 text Udhar given today
+			130 text Credit extended to customers
+			131 text ₹298.75
+			132 image
+			133 text Supplier cash paid
+			134 text ₹0
+			135 image
+			136 text Supplier UPI paid
+			137 text ₹0
+			138 image
+			139 text Supplier bank paid
+			140 text ₹0
+			141 text Supplier due (unpaid)
+			142 text Purchase bills not yet paid
+			143 text ₹0
+			144 image
+			145 heading Top sold products, Value: 2
+				146 text Top sold products
+			147 table
+				148 row
+					149 cell
+						150 text PRODUCT
+					151 cell
+						152 text QTY
+					153 cell
+						154 text SALES
+				155 row
+					156 cell
+						157 text 1 QA Day Tea 250g
+					158 cell
+						159 text 4
+					160 cell
+						161 text ₹798
+			162 image
+			163 heading Low-stock items, Value: 2
+				164 text Low-stock items
+			165 text No low-stock items
+			166 image
+			167 heading Sync check before closing, Value: 2
+				168 text Sync check before closing
+			169 text Ensure all data is backed up to the cloud
+			170 image
+			171 text 2
+			172 text Pending backup
+			173 image
+			174 text 0
+			175 text Failed sync
+			176 image
+			177 text 0
+			178 text Conflicts
+		179 container Primary navigation
+			180 link Description: Home, Value: localhost:51977/dashboard
+			181 link Description: Sell, Value: localhost:51977/billing
+			182 link Description: Stock, Value: localhost:51977/inventory
+			183 link Description: Customers, Value: localhost:51977/customers
+			184 pop up button (collapsed) Description: Open all app areas, Secondary Actions: Expand
+		185 button Open assistant
+			186 image
+		187 container Notifications (F8)
+			188 content list
+
+The focused UI element is 1 AXWebArea Daily Closing · Artha, URL: localhost:51977/daily-closing

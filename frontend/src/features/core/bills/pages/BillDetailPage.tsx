@@ -1,3 +1,4 @@
+import { formatMoney as money, addMoney, subtractMoney } from "@/lib/money";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
@@ -57,10 +58,6 @@ function asIdSet(bill: BillRecord) {
 function readNumber(value: unknown, fallback = 0) {
   const num = Number(value ?? fallback);
   return Number.isFinite(num) ? num : fallback;
-}
-
-function money(value: number) {
-  return `₹${Math.round(value).toLocaleString("en-IN")}`;
 }
 
 function billNo(bill: BillRecord) {
@@ -189,7 +186,10 @@ async function loadBillDetail(id: string) {
       };
     }),
   });
-  return { bill, items, payments, ledger, audit, customer, customerLedgerBalance, returnBalances };
+  const remainingInvoiceTotal = Number.isFinite(Number(bill.grandTotal))
+    ? subtractMoney(Math.abs(Number(bill.grandTotal)), addMoney(...activeReturns.map((row) => Math.abs(readNumber(row.grandTotal, 0)))))
+    : undefined;
+  return { bill, items, payments, ledger, audit, customer, customerLedgerBalance, returnBalances, remainingInvoiceTotal };
 }
 
 function useBillDetail(id: string) {
@@ -517,6 +517,7 @@ export default function BillDetailPage() {
         customerId={(bill.customerId as string | undefined) ?? undefined}
         customerName={(bill.customerName as string | undefined) ?? undefined}
         originalBillId={bill.id}
+        remainingInvoiceTotal={data.remainingInvoiceTotal}
         gstMode={(bill.gstMode as "inclusive" | "exclusive" | "none" | undefined) ?? "inclusive"}
         onDone={() => { void refetch(); }}
       />

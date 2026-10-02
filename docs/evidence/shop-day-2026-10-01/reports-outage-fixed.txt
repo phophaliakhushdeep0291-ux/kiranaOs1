@@ -1,0 +1,270 @@
+Browser tab: 5, Title: "Reports & Analytics · Artha", URL: "http://localhost:51977/reports".
+1 AXWebArea Reports & Analytics · Artha, URL: localhost:51977/reports
+	2 container root
+		3 link Description: Skip to main content, Value: localhost:51977/reports#main-content
+		4 container
+			5 link Description: Artha home, Value: localhost:51977/dashboard
+			6 heading Reports & Analytics, Value: 1
+				7 text Reports & Analytics
+			8 text QA Full Shop Day  ·  Cloud paused
+			9 button Search products, bills, and customers
+			10 link Description: Open backup and sync status, Value: localhost:51977/sync-status
+		11 text Cloud backup is paused because the backend is not reachable. Local billing still works. 
+		12 link Description: Open Sync Status ->, Value: localhost:51977/sync-status
+		13 text 1 change waiting to back up
+		14 text Will retry automatically when the connection is healthy.
+		15 button Retry now
+		16 link Description: View, Value: localhost:51977/sync-status
+		17 container main-content
+			18 text Reports & Analytics page loaded
+			19 container
+				20 text 1 changes awaiting sync
+				21 pop up button (collapsed) 26 Sept 2026 - 02 Oct 2026, Secondary Actions: Expand
+					22 image
+					23 text 26 Sept 2026 - 02 Oct 2026
+				24 pop up button (collapsed) Filters, Secondary Actions: Expand
+					25 image
+					26 text Filters
+				27 button Export
+					28 image
+					29 text Export
+				30 button Refresh reports
+					31 image
+			32 text Expense totals include saved changes on this device. Cloud updates are pending; check sync before finalising the day.
+			33 container
+				34 text REPORTS FOR YOUR SHOP TYPE 🛒 Kirana / General Store
+				35 button (collapsed) Description: Reports for your shop type, Secondary Actions: Expand
+			36 container Mobile report overview
+				37 container
+					38 text TOTAL SALES ₹798.50 26 Sept 2026 - 02 Oct 2026
+					39 image
+					40 text 100 % against the previous period CASH ₹299.75 UPI ₹250.50 BANK ₹0
+				41 container
+					42 image
+					43 text Profit (Est.) ₹318 Before expenses
+				44 container
+					45 image
+					46 text Net Profit ₹267.50 After expenses
+				47 container
+					48 image
+					49 text Expenses ₹50.50 Selected period
+				50 container
+					51 image
+					52 text Udhar Due ₹248.25 Needs collection
+			53 container
+				54 container
+					55 heading Sales Trend, Value: 2
+						56 text Sales Trend
+					57 image
+					58 pop up button (collapsed) This Week, Secondary Actions: Expand
+				59 text Total Sales
+				60 text ₹798.50
+				61 image
+				62 text 100 %
+				63 text vs last period
+				64 image
+					65 text 26 Sept
+					66 text 27 Sept
+					67 text 28 Sept
+					68 text 29 Sept
+					69 text 30 Sept
+					70 text 1 Oct
+					71 text 2 Oct
+					72 text ₹0
+					73 text ₹200
+					74 text ₹400
+					75 text ₹600
+					76 text ₹800
+				77 container
+					78 heading Category Performance, Value: 2
+						79 text Category Performance
+					80 image
+					81 pop up button (collapsed) This Week, Secondary Actions: Expand
+				82 image
+					83 text General
+					84 text ₹0
+					85 text ₹200
+					86 text ₹400
+					87 text ₹600
+					88 text ₹800
+					89 text ₹798
+				90 container
+					91 heading Payment Mode Breakdown, Value: 2
+						92 text Payment Mode Breakdown
+					93 image
+					94 pop up button (collapsed) This Week, Secondary Actions: Expand
+				95 container
+					96 image
+						97 container
+							98 image
+							99 image
+							100 image
+					101 text ₹798.50
+					102 text Total Sales
+				103 text Cash ₹299.75
+				104 container
+					105 text ( 37.5 %)
+				106 text UPI ₹200
+				107 container
+					108 text ( 25.0 %)
+				109 text Udhar ₹298.75
+				110 container
+					111 text ( 37.4 %)
+			112 container
+				113 container
+					114 heading Top Products, Value: 2
+						115 text Top Products
+					116 link Description: View all, Value: localhost:51977/products
+				117 text QA Day Tea 250g
+				118 text General
+				119 text ₹798
+				120 text 4 qty • 40.0% margin
+				121 container
+					122 heading Top Customers (Udhar), Value: 2
+						123 text Top Customers (Udhar)
+					124 link Description: View all, Value: localhost:51977/customers
+				125 text Walk-in
+				126 text Last purchase 01 Oct 2026
+				127 text ₹0
+				128 text Low
+				129 text QA Day Customer
+				130 text Last purchase 01 Oct 2026
+				131 text ₹248.25
+				132 text Low
+				133 container
+					134 heading Discounts Given, Value: 2
+						135 text Discounts Given
+					136 link Description: View all, Value: localhost:51977/bills
+				137 container
+					138 heading Sales by Staff, Value: 2
+						139 text Sales by Staff
+					140 link Description: View all, Value: localhost:51977/staff
+				141 text Owner / main counter
+				142 text 4 bills • avg ₹199.63
+				143 text ₹798.50
+				144 container
+					145 heading Daily Closing Summary, Value: 2
+						146 text Daily Closing Summary
+					147 link Description: View all, Value: localhost:51977/daily-closing
+				148 text 02 Oct 2026
+				149 text Sales ₹0 • Collection ₹0
+				150 text ₹0
+				151 text Expense ₹0
+				152 text 01 Oct 2026
+				153 text Sales ₹798.50 • Collection ₹550.25
+				154 text ₹267.50
+				155 text Expense ₹50.50
+				156 text 30 Sept 2026
+				157 text Sales ₹0 • Collection ₹0
+				158 text ₹0
+				159 text Expense ₹0
+				160 text 29 Sept 2026
+				161 text Sales ₹0 • Collection ₹0
+				162 text ₹0
+				163 text Expense ₹0
+				164 text 28 Sept 2026
+				165 text Sales ₹0 • Collection ₹0
+				166 text ₹0
+				167 text Expense ₹0
+			168 container
+				169 container
+					170 heading Sales by Hour, Value: 2
+						171 text Sales by Hour
+					172 image
+					173 text Peak 2pm • ₹998 (3 bills)
+					174 pop up button (collapsed) This Week, Secondary Actions: Expand
+				175 image
+					176 text 1am
+					177 text 3am
+					178 text 5am
+					179 text 7am
+					180 text 9am
+					181 text 11am
+					182 text 1pm
+					183 text 3pm
+					184 text 5pm
+					185 text 7pm
+					186 text 9pm
+					187 text 11pm
+					188 text ₹-350
+					189 text ₹0
+					190 text ₹350
+					191 text ₹700
+					192 text ₹1K
+				193 heading Busy Hours Insight, Value: 2
+					194 text Busy Hours Insight
+				195 container
+					196 text 2pm  is your busiest hour —  ₹998  across  3  bill s  in this period.
+				197 text Counted from every non-cancelled bill in the selected period using its own local time. Refunds are deducted from the hour they were recorded in, so these hours add up to Total Sales; the bill count stays the number of sales you rang up.
+			198 container
+				199 container
+					200 heading Stock Movement Snapshot, Value: 2
+						201 text Stock Movement Snapshot
+					202 image
+					203 pop up button (collapsed) This Week, Secondary Actions: Expand
+				204 image
+				205 text Total Stock In
+				206 text ₹120
+				207 text Value received
+				208 image
+				209 text Total Stock Out
+				210 text ₹600
+				211 text Value issued
+				212 image
+				213 text New Products Added
+				214 text 1
+				215 text In selected period
+				216 image
+				217 text Low Stock Items
+				218 text 0
+				219 text Require attention
+				220 container
+					221 heading Stock Movement Trend, Value: 2
+						222 text Stock Movement Trend
+					223 image
+					224 text (Value)
+					225 pop up button (collapsed) This Week, Secondary Actions: Expand
+				226 text → Stock In → Stock Out
+				227 image
+					228 text 26 Sept
+					229 text 27 Sept
+					230 text 28 Sept
+					231 text 29 Sept
+					232 text 30 Sept
+					233 text 1 Oct
+					234 text 2 Oct
+					235 text ₹0
+					236 text ₹150
+					237 text ₹300
+					238 text ₹450
+					239 text ₹600
+				240 heading Report Insights, Value: 2
+					241 text Report Insights
+				242 image
+				243 text Sales increased by 100% compared to the previous period.
+				244 text Cash currently leads the payment mode mix.
+				245 image
+				246 text General contributes 100% of total sales.
+				247 text Review product margins and stock depth in this category.
+				248 image
+				249 text 1 customers have outstanding dues.
+				250 text Follow up from Customers / Udhar to improve cash flow.
+				251 link Description: View Detailed Insights →, Value: localhost:51977/daily-closing
+			252 button (collapsed) Secondary Actions: Expand, Financial controls Accounting integrity and bank reconciliation for owners and finance review Open controls
+				253 image
+				254 text Financial controls
+				255 text Accounting integrity and bank reconciliation for owners and finance review
+				256 text Open controls
+				257 image
+		258 container Primary navigation
+			259 link Description: Home, Value: localhost:51977/dashboard
+			260 link Description: Sell, Value: localhost:51977/billing
+			261 link Description: Stock, Value: localhost:51977/inventory
+			262 link Description: Customers, Value: localhost:51977/customers
+			263 pop up button (collapsed) Description: Open all app areas, Secondary Actions: Expand
+		264 button Open assistant
+			265 image
+		266 container Notifications (F8)
+			267 content list
+
+The focused UI element is 1 AXWebArea Reports & Analytics · Artha, URL: localhost:51977/reports

@@ -1,0 +1,113 @@
+Browser tab: 5, Title: "Billing History · Artha", URL: "http://localhost:51977/bills/cmuqpp35a00xfsdaaxbi12wj7".
+1 AXWebArea Billing History · Artha, URL: localhost:51977/bills/cmuqpp35a00xfsdaaxbi12wj7
+	2 container root
+		3 link Description: Skip to main content, Value: localhost:51977/bills/cmuqpp35a00xfsdaaxbi12wj7#main-content
+		4 container
+			5 link Description: Artha home, Value: localhost:51977/dashboard
+			6 heading Billing History, Value: 1
+				7 text Billing History
+			8 text QA Full Shop Day  ·  Cloud paused
+			9 button Search products, bills, and customers
+			10 link Description: Open backup and sync status, Value: localhost:51977/sync-status
+		11 text Cloud backup is paused because the backend is not reachable. Local billing still works. 
+		12 link Description: Open Sync Status ->, Value: localhost:51977/sync-status
+		13 text 2 changes waiting to back up
+		14 text Will retry automatically when the connection is healthy.
+		15 button Retry now
+		16 link Description: View, Value: localhost:51977/sync-status
+		17 container main-content
+			18 text Billing History page loaded
+			19 link Description: Back, Value: localhost:51977/bills
+			20 heading KOS-2026-000006, Value: 1
+				21 text KOS-2026-000006
+			22 text Duplicate copy, audit trail, ledger impact, and sync status.
+			23 button WhatsApp
+				24 image
+				25 text WhatsApp
+			26 button Print duplicate
+				27 image
+				28 text Print duplicate
+			29 text Not sent
+			30 button Email receipt
+				31 image
+				32 text Email receipt
+			33 button Edit bill
+				34 image
+				35 text Edit bill
+			36 button Add items
+				37 image
+				38 text Add items
+			39 button Return items
+				40 image
+				41 text Return items
+			42 button Cancel with PIN
+				43 image
+				44 text Cancel with PIN
+			45 button Recycle bin
+				46 image
+				47 text Recycle bin
+			48 text TOTAL
+			49 text ₹200
+			50 text PAID
+			51 text ₹200
+			52 text UDHAR
+			53 text ₹0
+			54 text STATUS
+			55 text Paid
+			56 text synced
+			57 text Bill summary
+			58 text Date
+			59 text 2/10/2026, 2:09:20 pm
+			60 text Bill type
+			61 text normal sale
+			62 text Subtotal
+			63 text ₹199.50
+			64 text Discount
+			65 text ₹0
+			66 text Deleted
+			67 text No
+			68 text Record identity
+			69 text Device: Merged after backup
+			70 text Cloud: cmuqpp35a00xfsdaaxbi12wj7
+			71 text Customer details
+			72 container
+				73 text Name: Walk-in
+			74 container
+				75 text Mobile: Not available
+			76 container
+				77 text Current udhar: ₹0
+			78 text Items
+			79 container
+				80 text QA Day Tea 250g Portion: piece
+				81 definition list
+					82 container QTY
+						83 text QTY
+					84 container
+						85 text 1 piece
+					86 container RATE
+						87 text RATE
+					88 text ₹199.50
+					89 container TOTAL
+						90 text TOTAL
+					91 text ₹199.50
+			92 text Payment details
+			93 text CASH
+			94 text ₹200
+			95 text Total paid
+			96 text ₹200
+			97 text Customer ledger impact
+			98 text No ledger rows found for this bill.
+			99 text Audit trail
+			100 text No local audit actions yet.
+		101 container Primary navigation
+			102 link Description: Home, Value: localhost:51977/dashboard
+			103 link Description: Sell, Value: localhost:51977/billing
+			104 link Description: Stock, Value: localhost:51977/inventory
+			105 link Description: Customers, Value: localhost:51977/customers
+			106 pop up button (collapsed) Description: Open all app areas, Secondary Actions: Expand
+		107 button Open assistant
+			108 image
+		109 container Notifications (F8)
+			110 content list
+
+The focused UI element is 1 AXWebArea Billing History · Artha, URL: localhost:51977/bills/cmuqpp35a00xfsdaaxbi12wj7

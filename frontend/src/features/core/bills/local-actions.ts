@@ -1,4 +1,6 @@
-import { apiRequest } from "@/lib/api/http";
+import { dedupeBillsForDisplay } from "@/features/core/sync/bill-reconciliation";
+import { verifyOwnerPin } from "@/features/core/settings/api";
+import { apiRequest, isRecoverableNetworkError } from "@/lib/api/http";
 import { offlineDB } from "@/lib/offline/db";
 import { emitLocalDataChanged, readInstantCache, upsertCachedListItem, writeInstantCache } from "@/lib/offline/instant-cache";
 import { buildOutboxOperation } from "@/features/core/sync/outbox";
@@ -52,9 +54,12 @@ function stableCancellationId(prefix: string, bill: Partial<Bill> & Record<strin
 
 async function findBill(id: string): Promise<(Bill & Record<string, unknown>) | undefined> {
   const rows = await offlineDB.getAll<Record<string, unknown>>("bills").catch(() => []);
-  const match = rows.find((row) => row.id === id || row.local_id === id || row.server_id === id || row.billNo === id || row.billNumber === id);
+  // Resolve the surviving bill, not a retired local twin that still carries its
+  // server_id. Mutating the twin reintroduces its deletion marker into the cache.
+  const matches = (row: Record<string, unknown>) => row.id === id || row.local_id === id || row.server_id === id || row.billNo === id || row.billNumber === id;
+  const match = dedupeBillsForDisplay(rows, { includeUserDeleted: true }).find(matches);
   if (match) return match as Bill & Record<string, unknown>;
-  return readInstantCache<Array<Bill & Record<string, unknown>>>(BILL_CACHE_KEY, []).find((bill) => bill.id === id || bill.billNo === id || bill.billNumber === id);
+  return dedupeBillsForDisplay(readInstantCache<Array<Bill & Record<string, unknown>>>(BILL_CACHE_KEY, []), { includeUserDeleted: true }).find(matches);
 }
 
 function buildBillAudit(action: string, bill: Bill & Record<string, unknown>, ownerPin: string, reason?: string, oldValue?: unknown) {
@@ -196,7 +201,9 @@ async function buildCancellationStockChanges(bill: Bill & Record<string, unknown
         stockQuantity: nextStock,
         updatedAt: now,
         updated_at: now,
-        sync_status: "pending_sync",
+        // The bill cancellation owns this stock projection. Preserve an actual
+        // product edit's status; do not invent an independently queued edit.
+        sync_status: String(product.sync_status ?? "synced"),
         negativeStockWarning: nextStock < 0 ? `Stock remains negative after cancelling ${billNumberOf(bill)}.` : undefined,
         stockNeedsReview: nextStock < 0,
       } as Product & Record<string, unknown>;
@@ -252,6 +259,15 @@ export async function cancelBillWithOwnerPinLocalFirst(id: string, ownerPin: str
     updateBillCache(saved);
     emitLocalDataChanged({ type: "bill", id: saved.id, action: "cancelled" });
     return saved;
+  }
+
+  // Refuse an explicitly wrong PIN before projecting stock/money changes. An
+  // actual outage can still queue the action for authoritative server approval.
+  if (typeof navigator !== "undefined" && navigator.onLine === true) {
+    let verified: { valid: boolean } | undefined;
+    try { verified = await verifyOwnerPin(ownerPin); }
+    catch (error) { if (!isRecoverableNetworkError(error)) throw error; }
+    if (verified && verified.valid !== true) throw new Error("Owner PIN verification failed");
   }
 
   const now = new Date().toISOString();

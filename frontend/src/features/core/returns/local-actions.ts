@@ -10,7 +10,7 @@ import { buildOutboxOperation } from "@/features/core/sync/outbox";
 import { makeLocalEntity, readNumber, roundMoney } from "@/lib/offline/actions/utils";
 import { normaliseLocalCustomer } from "@/features/core/customers/local-actions";
 import { buildAuditLogOutboxInput, buildAuditLogRow } from "@/features/core/audit-logs/local-actions";
-import { buildReturnLineBalances, consumeReturnLine } from "@/features/core/returns/return-math";
+import { buildReturnLineBalances, consumeReturnLine, linkedReturnRefundTotal, remainingReturnQuantity } from "@/features/core/returns/return-math";
 import { withCustomerFinancialLock } from "@/features/core/ledger/customer-financial-lock";
 import { productTracksStock } from "@/features/core/inventory/stock-display";
 import { toInventoryBaseQty } from "@/features/core/inventory/calculations";
@@ -243,7 +243,12 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
     }, "bill_item", "pending_sync");
   });
 
-  const grandTotalMagnitude = gstMode === "exclusive" ? roundMoney(subtotal + totalGst) : subtotal;
+  const itemTotal = gstMode === "exclusive" ? roundMoney(subtotal + totalGst) : subtotal;
+  const remainingInvoiceTotal = originalBill && Number.isFinite(Number(originalBill.grandTotal))
+    ? roundMoney(Math.abs(Number(originalBill.grandTotal)) - activePreviousReturns.reduce((sum, row) => roundMoney(sum + Math.abs(readNumber(row.grandTotal, 0))), 0))
+    : undefined;
+  const grandTotalMagnitude = linkedReturnRefundTotal(itemTotal, remainingInvoiceTotal,
+    returnBalances.size > 0 && [...returnBalances.values()].every((balance) => remainingReturnQuantity(balance) === 0));
   const refundAmount = roundMoney(grandTotalMagnitude);
 
   // Resolve customer (for udhar refund) from cache; reduce local balance immediately.

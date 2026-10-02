@@ -1,0 +1,3 @@
+Browser tab: 5, Title: "Billing History · Artha", URL: "http://localhost:51977/bills/cmuq25t49004jsdaagpm5x8ac".
+There has been no change in the accessibility tree.
+The focused UI element is 1 AXWebArea Billing History · Artha, URL: localhost:51977/bills/cmuq25t49004jsdaagpm5x8ac

@@ -91,6 +91,11 @@ const UNSYNCED_LOCAL_STATUSES = new Set(["pending_sync", "syncing", "failed", "c
  * the server knows about, and they must still win here.
  */
 export function isSupersededLocalEcho(row: AnyRecord, idMap: Record<string, string>): boolean {
+  // A retired twin can still carry a server id and a stale pending edit from an
+  // older build. It must not suppress the surviving row in a recovery snapshot.
+  const mergedInto = row.merged_into_id ?? row.mergedIntoId;
+  if (typeof mergedInto === "string" && mergedInto.length > 0
+    && mergedInto !== row.id && mergedInto !== row.local_id) return true;
   const serverId = row.server_id ?? row.serverId;
   if (typeof serverId === "string" && serverId.length > 0) return false;
   const id = typeof row.id === "string" ? row.id : null;

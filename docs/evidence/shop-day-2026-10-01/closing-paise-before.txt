@@ -1,0 +1,223 @@
+Browser tab: 2, Title: "Daily Closing · Artha", URL: "http://localhost:51977/daily-closing".
+0 AXWebArea Daily Closing · Artha, URL: localhost:51977/daily-closing
+	1 container root
+		18 link Description: Skip to main content, Value: localhost:51977/daily-closing#main-content
+		19 container
+			20 button Description: Resize sidebar, 260 pixels. Use left and right arrow keys., Help: Drag, use arrow keys, or press Home/End to resize the sidebar
+			21 link Description: Artha Built for busy Indian stores, Value: localhost:51977/dashboard
+			22 button Collapse sidebar
+			23 container Main navigation
+				24 link Description: Dashboard, Value: localhost:51977/dashboard
+				25 link Description: Billing F2, Value: localhost:51977/billing
+				26 link Description: Inventory, Value: localhost:51977/inventory
+				27 button (expanded) Description: Collapse Inventory menu, Secondary Actions: Collapse
+				28 container
+					29 link Description: Products, Value: localhost:51977/products
+					30 link Description: Categories, Value: localhost:51977/categories
+					31 link Description: Stock In, Value: localhost:51977/inventory/stock-in
+					32 link Description: Stock Out, Value: localhost:51977/inventory/stock-out
+					33 link Description: Adjustments, Value: localhost:51977/inventory/adjustments
+					34 link Description: Stock Transfers, Value: localhost:51977/inventory/stock-transfers
+					35 link Description: Stock Counts, Value: localhost:51977/inventory/stock-counts
+					36 link Description: Batch & Expiry, Value: localhost:51977/inventory/batches
+				37 link Description: Customers / Udhar, Value: localhost:51977/customers
+				38 link Description: Purchases, Value: localhost:51977/purchase-bills
+				39 button Sales
+				40 container
+					41 link Description: Billing History, Value: localhost:51977/bills
+					42 link Description: Orders Received, Value: localhost:51977/orders-received
+					43 link Description: Sales Overview, Value: localhost:51977/sales-overview
+				44 link Description: Returns, Value: localhost:51977/returns
+				45 link Description: Reports, Value: localhost:51977/reports
+				46 link Description: Cash & Payments, Value: localhost:51977/money-statement
+				47 link Description: Accounting, Value: localhost:51977/accounting
+				48 button Business Tools
+				49 container
+					50 link Description: Activity & Insights, Value: localhost:51977/activity-insights
+					51 link Description: Offers & Discounts, Value: localhost:51977/offers
+					52 link Description: Loyalty, Value: localhost:51977/loyalty
+					53 link Description: Gift Cards, Value: localhost:51977/gift-cards
+					54 link Description: Financial Assurance, Value: localhost:51977/assurance
+				55 link Description: Expenses, Value: localhost:51977/expenses
+				56 link Description: Settings, Value: localhost:51977/settings
+			57 pop up button (collapsed) QF QA Full Shop Day QA Full Shop Day - Main · Jodhpur, ID: radix-:rf:, Secondary Actions: Expand
+				58 text QF
+				59 text QA Full Shop Day
+				60 text QA Full Shop Day - Main · Jodhpur
+		61 container
+			62 button Toggle sidebar
+			63 heading Daily Closing, Value: 1
+				64 text Daily Closing
+			77 pop up button (collapsed) QA Full Shop Day - Main MAIN · PRIMARY, ID: radix-:rp:, Secondary Actions: Expand
+				78 image
+				79 text QA Full Shop Day - Main
+				80 text MAIN
+				81 text  · PRIMARY
+				82 image
+			65 text Synced Just now
+			66 text Free · Business
+			67 link Description: Open sync alerts, Value: localhost:51977/sync-status
+			68 pop up button (collapsed) QF, ID: radix-:rh:, Secondary Actions: Expand
+		69 container main-content
+			70 text Daily Closing page loaded
+			83 image
+			84 heading Daily Closing, Value: 1
+				85 text Daily Closing
+			86 text Cash drawer and business summary from local data.
+			87 link Description: Reports, Value: localhost:51977/reports
+			88 button Print
+				89 image
+				90 text Print
+			91 button Share
+				92 image
+				93 text Share
+			94 button Refresh
+				95 image
+				96 text Refresh
+			97 text CLOSING DATE
+			98 date field (settable) Description: Closing date, Value: 2026-10-01
+				99 container
+					100 stepper
+					101 stepper
+					102 stepper
+				103 pop up button Show date picker Show date picker
+			104 image
+			105 text EXPECTED CASH IN DRAWER TONIGHT
+			106 text ₹750
+			107 text Opening float + cash sales + old udhar cash recovery + cash in - supplier cash paid - cash expenses - cash out
+			108 image
+			109 text Cash in 
+			110 text ₹300
+			111 image
+			112 text UPI in 
+			113 text ₹251
+			114 image
+			115 text Bank in 
+			116 text ₹0
+			117 text CASH, UPI, AND BANK SPLIT
+			118 text Cash in
+			119 text ₹300
+			120 container
+				121 text 54 %
+			122 text UPI in
+			123 text ₹251
+			124 container
+				125 text 46 %
+			126 text Bank in
+			127 text ₹0
+			128 container
+				129 text Old udhar recovered  ₹51
+			130 text OPENING FLOAT & CASH IN / OUT
+			131 container
+				132 text OPENING FLOAT FOR  2026-10-01
+			133 stepper (settable, integer) OPENING FLOAT FOR 2026-10-01, Value: 500, ID: opening-float
+			134 button Save
+			234 container
+				235 text The change you put in the drawer this morning. Declared each day rather than carried over, so yesterday's shortage never hides inside today's expected cash.  Currently ₹500.
+			136 text Cash expenses today
+			137 text ₹50
+			138 text Cash-paid expenses only — UPI and bank expenses never leave the drawer.
+			139 text RECORD CASH IN / OUT
+			140 stepper (settable)
+			141 text field (settable)
+			142 button Cash in
+				143 image
+				144 text Cash in
+			145 button Cash out
+				146 image
+				147 text Cash out
+			148 container
+				149 text Nothing recorded for  2026-10-01 . Log money you add to or take from the till so the count at closing can actually match.
+			150 text COUNT THE DRAWER — OVER / SHORT
+			151 container
+				152 text COUNTED CASH FOR  2026-10-01
+			153 stepper (settable, float) COUNTED CASH FOR 2026-10-01, Value: 749.75, ID: counted-cash
+			154 button Save
+			236 text Short by ₹0 vs expected ₹750.
+			155 text Saved on this device and kept for 90 days — repeated shorts on the same weekday are worth investigating.
+			156 text OVER / SHORT HISTORY
+			157 text No drawer counts saved yet. Count tonight's drawer to start the history.
+			158 image
+			159 heading Income today, Value: 2
+				160 text Income today
+			161 text Everything that came in
+			162 image
+			163 text Total sales
+			164 text All bills for the day
+			165 text ₹799
+			166 image
+			167 text Cash sales
+			168 text ₹300
+			169 image
+			170 text UPI sales
+			171 text ₹200
+			172 image
+			173 text Bank sales
+			174 text ₹0
+			175 image
+			176 text Old udhar recovered
+			177 text Cash ₹0 / UPI ₹51 / Bank ₹0
+			178 text ₹51
+			179 image
+			180 heading Credit & outgoing, Value: 2
+				181 text Credit & outgoing
+			182 text What went out or remains due
+			183 image
+			184 text Udhar given today
+			185 text Credit extended to customers
+			186 text ₹299
+			187 image
+			188 text Supplier cash paid
+			189 text ₹0
+			190 image
+			191 text Supplier UPI paid
+			192 text ₹0
+			193 image
+			194 text Supplier bank paid
+			195 text ₹0
+			196 text Supplier due (unpaid)
+			197 text Purchase bills not yet paid
+			198 text ₹0
+			199 image
+			200 heading Top sold products, Value: 2
+				201 text Top sold products
+			202 table
+				203 row
+					204 cell
+						205 text PRODUCT
+					206 cell
+						207 text QTY
+					208 cell
+						209 text SALES
+				210 row
+					211 cell
+						212 text 1 QA Day Tea 250g
+					213 cell
+						214 text 4
+					215 cell
+						216 text ₹798
+			217 image
+			218 heading Low-stock items, Value: 2
+				219 text Low-stock items
+			220 text No low-stock items
+			221 image
+			222 heading Sync check before closing, Value: 2
+				223 text Sync check before closing
+			224 text Ensure all data is backed up to the cloud
+			225 image
+			226 text 0
+			227 text Pending backup
+			228 image
+			229 text 0
+			230 text Failed sync
+			231 image
+			232 text 0
+			233 text Conflicts
+		73 button Voice assistant
+		74 button Report a problem
+		75 button Open assistant
+			76 image
+		16 container Notifications (F8)
+			17 content list
+
+The focused UI element is 153 stepper (settable, float) COUNTED CASH FOR 2026-10-01, Value: 749.75, ID: counted-cash

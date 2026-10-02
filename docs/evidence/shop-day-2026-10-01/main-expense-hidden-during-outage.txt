@@ -1,0 +1,114 @@
+Browser tab: 3, Title: "Expenses · Artha", URL: "http://localhost:51977/expenses".
+1 AXWebArea Expenses · Artha, URL: localhost:51977/expenses
+	2 container root
+		3 link Description: Skip to main content, Value: localhost:51977/expenses#main-content
+		4 container
+			5 button Description: Resize sidebar, 260 pixels. Use left and right arrow keys., Help: Drag, use arrow keys, or press Home/End to resize the sidebar
+			6 link Description: Artha Built for busy Indian stores, Value: localhost:51977/dashboard
+			7 button Collapse sidebar
+			8 container Main navigation
+				9 link Description: Dashboard, Value: localhost:51977/dashboard
+				10 link Description: Billing F2, Value: localhost:51977/billing
+				11 link Description: Inventory, Value: localhost:51977/inventory
+				12 button (expanded) Description: Collapse Inventory menu, Secondary Actions: Collapse
+				13 container
+					14 link Description: Products, Value: localhost:51977/products
+					15 link Description: Categories, Value: localhost:51977/categories
+					16 link Description: Stock In, Value: localhost:51977/inventory/stock-in
+					17 link Description: Stock Out, Value: localhost:51977/inventory/stock-out
+					18 link Description: Adjustments, Value: localhost:51977/inventory/adjustments
+					19 link Description: Stock Transfers, Value: localhost:51977/inventory/stock-transfers
+					20 link Description: Stock Counts, Value: localhost:51977/inventory/stock-counts
+					21 link Description: Batch & Expiry, Value: localhost:51977/inventory/batches
+				22 link Description: Customers / Udhar, Value: localhost:51977/customers
+				23 link Description: Purchases, Value: localhost:51977/purchase-bills
+				24 button Sales
+				25 container
+					26 link Description: Billing History, Value: localhost:51977/bills
+					27 link Description: Orders Received, Value: localhost:51977/orders-received
+					28 link Description: Sales Overview, Value: localhost:51977/sales-overview
+				29 link Description: Returns, Value: localhost:51977/returns
+				30 link Description: Reports, Value: localhost:51977/reports
+				31 link Description: Cash & Payments, Value: localhost:51977/money-statement
+				32 link Description: Accounting, Value: localhost:51977/accounting
+				33 button Business Tools
+				34 container
+					35 link Description: Activity & Insights, Value: localhost:51977/activity-insights
+					36 link Description: Offers & Discounts, Value: localhost:51977/offers
+					37 link Description: Loyalty, Value: localhost:51977/loyalty
+					38 link Description: Gift Cards, Value: localhost:51977/gift-cards
+					39 link Description: Financial Assurance, Value: localhost:51977/assurance
+				40 link Description: Expenses, Value: localhost:51977/expenses
+				41 link Description: Settings, Value: localhost:51977/settings
+			42 text Cloud paused 5 Local billing works; backup will retry
+			43 link Description: Sync Now, Value: localhost:51977/sync-status
+			44 pop up button (collapsed) QF QA Full Shop Day Jodhpur, ID: radix-:rf:, Secondary Actions: Expand
+				45 text QF
+				46 text QA Full Shop Day
+				47 text Jodhpur
+		48 container
+			49 button Toggle sidebar
+			50 heading Expenses, Value: 1
+				51 text Expenses
+			52 text Cloud paused
+			53 text Free · Business
+			54 link Description: Open sync alerts, Value: localhost:51977/sync-status
+			55 pop up button (collapsed) QF, ID: radix-:rh:, Secondary Actions: Expand
+		56 text Cloud backup is paused because the backend is not reachable. Local billing still works. 
+		57 link Description: Open Sync Status ->, Value: localhost:51977/sync-status
+		58 text 5 changes waiting to back up
+		59 text Will retry automatically when the connection is healthy.
+		60 button Retry now
+		61 link Description: View, Value: localhost:51977/sync-status
+		62 container main-content
+			63 text Expenses page loaded
+			64 image
+			65 text Today's Expenses
+			66 text ₹0
+			67 text vs yesterday
+			68 image
+			69 text This Month's Expenses
+			70 text ₹0
+			71 text vs last month
+			72 image
+			73 text Pending Payouts
+			74 text ₹0
+			75 text 0 payments pending
+			76 image
+			77 text Top Expense Category
+			78 text —
+			79 text No expenses yet
+			80 container
+				81 image
+				82 text field (settable)
+			83 combo box (collapsed) Value: This Month, Secondary Actions: Expand
+				84 text This Month
+			85 combo box (collapsed) Value: All Categories, Secondary Actions: Expand
+				86 text All Categories
+			87 button Export
+				88 image
+				89 text Export
+			90 button Add Expense
+				91 image
+				92 text Add Expense
+			93 heading Expenses by Category, Value: 3
+				94 text Expenses by Category
+			95 text This month
+			96 text No expenses this month yet.
+			97 heading Monthly Spending Trend, Value: 3
+				98 text Monthly Spending Trend
+			99 text Last 6 months
+			100 text Average monthly expense: 
+			101 text ₹0
+			102 heading All Expenses, Value: 3
+				103 text All Expenses
+			104 text Showing 1 to 1 of 1 expenses
+			105 text Couldn't load expenses. Check your connection and retry.
+		106 button Voice assistant
+		107 button Report a problem
+		108 button Open assistant
+			109 image
+		110 container Notifications (F8)
+			111 content list
+
+The focused UI element is 33 button Business Tools

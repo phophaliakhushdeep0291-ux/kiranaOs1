@@ -182,3 +182,10 @@ export function unlinkedReturnLineAmount(input: {
   const tax = input.gstMode === "exclusive" ? roundMoney(net * (Number(input.gstRate) || 0) / 100) : 0;
   return { net, tax, total: roundMoney(net + tax) };
 }
+
+/** Settle invoice round-off on the final return without changing item values or GST. */
+export function linkedReturnRefundTotal(itemTotal: number, remainingInvoiceTotal: number | undefined, finalInvoiceReturn: boolean): number {
+  if (remainingInvoiceTotal == null || !Number.isFinite(remainingInvoiceTotal)) return roundMoney(itemTotal);
+  const remaining = Math.max(0, roundMoney(remainingInvoiceTotal));
+  return finalInvoiceReturn ? remaining : Math.min(remaining, roundMoney(itemTotal));
+}

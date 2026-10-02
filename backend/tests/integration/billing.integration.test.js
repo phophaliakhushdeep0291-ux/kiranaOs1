@@ -951,6 +951,32 @@ if (ctx.skip) {
       assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "SALE_RETURN_CREATED" } }), 0);
     });
 
+    for (const [rate, quantity, total] of [[199.5, 1, 200], [199.4, 1, 199], [199.4, 2, 399]]) {
+      test(`linked returns reverse rounded sale ${rate} x ${quantity} = ${total} exactly`, async () => {
+        const { tenant, ownerAuth } = await ownerCtx();
+        const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: rate });
+        const sale = assertSuccess(await ctx.post("/api/bills/confirm", {
+          ...billPayload(product, { quantity, ratePerRateUnit: rate, gstMode: "none", actualAmount: total, buyerPaidAmount: total, payments: [{ mode: "cash", amount: total }] }), roundOff: true,
+        }, { token: ownerAuth.accessToken }), 201);
+        assert.equal(sale.grandTotal, total);
+        const returned = [];
+        for (let index = 0; index < quantity; index++) {
+          const payload = { refundMode: "cash", returnOfBillId: sale.id, reason: "Rounded invoice return", idempotencyKey: `rounded-return-${index}`, clientBillId: `rounded-return-${index}`,
+            items: [{ originalBillItemId: sale.items[0].id, productId: product.id, name: product.name, quantity: 1, enteredUnit: "piece", ratePerRateUnit: rate }] };
+          const result = assertSuccess(await ctx.post("/api/bills/returns", payload, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 201);
+          returned.push(result);
+          assert.equal(result.subtotal, -rate);
+          assert.equal(result.gst, 0);
+          const replay = assertSuccess(await ctx.post("/api/bills/returns", payload, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 201);
+          assert.equal(replay.id, result.id);
+        }
+        assert.equal(Math.round(returned.reduce((sum, row) => sum + row.grandTotal, total) * 100), 0);
+        const payments = await ctx.db.payment.findMany({ where: { shopId: tenant.shop.id } });
+        assert.equal(payments.reduce((sum, row) => sum + Number(row.amountPaise), 0), 0);
+        assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 10);
+      });
+    }
+
     test("partial returns reverse invoice discount and GST exactly without refresh-era drift", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, {

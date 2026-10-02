@@ -1720,7 +1720,15 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
         }
       }
 
-      const grandTotalMagnitude = effectiveGstMode === "exclusive" ? addMoney(subtotal, totalGst) : subtotal;
+      const itemTotal = effectiveGstMode === "exclusive" ? addMoney(subtotal, totalGst) : subtotal;
+      // Reverse the original bill's round-off only when its final items come back.
+      // Keep item subtotal and GST intact, and never refund more than remains.
+      const remainingInvoiceTotal = original
+        ? Math.max(0, subtractMoney(Math.abs(Number(original.grandTotal)), addMoney(...previouslyReturned.map((row) => Math.abs(Number(row.grandTotal))))))
+        : itemTotal;
+      const finalInvoiceReturn = original && originalFinancialByLine.size > 0
+        && [...originalFinancialByLine.values()].every((line) => line.returnedQuantity >= line.soldQuantity - 0.000001);
+      const grandTotalMagnitude = finalInvoiceReturn ? remainingInvoiceTotal : Math.min(itemTotal, remainingInvoiceTotal);
       const refundAmount = round2(grandTotalMagnitude);
       const resolvedCustomerId = customerId ?? original?.customerId ?? null;
       const returnCustomer = !original && resolvedCustomerId

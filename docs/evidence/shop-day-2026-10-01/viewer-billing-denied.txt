@@ -1,0 +1,96 @@
+Browser tab: 5, Title: "Dashboard · Artha", URL: "http://localhost:51977/dashboard".
+1 AXWebArea Dashboard · Artha, URL: localhost:51977/dashboard
+	2 container root
+		27 link Description: Skip to main content, Value: localhost:51977/dashboard#main-content
+		28 container
+			29 link Description: Artha home, Value: localhost:51977/dashboard
+			30 heading Dashboard, Value: 1
+				31 text Dashboard
+			32 text QA Full Shop Day  ·  Synced
+			33 button Search products, bills, and customers
+			34 link Description: Open backup and sync status, Value: localhost:51977/sync-status
+		35 container main-content
+			36 text Dashboard page loaded
+			37 container
+				38 text TODAY'S NET SALES
+				39 text ₹0
+				40 image
+				41 text 100 % vs yesterday · 2 bills
+				42 link Description: Synced, Value: localhost:51977/sync-status
+				43 text CASH
+				44 text ₹0
+				45 text UPI
+				46 text ₹0
+				47 text BANK
+				48 text ₹0
+				49 link Description: New sale, Value: localhost:51977/billing
+				50 link Description: Collect due, Value: localhost:51977/customers?filter=udhar
+			51 container
+				52 heading Shop health, Value: 2
+					53 text Shop health
+				54 text The numbers that need your attention
+				55 link Description: All reports, Value: localhost:51977/reports
+				56 link Description: Gross profit ₹0 -100% · Estimated today, Value: localhost:51977/reports
+				57 link Description: Udhar due ₹248 No change · Customers: 1, Value: localhost:51977/customers?filter=udhar
+				58 link Description: Expenses ₹0 -100% · Recorded today, Value: localhost:51977/expenses
+				59 link Description: Low stock 0 Stock is healthy, Value: localhost:51977/inventory
+			60 heading Recent Bills, Value: 2
+				61 text Recent Bills
+			62 link Description: View all, Value: localhost:51977/bills
+			63 link Description: Bill #5 Cash Walk-in ₹200, Value: localhost:51977/bills/cmuq25t49004jsdaagpm5x8ac
+			64 link Description: Bill #2 Cash Walk-in ₹-200, Value: localhost:51977/bills/cmuq21wg3003fsdaaed8v6vbh
+			65 link Description: Bill #4 Cash Walk-in ₹200, Value: localhost:51977/bills/cmuq21vsk001xsdaaaqtyq7ip
+			66 link Description: Bill #1 Cash Walk-in ₹-200, Value: localhost:51977/bills/cmuplqwqc0013cn7rg9yz9f0i
+			67 link Description: Bill #3 Udhar QA Day Customer ₹399, Value: localhost:51977/bills/cmupb5jnj005s14oropi8ezyc
+			68 container
+				69 heading Kirana daily workflow, Value: 2
+					70 text Kirana daily workflow
+				71 link Description: Shop setup, Value: localhost:51977/settings/store-profile
+				72 link Description: Fast counter billing Scan items or sell loose quantity, Value: localhost:51977/billing
+				73 link Description: Refill stock Receive supplier purchase bills, Value: localhost:51977/purchase-bills
+				74 link Description: Pack and loose setup Add packets, kg, litre, and pieces, Value: localhost:51977/products?add=1
+				75 link Description: Customer orders Review orders received from your link, Value: localhost:51977/orders-received
+			76 container
+				77 heading Sales Trend, Value: 2
+					78 text Sales Trend
+				79 text Total Sales ₹799 — vs previous period
+				80 pop up button (collapsed) Description: Change period — currently This Week, Secondary Actions: Expand
+				81 image
+					82 text 26 Sept
+					83 text 27 Sept
+					84 text 28 Sept
+					85 text 29 Sept
+					86 text 30 Sept
+					87 text 1 Oct
+					88 text 2 Oct
+					89 text ₹0
+					90 text ₹200
+					91 text ₹400
+					92 text ₹600
+					93 text ₹800
+			94 container
+				95 heading Quick Insights, Value: 2
+					96 text Quick Insights
+				97 image
+				98 text Sales decreased by 100% compared with yesterday. Review the sales trend and payment mix.
+				99 image
+				100 text QA Day Tea 250g is leading sales. Keep the best sellers available in stock.
+				101 image
+				102 text 1 customers have outstanding dues. Follow up to improve cash flow.
+				103 link Description: View detailed insights, Value: localhost:51977/reports
+			104 container
+				105 heading Top products, Value: 2
+					106 text Top products
+				107 link Description: View all, Value: localhost:51977/products
+				108 link Description: QA QA Day Tea 250g 4 sold ₹798, Value: localhost:51977/products
+		109 container Primary navigation
+			110 link Description: Home, Value: localhost:51977/dashboard
+			111 link Description: Stock, Value: localhost:51977/inventory
+			112 link Description: Customers, Value: localhost:51977/customers
+			113 pop up button (collapsed) Description: Open all app areas, Secondary Actions: Expand
+		114 button Open assistant
+			115 image
+		25 container Notifications (F8)
+			26 content list
+
+The focused UI element is 35 container main-content

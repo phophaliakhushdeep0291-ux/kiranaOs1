@@ -26,7 +26,9 @@ import {
   type CashMovementKind,
   type OpeningFloat,
 } from "@/features/core/reports/cash-drawer";
-import { listExpenses } from "@/features/core/expenses/api";
+import { formatMoney } from "@/lib/money";
+import { loadReportExpenses, reportExpensesInRange } from "@/features/core/reports/expense-reporting";
+import { LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
 import { shareDailyClosingOnWhatsapp } from "@/features/core/reports/daily-summary-share";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
@@ -37,7 +39,7 @@ import { escapeHtml } from "@/lib/escape-html";
 type OrderClosingTenders = Pick<DailyClosingReport, "rentalTenders" | "furnitureTenders">;
 
 function fmt(value: number | undefined) {
-  return "₹" + Math.round(value ?? 0).toLocaleString("en-IN");
+  return value == null || !Number.isFinite(value) ? "—" : formatMoney(value);
 }
 
 function printClosing(report: DailyClosingReport, t: Translate) {
@@ -88,11 +90,6 @@ export default function DailyClosingPage() {
     cashUpi: notif.dailyCashUpi !== false,
     udhar: notif.dailyUdhar !== false,
   };
-  // A failed server read blocks closing instead of reporting zero cash expenses.
-  async function loadCashExpenseTotal(forDate: string): Promise<number> {
-    return paidCashExpenseTotal(await listExpenses({ from: forDate, to: forDate, status: "paid" }));
-  }
-
   const [date, setDate] = useState(toDateInputValue(new Date()));
   const [report, setReport] = useState<DailyClosingReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,6 +104,7 @@ export default function DailyClosingPage() {
   const [movementAmount, setMovementAmount] = useState("");
   const [movementNote, setMovementNote] = useState("");
   const [cashExpenses, setCashExpenses] = useState(0);
+  const [expensesAreLocal, setExpensesAreLocal] = useState(false);
   const reportRef = useRef<DailyClosingReport | null>(null);
   const refreshTimer = useRef<number | null>(null);
   const countedDraftDirty = useRef(false);
@@ -121,11 +119,10 @@ export default function DailyClosingPage() {
     const showLoader = options?.showLoader ?? !reportRef.current;
     if (showLoader) setLoading(true);
     try {
-      // The float and till movements live on this device; cash expenses are server-backed,
-      // so they are fetched and handed to the same drawer calculation.
-      const [drawer, expenseCash, counts, floats, movements, rentalClosing] = await Promise.all([
+      // Include saved expense edits immediately, even before their cloud backup.
+      const [drawer, expenseLedger, counts, floats, movements, rentalClosing] = await Promise.all([
         loadDrawerAdjustments(date),
-        loadCashExpenseTotal(date),
+        loadReportExpenses(date),
         loadDrawerCounts(),
         loadOpeningFloats(),
         loadCashMovements(),
@@ -133,10 +130,12 @@ export default function DailyClosingPage() {
       ]);
       if (businessType === "clothing" && !rentalClosing?.rentalTenders) throw new Error(t("rental.closing.unavailable"));
       if (businessType === "furniture" && !rentalClosing?.furnitureTenders) throw new Error(t("furniture.closing.unavailable"));
+      const expenseCash = paidCashExpenseTotal(reportExpensesInRange(expenseLedger.rows, { from: date, to: date }));
       const next = await buildDailyClosingReport(date, { ...drawer, cashExpenses: expenseCash, rentalTenders: businessType === "clothing" ? rentalClosing?.rentalTenders : undefined, furnitureTenders: businessType === "furniture" ? rentalClosing?.furnitureTenders : undefined });
       if (generation !== loadGeneration.current) return;
       setCashExpenses(expenseCash);
-      setReport(next);
+      setReport({ ...next, isLocalEstimate: next.isLocalEstimate || expenseLedger.isLocalEstimate });
+      setExpensesAreLocal(expenseLedger.isLocalEstimate);
       setDrawerCounts(counts);
       setOpeningFloats(floats);
       setCashMovements(movements);
@@ -159,6 +158,7 @@ export default function DailyClosingPage() {
     };
     window.addEventListener("kirana:local-data-changed", refresh);
     window.addEventListener("kirana:sync-queue-updated", refresh);
+    window.addEventListener(LOCATION_CHANGED_EVENT, refresh);
     return () => {
       loadGeneration.current += 1;
       if (refreshTimer.current) {
@@ -167,6 +167,7 @@ export default function DailyClosingPage() {
       }
       window.removeEventListener("kirana:local-data-changed", refresh);
       window.removeEventListener("kirana:sync-queue-updated", refresh);
+      window.removeEventListener(LOCATION_CHANGED_EVENT, refresh);
     };
   }, [load]);
 
@@ -299,6 +300,8 @@ export default function DailyClosingPage() {
 
       {report?.furnitureTenders && <p className="rounded-xl border bg-card p-3 text-sm">{t("furniture.closing.net")}: {t("rental.collection.cash")} {fmt(report.furnitureTenders.cash)} · {t("rental.collection.upi")} {fmt(report.furnitureTenders.upi)} · {t("rental.collection.bank")} {fmt(report.furnitureTenders.bank)}</p>}
       {report?.rentalTenders && <p className="rounded-xl border bg-card p-3 text-sm">{t("rental.closing.net")}: {t("rental.collection.cash")} {fmt(report.rentalTenders.cash)} · {t("rental.collection.upi")} {fmt(report.rentalTenders.upi)} · {t("rental.collection.bank")} {fmt(report.rentalTenders.bank)} · {t("rental.collection.other")} {fmt(report.rentalTenders.other)}</p>}
+
+      {expensesAreLocal && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">{t("reports.expenses.localEstimate")}</p>}
 
       {/* ── Date picker ─────────────────────────────────────────────────── */}
       <div className="flex items-end gap-4">

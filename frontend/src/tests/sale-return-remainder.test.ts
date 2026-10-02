@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { buildReturnLineBalances, consumeReturnLine, returnPreviewQuantity } from "@/features/core/returns/return-math";
+import { buildReturnLineBalances, consumeReturnLine, linkedReturnRefundTotal, returnPreviewQuantity } from "@/features/core/returns/return-math";
 
 describe("linked return remainder accounting", () => {
+  it("previews rounded final refunds and caps intermediate refunds at the remaining invoice", () => {
+    expect(linkedReturnRefundTotal(199.5, 200, true)).toBe(200);
+    expect(linkedReturnRefundTotal(199.4, 199, true)).toBe(199);
+    expect(linkedReturnRefundTotal(199.4, 199.6, false)).toBe(199.4);
+    expect(linkedReturnRefundTotal(199.4, 199.6, true)).toBe(199.6);
+    expect(linkedReturnRefundTotal(0.49, 0.25, false)).toBe(0.25);
+    expect(linkedReturnRefundTotal(199.5, undefined, true)).toBe(199.5);
+  });
   it("keeps a live preview valid as another return consumes its selected quantity", () => {
     const balance = buildReturnLineBalances({
       lines: [{ id: "line-1", quantity: 2, lineTotal: 40, lineDiscount: 0, lineCost: 20, gstRate: 0 }],

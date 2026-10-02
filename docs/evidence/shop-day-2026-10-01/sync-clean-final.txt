@@ -1,0 +1,114 @@
+Browser tab: 5, Title: "Cloud Backup · Artha", URL: "http://localhost:51977/sync-status".
+1 AXWebArea Cloud Backup · Artha, URL: localhost:51977/sync-status
+	2 container root
+		3 link Description: Skip to main content, Value: localhost:51977/sync-status#main-content
+		4 container
+			5 link Description: Artha home, Value: localhost:51977/dashboard
+			6 heading Cloud Backup, Value: 1
+				7 text Cloud Backup
+			8 text QA Full Shop Day  ·  Synced
+			9 button Search products, bills, and customers
+			10 link Description: Open backup and sync status, Value: localhost:51977/sync-status
+		11 container main-content
+			12 text Cloud Backup page loaded
+			13 container
+				14 heading Sync Status, Value: 2
+					15 image
+					16 text Sync Status
+				17 text Data safe locally and backed up 0 pending cloud backup
+				18 button (disabled) Retry failed
+					19 image
+					20 text Retry failed
+				21 button Force sync
+					22 image
+					23 text Force sync
+			24 text Internet
+			25 image
+			26 text Online
+			27 text Internet available.
+			28 text Backend
+			29 image
+			30 text Online
+			31 text Cloud backup can run.
+			32 text Last backup
+			33 image
+			34 text less than a minute ago
+			35 text Last successful cloud backup.
+			36 text Pending
+			37 image
+			38 text 0
+			39 text 0 changes pending cloud backup.
+			40 text Retry / review
+			41 image
+			42 text 0 / 0
+			43 text Retry failed backup items. Review only if it remains blocked.
+			44 image
+			45 text Device sync health
+			46 text Server-confirmed progress for every active terminal in this shop.
+			47 text 1 current
+			48 text Fleet healthy
+			49 text Chrome on macOS
+			50 text fb9121f5-6fc4-48af-a365-9939854245c2
+			51 text Current
+			52 text Sequence lag
+			53 text 0
+			54 text Presence
+			55 text Online
+			56 text Applied less than a minute ago
+			57 text This device
+			58 text A terminal becomes current only after it applies data locally and acknowledges sequence 67.
+			59 text Sync diagnostics
+			60 text Plain-language explanations for anything that could not back up.
+			61 button Refresh sync diagnostics
+			62 text Pending
+			63 text : 
+			64 text 0
+			65 text Failed
+			66 text : 
+			67 text 1
+			68 text Conflicts
+			69 text : 
+			70 text 0
+			71 text Retries
+			72 text : 
+			73 text 89
+			74 text Last successful upload less than a minute ago
+			75 content list
+				76 container
+					77 text Saving a bill failed because of a temporary server problem. Auto-retry This will retry automatically when the connection is healthy.
+			78 text Device and cloud settings
+			79 text Useful for checking which shop device is backing up data.
+			80 image
+			81 text Device ID
+			82 text fb9121f5-6fc4-48af-a365-9939854245c2
+			83 image
+			84 text Server URL
+			85 button Edit
+			86 text http://localhost:3018/api
+			87 image
+			88 text Subscription sync
+			89 container
+				90 text Sync allowed
+			91 button (collapsed) Show server status details, Secondary Actions: Expand
+				92 text Show server status details
+			93 text Pending operations
+			94 text No pending changes. Cloud backup queue is clear.
+			95 text No pending changes. Cloud backup queue is clear.
+			96 text Failed operations
+			97 text No failed changes right now.
+			98 text No failed changes right now.
+			99 text Backup review
+			100 text No cloud backup item needs review.
+			101 text No review items. Data is clean for backup.
+		102 container Primary navigation
+			103 link Description: Home, Value: localhost:51977/dashboard
+			104 link Description: Sell, Value: localhost:51977/billing
+			105 link Description: Stock, Value: localhost:51977/inventory
+			106 link Description: Customers, Value: localhost:51977/customers
+			107 pop up button (collapsed) Description: Open all app areas, Secondary Actions: Expand
+		108 button Open assistant
+			109 image
+		110 container Notifications (F8)
+			111 content list
+
+The focused UI element is 10 link Description: Open backup and sync status, URL: localhost:51977/sync-status

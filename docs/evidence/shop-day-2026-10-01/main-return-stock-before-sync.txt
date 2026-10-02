@@ -1,0 +1,210 @@
+Browser tab: 3, Title: "Inventory · Artha", URL: "http://localhost:51977/inventory".
+1 AXWebArea Inventory · Artha, URL: localhost:51977/inventory
+	2 container root
+		3 link Description: Skip to main content, Value: localhost:51977/inventory#main-content
+		4 container
+			5 button Description: Resize sidebar, 260 pixels. Use left and right arrow keys., Help: Drag, use arrow keys, or press Home/End to resize the sidebar
+			6 link Description: Artha Built for busy Indian stores, Value: localhost:51977/dashboard
+			7 button Collapse sidebar
+			8 container Main navigation
+				9 link Description: Dashboard, Value: localhost:51977/dashboard
+				10 link Description: Billing F2, Value: localhost:51977/billing
+				11 link Description: Inventory Current page, Value: localhost:51977/inventory
+				12 button (expanded) Description: Collapse Inventory menu, Secondary Actions: Collapse
+				13 container
+					14 link Description: Products, Value: localhost:51977/products
+					15 link Description: Categories, Value: localhost:51977/categories
+					16 link Description: Stock In, Value: localhost:51977/inventory/stock-in
+					17 link Description: Stock Out, Value: localhost:51977/inventory/stock-out
+					18 link Description: Adjustments, Value: localhost:51977/inventory/adjustments
+					19 link Description: Stock Transfers, Value: localhost:51977/inventory/stock-transfers
+					20 link Description: Stock Counts, Value: localhost:51977/inventory/stock-counts
+					21 link Description: Batch & Expiry, Value: localhost:51977/inventory/batches
+				22 link Description: Customers / Udhar, Value: localhost:51977/customers
+				23 link Description: Purchases, Value: localhost:51977/purchase-bills
+				24 button Sales
+				25 container
+					26 link Description: Billing History, Value: localhost:51977/bills
+					27 link Description: Orders Received, Value: localhost:51977/orders-received
+					28 link Description: Sales Overview, Value: localhost:51977/sales-overview
+				29 link Description: Returns, Value: localhost:51977/returns
+				30 link Description: Reports, Value: localhost:51977/reports
+				31 link Description: Cash & Payments, Value: localhost:51977/money-statement
+				32 link Description: Accounting, Value: localhost:51977/accounting
+				33 button Business Tools
+				34 link Description: Expenses, Value: localhost:51977/expenses
+				35 link Description: Settings, Value: localhost:51977/settings
+			36 text Cloud paused 4 Local billing works; backup will retry
+			37 link Description: Sync Now, Value: localhost:51977/sync-status
+			38 pop up button (collapsed) QF QA Full Shop Day Jodhpur, ID: radix-:rf:, Secondary Actions: Expand
+				39 text QF
+				40 text QA Full Shop Day
+				41 text Jodhpur
+		42 container
+			43 button Toggle sidebar
+			44 heading Inventory, Value: 1
+				45 text Inventory
+			46 text Cloud paused
+			47 text Free · Business
+			48 link Description: Open sync alerts, Value: localhost:51977/sync-status
+			49 pop up button (collapsed) QF, ID: radix-:rh:, Secondary Actions: Expand
+		50 text Cloud backup is paused because the backend is not reachable. Local billing still works. 
+		51 link Description: Open Sync Status ->, Value: localhost:51977/sync-status
+		52 text 4 changes waiting to back up
+		53 text Will retry automatically when the connection is healthy.
+		54 button Retry now
+		55 link Description: View, Value: localhost:51977/sync-status
+		56 container main-content
+			57 text Inventory page loaded
+			58 container
+				59 text STOCK TOOLS FOR YOUR SHOP TYPE 🛒 Kirana / General Store Keep loose and packed stock in the unit you actually sell in, and refill before the shelf runs empty.
+				60 container :r3n:
+					61 link Description: Batch and expiry, Value: localhost:51977/inventory/batches
+					62 link Description: Stock Counts, Value: localhost:51977/inventory/stock-counts
+					63 link Description: Change shop type, Value: localhost:51977/settings/store-profile
+			64 text Total Stock Value
+			65 image
+			66 text ₹1,800
+			67 text At current cost
+			68 text Total SKUs
+			69 image
+			70 text 1
+			71 text Products counted as stock
+			72 text Low Stock Items
+			73 image
+			74 text 0
+			75 text Require attention
+			76 text Out of Stock Items
+			77 image
+			78 text 0
+			79 text Take immediate action
+			80 button Add Stock Increase inventory
+				81 image
+				82 text Add Stock
+				83 text Increase inventory
+			84 button Stock Correction Adjust stock levels
+				85 image
+				86 text Stock Correction
+				87 text Adjust stock levels
+			88 button Damage Entry Record damaged items
+				89 image
+				90 text Damage Entry
+				91 text Record damaged items
+			92 button Supplier Purchase Create purchase entry
+				93 image
+				94 text Supplier Purchase
+				95 text Create purchase entry
+			96 pop up button (collapsed) More Actions History, bills and insights, ID: radix-:r3o:, Secondary Actions: Expand
+				97 image
+				98 text More Actions
+				99 text History, bills and insights
+			100 container
+				101 heading Product Stock, Value: 2
+					102 text Product Stock
+				103 text Real-time stock from local data, ready to sync.
+				104 image
+				105 text field (settable) Search by product, SKU, barcode...
+				106 button Filters
+					107 image
+					108 text Filters
+				109 button Export
+					110 image
+					111 text Export
+				112 combo box (collapsed) Description: All Categories, Secondary Actions: Expand
+					113 text All Categories
+				114 combo box (collapsed) Description: All Brands, Secondary Actions: Expand
+					115 text All Brands
+				116 combo box (collapsed) Description: All Units, Secondary Actions: Expand
+					117 text All Units
+				118 combo box (collapsed) Description: All Stock Status, Secondary Actions: Expand
+					119 text All Stock Status
+				120 container Product Stock
+					121 table
+						122 row
+							123 cell
+								124 text PRODUCT
+							125 cell
+								126 text SKU / BARCODE
+							127 cell
+								128 text CATEGORY
+							129 cell
+								130 text UNIT
+							131 cell
+								132 text STOCK
+							133 cell
+								134 text COST
+							135 cell
+								136 text TOTAL VALUE
+							137 cell
+								138 text STATUS
+						139 row
+							140 cell
+								141 text QA
+								142 text QA Day Tea 250g
+								143 text Unbranded
+							144 cell
+								145 text -
+							146 cell
+								147 text General
+							148 cell
+								149 text Piece
+							150 cell
+								151 text 15
+							152 cell
+								153 text ₹120
+							154 cell
+								155 text ₹1,800
+							156 cell
+								157 text In Stock
+				158 text Showing 1 to 1 of 1 products
+				159 button (disabled) Previous page
+					160 image
+				161 button Page 1
+				162 button (disabled) Next page
+					163 image
+				164 text 8 rows per page
+			165 container
+				166 heading Stock Overview by Location, Value: 2
+					167 text Stock Overview by Location
+				168 text Current stock distribution
+				169 image Stock Overview by Location: Main Store, Total Value ₹1,800
+				170 text Main Store
+				171 text 100% of tracked stock
+				172 text Total Value ₹1,800
+				173 heading Low Stock Alerts, Value: 2
+					174 text Low Stock Alerts
+				175 text Items needing immediate attention
+				176 button View all
+				177 text All tracked products have healthy stock.
+				178 heading Recent Stock Updates, Value: 2
+					179 text Recent Stock Updates
+				180 text Latest inventory movements
+				181 button View all
+				182 image
+				183 text Manual sale
+				184 container
+					185 text QA Day Tea 250g  ·  QA Shopkeeper  ·  1 Oct, 2:34 PM
+				186 text -2
+				187 image
+				188 text Manual sale
+				189 container
+					190 text QA Day Tea 250g  ·  Legacy entry  ·  1 Oct, 2:34 PM
+				191 text -2 piece
+				192 image
+				193 text Manual sale
+				194 container
+					195 text QA Day Tea 250g  ·  QA Shopkeeper  ·  1 Oct, 2:33 PM
+				196 text -1
+				197 image
+				198 text Manual sale
+				199 container
+					200 text QA Day Tea 250g  ·  Legacy entry  ·  1 Oct, 2:33 PM
+				201 text -1 piece
+		202 button Voice assistant
+		203 button Report a problem
+		204 button Open assistant
+			205 image
+		206 container Notifications (F8)
+			207 content list
+
+The focused UI element is 11 link Description: Inventory Current page, URL: localhost:51977/inventory
