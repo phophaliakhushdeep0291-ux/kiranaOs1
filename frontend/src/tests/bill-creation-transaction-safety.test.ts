@@ -84,6 +84,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 import { readInstantCache, writeInstantMemoryCache } from "@/lib/offline/instant-cache";
 import { createBillLocalFirst } from "@/features/core/billing/local-actions";
 
@@ -105,6 +106,8 @@ function baseInput(overrides: Partial<BillInput> = {}): BillInput {
     ...overrides,
   };
 }
+
+withTargetedReads(offlineDB);
 
 describe("bill creation transaction safety", () => {
   beforeEach(() => {
@@ -322,6 +325,31 @@ describe("bill creation transaction safety", () => {
     expect(tableRows("products")[0].stockBaseQty).toBe(16);
     expect(tableRows("customers")[0].udharAmount).toBe(145);
     expect(tableRows("customer_ledger").map((row) => row.balance_after)).toEqual([85, 145]);
+  });
+
+  it("finds the credit customer by any of its identities without reading every customer", async () => {
+    dbState.committed.customers = [
+      { id: "customer_0", name: "Someone else", udharAmount: 900, totalUdhar: 900 },
+      { id: "local_customer_7", server_id: "srv_customer_7", name: "Ramesh", udharAmount: 25, totalUdhar: 25 },
+    ];
+    const credit = baseInput({ customerId: "srv_customer_7", buyerPaidAmount: 40,
+      payments: [{ mode: BillPaymentMode.cash, amount: 40 }, { mode: BillPaymentMode.credit, amount: 60 }] });
+    await createBillLocalFirst(credit);
+    expect(tableRows("customers").map((row) => [row.id, row.udharAmount])).toEqual([["customer_0", 900], ["local_customer_7", 85]]);
+  });
+
+  it("uses a cached credit customer only when the device stores no row with its id", async () => {
+    const credit = (customerId: string) => baseInput({ customerId, buyerPaidAmount: 40,
+      payments: [{ mode: BillPaymentMode.cash, amount: 40 }, { mode: BillPaymentMode.credit, amount: 60 }] });
+    vi.mocked(readInstantCache).mockImplementation((key, fallback) => (key === "customers"
+      ? [{ id: "customer_9", name: "New on screen", udharAmount: 10, totalUdhar: 10 },
+        { id: "customer_1", server_id: "srv_stale", name: "Ramesh (stale)", udharAmount: 0, totalUdhar: 0 }]
+      : fallback) as typeof fallback);
+    await createBillLocalFirst(credit("customer_9"));
+    expect(tableRows("customers").find((row) => row.id === "customer_9")).toMatchObject({ udharAmount: 70 });
+    // The stored customer_1 has no such server id; its stale cached copy must not stand in for it.
+    await createBillLocalFirst(credit("srv_stale"));
+    expect(tableRows("customers").find((row) => row.id === "customer_1")).toMatchObject({ udharAmount: 25 });
   });
 
   it("retries a failed atomic save with the same open-bill identity without leftover children", async () => {

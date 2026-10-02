@@ -120,7 +120,7 @@ async function buildCancellationStockChanges(bill: Bill & Record<string, unknown
   const productIds = new Set(items.map((item) => item.productId ?? item.product_id).filter((value): value is string => typeof value === "string" && value.length > 0));
   if (productIds.size === 0) return { products: [] as Array<Product & Record<string, unknown>>, movements: [] as Array<Record<string, unknown>> };
 
-  const dbProducts = await offlineDB.getAll<Product & Record<string, unknown>>("products").catch(() => []);
+  const dbProducts = await offlineDB.getMany<Product & Record<string, unknown>>("products", productIds).catch(() => []);
   const cachedProducts = readInstantCache<Array<Product & Record<string, unknown>>>("products", []);
   const productsById = new Map<string, Product & Record<string, unknown>>();
   for (const product of [...dbProducts, ...cachedProducts]) {

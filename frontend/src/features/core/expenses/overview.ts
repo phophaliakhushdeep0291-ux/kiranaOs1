@@ -21,6 +21,17 @@ export function expenseSummaryWindowStart(now = new Date()): string {
   return new Date(Date.UTC(year, month - SUMMARY_MONTHS, 1) - SHOP_UTC_OFFSET_MS).toISOString();
 }
 
+/**
+ * Whether a "kirana:local-data-changed" event can have changed the device's
+ * expenses. Every sale and stock change fires one; re-reading the expense
+ * table for those was wasted work while the page stayed open. Sync, restores
+ * and untyped events can touch any table, so they still count.
+ */
+export function localChangeAffectsExpenses(detail: { type?: unknown } | null | undefined): boolean {
+  const type = detail?.type;
+  return typeof type !== "string" || type === "expense" || type === "sync";
+}
+
 export function expensesForLocation(rows: Expense[], locationId: string | null, primaryLocationId?: string): Expense[] {
   if (!locationId) return rows;
   // Old offline rows omitted locationId; the server assigns those to primary.

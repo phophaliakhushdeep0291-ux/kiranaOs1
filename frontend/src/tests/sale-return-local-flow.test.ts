@@ -61,6 +61,8 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 
 import { calculateLedgerBalance, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 import { createSaleReturnLocalFirst } from "@/features/core/returns/local-actions";
+import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 
 function rows(table: string) {
   return (dbState.committed[table] ?? []) as Array<Record<string, unknown>>;
@@ -86,6 +88,8 @@ function seed() {
   dbState.committed = { bills: [], bill_items: [], payments: [], customer_ledger: [], inventory_movements: [], customers: [customer], local_audit_logs: [], sync_outbox: [] };
   dbState.instant = { products: [product], customers: [customer] };
 }
+
+withTargetedReads(offlineDB);
 
 describe("sale return local-first", () => {
   beforeEach(() => {

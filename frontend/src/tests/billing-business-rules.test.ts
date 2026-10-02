@@ -78,6 +78,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 import { writeInstantMemoryCache } from "@/lib/offline/instant-cache";
 import { createBillLocalFirst } from "@/features/core/billing/local-actions";
 
@@ -99,6 +100,8 @@ function baseInput(overrides: Partial<BillInput> = {}): BillInput {
     ...overrides,
   };
 }
+
+withTargetedReads(offlineDB);
 
 describe("billing business rules", () => {
   beforeEach(() => {

@@ -535,7 +535,7 @@ export async function updateProductLocalFirst(id: string, data: ProductInput): P
   const validated = parseOrThrow(productCreationSchema, data) as unknown as ProductInput;
   await assertNoLocalProductNameConflict(validated.name, id);
   await assertNoLocalProductCodeConflict(validated, id);
-  const existing = await offlineDB.getAll<Product>("products").then((rows) => rows.find((row) => row.id === id)).catch(() => undefined);
+  const existing = await offlineDB.getMany<Product>("products", [id]).then(([row]) => row).catch(() => undefined);
   assertPackagingModeChangeIsSafe(existing, validated);
   const product = touchLocalEntity(toProduct(validated, id, existing), "pending_sync");
   const auditLogs = [
@@ -774,7 +774,7 @@ export async function importProductsLocalFirst(
 
 export async function deleteProductLocalFirst(id: string, ownerPin: string, reason?: string): Promise<Product> {
   parseOrThrow(ownerPinRequiredActionSchema, { action: "delete_product", ownerPin, reason, entityId: id });
-  const existing = await offlineDB.getAll<Product>("products").then((rows) => rows.find((row) => row.id === id)).catch(() => undefined);
+  const existing = await offlineDB.getMany<Product>("products", [id]).then(([row]) => row).catch(() => undefined);
   const now = new Date().toISOString();
   const deleted: Product = {
     ...(existing ?? { id, name: "Deleted product", defaultPricePerRateUnit: 0 }),
@@ -815,7 +815,7 @@ export async function deleteProductLocalFirst(id: string, ownerPin: string, reas
 }
 
 export async function patchProductLocalFirst(id: string, data: Partial<ProductInput>, ownerPin?: string, reason?: string): Promise<Product> {
-  const existing = await offlineDB.getAll<Product>("products").then((rows) => rows.find((row) => row.id === id)).catch(() => undefined);
+  const existing = await offlineDB.getMany<Product>("products", [id]).then(([row]) => row).catch(() => undefined);
   const fallbackInput: ProductInput = {
     name: existing?.name ?? "Product",
     category: existing?.category ?? "general",

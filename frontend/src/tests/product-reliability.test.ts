@@ -62,6 +62,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 import { emitLocalDataChanged, removeCachedListItem, upsertCachedListItem } from "@/lib/offline/instant-cache";
 import { createProductLocalFirst, deleteProductLocalFirst, patchProductLocalFirst, updateProductLocalFirst } from "@/features/core/products/local-actions";
 import { productUpdateNeedsOwnerApproval } from "@/features/core/products/pages/product-form-state";
@@ -124,6 +125,8 @@ function resetCommitted() {
   mockState.committed.local_audit_logs = [];
   mockState.committed.sync_outbox = [];
 }
+
+withTargetedReads(offlineDB);
 
 describe("product reliability", () => {
   beforeEach(() => {

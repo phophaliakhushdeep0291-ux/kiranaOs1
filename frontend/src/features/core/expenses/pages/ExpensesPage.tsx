@@ -20,7 +20,7 @@ import {
   Sparkles, Store, Thermometer, Trash2, Truck, Users, Utensils, Wallet, Wrench, X, Zap,
 } from "lucide-react";
 import { listExpenses } from "@/features/core/expenses/api";
-import { expenseLocationUnknown, expenseOverview, expenseSummaryWindowStart, expensesForLocation, shopDayKey } from "@/features/core/expenses/overview";
+import { expenseLocationUnknown, expenseOverview, expenseSummaryWindowStart, expensesForLocation, localChangeAffectsExpenses, shopDayKey } from "@/features/core/expenses/overview";
 import { getActiveLocationId, getPrimaryLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
 import { apiRequest } from "@/lib/api/http";
 import { expenseDateInput, expenseDateTimestamp } from "@/features/core/expenses/dates";
@@ -132,8 +132,11 @@ export default function ExpensesPage() {
   }, []);
   useEffect(() => {
     refreshLocalExpenses();
-    window.addEventListener("kirana:local-data-changed", refreshLocalExpenses);
-    return () => window.removeEventListener("kirana:local-data-changed", refreshLocalExpenses);
+    const onLocalDataChanged = (event: Event) => {
+      if (localChangeAffectsExpenses((event as CustomEvent<{ type?: unknown } | undefined>).detail)) refreshLocalExpenses();
+    };
+    window.addEventListener("kirana:local-data-changed", onLocalDataChanged);
+    return () => window.removeEventListener("kirana:local-data-changed", onLocalDataChanged);
   }, [refreshLocalExpenses]);
   useEffect(() => {
     // Totals depend only on the shop day: keep the same Date (no re-render)
