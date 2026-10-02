@@ -27,6 +27,19 @@ const e5 = explainSyncFailure({ entityType: "bill", reasonCode: "SOME_UNMAPPED_C
 assert.match(e5.explanation, /brand new situation/, "unmapped code falls back to the raw message");
 assert.equal(e5.retryable, false, "conflict record (reasonCode) is not retryable");
 
+for (const [error, code, cause] of [
+  ["Wrong owner PIN", "OWNER_PIN_INVALID", /owner PIN is incorrect/],
+  ["Owner PIN required", "OWNER_PIN_REQUIRED", /owner PIN approval is required/],
+]) {
+  const approvalFailure = explainSyncFailure({ type: "CANCEL_BILL", error });
+  assert.equal(approvalFailure.code, code, "stored PIN failure retains its business cause without an HTTP status");
+  assert.equal(approvalFailure.retryable, false, "reconnecting cannot fix owner approval");
+  assert.match(approvalFailure.explanation, /^Cancelling a bill failed/);
+  assert.match(approvalFailure.explanation, cause);
+  assert.doesNotMatch(approvalFailure.action, /retry automatically/);
+}
+assert.match(explainSyncFailure({ type: "RESTORE_BILL", error: "Owner PIN required" }).explanation, /^Restoring a bill failed/);
+
 async function main() {
   const shop = await db.shop.create({ data: { name: `SD ${Date.now()}`, ownerName: "o", city: "c", address: "a" } });
   try {

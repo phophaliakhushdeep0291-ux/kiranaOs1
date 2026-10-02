@@ -7,6 +7,8 @@ import { classifySyncError } from "../../utils/syncRules.js";
 
 const OPERATION_LABELS = [
   [/RETURN/, "Processing a return"],
+  [/CANCEL_BILL/, "Cancelling a bill"],
+  [/RESTORE_BILL/, "Restoring a bill"],
   [/BILL/, "Saving a bill"],
   [/PRODUCT/, "Updating a product"],
   [/STOCK|DAMAGE|INVENTORY/, "Updating inventory"],
@@ -27,6 +29,8 @@ function operationLabel(type = "") {
 // Friendly cause per classifier/reason code (see utils/syncRules.js classifySyncError
 // + getConflictCodeFromMessage).
 const CAUSE_BY_CODE = {
+  OWNER_PIN_INVALID: "the owner PIN is incorrect",
+  OWNER_PIN_REQUIRED: "owner PIN approval is required",
   INVALID_PRODUCT_ID: "the product no longer exists",
   PRODUCT_DELETED: "the product was deleted",
   STOCK_INSUFFICIENT: "there isn't enough stock",
@@ -63,6 +67,8 @@ const CAUSE_BY_CODE = {
 function codeFromMessage(message) {
   const m = String(message ?? "").toLowerCase();
   if (!m) return null;
+  if (m.includes("wrong owner pin") || m.includes("incorrect owner pin")) return "OWNER_PIN_INVALID";
+  if (m.includes("owner pin required")) return "OWNER_PIN_REQUIRED";
   if (m.includes("insufficient stock") || m.includes("not enough stock")) return "STOCK_INSUFFICIENT";
   if (m.includes("already cancelled")) return "BILL_ALREADY_CANCELLED";
   if (m.includes("already restored") || m.includes("not cancelled")) return "BILL_ALREADY_RESTORED";
