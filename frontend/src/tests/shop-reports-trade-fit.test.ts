@@ -106,8 +106,5 @@ describe("reports page trade fit", () => {
     // card's gradient would have collided the moment the labels were translated.
     expect(reportsPage).toContain("const gradientId = `report-kpi-${id}`");
     expect(reportsPage).not.toContain("label.toLowerCase().replace");
-    // Same reason the loading flag cannot ask whether the English word
-    // "Expense" appears in the label.
-    expect(reportsPage).toContain('kpi.id === "expense"');
   });
 });

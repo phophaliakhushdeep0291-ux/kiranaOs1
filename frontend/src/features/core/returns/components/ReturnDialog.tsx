@@ -14,7 +14,7 @@ import { apiRequest } from "@/lib/api/http";
 import { useOfflineStatus } from "@/features/core/sync";
 import { BillPaymentMode, type BillInput } from "@/types/api";
 import { ArrowLeftRight, Copy, Gift, Plus, Trash2 } from "lucide-react";
-import { consumeReturnLine, returnPreviewQuantity, unlinkedReturnLineAmount, type ReturnLineBalance } from "@/features/core/returns/return-math";
+import { consumeReturnLine, linkedReturnRefundTotal, remainingReturnQuantity, returnPreviewQuantity, unlinkedReturnLineAmount, type ReturnLineBalance } from "@/features/core/returns/return-math";
 
 type ReturnRefundMode = RefundMode | "gift_card";
 /** Exchanges settle in immediate tender only — udhar/store-credit stay plain returns. */
@@ -74,11 +74,12 @@ interface ReturnDialogProps {
   customerId?: string;
   customerName?: string;
   originalBillId?: string;
+  remainingInvoiceTotal?: number;
   gstMode?: "inclusive" | "exclusive" | "none";
   onDone?: () => void;
 }
 
-export function ReturnDialog({ open, onOpenChange, lines, customerId, customerName, originalBillId, gstMode = "inclusive", onDone }: ReturnDialogProps) {
+export function ReturnDialog({ open, onOpenChange, lines, customerId, customerName, originalBillId, remainingInvoiceTotal, gstMode = "inclusive", onDone }: ReturnDialogProps) {
   const { toast } = useToast();
   const { t } = useAppLanguage();
   const returnIdentity = useRef(crypto.randomUUID());
@@ -102,7 +103,7 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
     return balance ? returnPreviewQuantity(requested, balance) : requested;
   };
   const refundTotal = useMemo(
-    () => roundMoney(lines.reduce((sum, line, i) => {
+    () => linkedReturnRefundTotal(roundMoney(lines.reduce((sum, line, i) => {
       const returnQty = getQty(i);
       if (returnQty <= 0) return sum;
       if (line.returnBalance) {
@@ -119,8 +120,9 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
         gstMode,
       });
       return sum + net + tax;
-    }, 0)),
-    [gstMode, lines, qty],
+    }, 0)), remainingInvoiceTotal, lines.length > 0 && lines.every((line, i) =>
+      line.returnBalance && getQty(i) >= remainingReturnQuantity(line.returnBalance))),
+    [gstMode, lines, qty, remainingInvoiceTotal],
   );
   const hasCustomer = Boolean(customerId);
   const selectedCount = lines.filter((_, i) => getQty(i) > 0).length;

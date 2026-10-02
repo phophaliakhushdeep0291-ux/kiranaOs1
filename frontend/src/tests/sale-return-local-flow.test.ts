@@ -245,6 +245,28 @@ describe("sale return local-first", () => {
     expect(returns.reduce((sum, row) => sum + Number(row.grandTotal), 0)).toBe(-212.4);
   });
 
+  it.each([[199.5, 200], [199.4, 199]])("returns the rounded invoice total %s → %s exactly", async (rate, total) => {
+    dbState.committed.bills = [{ id: "rounded", billType: "normal_sale", status: "active", subtotal: rate, grandTotal: total, gstMode: "none" }];
+    dbState.committed.bill_items = [{ id: "rounded_item", billId: "rounded", productId: "product_sugar", name: "Sugar", quantity: 1, ratePerRateUnit: rate, lineTotal: rate }];
+    const result = await createSaleReturnLocalFirst({
+      originalBillId: "rounded", refundMode: "cash", ownerPin: "4321",
+      items: [{ originalBillItemId: "rounded_item", productId: "product_sugar", name: "Sugar", quantity: 1, enteredUnit: "piece", ratePerRateUnit: rate }],
+    });
+    expect(result.grandTotal).toBe(-total);
+    expect(result.subtotal).toBe(-rate);
+    expect(rows("payments")[0].amount).toBe(-total);
+  });
+
+  it("settles round-off after earlier partial returns without changing their item values", async () => {
+    dbState.committed.bills = [{ id: "rounded", billType: "normal_sale", status: "active", subtotal: 398.8, grandTotal: 399, gstMode: "none" }];
+    dbState.committed.bill_items = [{ id: "rounded_item", billId: "rounded", productId: "product_sugar", name: "Sugar", quantity: 2, ratePerRateUnit: 199.4, lineTotal: 398.8 }];
+    const input = { originalBillId: "rounded", refundMode: "cash" as const, ownerPin: "4321", items: [{ originalBillItemId: "rounded_item", productId: "product_sugar", name: "Sugar", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 199.4 }] };
+    expect((await createSaleReturnLocalFirst(input)).grandTotal).toBe(-199.4);
+    expect((await createSaleReturnLocalFirst(input)).grandTotal).toBe(-199.6);
+    expect(rows("payments").reduce((sum, row) => sum + Number(row.amount), 0)).toBe(-399);
+    expect(rows("bill_items").filter((row) => row.quantity === -1).map((row) => row.lineTotal)).toEqual([-199.4, -199.4]);
+  });
+
   it("damaged refund: no restock, damage movement recorded", async () => {
     await createSaleReturnLocalFirst({
       items: [{ productId: "product_sugar", name: "Sugar", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 25, gstRate: 0, damaged: true }],

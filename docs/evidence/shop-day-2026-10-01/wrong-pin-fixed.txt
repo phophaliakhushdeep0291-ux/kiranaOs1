@@ -1,0 +1,20 @@
+Browser tab: 5, Title: "Billing History · Artha", URL: "http://localhost:51977/bills/cmuq25t49004jsdaagpm5x8ac".
+1 AXWebArea Billing History · Artha, URL: localhost:51977/bills/cmuq25t49004jsdaagpm5x8ac
+	2 container
+		3 text Billing History page loaded
+		4 container Cancel bill, ID: radix-:r14:
+			5 heading Cancel bill, Value: 2, ID: radix-:r15:
+				6 text Cancel bill
+			7 container
+				8 text Owner PIN is required. Financial records are preserved locally and synced later.
+				9 text Owner PIN *
+				10 text field (settable) Owner PIN *, Value: <redacted>
+				11 text Reason for audit trail  *
+				12 text entry area (settable) Reason for audit trail *, Value: QA wrong PIN regression, ID: :r13:
+				13 button Cancel
+				14 button Cancel bill
+			15 button Close
+				16 image
+				17 text Close
+
+The focused UI element is 1 AXWebArea Billing History · Artha, URL: localhost:51977/bills/cmuq25t49004jsdaagpm5x8ac

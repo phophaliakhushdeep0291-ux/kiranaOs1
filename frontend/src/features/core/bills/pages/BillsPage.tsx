@@ -1,3 +1,4 @@
+import { formatMoney as money } from "@/lib/money";
 import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { billNumberLabel } from "@/features/core/billing/bill-number";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
@@ -216,10 +217,6 @@ function paymentModeOf(bill: BillRecord) {
 
 function itemsCount(bill: BillRecord) {
   return Array.isArray(bill.items) ? bill.items.length : readNumber(bill.itemCount ?? bill.itemsCount, 0);
-}
-
-function money(value: number, fractionDigits = 0) {
-  return `\u20b9${value.toLocaleString("en-IN", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits })}`;
 }
 
 function statusLabel(status: string) {

@@ -1,0 +1,151 @@
+Browser tab: 5, Title: "Cloud Backup · Artha", URL: "http://localhost:51977/sync-status".
+1 AXWebArea Cloud Backup · Artha, URL: localhost:51977/sync-status
+	2 container root
+		18 link Description: Skip to main content, Value: localhost:51977/sync-status#main-content
+		19 container
+			20 link Description: Artha home, Value: localhost:51977/dashboard
+			21 heading Cloud Backup, Value: 1
+				22 text Cloud Backup
+			23 text QA Full Shop Day  ·  Review sync
+			24 button Search products, bills, and customers
+			25 link Description: Open backup and sync status, Value: localhost:51977/sync-status
+		30 container main-content
+			75 text Cloud Backup page loaded
+			42 container
+				43 heading Sync Status, Value: 2
+					44 image
+					76 text Sync Status
+				77 text Sync failed, retry needed 1 failed cloud backup
+				45 button Retry failed
+					46 image
+					78 text Retry failed
+				47 button Force sync
+					48 image
+					79 text Force sync
+			80 container
+				81 image
+				82 text Backup did not finish Your local data is safe. Open the item below to see what the server refused — most of these need the record corrected and saved again, not another retry.
+			83 text Needs attention
+			84 text Local changes are safe on this device. Retry backup when ready.
+			85 container
+				86 text Cancel bill  x  1
+			49 text Cancel bill
+			87 text FAILED
+			88 text bill - bill_cf6ef848-a75e-452a-82c9-632da21f4520
+			89 container
+				90 text about 10 hours ago  -  Wrong owner PIN
+			50 button Retry
+			51 link Description: Open record, Value: localhost:51977/bills/bill_cf6ef848-a75e-452a-82c9-632da21f4520
+			52 button Ignore
+			53 text Internet
+			54 image
+			91 text Online
+			92 text Internet available.
+			55 text Backend
+			56 image
+			93 text Online
+			94 text Cloud backup can run.
+			57 text Last backup
+			58 image
+			95 text less than a minute ago
+			96 text Last successful cloud backup.
+			59 text Pending
+			60 image
+			97 text 0
+			98 text 0 changes pending cloud backup.
+			61 text Retry / review
+			62 image
+			99 text 1 / 0
+			100 text Retry failed backup items. Review only if it remains blocked.
+			101 image
+			102 text Device sync health
+			103 text Server-confirmed progress for every active terminal in this shop.
+			104 text 1 current
+			105 text Fleet healthy
+			106 text Chrome on macOS
+			107 text fb9121f5-6fc4-48af-a365-9939854245c2
+			108 text Current
+			109 text Sequence lag
+			110 text 0
+			111 text Presence
+			112 text Online
+			113 text Applied less than a minute ago
+			114 text This device
+			115 text A terminal becomes current only after it applies data locally and acknowledges sequence 44.
+			116 text Sync diagnostics
+			117 text Plain-language explanations for anything that could not back up.
+			63 button Refresh sync diagnostics
+			118 text Pending
+			119 text : 
+			120 text 0
+			121 text Failed
+			122 text : 
+			123 text 1
+			124 text Conflicts
+			125 text : 
+			126 text 0
+			127 text Retries
+			128 text : 
+			129 text 89
+			130 text Last successful upload less than a minute ago
+			131 content list
+				132 container
+					133 text Saving a bill failed because of a temporary server problem. Auto-retry This will retry automatically when the connection is healthy.
+			134 text Device and cloud settings
+			135 text Useful for checking which shop device is backing up data.
+			64 image
+			65 text Device ID
+			136 text fb9121f5-6fc4-48af-a365-9939854245c2
+			66 image
+			67 text Server URL
+			68 button Edit
+			137 text http://localhost:3018/api
+			69 image
+			70 text Subscription sync
+			138 container
+				139 text Sync allowed
+			140 button (collapsed) Show server status details, Secondary Actions: Expand
+				141 text Show server status details
+			142 text Pending operations
+			143 text No pending changes. Cloud backup queue is clear.
+			144 text No pending changes. Cloud backup queue is clear.
+			145 text Failed operations
+			146 text 1 change listed here.
+			147 text Cancel bill
+			148 text bill - bill_cf6ef848-a75e-452a-82c9-632da21f4520
+			149 text Cloud backup failed for this change. Retry is needed.
+			150 text FAILED
+			71 button Retry this
+			72 link Description: Open, Value: localhost:51977/bills/bill_cf6ef848-a75e-452a-82c9-632da21f4520
+			73 button Ignore
+			151 container
+				152 text Entity: bill
+			153 container
+				154 text Operation: CANCEL_BILL_PENDING
+			155 container
+				156 text Item: bill_cf6ef848-a75e-452a-82c9-632da21f4520
+			157 container
+				158 text Amount: -
+			159 container
+				160 text Retries: 29
+			161 container
+				162 text Created: about 10 hours ago
+			163 container
+				164 text Reason: Wrong owner PIN
+			74 button (collapsed) Show technical details, Secondary Actions: Expand
+				165 text Show technical details
+			166 text Backup review
+			167 text No cloud backup item needs review.
+			168 text No review items. Data is clean for backup.
+		34 container Primary navigation
+			35 link Description: Home, Value: localhost:51977/dashboard
+			36 link Description: Sell, Value: localhost:51977/billing
+			37 link Description: Stock, Value: localhost:51977/inventory
+			38 link Description: Customers, Value: localhost:51977/customers
+			39 pop up button (collapsed) Description: Open all app areas, Secondary Actions: Expand
+		40 button Open assistant
+			41 image
+		16 container Notifications (F8)
+			17 content list
+
+The focused UI element is 25 link Description: Open backup and sync status, URL: localhost:51977/sync-status

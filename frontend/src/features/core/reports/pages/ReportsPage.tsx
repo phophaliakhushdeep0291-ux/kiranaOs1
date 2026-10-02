@@ -1,7 +1,9 @@
-import { LocalDataUnavailable } from "@/features/core/sync/LocalDataUnavailable";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { formatMoney } from "@/lib/money";
+import { ReportDataUnavailable } from "@/features/core/reports/ReportDataUnavailable";
+import { loadReportExpenses, reportExpenseTotal, reportExpensesInRange, type ReportExpenses } from "@/features/core/reports/expense-reporting";
+import { LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
 import {
   Area,
   AreaChart,
@@ -52,7 +54,6 @@ import { PageShell, SyncBadge, TradeFocusStrip } from "@/components/shared";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { getShopReportsProfile } from "@/features/core/settings/shop-reports";
-import { getExpenseSummary, listExpenses } from "@/features/core/expenses/api";
 import { expenseTotalsByDay, reportCalendarDay } from "@/features/core/reports/report-calendar";
 import {
   buildLocalReportSnapshot,
@@ -65,7 +66,6 @@ import { AccountingControlPanel } from "@/features/core/reports/components/Accou
 import { BankReconciliationPanel } from "@/features/core/reports/components/BankReconciliationPanel";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import type { Expense, ExpenseSummary } from "@/types/api";
 import { ACTIVITY_EVENTS, trackEvent, useReportView } from "@/lib/activity";
 
 const PANEL = "min-w-0 overflow-hidden rounded-[16px] border border-[#e2e9f3] bg-white shadow-[0_10px_30px_rgba(31,60,110,0.055)]";
@@ -89,7 +89,7 @@ function usePhoneReportLayout() {
 
 function fmt(value: number | undefined) {
   if (value == null || !Number.isFinite(value)) return "—";
-  return `₹${Math.round(value).toLocaleString("en-IN")}`;
+  return formatMoney(value);
 }
 
 function fmtAxis(value: number) {
@@ -172,28 +172,6 @@ function shortText(value: string, max = 18) {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
-type ExpenseDateParams = { from?: string; to?: string };
-
-function emptyExpenseSummary(): ExpenseSummary {
-  return { total: 0, count: 0, byCategory: {}, byMode: {}, pendingTotal: 0, pendingCount: 0 };
-}
-
-async function getExpenseSummaryOrEmpty(params: ExpenseDateParams): Promise<ExpenseSummary> {
-  try {
-    return await getExpenseSummary(params);
-  } catch {
-    return emptyExpenseSummary();
-  }
-}
-
-async function listExpensesOrEmpty(params: ExpenseDateParams): Promise<Expense[]> {
-  try {
-    return await listExpenses(params);
-  } catch {
-    return [];
-  }
-}
-
 export default function ReportsPage() {
   useReportView("overview", "Business overview");
   const { toast } = useToast();
@@ -210,6 +188,7 @@ export default function ReportsPage() {
   const [period, setPeriod] = useState<ReportPeriod>("week");
   const [snapshot, setSnapshot] = useState<LocalReportSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expenseLedger, setExpenseLedger] = useState<ReportExpenses | null>(null);
   const [readError, setReadError] = useState(false);
   const snapshotRef = useRef<LocalReportSnapshot | null>(null);
   const loadRequestId = useRef(0);
@@ -219,26 +198,8 @@ export default function ReportsPage() {
 
   const range = useMemo(() => safeDateRange(from, to), [from, to]);
   const priorRange = useMemo(() => previousRange(range.from, range.to), [range.from, range.to]);
-  const expenseParams = useMemo(() => ({
-    from: range.from,
-    to: range.to,
-  }), [range.from, range.to]);
-
-  const expenseSummary = useQuery({
-    queryKey: ["reports-expense-summary", range],
-    queryFn: () => getExpenseSummaryOrEmpty(expenseParams),
-    retry: false,
-  });
-  const previousExpenseSummary = useQuery({
-    queryKey: ["reports-expense-summary", priorRange],
-    queryFn: () => getExpenseSummaryOrEmpty({ from: priorRange.from, to: priorRange.to }),
-    retry: false,
-  });
-  const expenses = useQuery({
-    queryKey: ["reports-expenses", range],
-    queryFn: () => listExpensesOrEmpty(expenseParams),
-    retry: false,
-  });
+  const expenses = useMemo(() => expenseLedger ? reportExpensesInRange(expenseLedger.rows, range) : [], [expenseLedger, range]);
+  const priorExpenses = useMemo(() => expenseLedger ? reportExpensesInRange(expenseLedger.rows, priorRange) : [], [expenseLedger, priorRange]);
 
   const applyPeriod = (nextPeriod: Exclude<ReportPeriod, "custom">) => {
     const nextRange = reportPeriodRange(nextPeriod);
@@ -256,9 +217,13 @@ export default function ReportsPage() {
     const showLoader = options?.showLoader ?? !snapshotRef.current;
     if (showLoader) setLoading(true);
     try {
-      const nextSnapshot = await buildLocalReportSnapshot({ from: range.from, to: range.to });
+      const [nextSnapshot, nextExpenses] = await Promise.all([
+        buildLocalReportSnapshot({ from: range.from, to: range.to }),
+        loadReportExpenses(priorRange.from),
+      ]);
       if (requestId === loadRequestId.current) {
         setSnapshot(nextSnapshot);
+        setExpenseLedger(nextExpenses);
         setReadError(false);
       }
     } catch {
@@ -268,7 +233,7 @@ export default function ReportsPage() {
         setLoading(false);
       }
     }
-  }, [range.from, range.to]);
+  }, [range.from, range.to, priorRange.from]);
 
   useEffect(() => {
     void loadReports({ showLoader: !snapshotRef.current });
@@ -286,6 +251,7 @@ export default function ReportsPage() {
     };
     window.addEventListener("kirana:local-data-changed", refresh);
     window.addEventListener("kirana:sync-queue-updated", refresh);
+    window.addEventListener(LOCATION_CHANGED_EVENT, refresh);
     return () => {
       if (refreshTimer.current) {
         window.clearTimeout(refreshTimer.current);
@@ -293,13 +259,14 @@ export default function ReportsPage() {
       }
       window.removeEventListener("kirana:local-data-changed", refresh);
       window.removeEventListener("kirana:sync-queue-updated", refresh);
+      window.removeEventListener(LOCATION_CHANGED_EVENT, refresh);
     };
   }, [loadReports]);
 
   const selected = snapshot?.selected;
   const previous = snapshot?.previousSelected;
-  const expenseTotal = expenseSummary.data?.total;
-  const previousExpenseTotal = previousExpenseSummary.data?.total ?? 0;
+  const expenseTotal = expenseLedger ? reportExpenseTotal(expenses) : undefined;
+  const previousExpenseTotal = reportExpenseTotal(priorExpenses);
   const netProfit = expenseTotal == null ? undefined : (selected?.profitEstimate ?? 0) - expenseTotal;
   const previousNetProfit = (previous?.profitEstimate ?? 0) - previousExpenseTotal;
 
@@ -320,7 +287,7 @@ export default function ReportsPage() {
   }, [creditWord, snapshot]);
 
   const paymentTotal = paymentModes.reduce((sum, item) => sum + item.value, 0);
-  const expenseByDay = useMemo(() => expenseTotalsByDay(expenses.data ?? []), [expenses.data]);
+  const expenseByDay = useMemo(() => expenseTotalsByDay(expenses), [expenses]);
 
   const dailyRows = useMemo(() => (snapshot?.dailyTrend ?? []).slice(-7).reverse().map((point) => {
     const dayExpense = expenseByDay.get(point.date) ?? 0;
@@ -481,7 +448,7 @@ export default function ReportsPage() {
     },
   ];
 
-  if (readError || !snapshot) return <LocalDataUnavailable checking={!readError && loading} onRetry={() => void loadReports()} />;
+  if (readError || !snapshot || !expenseLedger) return <ReportDataUnavailable checking={!readError && loading} onRetry={() => void loadReports()} />;
 
   return (
     <PageShell className="reports-page mx-auto min-h-full w-full max-w-[1800px] space-y-4 pb-10 text-[var(--brand-ink)] lg:space-y-5">
@@ -492,8 +459,8 @@ export default function ReportsPage() {
             <div><h2 className="text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{t(tradeProfile.headingKey)}</h2><p className="mt-0.5 text-[11px] font-medium text-[#68768d]">Sales, collections, profit and stock performance in one clear view</p></div>
           </div>
           <div className="flex min-w-0 items-center gap-2 text-[11px] text-[#6c7c98] lg:mt-3">
-            {snapshot?.hasUnsyncedOperations ? (
-              <SyncBadge status="estimate" label={`${snapshot.pendingSyncCount + snapshot.failedSyncCount} changes awaiting sync`} />
+            {snapshot?.hasUnsyncedOperations || expenseLedger.isLocalEstimate ? (
+              <SyncBadge status="estimate" label={snapshot.pendingSyncCount + snapshot.failedSyncCount > 0 ? `${snapshot.pendingSyncCount + snapshot.failedSyncCount} changes awaiting sync` : t("reports.localEstimate")} />
             ) : (
               <SyncBadge status="synced" label="Synced · Local reports ready" />
             )}
@@ -530,11 +497,13 @@ export default function ReportsPage() {
         </div>
       </section>
 
+      {expenseLedger.isLocalEstimate && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">{t("reports.expenses.localEstimate")}</p>}
+
       <TradeFocusStrip titleKey="reports.trade.title" focusKey={tradeProfile.watchKey} links={tradeProfile.links} />
 
       {isPhoneLayout ? (
         <MobileReportsOverview
-          loading={loading || expenseSummary.isLoading}
+          loading={loading}
           periodLabel={rangeLabel(range.from, range.to)}
           salesLabel={salesLabel}
           creditLabel={t("reports.mobile.creditDue", { credit: creditWord })}
@@ -553,7 +522,7 @@ export default function ReportsPage() {
       {!isPhoneLayout ? (
         <section className="hidden min-w-0 grid-cols-2 gap-2 md:grid lg:grid-cols-4">
           {kpis.map((kpi) => (
-            <KpiCard key={kpi.id} {...kpi} loading={loading || (kpi.id === "expense" && expenseSummary.isLoading)} />
+            <KpiCard key={kpi.id} {...kpi} loading={loading} />
           ))}
         </section>
       ) : null}
@@ -691,7 +660,7 @@ export default function ReportsPage() {
           {snapshot && snapshot.discounts.total > 0 ? <tr className="font-bold"><Td>Total ({snapshot.discounts.discountedBillCount} bills)</Td><Td /><Td right>{fmt(snapshot.discounts.total)}</Td><Td>{[snapshot.discounts.manual > 0 ? `manual ${fmt(snapshot.discounts.manual)}` : null, snapshot.discounts.coupon > 0 ? `coupon ${fmt(snapshot.discounts.coupon)}` : null, snapshot.discounts.loyalty > 0 ? `loyalty ${fmt(snapshot.discounts.loyalty)}` : null, snapshot.discounts.line > 0 ? `line ${fmt(snapshot.discounts.line)}` : null].filter(Boolean).join(" · ") || "—"}</Td></tr> : null}
         </DenseTable>
 
-        <DenseTable title="Daily Closing Summary" action="View all" actionHref="/daily-closing" headers={["Date", "Sales (₹)", "Collection (₹)", "Expense (₹)", "Net Profit (₹)"]} loading={loading || expenses.isLoading} empty={!dailyRows.length}>
+        <DenseTable title="Daily Closing Summary" action="View all" actionHref="/daily-closing" headers={["Date", "Sales (₹)", "Collection (₹)", "Expense (₹)", "Net Profit (₹)"]} loading={loading} empty={!dailyRows.length}>
           {dailyRows.map((row) => <tr key={row.date}><Td strong>{new Date(`${row.date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</Td><Td right>{fmt(row.sales)}</Td><Td right>{fmt(row.collection)}</Td><Td right>{fmt(row.expense)}</Td><Td right strong>{fmt(row.net)}</Td></tr>)}
         </DenseTable>
       </section>

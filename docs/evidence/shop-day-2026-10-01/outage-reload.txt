@@ -1,0 +1,172 @@
+Browser tab: 3, Title: "Customers / Udhar · Artha", URL: "http://localhost:51977/customers".
+1 AXWebArea Customers / Udhar · Artha, URL: localhost:51977/customers
+	2 container root
+		6 link Description: Skip to main content, Value: localhost:51977/customers#main-content
+		7 container
+			8 button Description: Resize sidebar, 260 pixels. Use left and right arrow keys., Help: Drag, use arrow keys, or press Home/End to resize the sidebar
+			9 link Description: Artha Built for busy Indian stores, Value: localhost:51977/dashboard
+			10 button Collapse sidebar
+			11 container Main navigation
+				12 link Description: Dashboard, Value: localhost:51977/dashboard
+				13 link Description: Billing F2, Value: localhost:51977/billing
+				14 link Description: Inventory, Value: localhost:51977/inventory
+				15 button (collapsed) Description: Expand Inventory menu, Secondary Actions: Expand
+				16 link Description: Customers / Udhar, Value: localhost:51977/customers
+				17 link Description: Purchases, Value: localhost:51977/purchase-bills
+				18 button Sales
+				19 link Description: Returns, Value: localhost:51977/returns
+				20 link Description: Reports, Value: localhost:51977/reports
+				21 link Description: Cash & Payments, Value: localhost:51977/money-statement
+				22 link Description: Accounting, Value: localhost:51977/accounting
+				23 button Business Tools
+				24 link Description: Expenses, Value: localhost:51977/expenses
+				25 link Description: Settings, Value: localhost:51977/settings
+			26 text Cloud paused 2 Local billing works; backup will retry
+			27 link Description: Sync Now, Value: localhost:51977/sync-status
+			28 pop up button (collapsed) QF QA Full Shop Day Jodhpur, ID: radix-:rf:, Secondary Actions: Expand
+				29 text QF
+				30 text QA Full Shop Day
+				31 text Jodhpur
+		32 container
+			33 button Toggle sidebar
+			34 heading Customers / Udhar, Value: 1
+				35 text Customers / Udhar
+			36 link Description: Open sync alerts, Value: localhost:51977/sync-status
+			37 pop up button (collapsed) QF, ID: radix-:rh:, Secondary Actions: Expand
+		38 text Cloud backup is paused because the backend is not reachable. Local billing still works. 
+		39 link Description: Open Sync Status ->, Value: localhost:51977/sync-status
+		40 text 2 changes waiting to back up
+		41 text Will retry automatically when the connection is healthy.
+		42 button Retry now
+		43 link Description: View, Value: localhost:51977/sync-status
+		44 container main-content
+			45 text Customers / Udhar page loaded
+			46 container
+				47 image
+				48 heading Customers and udhar, Value: 2
+					49 text Customers and udhar
+				50 text Track every balance, collection promise and payment from one workspace 2 pending
+				51 pop up button (collapsed) 25 Sept 2026 - 01 Oct 2026, ID: radix-:rj:, Secondary Actions: Expand
+					52 image
+					53 text 25 Sept 2026
+					54 text  - 
+					55 text 01 Oct 2026
+					56 image
+				57 pop up button (collapsed) Filters, ID: radix-:rl:, Secondary Actions: Expand
+					58 image
+					59 text Filters
+				60 button Export
+					61 image
+					62 text Export
+				63 button Collect payment
+					64 image
+					65 text Collect payment
+				66 button Add customer
+					67 image
+					68 text Add customer
+			69 container
+				70 text ACCOUNTS FOR YOUR SHOP TYPE 🛒 Kirana / General Store Most udhar here is small and old rather than large and recent — work the ageing list from the oldest end, not the biggest.
+				71 link Description: Change shop type, Value: localhost:51977/settings/store-profile
+			72 container Customer account summary
+				73 container
+					74 image
+					75 text Total Customers 1
+					76 image
+					77 text 100 % vs last week
+					78 image
+				79 container
+					80 image
+					81 text Total Udhar Outstanding ₹248.25
+					82 image
+					83 text 100 % vs last week
+					84 image
+				85 container
+					86 image
+					87 text Overdue Amount ₹0 0 % vs last week
+					88 image
+				89 container
+					90 image
+					91 text Udhar Collected ₹50.50
+					92 image
+					93 text 100 % vs last week
+					94 image
+			95 container
+				96 container customer-list-panel
+					97 container
+						98 heading Customers, Value: 2
+							99 text Customers
+						100 text 1 shown
+					101 container
+						102 image
+						103 text field (settable) Search by name or mobile
+					104 checkbox All Customers, Value: 1
+					105 checkbox With Balance, Value: 0
+					106 checkbox Overdue, Value: 0
+					107 checkbox Cleared, Value: 0
+					108 button QD QA Day Customer No address 6999996512 01 Oct 2026, 02:35 pm ₹248.25 0-7 Days Low
+						109 text QD
+						110 text QA Day Customer
+						111 text No address
+						112 text 6999996512
+						113 text 01 Oct 2026, 02:35 pm
+						114 text ₹248.25
+						115 text 0-7 Days
+						116 text Low
+					117 container
+						118 text Showing 1 of 1 customers 1 loaded
+				119 image
+				120 text Select a customer Choose a customer from the list to view balance, collect payment, and inspect ledger history.
+				121 image
+				122 text Customer insights
+				123 text Ageing, recent payments, and credit risk will appear after selecting a customer.
+			124 container
+				125 heading Udhar Ledger, Value: 2
+					126 text Udhar Ledger
+				127 image
+				128 text View every bill, payment, and balance movement
+				129 pop up button (collapsed) All Entries, ID: radix-:rs:, Secondary Actions: Expand
+					130 text All Entries
+					131 image
+				132 button All time - 01 Oct 2026
+					133 image
+					134 text All time
+					135 text  - 
+					136 text 01 Oct 2026
+					137 image
+				138 button (disabled) Download Statement
+					139 image
+					140 text Download Statement
+				141 container Udhar Ledger
+					142 table
+						143 row
+							144 cell
+								145 text Date
+							146 cell
+								147 text Entry Type
+							148 cell
+								149 text Reference
+							150 cell
+								151 text Description
+							152 cell
+								153 text Debit (₹)
+							154 cell
+								155 text Credit (₹)
+							156 cell
+								157 text Running Balance (₹)
+							158 cell
+								159 text Mode
+							160 cell
+								161 text Status
+							162 cell
+								163 text Action
+						164 row
+							165 cell
+								166 text No ledger entries found.
+		167 button Voice assistant
+		168 button Report a problem
+		169 button Open assistant
+			170 image
+		4 container Notifications (F8)
+			5 content list
+
+The focused UI element is 1 AXWebArea Customers / Udhar · Artha, URL: localhost:51977/customers

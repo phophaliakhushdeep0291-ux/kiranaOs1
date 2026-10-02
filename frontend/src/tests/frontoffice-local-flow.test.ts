@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BillInputBillType, BillPaymentMode, type BillInput, type Product } from "@/types/api";
 import type { CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 import type { SupplierDueRow } from "@/features/core/finance/services/FinancialAggregationService";
@@ -83,6 +83,11 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { createBillLocalFirst } from "@/features/core/billing/local-actions";
+vi.mock("@/features/core/settings/api", () => ({ verifyOwnerPin: vi.fn(async () => ({ valid: true })) }));
+import { verifyOwnerPin } from "@/features/core/settings/api";
+import { ApiClientError } from "@/lib/api/http";
+afterEach(() => vi.unstubAllGlobals());
+
 import { cancelBillWithOwnerPinLocalFirst, restoreBillWithOwnerPinLocalFirst, softDeleteBillWithOwnerPinLocalFirst } from "@/features/core/bills/local-actions";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/core/payments/local-actions";
 import { recordPurchaseBatchLocalFirst, recordPurchaseLocalFirst } from "@/features/core/inventory/local-actions";
@@ -298,6 +303,54 @@ describe("front office local-first cashier flow", () => {
         paymentStatus: "paid",
       }),
     }));
+  });
+
+  it("cancels the surviving server bill instead of its retired local twin", async () => {
+    const bill = await createBillLocalFirst(billInput());
+    const original = rows("bills").find((row) => row.id === bill.id)!;
+    const retired = { ...original, server_id: "server_sale", merged_into_id: "server_sale", deleted_at: "2026-10-01T10:00:00Z", sync_status: "synced" };
+    const live = { ...original, id: "server_sale", local_id: bill.id, server_id: "server_sale", sync_status: "synced" };
+    dbState.committed.bills = [retired, live];
+    dbState.instant.bills = [original];
+    const result = await cancelBillWithOwnerPinLocalFirst("server_sale", "1234", "Canonical cancellation");
+    expect(result.id).toBe("server_sale");
+    expect(result.status).toBe("cancelled");
+    expect(result.deleted_at).toBeFalsy();
+    expect(result.merged_into_id).toBeFalsy();
+    expect(rows("bills").find((row) => row.id === bill.id)).toEqual(retired);
+    expect(rows("sync_outbox").find((row) => row.operation_type === "CANCEL_BILL_PENDING")?.entity_id).toBe("server_sale");
+  });
+
+  it("rejects a wrong online cancellation PIN without changing bills, stock, ledgers, or the queue", async () => {
+    const bill = await createBillLocalFirst(billInput());
+    const before = clone(dbState.committed);
+    vi.stubGlobal("navigator", { onLine: true });
+    vi.mocked(verifyOwnerPin).mockRejectedValueOnce(new ApiClientError("Invalid owner PIN", 403));
+    await expect(cancelBillWithOwnerPinLocalFirst(bill.id, "9999", "Wrong PIN proof")).rejects.toThrow("Invalid owner PIN");
+    expect(dbState.committed).toEqual(before);
+  });
+
+  it("still queues cancellation during an API outage for server approval on reconnect", async () => {
+    const bill = await createBillLocalFirst(billInput());
+    vi.stubGlobal("navigator", { onLine: true });
+    vi.mocked(verifyOwnerPin).mockRejectedValueOnce(new ApiClientError("API unavailable", 0));
+    expect((await cancelBillWithOwnerPinLocalFirst(bill.id, "1234", "Outage proof")).status).toBe("cancelled");
+    expect(rows("sync_outbox").some((row) => row.operation_type === "CANCEL_BILL_PENDING")).toBe(true);
+  });
+
+  it("accepts a verified PIN before projecting an online cancellation", async () => {
+    const bill = await createBillLocalFirst(billInput());
+    vi.stubGlobal("navigator", { onLine: true });
+    expect((await cancelBillWithOwnerPinLocalFirst(bill.id, "1234", "Verified proof")).status).toBe("cancelled");
+    expect(verifyOwnerPin).toHaveBeenCalledWith("1234");
+  });
+
+  it.each(["synced", "pending_sync", "conflict"])("keeps product status %s when cancellation owns the stock reversal", async (status) => {
+    const bill = await createBillLocalFirst(billInput());
+    rows("products")[0].sync_status = status;
+    await cancelBillWithOwnerPinLocalFirst(bill.id, "1234", "Stock projection proof");
+    expect(rows("products")[0]).toMatchObject({ stockBaseQty: 10, sync_status: status });
+    expect(rows("sync_outbox").some((row) => row.operation_type.includes("PRODUCT"))).toBe(false);
   });
 
   it("cancels stock and udhar locally exactly once before the server acknowledges it", async () => {

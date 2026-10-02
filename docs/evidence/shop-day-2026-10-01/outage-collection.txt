@@ -1,0 +1,294 @@
+Browser tab: 3, Title: "Customers / Udhar · Artha", URL: "http://localhost:51977/customers".
+0 AXWebArea Customers / Udhar · Artha, URL: localhost:51977/customers
+	1 container root
+		2 link Description: Skip to main content, Value: localhost:51977/customers#main-content
+		3 container
+			4 button Description: Resize sidebar, 260 pixels. Use left and right arrow keys., Help: Drag, use arrow keys, or press Home/End to resize the sidebar
+			5 link Description: Artha Built for busy Indian stores, Value: localhost:51977/dashboard
+			6 button Collapse sidebar
+			7 container Main navigation
+				8 link Description: Dashboard, Value: localhost:51977/dashboard
+				9 link Description: Billing F2, Value: localhost:51977/billing
+				10 link Description: Inventory, Value: localhost:51977/inventory
+				11 button (collapsed) Description: Expand Inventory menu, Secondary Actions: Expand
+				12 link Description: Customers / Udhar, Value: localhost:51977/customers
+				13 link Description: Purchases, Value: localhost:51977/purchase-bills
+				14 button Sales
+				15 link Description: Returns, Value: localhost:51977/returns
+				16 link Description: Reports, Value: localhost:51977/reports
+				17 link Description: Cash & Payments, Value: localhost:51977/money-statement
+				18 link Description: Accounting, Value: localhost:51977/accounting
+				19 button Business Tools
+				20 link Description: Expenses, Value: localhost:51977/expenses
+				21 link Description: Settings, Value: localhost:51977/settings
+			22 text Cloud paused 2 Local billing works; backup will retry
+			23 link Description: Sync Now, Value: localhost:51977/sync-status
+			24 pop up button (collapsed) QF QA Full Shop Day QA Full Shop Day - Main · Jodhpur, ID: radix-:rf:, Secondary Actions: Expand
+				25 text QF
+				26 text QA Full Shop Day
+				27 text QA Full Shop Day - Main · Jodhpur
+		28 container
+			29 button Toggle sidebar
+			30 heading Customers / Udhar, Value: 1
+				31 text Customers / Udhar
+			32 pop up button (collapsed) QA Full Shop Day - Main MAIN · PRIMARY, ID: radix-:r15:, Secondary Actions: Expand
+				33 image
+				34 text QA Full Shop Day - Main
+				35 text MAIN
+				36 text  · PRIMARY
+				37 image
+			38 link Description: Open sync alerts, Value: localhost:51977/sync-status
+			39 pop up button (collapsed) QF, ID: radix-:rh:, Secondary Actions: Expand
+		40 text Cloud backup is paused because the backend is not reachable. Local billing still works. 
+		41 link Description: Open Sync Status ->, Value: localhost:51977/sync-status
+		42 text 2 changes waiting to back up
+		43 text Will retry automatically when the connection is healthy.
+		44 button Retry now
+		45 link Description: View, Value: localhost:51977/sync-status
+		46 container main-content
+			47 text Customers / Udhar page loaded
+			48 container
+				49 image
+				50 heading Customers and udhar, Value: 2
+					51 text Customers and udhar
+				52 text Track every balance, collection promise and payment from one workspace 2 pending
+				53 pop up button (collapsed) 25 Sept 2026 - 01 Oct 2026, ID: radix-:r2k:, Secondary Actions: Expand
+					54 image
+					55 text 25 Sept 2026
+					56 text  - 
+					57 text 01 Oct 2026
+					58 image
+				59 pop up button (collapsed) Filters, ID: radix-:r2m:, Secondary Actions: Expand
+					60 image
+					61 text Filters
+				62 button Export
+					63 image
+					64 text Export
+				65 button Collect payment
+					66 image
+					67 text Collect payment
+				68 button Add customer
+					69 image
+					70 text Add customer
+			71 container
+				72 text ACCOUNTS FOR YOUR SHOP TYPE 🛒 Kirana / General Store Most udhar here is small and old rather than large and recent — work the ageing list from the oldest end, not the biggest.
+				73 link Description: Change shop type, Value: localhost:51977/settings/store-profile
+			74 container Customer account summary
+				75 container
+					76 image
+					77 text Total Customers 1
+					78 image
+					79 text 100 % vs last week
+					80 image
+				81 container
+					82 image
+					83 text Total Udhar Outstanding ₹248.25
+					84 image
+					85 text 100 % vs last week
+					86 image
+				87 container
+					88 image
+					89 text Overdue Amount ₹0 0 % vs last week
+					90 image
+				91 container
+					92 image
+					93 text Udhar Collected ₹50.50
+					94 image
+					95 text 100 % vs last week
+					96 image
+			97 container
+				98 container customer-list-panel
+					99 container
+						100 heading Customers, Value: 2
+							101 text Customers
+						102 text 1 shown
+					103 container
+						104 image
+						105 text field (settable) Search by name or mobile
+					106 checkbox All Customers, Value: 1
+					107 checkbox With Balance, Value: 0
+					108 checkbox Overdue, Value: 0
+					109 checkbox Cleared, Value: 0
+					110 button QD QA Day Customer No address 6999996512 01 Oct 2026, 02:35 pm ₹248.25 0-7 Days Low
+						111 text QD
+						112 image
+						113 text QA Day Customer
+						114 text No address
+						115 text 6999996512
+						116 text 01 Oct 2026, 02:35 pm
+						117 text ₹248.25
+						118 text 0-7 Days
+						119 text Low
+					120 container
+						121 text Showing 1 of 1 customers 1 loaded
+				122 container
+					123 text QD
+					124 heading QA Day Customer, Value: 2
+						125 text QA Day Customer
+					126 text Low Risk
+					127 button Edit customer
+						128 image
+					129 image
+					130 text 6999996512
+					131 image
+					132 text No address
+					133 link Description: View Ledger, Help: Open full udhar ledger, Value: localhost:51977/customers/cmupb2bsc0008mm77cbbtgzi3
+					134 text Last Payment 01 Oct 2026 CREDIT LIMIT Not set TOTAL PURCHASES ₹399 TOTAL PAID ₹150.75 OUTSTANDING ₹248.25 OVERDUE DAYS 0 Days
+				135 container
+					136 heading Record Udhar Payment, Value: 2
+						137 text Record Udhar Payment
+					138 text AMOUNT DUE ₹248.25 Payment Amount * ₹
+					139 stepper (settable) Payment Amount *, ID: customer-payment-amount
+					140 button Full Due (₹248.25)
+					141 button ₹500
+					142 button ₹1,000
+					143 button ₹2,000
+					144 button Custom
+					145 text Payment Mode
+					146 button Cash
+						147 image
+						148 text Cash
+					149 button UPI
+						150 image
+						151 text UPI
+					152 button Bank
+						153 image
+						154 text Bank
+					155 button Split
+						156 image
+						157 text Split
+					158 text Payment Note (Optional)
+					159 text field (settable) Payment Note (Optional), ID: customer-payment-note
+					160 button (disabled) Collect Payment
+						161 image
+						162 text Collect Payment
+					163 button Send Reminder
+						164 image
+						165 text Send Reminder
+					166 image
+					167 text After payment, customer balance and ledger update automatically.
+				168 heading Ageing Summary, Value: 3
+					169 text Ageing Summary
+				170 image
+				171 text ₹248.25
+				172 text Total Due
+				173 text 0 - 7 Days ₹248.25 100% 7 - 30 Days ₹0 0% 30+ Days ₹0 0%
+				174 heading Collection Progress, Value: 3
+					175 text Collection Progress
+				176 image
+				177 button Last 7 days
+					178 text Last 7 days
+					179 image
+				180 container
+					181 text 38 %
+				182 text Collected
+				183 text Collected
+				184 text ₹150.75
+				185 container
+					186 text vs previous period: ↑ 100 %
+				187 text Pending
+				188 text ₹248.25
+				189 heading Recent Payments Received, Value: 3
+					190 text Recent Payments Received
+				191 button View all
+				192 text 01 Oct 2026 ₹50.50 UPI 01 Oct 2026 ₹100.25 Cash
+				193 heading Credit Risk, Value: 3
+					194 text Credit Risk
+				195 image
+				196 text Low Risk
+				197 text Payment pattern looks trackable.
+				198 button Send Reminder
+					199 image
+					200 text Send Reminder
+			201 container
+				202 heading Udhar Ledger, Value: 2
+					203 text Udhar Ledger
+				204 image
+				205 text View every bill, payment, and balance movement
+				206 pop up button (collapsed) All Entries, ID: radix-:r2t:, Secondary Actions: Expand
+					207 text All Entries
+					208 image
+				209 button 01 Oct 2026 - 01 Oct 2026
+					210 image
+					211 text 01 Oct 2026
+					212 text  - 
+					213 text 01 Oct 2026
+					214 image
+				215 button Download Statement
+					216 image
+					217 text Download Statement
+				218 container Udhar Ledger
+					219 table
+						220 row
+							221 cell
+								222 text Date
+							223 cell
+								224 text Entry Type
+							225 cell
+								226 text Reference
+							227 cell
+								228 text Description
+							229 cell
+								230 text Debit (₹)
+							231 cell
+								232 text Credit (₹)
+							233 cell
+								234 text Running Balance (₹)
+							235 cell
+								236 text Mode
+							237 cell
+								238 text Status
+							239 cell
+								240 text Action
+						241 row
+							242 cell
+								243 text 01 Oct 2026
+							244 cell
+								245 text Payment
+							246 cell
+								247 text payment_f730a76f-37a2-4904-9060-5a15ceef6210
+							248 cell
+								249 text QA outage collection
+							250 cell
+								251 text —
+							252 cell
+								253 text ₹50.50
+							254 cell
+								255 text ₹248.25
+							256 cell
+								257 text upi
+							258 cell
+								259 text Posted
+							260 cell
+								261 pop up button (collapsed) Description: Ledger actions, ID: radix-:r3c:, Secondary Actions: Expand
+									262 image
+						263 row
+							264 cell
+								265 text 01 Oct 2026
+							266 cell
+								267 text Bill
+							268 cell
+								269 text —
+							270 cell
+								271 text Bill KOS-2026-000003
+							272 cell
+								273 text ₹298.75
+							274 cell
+								275 text —
+							276 cell
+								277 text ₹298.75
+							278 cell
+								279 text credit
+							280 cell
+								281 text Posted
+							282 cell
+								283 pop up button (collapsed) Description: Ledger actions, ID: radix-:r3a:, Secondary Actions: Expand
+									284 image
+		285 button Voice assistant
+		286 button Report a problem
+		287 button Open assistant
+			288 image
+		289 container Notifications (F8)
+			290 content list
+
+The focused UI element is 0 AXWebArea Customers / Udhar · Artha, URL: localhost:51977/customers

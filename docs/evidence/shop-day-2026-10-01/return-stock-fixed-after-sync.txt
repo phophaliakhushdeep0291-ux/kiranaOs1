@@ -1,0 +1,136 @@
+Browser tab: 5, Title: "Inventory · Artha", URL: "http://localhost:51977/inventory".
+1 AXWebArea Inventory · Artha, URL: localhost:51977/inventory
+	2 container root
+		3 link Description: Skip to main content, Value: localhost:51977/inventory#main-content
+		4 container
+			5 link Description: Artha home, Value: localhost:51977/dashboard
+			6 heading Inventory, Value: 1
+				7 text Inventory
+			8 text QA Full Shop Day  ·  Synced
+			9 button Search products, bills, and customers
+			10 link Description: Open backup and sync status, Value: localhost:51977/sync-status
+		11 container main-content
+			12 text Inventory page loaded
+			13 container
+				14 text STOCK TOOLS FOR YOUR SHOP TYPE 🛒 Kirana / General Store
+				15 button (collapsed) Description: Stock tools for your shop type, Secondary Actions: Expand
+			16 text Total Stock Value
+			17 image
+			18 text ₹1,920
+			19 text At current cost
+			20 text Total SKUs
+			21 image
+			22 text 1
+			23 text Products counted as stock
+			24 text Low Stock Items
+			25 image
+			26 text 0
+			27 text Require attention
+			28 text Out of Stock Items
+			29 image
+			30 text 0
+			31 text Take immediate action
+			32 button Add Stock Increase inventory
+				33 image
+				34 text Add Stock
+				35 text Increase inventory
+			36 button Stock Correction Adjust stock levels
+				37 image
+				38 text Stock Correction
+				39 text Adjust stock levels
+			40 button Damage Entry Record damaged items
+				41 image
+				42 text Damage Entry
+				43 text Record damaged items
+			44 button Supplier Purchase Create purchase entry
+				45 image
+				46 text Supplier Purchase
+				47 text Create purchase entry
+			48 pop up button (collapsed) More Actions History, bills and insights, ID: radix-:rk:, Secondary Actions: Expand
+				49 image
+				50 text More Actions
+				51 text History, bills and insights
+			52 container
+				53 heading Product Stock, Value: 2
+					54 text Product Stock
+				55 text Real-time stock from local data, ready to sync.
+				56 image
+				57 text field (settable) Search by product, SKU, barcode...
+				58 button Filters
+					59 image
+					60 text Filters
+				61 button Export
+					62 image
+					63 text Export
+				64 combo box (collapsed) Description: All Categories, Secondary Actions: Expand
+					65 text All Categories
+				66 combo box (collapsed) Description: All Brands, Secondary Actions: Expand
+					67 text All Brands
+				68 combo box (collapsed) Description: All Units, Secondary Actions: Expand
+					69 text All Units
+				70 combo box (collapsed) Description: All Stock Status, Secondary Actions: Expand
+					71 text All Stock Status
+				72 button QA QA Day Tea 250g SKU: - Category: General 16 piece Value: ₹1,920 In Stock
+					73 text QA
+					74 text QA Day Tea 250g
+					75 text SKU: -
+					76 text Category: General
+					77 text 16 piece
+					78 text Value: ₹1,920
+					79 text In Stock
+				80 text Showing 1 to 1 of 1 products
+				81 button (disabled) Previous page
+					82 image
+				83 button Page 1
+				84 button (disabled) Next page
+					85 image
+				86 text 8 rows per page
+			87 container
+				88 heading Stock Overview by Location, Value: 2
+					89 text Stock Overview by Location
+				90 text Current stock distribution
+				91 image Stock Overview by Location: Main Store, Total Value ₹1,920
+				92 text Main Store
+				93 text 100% of tracked stock
+				94 text Total Value ₹1,920
+				95 heading Low Stock Alerts, Value: 2
+					96 text Low Stock Alerts
+				97 text Items needing immediate attention
+				98 button View all
+				99 text All tracked products have healthy stock.
+				100 heading Recent Stock Updates, Value: 2
+					101 text Recent Stock Updates
+				102 text Latest inventory movements
+				103 button View all
+				104 image
+				105 text return
+				106 container
+					107 text QA Day Tea 250g  ·  Authenticated staff  ·  2 Oct, 3:07 AM
+				108 text + 1 piece
+				109 image
+				110 text Manual sale
+				111 container
+					112 text QA Day Tea 250g  ·  QA Shopkeeper  ·  2 Oct, 3:07 AM
+				113 text -1 piece
+				114 image
+				115 text return
+				116 container
+					117 text QA Day Tea 250g  ·  Authenticated staff  ·  1 Oct, 7:31 PM
+				118 text + 1 piece
+				119 image
+				120 text Manual sale
+				121 container
+					122 text QA Day Tea 250g  ·  QA Shopkeeper  ·  1 Oct, 2:34 PM
+				123 text -2 piece
+		124 container Primary navigation
+			125 link Description: Home, Value: localhost:51977/dashboard
+			126 link Description: Sell, Value: localhost:51977/billing
+			127 link Description: Stock, Value: localhost:51977/inventory
+			128 link Description: Customers, Value: localhost:51977/customers
+			129 pop up button (collapsed) Description: Open all app areas, Secondary Actions: Expand
+		130 button Open assistant
+			131 image
+		132 container Notifications (F8)
+			133 content list
+
+The focused UI element is 1 AXWebArea Inventory · Artha, URL: localhost:51977/inventory

@@ -1,0 +1,94 @@
+{
+  "stockBaseQty": 16.0,
+  "customerDuePaise": 24825,
+  "activeNetSalesPaise": 79850,
+  "expenses": [
+    {
+      "title": "QA shop-day packing expense",
+      "amountPaise": 4975,
+      "status": "paid"
+    },
+    {
+      "title": "QA paise outage regression",
+      "amountPaise": 25,
+      "status": "paid"
+    },
+    {
+      "title": "QA unsynced report expense",
+      "amountPaise": 50,
+      "status": "paid"
+    }
+  ],
+  "bills": [
+    {
+      "billNo": "KOS-2026-000001",
+      "status": "active",
+      "grandTotalPaise": 39900,
+      "paidAmountPaise": 39900,
+      "returnOfBillId": null
+    },
+    {
+      "billNo": "KOS-2026-000002",
+      "status": "active",
+      "grandTotalPaise": 20000,
+      "paidAmountPaise": 20000,
+      "returnOfBillId": null
+    },
+    {
+      "billNo": "KOS-2026-000003",
+      "status": "active",
+      "grandTotalPaise": 39900,
+      "paidAmountPaise": 10025,
+      "returnOfBillId": null
+    },
+    {
+      "billNo": "RET-2026-000001",
+      "status": "active",
+      "grandTotalPaise": -19950,
+      "paidAmountPaise": -19950,
+      "returnOfBillId": "cmupb496p001i14orltqs1c05"
+    },
+    {
+      "billNo": "KOS-2026-000004",
+      "status": "active",
+      "grandTotalPaise": 20000,
+      "paidAmountPaise": 20000,
+      "returnOfBillId": null
+    },
+    {
+      "billNo": "RET-2026-000002",
+      "status": "active",
+      "grandTotalPaise": -20000,
+      "paidAmountPaise": -20000,
+      "returnOfBillId": "cmuq21vsk001xsdaaaqtyq7ip"
+    },
+    {
+      "billNo": "KOS-2026-000005",
+      "status": "cancelled",
+      "grandTotalPaise": 20000,
+      "paidAmountPaise": 20000,
+      "returnOfBillId": null
+    },
+    {
+      "billNo": "KOS-2026-000006",
+      "status": "active",
+      "grandTotalPaise": 20000,
+      "paidAmountPaise": 20000,
+      "returnOfBillId": null
+    },
+    {
+      "billNo": "RET-2026-000003",
+      "status": "active",
+      "grandTotalPaise": -20000,
+      "paidAmountPaise": -20000,
+      "returnOfBillId": "cmuqpp35a00xfsdaaxbi12wj7"
+    },
+    {
+      "billNo": "KOS-2026-000007",
+      "status": "cancelled",
+      "grandTotalPaise": 20000,
+      "paidAmountPaise": 20000,
+      "returnOfBillId": null
+    }
+  ]
+}

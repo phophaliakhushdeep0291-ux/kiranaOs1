@@ -44,9 +44,19 @@ vi.mock("@/features/core/sync/sync-id-mapping", () => ({ loadIdMap: async () => 
 vi.mock("@/features/core/purchases/sync-guards", () => ({ loadPurchaseOverrideMatcher: async () => ({ keys: new Set() }), rowMatchesPurchaseOverride: () => false }));
 vi.mock("@/features/core/subscription/access", () => ({ writeSubscriptionSnapshot: async () => 0 }));
 
-import { hydrateFromBackendSnapshot } from "@/features/core/sync/cloud-hydration";
+import { hydrateFromBackendSnapshot, isSupersededLocalEcho } from "@/features/core/sync/cloud-hydration";
 
 const OURS = { tenant_id: "t1", store_id: "s1" };
+
+describe("retired bill copies in recovery snapshots", () => {
+  it("does not preserve a retired pending twin over its active server bill", () => {
+    expect(isSupersededLocalEcho({ id: "local", server_id: "server", merged_into_id: "server", deleted_at: "2026-10-02", sync_status: "pending_sync" }, {})).toBe(true);
+  });
+  it("preserves a genuine pending edit and a surviving row with a self marker", () => {
+    expect(isSupersededLocalEcho({ id: "server", server_id: "server", sync_status: "pending_sync" }, {})).toBe(false);
+    expect(isSupersededLocalEcho({ id: "server", server_id: "server", merged_into_id: "server", sync_status: "pending_sync" }, {})).toBe(false);
+  });
+});
 
 beforeEach(() => {
   store.cursors.clear();

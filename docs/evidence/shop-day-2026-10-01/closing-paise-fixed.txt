@@ -1,0 +1,180 @@
+Browser tab: 4, Title: "Daily Closing · Artha", URL: "http://localhost:51977/daily-closing".
+1 AXWebArea Daily Closing · Artha, URL: localhost:51977/daily-closing
+	2 container root
+		18 link Description: Skip to main content, Value: localhost:51977/daily-closing#main-content
+		19 container
+			20 link Description: Artha home, Value: localhost:51977/dashboard
+			21 heading Daily Closing, Value: 1
+				34 text Daily Closing
+			35 text QA Full Shop Day  ·  Synced
+			22 button Search products, bills, and customers
+			23 link Description: Open backup and sync status, Value: localhost:51977/sync-status
+		24 container main-content
+			36 text Daily Closing page loaded
+			37 image
+			38 heading Daily Closing, Value: 1
+				39 text Daily Closing
+			40 text Cash drawer and business summary from local data.
+			41 link Description: Reports, Value: localhost:51977/reports
+			42 button Print
+				43 image
+				44 text Print
+			45 button Share
+				46 image
+				47 text Share
+			48 button Refresh
+				49 image
+				50 text Refresh
+			51 text CLOSING DATE
+			52 date field (settable) Description: Closing date, Value: 2026-10-01
+				53 container
+					54 stepper
+					55 stepper
+					56 stepper
+				57 pop up button Show date picker Show date picker
+			58 image
+			59 text EXPECTED CASH IN DRAWER TONIGHT
+			60 text ₹750
+			61 text Opening float + cash sales + old udhar cash recovery + cash in - supplier cash paid - cash expenses - cash out
+			62 image
+			63 text Cash in 
+			64 text ₹299.75
+			65 image
+			66 text UPI in 
+			67 text ₹250.50
+			68 image
+			69 text Bank in 
+			70 text ₹0
+			71 text CASH, UPI, AND BANK SPLIT
+			72 text Cash in
+			73 text ₹299.75
+			74 container
+				75 text 54 %
+			76 text UPI in
+			77 text ₹250.50
+			78 container
+				79 text 46 %
+			80 text Bank in
+			81 text ₹0
+			82 container
+				83 text Old udhar recovered  ₹50.50
+			84 text OPENING FLOAT & CASH IN / OUT
+			85 container
+				86 text OPENING FLOAT FOR  2026-10-01
+			87 stepper (settable, integer) OPENING FLOAT FOR 2026-10-01, Value: 500, ID: opening-float
+			88 button Save
+			89 container
+				90 text The change you put in the drawer this morning. Declared each day rather than carried over, so yesterday's shortage never hides inside today's expected cash.  Currently ₹500.
+			91 text Cash expenses today
+			92 text ₹49.75
+			93 text Cash-paid expenses only — UPI and bank expenses never leave the drawer.
+			94 text RECORD CASH IN / OUT
+			95 stepper (settable)
+			96 text field (settable)
+			97 button Cash in
+				98 image
+				99 text Cash in
+			100 button Cash out
+				101 image
+				102 text Cash out
+			103 container
+				104 text Nothing recorded for  2026-10-01 . Log money you add to or take from the till so the count at closing can actually match.
+			105 text COUNT THE DRAWER — OVER / SHORT
+			106 container
+				107 text COUNTED CASH FOR  2026-10-01
+			108 stepper (settable, float) COUNTED CASH FOR 2026-10-01, Value: 749.75, ID: counted-cash
+			109 button Update
+			110 text Short by ₹0.25 vs expected ₹750.
+			111 text Saved on this device and kept for 90 days — repeated shorts on the same weekday are worth investigating.
+			112 text OVER / SHORT HISTORY
+			113 content list
+				114 container
+					115 text 01 Oct counted  ₹750  / expected  ₹750 Exact
+			116 image
+			117 heading Income today, Value: 2
+				118 text Income today
+			119 text Everything that came in
+			120 image
+			121 text Total sales
+			122 text All bills for the day
+			123 text ₹798.50
+			124 image
+			125 text Cash sales
+			126 text ₹299.75
+			127 image
+			128 text UPI sales
+			129 text ₹200
+			130 image
+			131 text Bank sales
+			132 text ₹0
+			133 image
+			134 text Old udhar recovered
+			135 text Cash ₹0 / UPI ₹50.50 / Bank ₹0
+			136 text ₹50.50
+			137 image
+			138 heading Credit & outgoing, Value: 2
+				139 text Credit & outgoing
+			140 text What went out or remains due
+			141 image
+			142 text Udhar given today
+			143 text Credit extended to customers
+			144 text ₹298.75
+			145 image
+			146 text Supplier cash paid
+			147 text ₹0
+			148 image
+			149 text Supplier UPI paid
+			150 text ₹0
+			151 image
+			152 text Supplier bank paid
+			153 text ₹0
+			154 text Supplier due (unpaid)
+			155 text Purchase bills not yet paid
+			156 text ₹0
+			157 image
+			158 heading Top sold products, Value: 2
+				159 text Top sold products
+			160 table
+				161 row
+					162 cell
+						163 text PRODUCT
+					164 cell
+						165 text QTY
+					166 cell
+						167 text SALES
+				168 row
+					169 cell
+						170 text 1 QA Day Tea 250g
+					171 cell
+						172 text 4
+					173 cell
+						174 text ₹798
+			175 image
+			176 heading Low-stock items, Value: 2
+				177 text Low-stock items
+			178 text No low-stock items
+			179 image
+			180 heading Sync check before closing, Value: 2
+				181 text Sync check before closing
+			182 text Ensure all data is backed up to the cloud
+			183 image
+			184 text 0
+			185 text Pending backup
+			186 image
+			187 text 0
+			188 text Failed sync
+			189 image
+			190 text 0
+			191 text Conflicts
+		26 container Primary navigation
+			27 link Description: Home, Value: localhost:51977/dashboard
+			28 link Description: Sell, Value: localhost:51977/billing
+			29 link Description: Stock, Value: localhost:51977/inventory
+			30 link Description: Customers, Value: localhost:51977/customers
+			31 pop up button (collapsed) Description: Open all app areas, Secondary Actions: Expand
+		32 button Open assistant
+			33 image
+		16 container Notifications (F8)
+			17 content list
+
+The focused UI element is 108 stepper (settable, float) COUNTED CASH FOR 2026-10-01, Value: 749.75, ID: counted-cash

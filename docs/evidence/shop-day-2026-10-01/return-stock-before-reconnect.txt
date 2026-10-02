@@ -1,0 +1,3 @@
+Browser tab: 5, Title: "Inventory · Artha", URL: "http://localhost:51977/inventory".
+There has been no change in the accessibility tree.
+The focused UI element is 104 link Description: Stock, URL: localhost:51977/inventory
