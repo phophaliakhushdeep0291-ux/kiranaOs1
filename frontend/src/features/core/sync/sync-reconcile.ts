@@ -506,7 +506,38 @@ async function refreshCustomerBalancesFromLocalLedger(): Promise<void> {
   }
 }
 
-export async function refreshBusinessCaches(): Promise<void> {
+/**
+ * Whether the screens' quick-start caches may be out of date. Starts true, so
+ * the first sync after the app loads always rebuilds them. Any local change
+ * marks them stale again; sync's own announcements do not, because sync
+ * refreshes before it announces.
+ */
+let businessCachesStale = true;
+if (typeof window !== "undefined") {
+  window.addEventListener("kirana:local-data-changed", (event) => {
+    if ((event as CustomEvent<{ type?: unknown } | undefined>).detail?.type !== "sync") businessCachesStale = true;
+  });
+}
+
+/**
+ * Rebuild the quick-start caches, reconcile orphaned children and re-derive
+ * customer balances. This reads most of the offline database, so a pull that
+ * received nothing passes `onlyIfStale`: an idle counter used to repeat all of
+ * it every sync cycle (2.5 to 45 seconds) with nothing new to show.
+ */
+export async function refreshBusinessCaches({ onlyIfStale = false }: { onlyIfStale?: boolean } = {}): Promise<void> {
+  if (onlyIfStale && !businessCachesStale) return;
+  // Cleared before reading, so a change made during the rebuild marks it again.
+  businessCachesStale = false;
+  try {
+    await rebuildBusinessCaches();
+  } catch (error) {
+    businessCachesStale = true;
+    throw error;
+  }
+}
+
+async function rebuildBusinessCaches(): Promise<void> {
   await removeOrphanedDependentRows();
   await refreshCustomerBalancesFromLocalLedger().catch(() => undefined);
   const listRows = async <T extends Record<string, unknown>>(
