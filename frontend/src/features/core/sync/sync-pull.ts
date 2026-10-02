@@ -286,6 +286,7 @@ export async function pullServerChanges(): Promise<{
   let totalPulled = 0;
   let totalConflicts = 0;
   let totalReceived = 0;
+  const affectedEntities = new Set<string | undefined>();
   let latestCursor: string | number | null | undefined = await getStoredCursor();
   let latestServerSequence: string | number | null | undefined = await getStoredServerSequence();
   let hasMore = false;
@@ -307,6 +308,9 @@ export async function pullServerChanges(): Promise<{
       // every offline table, so a 500-change page was 500 full walks.
       const mergedIds = new Map<string, string>();
       for (const change of changes) {
+        const record = change as Record<string, unknown>;
+        const entity = record.entity_type ?? record.entityType ?? record.type;
+        affectedEntities.add(typeof entity === "string" ? entity : undefined);
         const status = await mergeServerChange(change, mergedIds);
         if (status === "merged") pulled += 1;
         if (status === "conflict") conflicts += 1;
@@ -337,7 +341,7 @@ export async function pullServerChanges(): Promise<{
 
     // Anything the server sent, even an ignored change, can write an id mapping
     // the balance rebuild reads. Only a pull that received nothing may skip.
-    await refreshBusinessCaches({ onlyIfStale: totalReceived === 0 });
+    await refreshBusinessCaches({ onlyIfStale: totalReceived === 0, affectedEntities });
     if (totalPulled > 0 || totalConflicts > 0)
       emitLocalDataChanged({
         type: "sync",

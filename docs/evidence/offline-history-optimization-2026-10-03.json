@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-03",
+  "baseCommit": "a6a92641b4166cf296db4d879fc130cde29912c5",
+  "branch": "work/dashboard-customer-sync-reads",
+  "buildId": "a6a92641b416",
+  "localGate": {
+    "command": "KIRANA_BUILD_ID=a6a92641b416 VITE_API_BASE_URL=/api npm run prod:check -- -- --maxWorkers=4",
+    "exitCode": 0,
+    "passedTests": 3308,
+    "skippedTests": 1,
+    "passedFiles": 426,
+    "skippedFiles": 1
+  },
+  "serialIndexedDBProof": {
+    "command": "KIRANA_MEASURE_HISTORY=1 npm run test -- --maxWorkers=1 src/tests/offline-indexed-history.test.ts",
+    "exitCode": 0,
+    "passedTests": 23,
+    "measurement": {
+      "workload": "10000-bills-one-item-one-payment",
+      "displayedBills": 10,
+      "beforeRows": 30000,
+      "afterRows": 80
+    },
+    "runtime": "Dexie with fake-indexeddb; returned rows, not device latency"
+  },
+  "cacheSnapshotReads": {
+    "full": {
+      "baseline": 13,
+      "candidate": 9
+    },
+    "bill": {
+      "baseline": 13,
+      "candidate": 7
+    },
+    "supplier": {
+      "baseline": 13,
+      "candidate": 2
+    },
+    "expense": {
+      "baseline": 13,
+      "candidate": 0
+    },
+    "qualification": "Baseline call-site counts; candidate regression assertions. Native orphan scans excluded."
+  },
+  "bundle": {
+    "baselineLargestShopGzipKB": 1278.1,
+    "candidateLargestShopGzipKB": 1279.8,
+    "largestShopGzipBudgetKB": 1280,
+    "candidateStartupGzipKB": 273.5,
+    "startupGzipBudgetKB": 300,
+    "sameBuildIdAndFrontendEnvironment": true
+  },
+  "balanceRace": {
+    "withoutFinancialTransaction": {
+      "exitCode": 1,
+      "expected": 75,
+      "actual": 100
+    },
+    "withFinancialTransaction": {
+      "exitCode": 0,
+      "actual": 75
+    }
+  },
+  "freshBrowserProof": false,
+  "productionDeploymentProof": false
+}

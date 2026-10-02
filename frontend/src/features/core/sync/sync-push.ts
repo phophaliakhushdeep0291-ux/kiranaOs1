@@ -609,7 +609,7 @@ export async function pushPendingOutboxOperations(): Promise<{
     const { deferred, ...outcome } = await handlePushResults(prepared, results);
     const nextCursor = nextCursorFromResponse(response);
     await setStoredCursor(nextCursor);
-    await refreshBusinessCaches();
+    await refreshBusinessCaches({ affectedEntities: prepared.map(({ event }) => entityTypeFromOperation(event.operation_type, event.entity_type)) });
     emitLocalDataChanged({
       type: "sync",
       action: "push",

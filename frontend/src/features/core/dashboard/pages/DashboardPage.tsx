@@ -23,6 +23,7 @@ import { getLocalDashboardSnapshot, useGetPaymentSummary, useGetPnL, useGetUdhar
 import { buildLocalReportSnapshot, type LocalReportSnapshot } from "@/features/core/reports/local-reporting";
 import { FinancialAggregationService, type FinancialAggregationSnapshot } from "@/features/core/finance/services/FinancialAggregationService";
 import { offlineDB } from "@/lib/offline/db";
+import { dashboardChangeAffects, loadRecentDashboardBills } from "@/features/core/dashboard/local-reads";
 import { seedDemoShopData } from "@/features/core/demo/demo-shop-data";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useFeature } from "@/features/core/subscription";
@@ -574,10 +575,13 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
 
   useEffect(() => {
     let cancelled = false;
-    const refreshProducts = () => {
+    let generation = 0;
+    const refreshProducts = (event?: Event) => {
+      if (event && !dashboardChangeAffects((event as CustomEvent).detail, "products")) return;
+      const request = ++generation;
       void offlineDB.getAll<Product & Record<string, unknown>>("products")
         .then((rows) => {
-          if (cancelled) return;
+          if (cancelled || request !== generation) return;
           const activeRows = rows.filter(activeProduct);
           setProductsById(Object.fromEntries(activeRows.map((product) => [product.id, product])));
           // sortTime parses a date, and calling it inside the comparator costs
@@ -593,7 +597,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
           setRecentProducts(byRecency);
         })
         .catch(() => {
-          if (!cancelled) {
+          if (!cancelled && request === generation) {
             setProductsById({});
             setRecentProducts([]);
           }
@@ -611,31 +615,14 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
 
   useEffect(() => {
     let cancelled = false;
-    const refreshBills = () => {
-      void Promise.all([
-        offlineDB.getAll<Bill>("bills"),
-        offlineDB.getAll<Record<string, unknown>>("bill_items"),
-        offlineDB.getAll<Record<string, unknown>>("payments"),
-      ]).then(([rows, items, payments]) => {
-        const itemsByBill = new Map<string, Record<string, unknown>[]>();
-        const paymentsByBill = new Map<string, Record<string, unknown>[]>();
-        for (const item of items) {
-          const billId = String(item.billId ?? item.bill_id ?? "");
-          if (billId) itemsByBill.set(billId, [...(itemsByBill.get(billId) ?? []), item]);
-        }
-        for (const payment of payments) {
-          const billId = String(payment.billId ?? payment.bill_id ?? "");
-          if (billId) paymentsByBill.set(billId, [...(paymentsByBill.get(billId) ?? []), payment]);
-        }
-        if (!cancelled) {
-          setLocalRecentBills(rows.filter(isDashboardSaleBill).map((bill) => ({
-            ...bill,
-            items: Array.isArray(bill.items) ? bill.items : itemsByBill.get(bill.id) ?? [],
-            payments: Array.isArray(bill.payments) ? bill.payments : paymentsByBill.get(bill.id) ?? [],
-          })));
-        }
+    let generation = 0;
+    const refreshBills = (event?: Event) => {
+      if (event && !dashboardChangeAffects((event as CustomEvent).detail, "bills")) return;
+      const request = ++generation;
+      void loadRecentDashboardBills(10, true).then((rows) => {
+        if (!cancelled && request === generation) setLocalRecentBills(rows);
       }).catch(() => {
-        if (!cancelled) setLocalRecentBills([]);
+        if (!cancelled && request === generation) setLocalRecentBills([]);
       });
     };
     refreshBills();
@@ -719,7 +706,8 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
 
   const recentBills = useMemo(
     () => (dedupeBillsForDisplay([...(recentBillsQuery.data?.bills ?? []), ...localRecentBills]) as unknown as Bill[])
-      .sort((a, b) => sortTime(b.createdAt) - sortTime(a.createdAt)),
+      .filter(isDashboardSaleBill)
+      .sort((a, b) => sortTime(b.createdAt ?? (b as Bill & { created_at?: string }).created_at) - sortTime(a.createdAt ?? (a as Bill & { created_at?: string }).created_at)),
     [recentBillsQuery.data?.bills, localRecentBills],
   );
   const yesterdaySales = dashboard.previousRevenue || salesChartData[5]?.sales || 0;

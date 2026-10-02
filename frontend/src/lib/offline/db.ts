@@ -1,4 +1,5 @@
 import Dexie, { type Table } from "dexie";
+import { offlineReadIndexes } from "@/lib/offline/read-indexes";
 import type { SyncStatus } from "@/types/domain";
 import { getOfflineScope, nowIso, type OfflineScope } from "@/lib/offline/context";
 import { StorageFullError, isQuotaExceededError } from "@/lib/offline/storage-errors";
@@ -144,6 +145,8 @@ export class KiranaDexieDB extends Dexie {
   constructor() {
     super("kirana_os_offline");
 
+    // Dexie inherits unchanged tables/indexes. Record only version deltas;
+    // historical schemas are checked against the original full definitions.
     this.version(1).stores({
       products:
         "id, local_id, server_id, [tenant_id+store_id], name, category, barcode, sku, updated_at, sync_status, deleted_at",
@@ -179,41 +182,9 @@ export class KiranaDexieDB extends Dexie {
         "id, local_id, server_id, [tenant_id+store_id], name, mobile, role, isActive, active, updated_at, sync_status, deleted_at",
     });
 
-    this.version(2)
-      .stores({
-        products:
-          "id, local_id, server_id, [tenant_id+store_id], name, category, barcode, sku, updated_at, sync_status, deleted_at",
-        customers:
-          "id, local_id, server_id, [tenant_id+store_id], name, mobile, type, updated_at, sync_status, deleted_at",
-        bills:
-          "id, local_id, server_id, [tenant_id+store_id], billNo, billNumber, billType, status, customerId, customer_id, createdAt, created_at, updated_at, sync_status",
-        bill_items:
-          "id, bill_id, billId, product_id, productId, [tenant_id+store_id], created_at, sync_status",
-        payments:
-          "id, bill_id, billId, customer_id, customerId, mode, paid_at, created_at, sync_status",
-        customer_ledger:
-          "id, customer_id, customerId, [tenant_id+store_id], type, source_type, entry_at, created_at, sync_status",
-        inventory_movements:
-          "id, product_id, productId, type, reference_id, created_at, sync_status",
-        suppliers:
-          "id, local_id, server_id, [tenant_id+store_id], name, mobile, updated_at, sync_status, deleted_at",
-        settings: "key, [tenant_id+store_id], updated_at, expires_at",
-        sync_outbox:
-          "clientEventId, op_id, type, operation_type, entity_type, entity_id, client_created_at, createdAt, attempts, retry_count, [tenant_id+store_id], status, sync_status, next_retry_at, last_attempt_at",
-        sync_cursor: "id, entity_type, [tenant_id+store_id], updated_at",
-        sync_conflicts:
-          "id, entity_type, entity_id, [tenant_id+store_id], resolution, created_at, sync_status",
-        id_mappings:
-          "local_id, server_id, entity_type, [tenant_id+store_id], updated_at",
-        local_audit_logs:
-          "id, action, entity_type, entity_id, actor_id, created_at, [tenant_id+store_id]",
-        subscription_cache:
-          "id, plan_code, [tenant_id+store_id], updated_at, sync_status",
-        device_license_cache:
-          "id, device_fingerprint, status, [tenant_id+store_id], updated_at, sync_status",
-        staff_users:
-          "id, local_id, server_id, [tenant_id+store_id], name, mobile, role, isActive, active, updated_at, sync_status, deleted_at",
-      })
+    this.version(2).stores({
+      sync_outbox: "clientEventId, op_id, type, operation_type, entity_type, entity_id, client_created_at, createdAt, attempts, retry_count, [tenant_id+store_id], status, sync_status, next_retry_at, last_attempt_at",
+    })
       .upgrade(async (tx) => {
         const table = tx.table("sync_outbox") as Table<
           Record<string, unknown>,
@@ -275,192 +246,52 @@ export class KiranaDexieDB extends Dexie {
         });
       });
 
-    this.version(3).stores({
-      products:
-        "id, local_id, server_id, [tenant_id+store_id], name, category, barcode, sku, updated_at, sync_status, deleted_at",
-      customers:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, type, updated_at, sync_status, deleted_at",
-      bills:
-        "id, local_id, server_id, [tenant_id+store_id], billNo, billNumber, billType, status, customerId, customer_id, createdAt, created_at, updated_at, sync_status",
-      bill_items:
-        "id, bill_id, billId, product_id, productId, [tenant_id+store_id], created_at, sync_status",
-      payments:
-        "id, bill_id, billId, customer_id, customerId, mode, paid_at, created_at, sync_status",
-      customer_ledger:
-        "id, customer_id, customerId, [tenant_id+store_id], type, source_type, entry_at, created_at, sync_status",
-      inventory_movements:
-        "id, product_id, productId, type, reference_id, created_at, sync_status",
-      suppliers:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, updated_at, sync_status, deleted_at",
-      settings: "key, [tenant_id+store_id], updated_at, expires_at",
-      sync_outbox:
-        "clientEventId, op_id, type, operation_type, entity_type, entity_id, client_created_at, createdAt, attempts, retry_count, [tenant_id+store_id], status, sync_status, next_retry_at, last_attempt_at",
-      sync_cursor: "id, entity_type, [tenant_id+store_id], updated_at",
-      sync_conflicts:
-        "id, entity_type, entity_id, [tenant_id+store_id], resolution, created_at, sync_status",
-      id_mappings:
-        "local_id, server_id, entity_type, [tenant_id+store_id], updated_at",
-      local_audit_logs:
-        "id, action, entity_type, entity_id, actor_id, created_at, [tenant_id+store_id]",
-      subscription_cache:
-        "id, plan_code, [tenant_id+store_id], updated_at, sync_status",
-      device_license_cache:
-        "id, device_fingerprint, status, [tenant_id+store_id], updated_at, sync_status",
-      staff_users:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, role, isActive, active, updated_at, sync_status, deleted_at",
-    });
+    this.version(3).stores({});
 
     this.version(4).stores({
-      products:
-        "id, local_id, server_id, [tenant_id+store_id], name, category, barcode, sku, updated_at, sync_status, deleted_at",
-      customers:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, type, updated_at, sync_status, deleted_at",
-      bills:
-        "id, local_id, server_id, [tenant_id+store_id], billNo, billNumber, billType, status, customerId, customer_id, createdAt, created_at, updated_at, sync_status",
-      bill_items:
-        "id, bill_id, billId, product_id, productId, [tenant_id+store_id], created_at, sync_status",
-      payments:
-        "id, bill_id, billId, customer_id, customerId, mode, paid_at, created_at, [tenant_id+store_id], sync_status",
-      customer_ledger:
-        "id, customer_id, customerId, [tenant_id+store_id], type, source_type, entry_at, created_at, sync_status",
-      inventory_movements:
-        "id, product_id, productId, type, reference_id, [tenant_id+store_id], created_at, sync_status",
-      suppliers:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, updated_at, sync_status, deleted_at",
-      settings: "key, [tenant_id+store_id], updated_at, expires_at",
-      sync_outbox:
-        "clientEventId, op_id, type, operation_type, entity_type, entity_id, client_created_at, createdAt, attempts, retry_count, [tenant_id+store_id], status, sync_status, next_retry_at, last_attempt_at",
-      sync_cursor: "id, entity_type, [tenant_id+store_id], updated_at",
-      sync_conflicts:
-        "id, entity_type, entity_id, [tenant_id+store_id], resolution, created_at, sync_status",
-      id_mappings:
-        "local_id, server_id, entity_type, [tenant_id+store_id], updated_at",
-      local_audit_logs:
-        "id, action, entity_type, entity_id, actor_id, created_at, [tenant_id+store_id]",
-      subscription_cache:
-        "id, plan_code, [tenant_id+store_id], updated_at, sync_status",
-      device_license_cache:
-        "id, device_fingerprint, status, [tenant_id+store_id], updated_at, sync_status",
-      staff_users:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, role, isActive, active, updated_at, sync_status, deleted_at",
+      payments: "id, bill_id, billId, customer_id, customerId, mode, paid_at, created_at, [tenant_id+store_id], sync_status",
+      inventory_movements: "id, product_id, productId, type, reference_id, [tenant_id+store_id], created_at, sync_status",
     });
 
     this.version(5).stores({
-      products:
-        "id, local_id, server_id, [tenant_id+store_id], name, category, barcode, sku, updated_at, sync_status, deleted_at",
-      customers:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, type, updated_at, sync_status, deleted_at",
-      bills:
-        "id, local_id, server_id, [tenant_id+store_id], billNo, billNumber, billType, status, customerId, customer_id, createdAt, created_at, updated_at, sync_status",
-      bill_items:
-        "id, bill_id, billId, product_id, productId, [tenant_id+store_id], created_at, sync_status",
-      payments:
-        "id, bill_id, billId, customer_id, customerId, mode, paid_at, created_at, [tenant_id+store_id], sync_status",
-      customer_ledger:
-        "id, customer_id, customerId, [tenant_id+store_id], type, source_type, entry_at, created_at, sync_status",
-      inventory_movements:
-        "id, product_id, productId, type, reference_id, [tenant_id+store_id], created_at, sync_status",
-      suppliers:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, updated_at, sync_status, deleted_at",
-      purchase_bills:
-        "id, local_id, server_id, [tenant_id+store_id], supplierId, supplier_id, invoiceNumber, invoice_number, status, dueDate, due_date, created_at, sync_status, deleted_at",
-      settings: "key, [tenant_id+store_id], updated_at, expires_at",
-      sync_outbox:
-        "clientEventId, op_id, type, operation_type, entity_type, entity_id, client_created_at, createdAt, attempts, retry_count, [tenant_id+store_id], status, sync_status, next_retry_at, last_attempt_at",
-      sync_cursor: "id, entity_type, [tenant_id+store_id], updated_at",
-      sync_conflicts:
-        "id, entity_type, entity_id, [tenant_id+store_id], resolution, created_at, sync_status",
-      id_mappings:
-        "local_id, server_id, entity_type, [tenant_id+store_id], updated_at",
-      local_audit_logs:
-        "id, action, entity_type, entity_id, actor_id, created_at, [tenant_id+store_id]",
-      subscription_cache:
-        "id, plan_code, [tenant_id+store_id], updated_at, sync_status",
-      device_license_cache:
-        "id, device_fingerprint, status, [tenant_id+store_id], updated_at, sync_status",
-      staff_users:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, role, isActive, active, updated_at, sync_status, deleted_at",
+      purchase_bills: "id, local_id, server_id, [tenant_id+store_id], supplierId, supplier_id, invoiceNumber, invoice_number, status, dueDate, due_date, created_at, sync_status, deleted_at",
     });
 
     this.version(6).stores({
-      products:
-        "id, local_id, server_id, [tenant_id+store_id], name, category, barcode, sku, updated_at, sync_status, deleted_at",
-      customers:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, type, updated_at, sync_status, deleted_at",
-      bills:
-        "id, local_id, server_id, [tenant_id+store_id], billNo, billNumber, billType, status, customerId, customer_id, createdAt, created_at, updated_at, sync_status",
-      bill_items:
-        "id, bill_id, billId, product_id, productId, [tenant_id+store_id], created_at, sync_status",
-      payments:
-        "id, bill_id, billId, customer_id, customerId, mode, paid_at, created_at, [tenant_id+store_id], sync_status",
-      customer_ledger:
-        "id, customer_id, customerId, [tenant_id+store_id], type, source_type, entry_at, created_at, sync_status",
-      inventory_movements:
-        "id, product_id, productId, type, reference_id, [tenant_id+store_id], created_at, sync_status",
-      suppliers:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, updated_at, sync_status, deleted_at",
-      purchase_bills:
-        "id, local_id, server_id, [tenant_id+store_id], supplierId, supplier_id, invoiceNumber, invoice_number, status, dueDate, due_date, created_at, sync_status, deleted_at",
-      expenses:
-        "id, local_id, server_id, [tenant_id+store_id], category, paymentMode, status, spentAt, created_at, updated_at, sync_status, deleted_at",
-      settings: "key, [tenant_id+store_id], updated_at, expires_at",
-      sync_outbox:
-        "clientEventId, op_id, type, operation_type, entity_type, entity_id, client_created_at, createdAt, attempts, retry_count, [tenant_id+store_id], status, sync_status, next_retry_at, last_attempt_at",
-      sync_cursor: "id, entity_type, [tenant_id+store_id], updated_at",
-      sync_conflicts:
-        "id, entity_type, entity_id, [tenant_id+store_id], resolution, created_at, sync_status",
-      id_mappings:
-        "local_id, server_id, entity_type, [tenant_id+store_id], updated_at",
-      local_audit_logs:
-        "id, action, entity_type, entity_id, actor_id, created_at, [tenant_id+store_id]",
-      subscription_cache:
-        "id, plan_code, [tenant_id+store_id], updated_at, sync_status",
-      device_license_cache:
-        "id, device_fingerprint, status, [tenant_id+store_id], updated_at, sync_status",
-      staff_users:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, role, isActive, active, updated_at, sync_status, deleted_at",
+      expenses: "id, local_id, server_id, [tenant_id+store_id], category, paymentMode, status, spentAt, created_at, updated_at, sync_status, deleted_at",
     });
 
     // v7: index the open-bill identity. Every Save looked its clientBillId up
     // by reading the device's whole bill history, which is never pruned.
     this.version(7).stores({
-      products:
-        "id, local_id, server_id, [tenant_id+store_id], name, category, barcode, sku, updated_at, sync_status, deleted_at",
-      customers:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, type, updated_at, sync_status, deleted_at",
-      bills:
-        "id, local_id, server_id, [tenant_id+store_id], billNo, billNumber, billType, status, customerId, customer_id, createdAt, created_at, updated_at, sync_status, clientBillId, client_bill_id",
-      bill_items:
-        "id, bill_id, billId, product_id, productId, [tenant_id+store_id], created_at, sync_status",
-      payments:
-        "id, bill_id, billId, customer_id, customerId, mode, paid_at, created_at, [tenant_id+store_id], sync_status",
-      customer_ledger:
-        "id, customer_id, customerId, [tenant_id+store_id], type, source_type, entry_at, created_at, sync_status",
-      inventory_movements:
-        "id, product_id, productId, type, reference_id, [tenant_id+store_id], created_at, sync_status",
-      suppliers:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, updated_at, sync_status, deleted_at",
-      purchase_bills:
-        "id, local_id, server_id, [tenant_id+store_id], supplierId, supplier_id, invoiceNumber, invoice_number, status, dueDate, due_date, created_at, sync_status, deleted_at",
-      expenses:
-        "id, local_id, server_id, [tenant_id+store_id], category, paymentMode, status, spentAt, created_at, updated_at, sync_status, deleted_at",
-      settings: "key, [tenant_id+store_id], updated_at, expires_at",
-      sync_outbox:
-        "clientEventId, op_id, type, operation_type, entity_type, entity_id, client_created_at, createdAt, attempts, retry_count, [tenant_id+store_id], status, sync_status, next_retry_at, last_attempt_at",
-      sync_cursor: "id, entity_type, [tenant_id+store_id], updated_at",
-      sync_conflicts:
-        "id, entity_type, entity_id, [tenant_id+store_id], resolution, created_at, sync_status",
-      id_mappings:
-        "local_id, server_id, entity_type, [tenant_id+store_id], updated_at",
-      local_audit_logs:
-        "id, action, entity_type, entity_id, actor_id, created_at, [tenant_id+store_id]",
-      subscription_cache:
-        "id, plan_code, [tenant_id+store_id], updated_at, sync_status",
-      device_license_cache:
-        "id, device_fingerprint, status, [tenant_id+store_id], updated_at, sync_status",
-      staff_users:
-        "id, local_id, server_id, [tenant_id+store_id], name, mobile, role, isActive, active, updated_at, sync_status, deleted_at",
+      bills: "id, local_id, server_id, [tenant_id+store_id], billNo, billNumber, billType, status, customerId, customer_id, createdAt, created_at, updated_at, sync_status, clientBillId, client_bill_id",
     });
+    const readIndexes: Record<string, string> = {
+      customers: "*_read_customer_ids",
+      id_mappings: "*_read_mapping_ids",
+      bills: "_read_customer_id, *_read_bill_ids, _read_created_at",
+      customer_ledger: "_read_customer_id",
+      payments: "_read_customer_id",
+      local_audit_logs: "*_read_audit_customer_ids",
+    };
+    const readTables = Object.keys(readIndexes);
+    const readStores = Object.fromEntries(readTables.map((name) => {
+      const schema = this.table(name).schema;
+      return [name, [schema.primKey.src, ...schema.indexes.map((index) => index.src), readIndexes[name]].join(", ")];
+    }));
+    this.version(8).stores(readStores).upgrade(async (transaction) => {
+      for (const name of readTables) {
+        await transaction.table(name).toCollection().modify((row: Record<string, unknown>) => {
+          Object.assign(row, offlineReadIndexes(name, row));
+        });
+      }
+    });
+    // Hooks also cover sync's direct Dexie writes, restores and reference rewrites.
+    // Computing these keys only in the facade would leave those paths unindexed.
+    for (const name of readTables) {
+      this.table(name).hook("creating", (_key, row) => { Object.assign(row, offlineReadIndexes(name, row)); });
+      this.table(name).hook("updating", (changes, _key, row) => offlineReadIndexes(name, { ...row, ...changes }));
+    }
   }
 }
 
@@ -803,50 +634,66 @@ function withBusinessMetadata<T>(
   } as T & OfflineRow;
 }
 
+function matchesReadScope(row: unknown, scope: OfflineScope): boolean {
+  return isRecord(row) && row.tenant_id === scope.tenant_id && row.store_id === scope.store_id;
+}
+
 class OfflineDBFacade {
   async init(): Promise<void> {
-    await dexieDB.open();
+    if (!dexieDB.isOpen()) await dexieDB.open();
   }
 
   private table<T>(name: string): Table<T, string> {
     return dexieDB.table(name) as Table<T, string>;
   }
 
-  async getAll<T>(storeName: string): Promise<T[]> {
-    await this.init();
-    const table = this.table<T>(storeName);
-    if (!isScopedTableName(storeName)) return table.toArray();
+  /** Capture one shop for the complete read, including database initialization. */
+  private async read<T>(name: string, load: (table: Table<T, string>, scope: OfflineScope) => Promise<T[]>): Promise<T[]> {
     const scope = getOfflineScope();
-    return table
-      .where("[tenant_id+store_id]")
-      .equals([scope.tenant_id, scope.store_id])
-      .toArray()
-      .catch(() => table.filter(isScopedRecord).toArray());
+    await this.init();
+    assertCurrentOfflineScope(scope);
+    const rows = await load(this.table<T>(name), scope);
+    assertCurrentOfflineScope(scope);
+    return rows;
   }
 
-  /**
-   * Rows with these primary keys, without reading the rest of the table.
-   * Missing keys and other shops' rows are left out, as getAll leaves them out.
-   * Rows come back ordered by id, which is getAll's order for id-keyed tables.
-   */
+  async getAll<T>(storeName: string): Promise<T[]> {
+    return this.read<T>(storeName, (table, scope) => !isScopedTableName(storeName) ? table.toArray() : table
+      .where("[tenant_id+store_id]").equals([scope.tenant_id, scope.store_id]).toArray()
+      .catch(() => table.filter((row) => matchesReadScope(row, scope)).toArray()));
+  }
+
+  /** Requested primary keys only; missing/foreign rows are omitted, in key order. */
   async getMany<T>(storeName: string, ids: Iterable<string | null | undefined>): Promise<T[]> {
     const keys = distinctKeys(ids);
-    if (keys.length === 0) return [];
-    await this.init();
-    const rows = (await this.table<T>(storeName).bulkGet(keys)).filter((row): row is T => row != null);
-    return sortByPrimaryKey(isScopedTableName(storeName) ? rows.filter(isScopedRecord) : rows);
+    if (!keys.length) return [];
+    return this.read<T>(storeName, async (table, scope) => {
+      const rows = (await table.bulkGet(keys)).filter((row): row is T => row != null);
+      return sortByPrimaryKey(isScopedTableName(storeName) ? rows.filter((row) => matchesReadScope(row, scope)) : rows);
+    });
   }
 
-  /** Rows whose indexed `field` equals any of `values`, scoped and ordered like getMany. */
+  /** Indexed values, including multi-entry aliases, without duplicate records. */
   async getWhere<T>(storeName: string, field: string, values: Iterable<string | null | undefined>): Promise<T[]> {
     const keys = distinctKeys(values);
-    if (keys.length === 0) return [];
-    await this.init();
-    const rows = await this.table<T>(storeName).where(field).anyOf(keys).toArray()
-      // As getAll falls back from its index: a failed index read must not fail a save.
-      .catch(() => this.getAll<T>(storeName).then((all) =>
-        all.filter((row) => keys.includes((row as Record<string, unknown>)[field] as string))));
-    return sortByPrimaryKey(isScopedTableName(storeName) ? rows.filter(isScopedRecord) : rows);
+    if (!keys.length) return [];
+    return this.read<T>(storeName, async (table, scope) => {
+      const collection = table.where(field).anyOf(keys);
+      const unique = typeof collection.distinct === "function" ? collection.distinct() : collection;
+      const rows = await unique.toArray().catch(() => this.getAll<T>(storeName).then((all) => all.filter((row) => {
+        const record = row as Record<string, unknown>;
+        const value = field.startsWith("_read_") ? offlineReadIndexes(storeName, record)[field] : record[field];
+        return Array.isArray(value) ? value.some((key) => keys.includes(key)) : keys.includes(value as string);
+      })));
+      return sortByPrimaryKey(isScopedTableName(storeName) ? rows.filter((row) => matchesReadScope(row, scope)) : rows);
+    });
+  }
+
+  /** Newest indexed rows; scope filtering happens before the limit. */
+  async getLatest<T>(storeName: string, field: string, limit: number): Promise<T[]> {
+    if (!Number.isInteger(limit) || limit <= 0) return [];
+    return this.read<T>(storeName, (table, scope) => table.orderBy(field).reverse()
+      .filter((row) => !isScopedTableName(storeName) || matchesReadScope(row, scope)).limit(limit).toArray());
   }
 
   async put<T>(storeName: string, value: T): Promise<void> {

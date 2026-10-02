@@ -51,6 +51,7 @@ vi.mock("@/lib/offline/context", () => ({
 }));
 
 vi.mock("@/lib/offline/db", () => ({
+  assertCurrentOfflineScope: () => undefined,
   offlineDB: {
     getAll: vi.fn(async (table: string) => clone(scopedRows(table))),
     put: vi.fn(async (table: string, value: Record<string, unknown>) => putInto(table, value)),

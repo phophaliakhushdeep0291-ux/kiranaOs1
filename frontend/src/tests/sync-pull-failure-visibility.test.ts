@@ -187,12 +187,12 @@ describe("cache refresh after a pull", () => {
   it("lets a pull that received nothing skip the rebuild unless the caches are stale", async () => {
     pullBehaviour.changes = [];
     await pullServerChanges();
-    expect(refreshBusinessCaches).toHaveBeenCalledWith({ onlyIfStale: true });
+    expect(refreshBusinessCaches).toHaveBeenCalledWith({ onlyIfStale: true, affectedEntities: new Set() });
   });
 
-  it("always rebuilds when the server sent anything", async () => {
+  it("passes the affected entities even when the change is ignored", async () => {
     pullBehaviour.changes = [{ entity_type: "product", entity: { id: "p-1" } }];
     await pullServerChanges();
-    expect(refreshBusinessCaches).toHaveBeenCalledWith({ onlyIfStale: false });
+    expect(refreshBusinessCaches).toHaveBeenCalledWith({ onlyIfStale: false, affectedEntities: new Set(["product"]) });
   });
 });

@@ -1,4 +1,5 @@
 import { roundMoney } from "@/lib/money";
+import { firstString } from "@/lib/offline/read-indexes";
 import type { Customer } from "@/types/api";
 
 export type LedgerEntryType = "BILL" | "PAYMENT" | "ADJUSTMENT" | "REFUND" | "CORRECTION" | "CANCELLED_BILL";
@@ -133,13 +134,7 @@ export function isManualAdjustmentEntry(entry: Partial<CustomerLedgerEntry>): bo
 }
 
 function getStringField(row: Partial<CustomerLedgerEntry>, keys: string[]): string | null {
-  const record = row as Record<string, unknown>;
-  for (const key of keys) {
-    const value = record[key];
-    if (typeof value === "string" && value.trim().length > 0) return value;
-    if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  }
-  return null;
+  return firstString(row as Record<string, unknown>, keys) ?? null;
 }
 
 function ledgerBusinessKey(entry: Partial<CustomerLedgerEntry>): string {
