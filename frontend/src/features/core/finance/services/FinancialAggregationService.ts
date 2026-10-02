@@ -486,18 +486,36 @@ function billEmbeddedTender(bill: RecordLike): TenderTotals {
   };
 }
 
-function billLinkedTender(bill: RecordLike, payments: LocalPayment[]): TenderTotals {
-  const ids = new Set(billIdentityKeys(bill));
-  if (ids.size === 0) return emptyTenderTotals();
-  return sumPaymentTender(
-    payments.filter((payment) => {
-      const billId = getBillId(payment);
-      return Boolean(billId && ids.has(billId));
-    }),
-  );
+interface BillPaymentLookup {
+  byBillId: Map<string, LocalPayment[]>;
+  positions: Map<LocalPayment, number>;
 }
 
-function tenderForBill(bill: RecordLike, payments: LocalPayment[]): TenderTotals {
+function buildBillPaymentLookup(payments: LocalPayment[]): BillPaymentLookup {
+  const byBillId = new Map<string, LocalPayment[]>();
+  const positions = new Map<LocalPayment, number>();
+  payments.forEach((payment, position) => {
+    positions.set(payment, position);
+    const billId = getBillId(payment);
+    if (!billId) return;
+    const rows = byBillId.get(billId) ?? [];
+    rows.push(payment);
+    byBillId.set(billId, rows);
+  });
+  return { byBillId, positions };
+}
+
+function billLinkedTender(bill: RecordLike, lookup: BillPaymentLookup): TenderTotals {
+  const ids = new Set(billIdentityKeys(bill));
+  if (ids.size === 0) return emptyTenderTotals();
+  // Keep the original payment order across local/server bill aliases so duplicate
+  // selection and paise rounding use the same input as the former full scan.
+  const payments = [...ids].flatMap((id) => lookup.byBillId.get(id) ?? []);
+  payments.sort((a, b) => lookup.positions.get(a)! - lookup.positions.get(b)!);
+  return sumPaymentTender(payments);
+}
+
+function tenderForBill(bill: RecordLike, payments: BillPaymentLookup): TenderTotals {
   const embedded = billEmbeddedTender(bill);
   // Non-zero, not positive. A refund's tender is negative, so a `> 0` test read
   // "this bill states no tender" and fell through to the linked payment rows —
@@ -542,7 +560,7 @@ function subtractTenderAllowance(
   };
 }
 
-function buildTodayTenderAllowance(todayBills: LocalBill[], payments: LocalPayment[]): TenderTotals {
+function buildTodayTenderAllowance(todayBills: LocalBill[], payments: BillPaymentLookup): TenderTotals {
   return todayBills.reduce<TenderTotals>(
     (sum, bill) => {
       const tender = tenderForBill(bill, payments);
@@ -571,10 +589,11 @@ function calculateOldUdharRecovery(
   bills: LocalBill[],
   rangeBills: LocalBill[],
   range: { from: string; to: string },
+  billPayments: BillPaymentLookup,
 ): TenderTotals {
   const { saleBillIds, todaySaleBillIds: rangeSaleBillIds } = buildSaleBillIdSets(bills, rangeBills);
   const paymentsByIdentity = buildPaymentByIdentity(payments);
-  const rangeTenderAllowance = buildTodayTenderAllowance(rangeBills, payments);
+  const rangeTenderAllowance = buildTodayTenderAllowance(rangeBills, billPayments);
   const linkedPaymentIds = new Set<string>();
   const total = ledger
     .filter(
@@ -663,7 +682,7 @@ function calculateOutstandingCustomers(ledger: CustomerLedgerEntry[], customers:
 
 function buildRevenueBreakdown(
   bills: LocalBill[],
-  payments: LocalPayment[],
+  payments: BillPaymentLookup,
   customers: Customer[],
 ): RevenueBreakdownRow[] {
   const customerById = new Map(customers.map((customer) => [customer.id, customer]));
@@ -690,11 +709,15 @@ function buildRevenueBreakdown(
   });
 }
 
-function calculateProfitByProduct(
-  todayBills: LocalBill[],
+interface ProfitLookup {
+  productById: Map<string, Product>;
+  itemsByBillId: Map<string, LocalBillItem[]>;
+}
+
+function buildProfitLookup(
   billItems: LocalBillItem[],
   products: Product[],
-): ProfitByProductRow[] {
+): ProfitLookup {
   const productById = new Map(products.map((product) => [product.id, product]));
   const itemsByBillId = new Map<string, LocalBillItem[]>();
   for (const item of billItems.filter((row) => !isDeleted(row))) {
@@ -704,6 +727,13 @@ function calculateProfitByProduct(
     list.push(item);
     itemsByBillId.set(billId, list);
   }
+  return { productById, itemsByBillId };
+}
+
+function calculateProfitByProduct(
+  todayBills: LocalBill[],
+  { productById, itemsByBillId }: ProfitLookup,
+): ProfitByProductRow[] {
   const rows = new Map<string, ProfitByProductRow>();
 
   for (const bill of todayBills) {
@@ -768,14 +798,13 @@ function billStoredProfit(bill: RecordLike): number | null {
 
 function calculateTotalBillProfit(
   todayBills: LocalBill[],
-  billItems: LocalBillItem[],
-  products: Product[],
+  lookup: ProfitLookup,
 ): number {
   return roundMoney(
     todayBills.reduce((sum, bill) => {
       const stored = billStoredProfit(bill);
       if (stored !== null) return sum + stored;
-      const itemProfit = calculateProfitByProduct([bill], billItems, products)
+      const itemProfit = calculateProfitByProduct([bill], lookup)
         .reduce((itemSum, row) => itemSum + row.profit, 0);
       // Older/offline bills may not have a stored grossProfit. Their item rows hold
       // pre-discount selling prices, so the bill discount must be netted once here.
@@ -1020,18 +1049,20 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
   const suppliers = input.suppliers ?? [];
   const inventoryMovements = input.inventoryMovements ?? [];
   const purchaseBills = input.purchaseBills ?? [];
+  const billPayments = buildBillPaymentLookup(payments);
+  const profitLookup = buildProfitLookup(billItems, products);
 
   const todayBills = bills.filter((bill) => isSaleBill(bill) && isWithinDateRange(bill, range));
-  const revenueBreakdown = buildRevenueBreakdown(todayBills, payments, customers);
+  const revenueBreakdown = buildRevenueBreakdown(todayBills, billPayments, customers);
   const revenueToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.amount, 0));
   const discountToday = roundMoney(todayBills.reduce((sum, bill) => sum + billDiscount(bill), 0));
   const cashSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.cash, 0));
   const upiSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.upi, 0));
   const bankSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.bank, 0));
   const udharSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.udhar, 0));
-  const profitByProduct = calculateProfitByProduct(todayBills, billItems, products);
-  const profitToday = calculateTotalBillProfit(todayBills, billItems, products);
-  const oldUdhar = calculateOldUdharRecovery(payments, ledger, bills, todayBills, range);
+  const profitByProduct = calculateProfitByProduct(todayBills, profitLookup);
+  const profitToday = calculateTotalBillProfit(todayBills, profitLookup);
+  const oldUdhar = calculateOldUdharRecovery(payments, ledger, bills, todayBills, range, billPayments);
   const totalCashCollectedToday = roundMoney(cashSalesToday + oldUdhar.cash);
   const totalUpiCollectedToday = roundMoney(upiSalesToday + oldUdhar.upi);
   const totalBankCollectedToday = roundMoney(bankSalesToday + oldUdhar.bank);
