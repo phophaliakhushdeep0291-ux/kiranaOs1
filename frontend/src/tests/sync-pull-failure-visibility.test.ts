@@ -20,7 +20,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const settings = vi.hoisted(() => new Map<string, unknown>());
-const pullBehaviour = vi.hoisted(() => ({ shouldThrow: false }));
+const pullBehaviour = vi.hoisted(() => ({ shouldThrow: false, changes: [] as unknown[] }));
 const ackBehaviour = vi.hoisted(() => ({ mode: "accepted" as "accepted" | "stale" | "throws" }));
 
 vi.mock("@/lib/offline/db", () => ({
@@ -67,7 +67,7 @@ vi.mock("@/features/core/sync/api", () => ({
   syncPull: vi.fn(async () => {
     if (pullBehaviour.shouldThrow) throw new Error("Request failed with status 500");
     return {
-      changes: [],
+      changes: pullBehaviour.changes,
       sync: {
         protocol: "server_sequence_v2",
         hasMore: false,
@@ -84,6 +84,7 @@ vi.mock("@/features/core/sync/sync-reconcile", () => ({
   refreshBusinessCaches: vi.fn(async () => undefined),
 }));
 
+import { refreshBusinessCaches } from "@/features/core/sync/sync-reconcile";
 import {
   LAST_ACK_FAILURE_SETTING,
   LAST_PULL_FAILURE_SETTING,
@@ -96,6 +97,7 @@ describe("sync pull failure visibility", () => {
   beforeEach(() => {
     settings.clear();
     pullBehaviour.shouldThrow = false;
+    pullBehaviour.changes = [];
     ackBehaviour.mode = "accepted";
   });
 
@@ -172,5 +174,25 @@ describe("sync pull failure visibility", () => {
     expect(result.failed).toBe(false);
     expect(await readLastPullFailure()).toBeNull();
     expect(settings.get(LAST_PULL_FAILURE_SETTING)).toBeNull();
+  });
+});
+
+describe("cache refresh after a pull", () => {
+  beforeEach(() => {
+    pullBehaviour.shouldThrow = false;
+    ackBehaviour.mode = "accepted";
+    vi.mocked(refreshBusinessCaches).mockClear();
+  });
+
+  it("lets a pull that received nothing skip the rebuild unless the caches are stale", async () => {
+    pullBehaviour.changes = [];
+    await pullServerChanges();
+    expect(refreshBusinessCaches).toHaveBeenCalledWith({ onlyIfStale: true });
+  });
+
+  it("always rebuilds when the server sent anything", async () => {
+    pullBehaviour.changes = [{ entity_type: "product", entity: { id: "p-1" } }];
+    await pullServerChanges();
+    expect(refreshBusinessCaches).toHaveBeenCalledWith({ onlyIfStale: false });
   });
 });

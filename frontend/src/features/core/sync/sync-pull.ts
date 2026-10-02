@@ -285,6 +285,7 @@ export async function pullServerChanges(): Promise<{
 }> {
   let totalPulled = 0;
   let totalConflicts = 0;
+  let totalReceived = 0;
   let latestCursor: string | number | null | undefined = await getStoredCursor();
   let latestServerSequence: string | number | null | undefined = await getStoredServerSequence();
   let hasMore = false;
@@ -299,6 +300,7 @@ export async function pullServerChanges(): Promise<{
         background: true,
       });
       const changes = normalizePullChanges(response);
+      totalReceived += changes.length;
       let pulled = 0;
       let conflicts = 0;
       // One reference pass per page rather than per change: the rewrite walks
@@ -333,7 +335,9 @@ export async function pullServerChanges(): Promise<{
       if (!hasMore) break;
     }
 
-    await refreshBusinessCaches();
+    // Anything the server sent, even an ignored change, can write an id mapping
+    // the balance rebuild reads. Only a pull that received nothing may skip.
+    await refreshBusinessCaches({ onlyIfStale: totalReceived === 0 });
     if (totalPulled > 0 || totalConflicts > 0)
       emitLocalDataChanged({
         type: "sync",
