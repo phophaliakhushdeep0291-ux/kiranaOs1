@@ -6,7 +6,7 @@ import {
 } from "@/lib/offline/db";
 import type { Bill, Customer, Product, Supplier } from "@/types/api";
 import {
-  aggregateFinancialRows,
+  createFinancialAggregator,
   type FinancialAggregationSnapshot,
 } from "@/features/core/finance/services/FinancialAggregationService";
 import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
@@ -635,17 +635,27 @@ function movementValue(
   };
 }
 
-function buildDailyTrend(rows: LocalFinanceRows, range: DateRange): ReportDailyPoint[] {
+function buildDailyTrend(rows: LocalFinanceRows, range: DateRange, aggregate: ReturnType<typeof createReportAggregator>): ReportDailyPoint[] {
   const productsById = new Map(rows.products.map((product) => [product.id, product]));
-  return chartDays(range).map((date) => {
+  const days = chartDays(range);
+  const chartDates = new Set(days);
+  const stockByDate = new Map<string, { inbound: number; outbound: number }>();
+  for (const movement of rows.inventoryMovements) {
+    if (isDeleted(movement) || isRejectedBySync(movement)) continue;
+    const recordedAt = new Date(rowDate(movement));
+    if (!Number.isFinite(recordedAt.getTime())) continue;
+    const date = toDateInputValue(recordedAt);
+    if (!chartDates.has(date)) continue;
+    const value = movementValue(movement, productsById);
+    const total = stockByDate.get(date) ?? { inbound: 0, outbound: 0 };
+    total.inbound = roundMoney(total.inbound + value.inbound);
+    total.outbound = roundMoney(total.outbound + value.outbound);
+    stockByDate.set(date, total);
+  }
+  return days.map((date) => {
     const dayRange = { from: date, to: date };
-    const snapshot = aggregate(rows, dayRange);
-    const stock = rows.inventoryMovements
-      .filter((movement) => !isDeleted(movement) && !isRejectedBySync(movement) && isWithinRange(movement, dayRange))
-      .reduce<{ inbound: number; outbound: number }>((total, movement) => {
-        const value = movementValue(movement, productsById);
-        return { inbound: roundMoney(total.inbound + value.inbound), outbound: roundMoney(total.outbound + value.outbound) };
-      }, { inbound: 0, outbound: 0 });
+    const snapshot = aggregate(dayRange);
+    const stock = stockByDate.get(date) ?? { inbound: 0, outbound: 0 };
     const parsed = dateFromInput(date);
     return {
       date,
@@ -786,8 +796,8 @@ async function loadLocalFinanceRows(): Promise<LocalFinanceRows> {
   return { bills, billItems, payments, ledger, products, customers, suppliers, inventoryMovements, purchaseBills, outbox, conflicts };
 }
 
-function aggregate(rows: LocalFinanceRows, range: DateRange, drawer?: DrawerAdjustments): FinancialAggregationSnapshot {
-  return aggregateFinancialRows({
+function createReportAggregator(rows: LocalFinanceRows) {
+  const aggregate = createFinancialAggregator({
     bills: rows.bills,
     billItems: rows.billItems,
     payments: rows.payments,
@@ -797,6 +807,8 @@ function aggregate(rows: LocalFinanceRows, range: DateRange, drawer?: DrawerAdju
     suppliers: rows.suppliers,
     inventoryMovements: rows.inventoryMovements,
     purchaseBills: rows.purchaseBills,
+  });
+  return (range: DateRange, drawer?: DrawerAdjustments): FinancialAggregationSnapshot => aggregate({
     date: range.to,
     range,
     // Till adjustments only make sense for a single day's drawer, so they are passed
@@ -810,19 +822,20 @@ function aggregate(rows: LocalFinanceRows, range: DateRange, drawer?: DrawerAdju
 
 export async function buildLocalReportSnapshot(range: DateRange, drawer?: DrawerAdjustments): Promise<LocalReportSnapshot> {
   const rows = await loadLocalFinanceRows();
+  const aggregate = createReportAggregator(rows);
   const today = toDateInputValue(new Date());
   const todayRange = { from: today, to: today };
   const sevenDayRange = { from: toDateInputValue(addDays(startOfLocalDay(), -6)), to: today };
   const thirtyDayRange = { from: toDateInputValue(addDays(startOfLocalDay(), -29)), to: today };
-  const selectedSnapshot = aggregate(rows, range, drawer);
-  const previousSelectedSnapshot = aggregate(rows, previousRange(range));
-  const todaySnapshot = aggregate(rows, todayRange);
-  const sevenDaySnapshot = aggregate(rows, sevenDayRange);
-  const thirtyDaySnapshot = aggregate(rows, thirtyDayRange);
+  const selectedSnapshot = aggregate(range, drawer);
+  const previousSelectedSnapshot = aggregate(previousRange(range));
+  const todaySnapshot = aggregate(todayRange);
+  const sevenDaySnapshot = aggregate(sevenDayRange);
+  const thirtyDaySnapshot = aggregate(thirtyDayRange);
   const counters = calculateSyncQueueCounts(rows.outbox, rows.conflicts);
   const lowStock = calculateLowStock(rows.products);
   const lowStockPacks = calculateLowStockPacks(rows.products);
-  const dailyTrend = buildDailyTrend(rows, range);
+  const dailyTrend = buildDailyTrend(rows, range, aggregate);
   const hasLocalData = Boolean(
     rows.bills.length ||
       rows.payments.length ||
@@ -870,7 +883,7 @@ export async function buildDailyClosingReport(date: string, drawer?: DrawerAdjus
   // Closing needs one trading day. Building the overview here also calculated
   // four unused comparison windows, trends, staff sales and discount charts.
   const rows = await loadLocalFinanceRows();
-  const financials = aggregate(rows, { from: date, to: date }, drawer);
+  const financials = createReportAggregator(rows)({ from: date, to: date }, drawer);
   const counters = calculateSyncQueueCounts(rows.outbox, rows.conflicts);
   const snapshot = {
     selected: toMetricWindow(financials),

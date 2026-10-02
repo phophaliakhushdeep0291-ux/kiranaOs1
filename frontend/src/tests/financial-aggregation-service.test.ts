@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregateFinancialRows } from "@/features/core/finance/services/FinancialAggregationService";
+import { aggregateFinancialRows, createFinancialAggregator } from "@/features/core/finance/services/FinancialAggregationService";
 
 const date = "2026-06-06";
 
@@ -95,6 +95,49 @@ function payment(id: string, overrides: Record<string, unknown> = {}) {
 }
 
 describe("FinancialAggregationService", () => {
+  it("keeps a reused report's collection dates and drawer adjustments separate", () => {
+    const aggregate = createFinancialAggregator({
+      bills: [bill("old-sale", {
+        grandTotal: 100, cashAmount: 40, paidAmount: 40, creditAmount: 60,
+        createdAt: "2026-06-05T10:00:00.000",
+      })],
+      customers: [{ id: "customer_1", name: "Customer" }] as never,
+      ledger: [
+        { id: "charge", customerId: "customer_1", type: "BILL", amount: 60, createdAt: "2026-06-05T10:00:00.000" },
+        { id: "collection", customerId: "customer_1", type: "PAYMENT", amount: 25, mode: "upi", createdAt: "2026-06-06T10:00:00.000" },
+      ],
+    });
+    const collected = aggregate({ date, openingCash: 500, cashExpenses: 20 });
+    expect(collected).toMatchObject({ revenueToday: 0, upiUdharRecoveryToday: 25, totalOutstandingUdhar: 35 });
+    expect(collected.cashDrawer.expectedClosingCash).toBe(480);
+    const sold = aggregate({ date: "2026-06-05" });
+    expect(sold).toMatchObject({ revenueToday: 100, cashSalesToday: 40, upiUdharRecoveryToday: 0, totalOutstandingUdhar: 35 });
+    expect(sold.cashDrawer.expectedClosingCash).toBe(40);
+    expect(aggregate({ date: "2026-06-07" }).cashDrawer.expectedClosingCash).toBe(0);
+    collected.outstandingCustomers[0].outstanding = 999;
+    expect(aggregate({ date }).totalOutstandingUdhar).toBe(35);
+    expect(aggregate({ date }).outstandingCustomers[0].outstanding).toBe(35);
+  });
+
+  it("uses local midnight boundaries when selecting several windows from one history", () => {
+    const start = new Date(2026, 5, 6).getTime();
+    const next = new Date(2026, 5, 7).getTime();
+    const aggregate = createFinancialAggregator({
+      bills: [
+        bill("before", { createdAt: new Date(start - 1).toISOString() }),
+        bill("first", { createdAt: new Date(start).toISOString() }),
+        bill("last", { createdAt: new Date(next - 1).toISOString() }),
+        bill("next", { createdAt: new Date(next).toISOString() }),
+        bill("invalid", { createdAt: "not-a-date" }),
+      ],
+    });
+    expect(aggregate({ date }).totalBillsToday).toBe(2);
+    expect(aggregate({ date: "2026-06-05" }).totalBillsToday).toBe(1);
+    expect(aggregate({ date: "2026-06-07" }).totalBillsToday).toBe(1);
+    expect(aggregate({ date, range: { from: "2026-06-05", to: "2026-06-07" } }).totalBillsToday).toBe(4);
+    expect(aggregate({ date }).totalBillsToday).toBe(2);
+  });
+
   it("counts a collection once after sync replaces its client ledger reference with the server id", () => {
     const snapshot = aggregateFinancialRows({
       date,

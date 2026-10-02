@@ -11,7 +11,7 @@ vi.mock("@/features/core/sync/local-data-hardening", () => ({
   hardenLocalFinancialData: async () => undefined,
 }));
 
-import { buildDailyClosingReport, buildLocalReportSnapshot } from "../src/features/core/reports/local-reporting";
+import { buildDailyClosingReport, buildLocalReportSnapshot } from "@/features/core/reports/local-reporting";
 
 function fixture(count: number) {
   const products = Array.from({ length: 1000 }, (_, i) => ({
@@ -71,7 +71,7 @@ it("measures report computation with a year of bills; excludes database I/O and 
       expect(report!.paymentBreakdown.upi).toBe(count / 2 * 100.25);
       expect(report!.dailyTrend).toHaveLength(31);
       const median = (values: number[]) => values.sort((a, b) => a - b)[1];
-      measurements.push({ bills: count, products: 1000, closingMedianMs: +median(closingTimes).toFixed(2), yearReportMedianMs: +median(reportTimes).toFixed(2), closing });
+      measurements.push({ bills: count, products: 1000, closingMedianMs: +median(closingTimes).toFixed(2), yearReportMedianMs: +median(reportTimes).toFixed(2), closing, report });
     }
     const result = {
       note: "Synthetic local computation only. In-memory read fixture; excludes IndexedDB, browser rendering and networking. Three-run medians.",
@@ -80,6 +80,6 @@ it("measures report computation with a year of bills; excludes database I/O and 
     };
     const outputPath = process.env.REPORT_BENCHMARK_OUTPUT;
     if (outputPath) writeFileSync(outputPath, JSON.stringify(result, null, 2));
-    console.log(JSON.stringify({ ...result, measurements: measurements.map(({ closing, ...measurement }) => measurement) }, null, 2));
+    console.log(JSON.stringify({ ...result, measurements: measurements.map(({ closing, report, ...measurement }) => measurement) }, null, 2));
   } finally { vi.useRealTimers(); }
 });

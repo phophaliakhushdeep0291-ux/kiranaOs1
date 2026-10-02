@@ -227,13 +227,21 @@ function dateFromInput(value: string, endOfDay = false): Date {
   return date;
 }
 
-function isWithinDateRange(row: RecordLike, range: { from: string; to: string }): boolean {
-  const raw = getDateValue(row);
-  if (!raw) return false;
+function dateRangeFilter(
+  range: { from: string; to: string },
+  timestamps: WeakMap<RecordLike, number>,
+): (row: RecordLike) => boolean {
   const start = dateFromInput(range.from).getTime();
   const end = dateFromInput(range.to, true).getTime();
-  const time = new Date(raw).getTime();
-  return Number.isFinite(time) && time >= start && time <= end;
+  return (row) => {
+    let time = timestamps.get(row);
+    if (time === undefined) {
+      const raw = getDateValue(row);
+      time = raw ? new Date(raw).getTime() : NaN;
+      timestamps.set(row, time);
+    }
+    return Number.isFinite(time) && time >= start && time <= end;
+  };
 }
 
 function billIdentityKeys(bill: RecordLike): string[] {
@@ -489,6 +497,7 @@ function billEmbeddedTender(bill: RecordLike): TenderTotals {
 interface BillPaymentLookup {
   byBillId: Map<string, LocalPayment[]>;
   positions: Map<LocalPayment, number>;
+  tenders: WeakMap<RecordLike, TenderTotals>;
 }
 
 function buildBillPaymentLookup(payments: LocalPayment[]): BillPaymentLookup {
@@ -502,7 +511,7 @@ function buildBillPaymentLookup(payments: LocalPayment[]): BillPaymentLookup {
     rows.push(payment);
     byBillId.set(billId, rows);
   });
-  return { byBillId, positions };
+  return { byBillId, positions, tenders: new WeakMap() };
 }
 
 function billLinkedTender(bill: RecordLike, lookup: BillPaymentLookup): TenderTotals {
@@ -516,26 +525,27 @@ function billLinkedTender(bill: RecordLike, lookup: BillPaymentLookup): TenderTo
 }
 
 function tenderForBill(bill: RecordLike, payments: BillPaymentLookup): TenderTotals {
+  const cached = payments.tenders.get(bill);
+  if (cached) return cached;
   const embedded = billEmbeddedTender(bill);
   // Non-zero, not positive. A refund's tender is negative, so a `> 0` test read
   // "this bill states no tender" and fell through to the linked payment rows —
   // which a return written offline, or by an older client, does not have. The
   // refund then vanished from the tender split while still reducing the day's
   // sales.
-  if (embedded.cash !== 0 || embedded.upi !== 0 || embedded.bank !== 0) return embedded;
-  return billLinkedTender(bill, payments);
+  const tender = embedded.cash !== 0 || embedded.upi !== 0 || embedded.bank !== 0
+    ? embedded
+    : billLinkedTender(bill, payments);
+  payments.tenders.set(bill, tender);
+  return tender;
 }
 
-function buildSaleBillIdSets(bills: LocalBill[], todayBills: LocalBill[]) {
+function saleBillIdsFor(bills: LocalBill[]) {
   const saleBillIds = new Set<string>();
-  const todaySaleBillIds = new Set<string>();
-  for (const bill of bills.filter(isSaleBill)) {
+  for (const bill of bills) {
     for (const id of billIdentityKeys(bill)) saleBillIds.add(id);
   }
-  for (const bill of todayBills) {
-    for (const id of billIdentityKeys(bill)) todaySaleBillIds.add(id);
-  }
-  return { saleBillIds, todaySaleBillIds };
+  return saleBillIds;
 }
 
 function addRecoveryTender(total: TenderTotals, mode: string, amount: number) {
@@ -586,20 +596,20 @@ function ledgerPaymentMode(entry: CustomerLedgerEntry, paymentsByIdentity: Map<s
 function calculateOldUdharRecovery(
   payments: LocalPayment[],
   ledger: CustomerLedgerEntry[],
-  bills: LocalBill[],
   rangeBills: LocalBill[],
-  range: { from: string; to: string },
+  inRange: (row: RecordLike) => boolean,
   billPayments: BillPaymentLookup,
+  saleBillIds: Set<string>,
+  paymentsByIdentity: Map<string, LocalPayment>,
 ): TenderTotals {
-  const { saleBillIds, todaySaleBillIds: rangeSaleBillIds } = buildSaleBillIdSets(bills, rangeBills);
-  const paymentsByIdentity = buildPaymentByIdentity(payments);
+  const rangeSaleBillIds = saleBillIdsFor(rangeBills);
   const rangeTenderAllowance = buildTodayTenderAllowance(rangeBills, billPayments);
   const linkedPaymentIds = new Set<string>();
   const total = ledger
     .filter(
       (entry) =>
         isActiveLedgerEntry(entry) &&
-        isWithinDateRange(entry, range) &&
+        inRange(entry) &&
         normaliseLedgerType(entry.type, entry.source_type) === "PAYMENT",
     )
     .filter((entry) => {
@@ -618,7 +628,7 @@ function calculateOldUdharRecovery(
   const oldBillPaymentFallback = emptyTenderTotals();
   const unlinkedPaymentFallback = emptyTenderTotals();
   for (const payment of dedupePaymentsForDisplay(
-    payments.filter((row) => isActivePayment(row) && isWithinDateRange(row, range)),
+    payments.filter((row) => isActivePayment(row) && inRange(row)),
   )) {
     if (paymentIdentityKeys(payment).some((key) => linkedPaymentIds.has(key))) continue;
     const billId = getBillId(payment);
@@ -1037,9 +1047,15 @@ function buildSupplierDueRows(
   return dedupeSupplierDueCandidates([...explicitRows, ...movementRows]);
 }
 
-export function aggregateFinancialRows(input: FinancialAggregationInput): FinancialAggregationSnapshot {
-  const date = input.date ?? todayInputValue();
-  const range = input.range ?? { from: date, to: date };
+export type FinancialAggregationWindow = Pick<FinancialAggregationInput,
+  "date" | "range" | "generatedAt" | "openingCash" | "cashIn" | "cashOut" | "cashExpenses">;
+
+/**
+ * Prepare one immutable local-data snapshot for several report windows.
+ * Keep this calculator within a single refresh; a later edit or shop change must
+ * load rows and construct a new calculator, rather than reuse these lookups.
+ */
+export function createFinancialAggregator(input: FinancialAggregationInput) {
   const bills = dedupeBillsForDisplay(input.bills ?? [], { includeUserDeleted: true });
   const billItems = (input.billItems ?? []).filter((row) => !isDeleted(row));
   const payments = mergeSupplierPaymentHistory(input.payments ?? [], input.purchaseBills ?? []).filter((row) => !isDeleted(row));
@@ -1051,154 +1067,172 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
   const purchaseBills = input.purchaseBills ?? [];
   const billPayments = buildBillPaymentLookup(payments);
   const profitLookup = buildProfitLookup(billItems, products);
+  const saleBills = bills.filter(isSaleBill);
+  const saleBillIds = saleBillIdsFor(saleBills);
+  const paymentsByIdentity = buildPaymentByIdentity(payments);
+  const outstanding = calculateOutstandingCustomers(ledger, customers);
+  const supplierDueBase = buildSupplierDueRows(purchaseBills, inventoryMovements, suppliers);
+  const timestamps = new WeakMap<RecordLike, number>();
 
-  const todayBills = bills.filter((bill) => isSaleBill(bill) && isWithinDateRange(bill, range));
-  const revenueBreakdown = buildRevenueBreakdown(todayBills, billPayments, customers);
-  const revenueToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.amount, 0));
-  const discountToday = roundMoney(todayBills.reduce((sum, bill) => sum + billDiscount(bill), 0));
-  const cashSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.cash, 0));
-  const upiSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.upi, 0));
-  const bankSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.bank, 0));
-  const udharSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.udhar, 0));
-  const profitByProduct = calculateProfitByProduct(todayBills, profitLookup);
-  const profitToday = calculateTotalBillProfit(todayBills, profitLookup);
-  const oldUdhar = calculateOldUdharRecovery(payments, ledger, bills, todayBills, range, billPayments);
-  const totalCashCollectedToday = roundMoney(cashSalesToday + oldUdhar.cash);
-  const totalUpiCollectedToday = roundMoney(upiSalesToday + oldUdhar.upi);
-  const totalBankCollectedToday = roundMoney(bankSalesToday + oldUdhar.bank);
-  const outstandingCustomers = calculateOutstandingCustomers(ledger, customers);
-  const supplierDueRows = buildSupplierDueRows(purchaseBills, inventoryMovements, suppliers);
-  const todaySupplierRows = supplierDueRows.filter((row) => row.date && isWithinDateRange({ created_at: row.date }, range));
-  const supplierPayments = payments.filter((row) => row.kind === "supplier_payment"
-    && !["reversed", "cancelled", "voided"].includes(String(row.status ?? "").toLowerCase()));
-  for (const purchase of supplierDueRows) {
-    const keys = new Set([purchase.id, ...(purchase.purchaseKeys ?? [])]);
-    const totals = new Map<string, number>();
-    let settled = 0;
-    for (const payment of supplierPayments) {
-      if (!supplierPurchaseKeys(payment).some((key) => keys.has(key))) continue;
-      const amount = readNumber(payment.amount, 0);
-      const mode = paymentMode(payment);
-      settled += amount;
-      totals.set(mode, (totals.get(mode) ?? 0) + amount);
+  return (window: FinancialAggregationWindow = {}): FinancialAggregationSnapshot => {
+    const options = { ...input, ...window };
+    const date = options.date ?? todayInputValue();
+    const range = options.range ?? { from: date, to: date };
+    const inRange = dateRangeFilter(range, timestamps);
+    const todayBills = saleBills.filter(inRange);
+    const revenueBreakdown = buildRevenueBreakdown(todayBills, billPayments, customers);
+    const revenueToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.amount, 0));
+    const discountToday = roundMoney(todayBills.reduce((sum, bill) => sum + billDiscount(bill), 0));
+    const cashSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.cash, 0));
+    const upiSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.upi, 0));
+    const bankSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.bank, 0));
+    const udharSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.udhar, 0));
+    const profitByProduct = calculateProfitByProduct(todayBills, profitLookup);
+    const profitToday = calculateTotalBillProfit(todayBills, profitLookup);
+    const oldUdhar = calculateOldUdharRecovery(payments, ledger, todayBills, inRange, billPayments, saleBillIds, paymentsByIdentity);
+    const totalCashCollectedToday = roundMoney(cashSalesToday + oldUdhar.cash);
+    const totalUpiCollectedToday = roundMoney(upiSalesToday + oldUdhar.upi);
+    const totalBankCollectedToday = roundMoney(bankSalesToday + oldUdhar.bank);
+    // Returned snapshots may be edited by a consumer. Never expose the prepared
+    // rows themselves and let a previous window change the next one's balances.
+    const outstandingCustomers = outstanding.map((row) => ({ ...row }));
+    const supplierDueRows = supplierDueBase.map((row) => ({ ...row, purchaseKeys: row.purchaseKeys?.slice() }));
+    const todaySupplierRows = supplierDueRows.filter((row) => row.date && inRange({ created_at: row.date }));
+    const supplierPayments = payments.filter((row) => row.kind === "supplier_payment"
+      && !["reversed", "cancelled", "voided"].includes(String(row.status ?? "").toLowerCase()));
+    for (const purchase of supplierDueRows) {
+      const keys = new Set([purchase.id, ...(purchase.purchaseKeys ?? [])]);
+      const totals = new Map<string, number>();
+      let settled = 0;
+      for (const payment of supplierPayments) {
+        if (!supplierPurchaseKeys(payment).some((key) => keys.has(key))) continue;
+        const amount = readNumber(payment.amount, 0);
+        const mode = paymentMode(payment);
+        settled += amount;
+        totals.set(mode, (totals.get(mode) ?? 0) + amount);
+      }
+      const initialPaid = Math.max(0, roundMoney(purchase.paid - settled));
+      totals.set(purchase.paymentMode, (totals.get(purchase.paymentMode) ?? 0) + initialPaid);
+      const modes = [...totals].filter(([, total]) => roundMoney(total) > 0).map(([mode]) => mode);
+      purchase.settledPaymentMode = modes.length > 1 ? "mixed" : modes[0] ?? "unpaid";
     }
-    const initialPaid = Math.max(0, roundMoney(purchase.paid - settled));
-    totals.set(purchase.paymentMode, (totals.get(purchase.paymentMode) ?? 0) + initialPaid);
-    const modes = [...totals].filter(([, total]) => roundMoney(total) > 0).map(([mode]) => mode);
-    purchase.settledPaymentMode = modes.length > 1 ? "mixed" : modes[0] ?? "unpaid";
-  }
-  const supplierPaidToday = { cash: 0, upi: 0, bank: 0 };
-  for (const row of supplierPayments) {
-    const occurredAt = readString(row, ["paid_at", "paidAt", "created_at", "createdAt"]);
-    const mode = paymentMode(row);
-    if (mode in supplierPaidToday && occurredAt && isWithinDateRange({ created_at: occurredAt }, range)) {
-      supplierPaidToday[mode as keyof typeof supplierPaidToday] += readNumber(row.amount, 0);
+    const supplierPaidToday = { cash: 0, upi: 0, bank: 0 };
+    for (const row of supplierPayments) {
+      const occurredAt = readString(row, ["paid_at", "paidAt", "created_at", "createdAt"]);
+      const mode = paymentMode(row);
+      if (mode in supplierPaidToday && occurredAt && inRange({ created_at: occurredAt })) {
+        supplierPaidToday[mode as keyof typeof supplierPaidToday] += readNumber(row.amount, 0);
+      }
     }
-  }
-  for (const purchase of todaySupplierRows) {
-    const keys = new Set([purchase.id, ...(purchase.purchaseKeys ?? [])]);
-    const separatePaid = supplierPayments.filter((payment) => supplierPurchaseKeys(payment).some((key) => keys.has(key)))
-      .reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0);
-    const initialPaid = Math.max(0, roundMoney(purchase.paid - separatePaid));
-    if (purchase.paymentMode in supplierPaidToday) supplierPaidToday[purchase.paymentMode as keyof typeof supplierPaidToday] += initialPaid;
-  }
-  const supplierCashPaidToday = roundMoney(supplierPaidToday.cash);
-  const supplierUpiPaidToday = roundMoney(supplierPaidToday.upi);
-  const supplierBankPaidToday = roundMoney(supplierPaidToday.bank);
-  const purchaseDueToday = roundMoney(todaySupplierRows.reduce((sum, row) => sum + row.due, 0));
-  const supplierDue = roundMoney(supplierDueRows.reduce((sum, row) => sum + row.due, 0));
-  // These were hardcoded to 0, so the expected drawer ignored the morning float and any
-  // cash paid out during the day — it reported a short for every shop that pays rent from
-  // the till, and a permanent over for every shop that keeps change in it.
-  const openingCashToday = roundMoney(Math.max(0, Number(input.openingCash) || 0));
-  const cashInToday = roundMoney(Math.max(0, Number(input.cashIn) || 0));
-  const cashOutToday = roundMoney(Math.max(0, Number(input.cashOut) || 0));
-  const expenses = (input.expenses ?? []).filter((row) => {
-    const day = reportCalendarDay(row.spentAt);
-    return !isDeleted(row) && day !== null && day >= range.from && day <= range.to;
-  });
-  const expenseAmount = (row: Expense) => Math.max(0, readNumber(row.amount));
-  const cachedCashExpenses = expenses
-    .filter((row) => row.status === "paid" && row.paymentMode === "cash")
-    .reduce((sum, row) => sum + expenseAmount(row), 0);
-  const cashExpensesToday = roundMoney(Math.max(0, Number(input.cashExpenses ?? cachedCashExpenses) || 0));
-  const expensesToday = input.expenses === undefined
-    ? cashExpensesToday
-    : roundMoney(expenses.reduce((sum, row) => sum + expenseAmount(row), 0));
-  const ownerWithdrawalToday = 0;
-  const cashDrawer: CashDrawerSummary = {
-    openingCash: openingCashToday,
-    cashSales: cashSalesToday,
-    cashUdharRecovery: oldUdhar.cash,
-    supplierCashPaid: supplierCashPaidToday,
-    expenses: cashExpensesToday,
-    ownerWithdrawals: ownerWithdrawalToday,
-    cashIn: cashInToday,
-    cashOut: cashOutToday,
-    expectedClosingCash: roundMoney(
-      openingCashToday
-      + totalCashCollectedToday
-      + cashInToday
-      - supplierCashPaidToday
-      - cashExpensesToday
-      - cashOutToday
-      - ownerWithdrawalToday,
-    ),
-  };
+    for (const purchase of todaySupplierRows) {
+      const keys = new Set([purchase.id, ...(purchase.purchaseKeys ?? [])]);
+      const separatePaid = supplierPayments.filter((payment) => supplierPurchaseKeys(payment).some((key) => keys.has(key)))
+        .reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0);
+      const initialPaid = Math.max(0, roundMoney(purchase.paid - separatePaid));
+      if (purchase.paymentMode in supplierPaidToday) supplierPaidToday[purchase.paymentMode as keyof typeof supplierPaidToday] += initialPaid;
+    }
+    const supplierCashPaidToday = roundMoney(supplierPaidToday.cash);
+    const supplierUpiPaidToday = roundMoney(supplierPaidToday.upi);
+    const supplierBankPaidToday = roundMoney(supplierPaidToday.bank);
+    const purchaseDueToday = roundMoney(todaySupplierRows.reduce((sum, row) => sum + row.due, 0));
+    const supplierDue = roundMoney(supplierDueRows.reduce((sum, row) => sum + row.due, 0));
+    // These were hardcoded to 0, so the expected drawer ignored the morning float and any
+    // cash paid out during the day — it reported a short for every shop that pays rent from
+    // the till, and a permanent over for every shop that keeps change in it.
+    const openingCashToday = roundMoney(Math.max(0, Number(options.openingCash) || 0));
+    const cashInToday = roundMoney(Math.max(0, Number(options.cashIn) || 0));
+    const cashOutToday = roundMoney(Math.max(0, Number(options.cashOut) || 0));
+    const expenses = (input.expenses ?? []).filter((row) => {
+      const day = reportCalendarDay(row.spentAt);
+      return !isDeleted(row) && day !== null && day >= range.from && day <= range.to;
+    });
+    const expenseAmount = (row: Expense) => Math.max(0, readNumber(row.amount));
+    const cachedCashExpenses = expenses
+      .filter((row) => row.status === "paid" && row.paymentMode === "cash")
+      .reduce((sum, row) => sum + expenseAmount(row), 0);
+    const cashExpensesToday = roundMoney(Math.max(0, Number(options.cashExpenses ?? cachedCashExpenses) || 0));
+    const expensesToday = input.expenses === undefined
+      ? cashExpensesToday
+      : roundMoney(expenses.reduce((sum, row) => sum + expenseAmount(row), 0));
+    const ownerWithdrawalToday = 0;
+    const cashDrawer: CashDrawerSummary = {
+      openingCash: openingCashToday,
+      cashSales: cashSalesToday,
+      cashUdharRecovery: oldUdhar.cash,
+      supplierCashPaid: supplierCashPaidToday,
+      expenses: cashExpensesToday,
+      ownerWithdrawals: ownerWithdrawalToday,
+      cashIn: cashInToday,
+      cashOut: cashOutToday,
+      expectedClosingCash: roundMoney(
+        openingCashToday
+        + totalCashCollectedToday
+        + cashInToday
+        - supplierCashPaidToday
+        - cashExpensesToday
+        - cashOutToday
+        - ownerWithdrawalToday,
+      ),
+    };
 
-  return {
-    generatedAt: input.generatedAt ?? new Date().toISOString(),
-    date,
-    revenueToday,
-    profitToday: roundMoney(profitToday),
-    grossMarginPct: revenueToday > 0 ? Math.round((profitToday / revenueToday) * 100) : 0,
-    discountToday,
-    cashSalesToday,
-    upiSalesToday,
-    bankSalesToday,
-    udharSalesToday,
-    cashUdharRecoveryToday: oldUdhar.cash,
-    upiUdharRecoveryToday: oldUdhar.upi,
-    bankUdharRecoveryToday: oldUdhar.bank,
-    totalCashCollectedToday,
-    totalUpiCollectedToday,
-    totalBankCollectedToday,
-    totalOutstandingUdhar: roundMoney(outstandingCustomers.reduce((sum, row) => sum + row.outstanding, 0)),
-    totalBillsToday: todayBills.length,
-    totalCustomersWithUdhar: outstandingCustomers.length,
-    revenueBreakdown,
-    profitByProduct,
-    collectionBreakdown: {
+    return {
+      generatedAt: options.generatedAt ?? new Date().toISOString(),
+      date,
+      revenueToday,
+      profitToday: roundMoney(profitToday),
+      grossMarginPct: revenueToday > 0 ? Math.round((profitToday / revenueToday) * 100) : 0,
+      discountToday,
       cashSalesToday,
       upiSalesToday,
       bankSalesToday,
+      udharSalesToday,
       cashUdharRecoveryToday: oldUdhar.cash,
       upiUdharRecoveryToday: oldUdhar.upi,
       bankUdharRecoveryToday: oldUdhar.bank,
       totalCashCollectedToday,
       totalUpiCollectedToday,
       totalBankCollectedToday,
-    },
-    supplierDue,
-    supplierDueRows,
-    supplierCashPaidToday,
-    supplierUpiPaidToday,
-    supplierBankPaidToday,
-    purchaseDueToday,
-    expensesToday,
-    ownerWithdrawalToday,
-    cashDrawer,
-    outstandingCustomers,
-    hasLocalData:
-      bills.length > 0 ||
-      payments.length > 0 ||
-      ledger.length > 0 ||
-      products.length > 0 ||
-      customers.length > 0 ||
-      expenses.length > 0 ||
-      supplierDueRows.length > 0,
-    dataSourceLabel: "FinancialAggregationService",
+      totalOutstandingUdhar: roundMoney(outstandingCustomers.reduce((sum, row) => sum + row.outstanding, 0)),
+      totalBillsToday: todayBills.length,
+      totalCustomersWithUdhar: outstandingCustomers.length,
+      revenueBreakdown,
+      profitByProduct,
+      collectionBreakdown: {
+        cashSalesToday,
+        upiSalesToday,
+        bankSalesToday,
+        cashUdharRecoveryToday: oldUdhar.cash,
+        upiUdharRecoveryToday: oldUdhar.upi,
+        bankUdharRecoveryToday: oldUdhar.bank,
+        totalCashCollectedToday,
+        totalUpiCollectedToday,
+        totalBankCollectedToday,
+      },
+      supplierDue,
+      supplierDueRows,
+      supplierCashPaidToday,
+      supplierUpiPaidToday,
+      supplierBankPaidToday,
+      purchaseDueToday,
+      expensesToday,
+      ownerWithdrawalToday,
+      cashDrawer,
+      outstandingCustomers,
+      hasLocalData:
+        bills.length > 0 ||
+        payments.length > 0 ||
+        ledger.length > 0 ||
+        products.length > 0 ||
+        customers.length > 0 ||
+        expenses.length > 0 ||
+        supplierDueRows.length > 0,
+      dataSourceLabel: "FinancialAggregationService",
+    };
   };
+}
+
+export function aggregateFinancialRows(input: FinancialAggregationInput): FinancialAggregationSnapshot {
+  return createFinancialAggregator(input)();
 }
 
 async function loadScopedRows<T>(tableName: string): Promise<T[]> {

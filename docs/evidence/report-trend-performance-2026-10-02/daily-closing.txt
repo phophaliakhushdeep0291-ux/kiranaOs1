@@ -1,0 +1,231 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- complementary:
+  - button "Resize sidebar, 260 pixels. Use left and right arrow keys."
+  - link "Artha Built for busy Indian stores":
+    - /url: /dashboard
+    - generic: Artha
+    - generic: Built for busy Indian stores
+  - button "Collapse sidebar":
+  - navigation "Main navigation":
+    - link "Dashboard":
+      - /url: /dashboard
+      - generic: Dashboard
+    - link "Billing F2":
+      - /url: /billing
+      - generic: Billing
+      - generic: F2
+    - link "Inventory":
+      - /url: /inventory
+      - generic: Inventory
+    - button "Collapse Inventory menu" [expanded]:
+    - link "Products":
+      - /url: /products
+      - generic: Products
+    - link "Categories":
+      - /url: /categories
+      - generic: Categories
+    - link "Stock In":
+      - /url: /inventory/stock-in
+      - generic: Stock In
+    - link "Stock Out":
+      - /url: /inventory/stock-out
+      - generic: Stock Out
+    - link "Adjustments":
+      - /url: /inventory/adjustments
+      - generic: Adjustments
+    - link "Stock Transfers":
+      - /url: /inventory/stock-transfers
+      - generic: Stock Transfers
+    - link "Stock Counts":
+      - /url: /inventory/stock-counts
+      - generic: Stock Counts
+    - link "Batch & Expiry":
+      - /url: /inventory/batches
+      - generic: Batch & Expiry
+    - link "Customers / Udhar":
+      - /url: /customers
+      - generic: Customers / Udhar
+    - link "Purchases":
+      - /url: /purchase-bills
+      - generic: Purchases
+    - button "Sales":
+      - generic: Sales
+    - link "Billing History":
+      - /url: /bills
+      - generic: Billing History
+    - link "Orders Received":
+      - /url: /orders-received
+      - generic: Orders Received
+    - link "Sales Overview":
+      - /url: /sales-overview
+      - generic: Sales Overview
+    - link "Returns":
+      - /url: /returns
+      - generic: Returns
+    - link "Reports":
+      - /url: /reports
+      - generic: Reports
+    - link "Cash & Payments":
+      - /url: /money-statement
+      - generic: Cash & Payments
+    - link "Accounting":
+      - /url: /accounting
+      - generic: Accounting
+    - button "Business Tools":
+      - generic: Business Tools
+    - link "Activity & Insights":
+      - /url: /activity-insights
+      - generic: Activity & Insights
+    - link "Offers & Discounts":
+      - /url: /offers
+      - generic: Offers & Discounts
+    - link "Loyalty":
+      - /url: /loyalty
+      - generic: Loyalty
+    - link "Gift Cards":
+      - /url: /gift-cards
+      - generic: Gift Cards
+    - link "Financial Assurance":
+      - /url: /assurance
+      - generic: Financial Assurance
+    - link "Expenses":
+      - /url: /expenses
+      - generic: Expenses
+    - link "Settings":
+      - /url: /settings
+      - generic: Settings
+  - button "QF QA Full Shop Day QA Full Shop Day - Main · Jodhpur":
+    - generic: QF
+    - generic: QA Full Shop Day
+    - generic: QA Full Shop Day - Main · Jodhpur
+- banner:
+  - button "Toggle sidebar":
+  - heading "Daily Closing" [level=1]
+  - button "QA Full Shop Day - Main MAIN · Primary":
+    - generic: QA Full Shop Day - Main
+    - generic: MAIN · Primary
+  - generic: Synced
+  - generic: Just now
+  - generic "Free until 1 January 2027 · Business": Free · Business
+  - link "Open sync alerts":
+    - /url: /sync-status
+  - button "QF":
+    - generic: QF
+- main:
+  - status: Daily Closing page loaded
+  - heading "Daily Closing" [level=1]
+  - paragraph: Cash drawer and business summary from local data.
+  - link "Reports":
+    - /url: /reports
+    - text: Reports
+  - button "Print":
+    - text: Print
+  - button "Share":
+    - text: Share
+  - button "Refresh":
+    - text: Refresh
+  - text: Closing date
+  - textbox "Closing date" [active]: 2026-10-01
+  - paragraph: Expected cash in drawer tonight
+  - paragraph: ₹749.25
+  - paragraph: Opening float + cash sales + old udhar cash recovery + cash in - supplier cash paid - cash expenses - cash out
+  - text: Cash in ₹299.75
+  - text: UPI in ₹250.50
+  - text: Bank in ₹0
+  - paragraph: Cash, UPI, and bank split
+  - generic: Cash in
+  - generic: ₹299.75
+  - paragraph: 54%
+  - generic: UPI in
+  - generic: ₹250.50
+  - paragraph: 46%
+  - generic: Bank in
+  - generic: ₹0
+  - generic: Old udhar recovered ₹50.50
+  - paragraph: Opening float & cash in / out
+  - generic: Opening float for 2026-10-01
+  - spinbutton "Opening float for 2026-10-01": "500"
+  - button "Save"
+  - paragraph: The change you put in the drawer this morning. Declared each day rather than carried over, so yesterday's shortage never hides inside today's expected cash. Currently ₹500.
+  - generic: Cash expenses today
+  - generic: ₹50.50
+  - paragraph: Cash-paid expenses only — UPI and bank expenses never leave the drawer.
+  - text: Record cash in / out
+  - spinbutton
+  - textbox "Reason (e.g. petrol, extra change)"
+  - button "Cash in":
+    - text: Cash in
+  - button "Cash out":
+    - text: Cash out
+  - paragraph: Nothing recorded for 2026-10-01. Log money you add to or take from the till so the count at closing can actually match.
+  - paragraph: Count the drawer — over / short
+  - generic: Counted cash for 2026-10-01
+  - spinbutton "Counted cash for 2026-10-01": "749.25"
+  - button "Update"
+  - paragraph: Drawer matches expected — perfect close.
+  - paragraph: Saved on this device and kept for 90 days — repeated shorts on the same weekday are worth investigating.
+  - paragraph: Over / short history
+  - list:
+    - generic: 01 Oct
+    - generic: counted ₹749.25 / expected ₹749.25
+    - generic: Exact
+  - heading "Income today" [level=2]
+  - paragraph: Everything that came in
+  - paragraph: Total sales
+  - paragraph: All bills for the day
+  - paragraph: ₹798.50
+  - paragraph: Cash sales
+  - paragraph: ₹299.75
+  - paragraph: UPI sales
+  - paragraph: ₹200
+  - paragraph: Bank sales
+  - paragraph: ₹0
+  - paragraph: Old udhar recovered
+  - paragraph: Cash ₹0 / UPI ₹50.50 / Bank ₹0
+  - paragraph: ₹50.50
+  - heading "Credit & outgoing" [level=2]
+  - paragraph: What went out or remains due
+  - paragraph: Udhar given today
+  - paragraph: Credit extended to customers
+  - paragraph: ₹298.75
+  - paragraph: Supplier cash paid
+  - paragraph: ₹0
+  - paragraph: Supplier UPI paid
+  - paragraph: ₹0
+  - paragraph: Supplier bank paid
+  - paragraph: ₹0
+  - paragraph: Supplier due (unpaid)
+  - paragraph: Purchase bills not yet paid
+  - paragraph: ₹0
+  - heading "Top sold products" [level=2]
+  - table:
+    - rowgroup:
+      - row "Product Qty Sales":
+        - columnheader "Product"
+        - columnheader "Qty"
+        - columnheader "Sales"
+    - rowgroup:
+      - row "1 QA Day Tea 250g 4 ₹798":
+        - cell "1 QA Day Tea 250g":
+          - generic: "1"
+          - generic: QA Day Tea 250g
+        - cell "4"
+        - cell "₹798"
+  - heading "Low-stock items" [level=2]
+  - generic: No low-stock items
+  - heading "Sync check before closing" [level=2]
+  - paragraph: Ensure all data is backed up to the cloud
+  - paragraph: "0"
+  - paragraph: Pending backup
+  - paragraph: "0"
+  - paragraph: Failed sync
+  - paragraph: "0"
+  - paragraph: Conflicts
+- button "Voice assistant":
+  - generic: Voice assistant
+- button "Report a problem":
+  - generic: Report a problem
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

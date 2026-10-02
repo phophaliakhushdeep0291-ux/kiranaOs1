@@ -194,6 +194,37 @@ describe("local reports and daily closing", () => {
     vi.useRealTimers();
   });
 
+  it("prepares fresh history after a local edit and never reuses another shop's rows", async () => {
+    const sale = { ...bill("same-id", "2026-06-06T10:00:00.000Z", { grandTotal: 100 }), cashAmount: 100 };
+    setRows({ bills: [sale] });
+    const range = { from: "2026-06-06", to: "2026-06-06" };
+    expect((await buildLocalReportSnapshot(range)).selected.sales).toBe(100);
+    sale.grandTotal = 125;
+    sale.cashAmount = 125;
+    expect((await buildLocalReportSnapshot(range)).paymentBreakdown.cash).toBe(125);
+    state.tenantId = "other-tenant";
+    state.storeId = "other-store";
+    state.rows.bills.push({ ...sale, tenant_id: state.tenantId, store_id: state.storeId, grandTotal: 50, cashAmount: 50 });
+    const otherShop = await buildLocalReportSnapshot(range);
+    expect(otherShop.selected.sales).toBe(50);
+    expect(otherShop.paymentBreakdown.cash).toBe(50);
+  });
+
+  it("buckets stock by the counter's calendar day using business date before upload time", async () => {
+    const start = new Date(2026, 5, 6).getTime();
+    const next = new Date(2026, 5, 7).getTime();
+    setRows({ inventory_movements: [
+      { id: "first", action: "purchase", changeBaseQty: 1, purchaseBillAmount: 10.25,
+        createdAt: new Date(start).toISOString(), ...scope },
+      { id: "last", action: "purchase", changeBaseQty: 1, purchaseBillAmount: 20.25,
+        businessDate: new Date(next - 1).toISOString(), createdAt: new Date(next).toISOString(), ...scope },
+      { id: "next", action: "purchase", changeBaseQty: 1, purchaseBillAmount: 99,
+        createdAt: new Date(next).toISOString(), ...scope },
+    ] });
+    const report = await buildLocalReportSnapshot({ from: "2026-06-06", to: "2026-06-07" });
+    expect(report.dailyTrend.map((point) => point.stockIn)).toEqual([30.50, 99]);
+  });
+
   it("builds a 7-day report from local Dexie data", async () => {
     setRows({
       bills: [

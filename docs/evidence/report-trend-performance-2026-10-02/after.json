@@ -1,0 +1,23 @@
+{
+  "note": "Synthetic local computation only. In-memory read fixture; excludes IndexedDB, browser rendering and networking. Three-run medians.",
+  "environment": {
+    "node": "v26.1.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "measurements": [
+    {
+      "bills": 1000,
+      "products": 1000,
+      "closingMedianMs": 6.65,
+      "yearReportMedianMs": 28.48
+    },
+    {
+      "bills": 10000,
+      "products": 1000,
+      "closingMedianMs": 72.54,
+      "yearReportMedianMs": 250.26
+    }
+  ],
+  "fullReportAndClosingOutputsIdentical": true
+}
