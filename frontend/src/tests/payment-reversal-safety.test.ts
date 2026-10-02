@@ -104,11 +104,14 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 import { upsertCachedListItem } from "@/lib/offline/instant-cache";
 import { reversePaymentWithOwnerPinLocalFirst } from "@/features/core/payments/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
 const mockedUpsertCachedListItem = vi.mocked(upsertCachedListItem);
+
+withTargetedReads(offlineDB);
 
 describe("payment reversal transaction safety", () => {
   beforeEach(() => {

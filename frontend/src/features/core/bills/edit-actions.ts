@@ -129,10 +129,14 @@ export function billInputFromBill(bill: AnyRow, itemRows: AnyRow[] = []): BillIn
 }
 
 async function findLocalBill(id: string): Promise<AnyRow | undefined> {
-  const rows = await offlineDB.getAll<AnyRow>("bills").catch(() => []);
-  const match = rows.find(
-    (row) => row.id === id || row.local_id === id || row.server_id === id || row.billNo === id || row.billNumber === id,
-  );
+  // Every field below is indexed: look the bill up instead of reading the
+  // device's whole bill history, which is never pruned.
+  const rows = await Promise.all([
+    offlineDB.getMany<AnyRow>("bills", [id]),
+    ...["local_id", "server_id", "billNo", "billNumber"].map((field) => offlineDB.getWhere<AnyRow>("bills", field, [id])),
+  ]).then((groups) => groups.flat()).catch(() => [] as AnyRow[]);
+  // The full read returned bills in id order and took the first match.
+  const match = rows.sort((a, b) => (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0))[0];
   if (match) return match;
   return readInstantCache<AnyRow[]>("bills", []).find(
     (row) => row.id === id || row.billNo === id || row.billNumber === id,

@@ -74,6 +74,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 import { readInstantCache, upsertCachedListItem } from "@/lib/offline/instant-cache";
 import { AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY } from "@/features/core/ledger/authoritative-balances";
 import { getLocalUdharSummary, recordPaymentLocalFirst, recordSplitPaymentLocalFirst } from "@/features/core/payments/local-actions";
@@ -81,6 +82,8 @@ import { getLocalUdharSummary, recordPaymentLocalFirst, recordSplitPaymentLocalF
 const mockedOfflineDB = vi.mocked(offlineDB);
 const mockedReadInstantCache = vi.mocked(readInstantCache);
 const mockedUpsertCachedListItem = vi.mocked(upsertCachedListItem);
+
+withTargetedReads(offlineDB);
 
 describe("payment recording transaction safety", () => {
   beforeEach(() => {

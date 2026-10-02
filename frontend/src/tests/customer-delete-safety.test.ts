@@ -77,6 +77,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { offlineDB } from "@/lib/offline/db";
+import { withTargetedReads } from "./support/targeted-offline-reads";
 import { removeCachedListItem, upsertCachedListItem } from "@/lib/offline/instant-cache";
 import { createCustomerLocalFirst, deleteCustomerLocalFirst, updateCustomerLocalFirst } from "@/features/core/customers/local-actions";
 import { restoreEntityFromRecycleBinLocalFirst } from "@/features/core/recycle-bin/local-actions";
@@ -117,6 +118,8 @@ function resetCommitted() {
   mockState.committed.customer_ledger = [];
   mockState.committed.payments = [];
 }
+
+withTargetedReads(offlineDB);
 
 describe("customer local-first write safety", () => {
   beforeEach(() => {
