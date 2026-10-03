@@ -35,7 +35,8 @@ The generated audit exercises **3,000 seeded invoices** across no-tax, inclusive
 - Local gate: `KIRANA_BUILD_ID=a6a92641b416 VITE_API_BASE_URL=/api npm run prod:check -- -- --maxWorkers=4`.
 - Final gate log: `/private/tmp/kirana-financial-audit-prod-check-final.log`.
 - Largest offline package: **1,278.8 kB gzip**, within the unchanged 1,280 kB limit.
-- Backend GST/legacy replay examples, billing-unit examples, profit examples and JavaScript parsing passed locally. Server API integration regressions were added for tax ties, trusted offline replay and repeated partial returns; exact-commit server certification is required on the PR.
+- All **36 billing API integration tests** passed locally against a disposable SQLite database, including tax ties, trusted offline replay, repeated partial returns and transaction rollback. The copied application environment was disabled for this run and restored afterward. Log: `/private/tmp/kirana-financial-audit-backend-integration.log`.
+- Backend GST/legacy replay examples, billing-unit examples, profit examples and JavaScript parsing also passed locally. Full server certification, including PostgreSQL and Redis, is required on the PR.
 - React server rendering verifies actual mobile amount and refund-breakdown components; receipt generation verifies HTML output. These checks do not verify browser layout, contrast or physical printing.
 - Live browser verification remains unavailable: the Browser tool blocked the localhost navigation with its URL policy after the owned server was started and its worktree verified. No alternative browser access was used to bypass that restriction.
 - No production transactions, production database, deployment or merge were performed as part of this audit.

@@ -987,7 +987,7 @@ if (ctx.skip) {
       assert.equal(current.grandTotal, 3.05);
       assertFailure(await ctx.post("/api/bills/confirm", payload(3.04), { token: ownerAuth.accessToken }), 400);
       const legacy = await confirmBill(tenant.shop.id, payload(3.04), {
-        userId: tenant.owner.id, deviceId: "calculation-audit", isOfflineReplay: true, allowStockShortfall: true,
+        userId: tenant.owner.id, deviceId: "calculation-audit", isOfflineReplay: true, allowStockShortfall: true, businessDate: new Date().toISOString(),
       });
       assert.equal(legacy.gst, 0.14);
       assert.equal(legacy.grandTotal, 3.04);
