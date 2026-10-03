@@ -1,3 +1,4 @@
+import { gstLineAmounts, type GstMode } from "@/lib/gst";
 import { offlineDB } from "@/lib/offline/db";
 import { getOfflineScope } from "@/lib/offline/context";
 import {
@@ -63,11 +64,7 @@ const RETURN_TRANSACTION_TABLES = [
   "sync_outbox",
 ];
 
-function lineGstAmount(lineTotal: number, gstRate: number, gstMode: string): number {
-  if (gstRate <= 0 || gstMode === "none") return 0;
-  if (gstMode === "exclusive") return roundMoney((lineTotal * gstRate) / 100);
-  return roundMoney(lineTotal - lineTotal / (1 + gstRate / 100));
-}
+
 
 /**
  * Records a sales return locally-first. A return is a Bill with billType
@@ -202,7 +199,7 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
       ?? Math.min(Math.max(readNumber(item.lineDiscount, 0), 0), grossLineTotal);
     const lineTotal = linkedAmounts?.subtotal ?? roundMoney(grossLineTotal - lineDiscount);
     const lineCost = linkedAmounts?.cost ?? roundMoney(qty * cost);
-    const lineGst = linkedAmounts?.gst ?? lineGstAmount(lineTotal, gstRate, gstMode);
+    const lineGst = linkedAmounts?.gst ?? gstLineAmounts(lineTotal, gstRate, gstMode as GstMode).gst;
     const lineProfit = roundMoney(lineTotal - lineCost);
     subtotal = roundMoney(subtotal + lineTotal);
     totalGst = roundMoney(totalGst + lineGst);

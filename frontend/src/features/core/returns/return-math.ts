@@ -1,5 +1,7 @@
-import { allocateAmountByWeights, allocateInvoiceDiscount, type GstMode } from "@/lib/gst";
-import { roundMoney } from "@/lib/money";
+import { allocateAmountByWeights, allocateInvoiceDiscount, gstLineAmounts, type GstMode } from "@/lib/gst";
+import { roundMoney, toPaise } from "@/lib/money";
+
+const roundQuantity = (value: number) => Math.round((value + Number.EPSILON) * 1000) / 1000;
 
 export interface OriginalReturnLine {
   id: string;
@@ -42,9 +44,7 @@ function lineGst(lineTotal: number, gstRate: number, mode: GstMode): number {
   const total = Math.max(0, roundMoney(lineTotal));
   const rate = Math.max(0, Number(gstRate) || 0);
   if (total <= 0 || rate <= 0 || mode === "none") return 0;
-  return mode === "exclusive"
-    ? roundMoney(total * rate / 100)
-    : roundMoney(total - roundMoney(total / (1 + rate / 100)));
+  return gstLineAmounts(total, rate, mode).gst;
 }
 
 /**
@@ -102,7 +102,7 @@ export function buildReturnLineBalances(input: {
     previousReturn.items.forEach((line, index) => {
       const balance = line.originalBillItemId ? balances.get(line.originalBillItemId) : undefined;
       if (!balance) return;
-      balance.returnedQuantity = roundMoney(balance.returnedQuantity + Math.abs(Number(line.quantity) || 0));
+      balance.returnedQuantity = roundQuantity(balance.returnedQuantity + Math.abs(Number(line.quantity) || 0));
       balance.returnedGross = roundMoney(balance.returnedGross + Math.abs(Number(line.lineTotal) || 0) + Math.abs(Number(line.lineDiscount) || 0));
       balance.returnedSubtotal = roundMoney(balance.returnedSubtotal + Math.abs(Number(line.lineTotal) || 0));
       balance.returnedGst = roundMoney(balance.returnedGst + (exactReturnTax[index] ?? 0));
@@ -114,33 +114,37 @@ export function buildReturnLineBalances(input: {
 }
 
 export function remainingReturnQuantity(balance: ReturnLineBalance): number {
-  return Math.max(0, roundMoney(balance.soldQuantity - balance.returnedQuantity));
+  return Math.max(0, roundQuantity(balance.soldQuantity - balance.returnedQuantity));
 }
 
 /** A live preview can outlast its balance while a return commits or syncs. */
 export function returnPreviewQuantity(requested: number, balance: ReturnLineBalance): number {
-  return Math.min(Math.max(0, roundMoney(requested)), remainingReturnQuantity(balance));
+  return Math.min(Math.max(0, roundQuantity(requested)), remainingReturnQuantity(balance));
 }
 
 /** Calculate one linked return and consume it from the in-memory balance. */
 export function consumeReturnLine(balance: ReturnLineBalance, quantity: number) {
-  const requestedQuantity = Math.abs(roundMoney(quantity));
+  const requestedQuantity = Math.abs(roundQuantity(quantity));
   const remainingQuantity = remainingReturnQuantity(balance);
   if (requestedQuantity > remainingQuantity + 0.000001) {
     throw new Error("Return quantity exceeds what remains on the original sale");
   }
   const finalReturn = requestedQuantity >= remainingQuantity - 0.000001;
-  const fraction = requestedQuantity / Math.max(balance.soldQuantity, 0.000001);
-  const amount = (full: number, returned: number) => finalReturn
-    ? Math.max(0, roundMoney(full - returned))
-    : roundMoney(full * fraction);
+  const units = BigInt(Math.round(requestedQuantity * 1000));
+  const sold = BigInt(Math.max(1, Math.round(balance.soldQuantity * 1000)));
+  const amount = (full: number, returned: number) => {
+    const remaining = Math.max(0, roundMoney(full - returned));
+    if (finalReturn) return remaining;
+    const numerator = BigInt(toPaise(full)) * units;
+    return Math.min(remaining, Number((2n * numerator + sold) / (2n * sold)) / 100);
+  };
   const gross = amount(balance.gross, balance.returnedGross);
   const subtotal = amount(balance.subtotal, balance.returnedSubtotal);
   const gst = amount(balance.gst, balance.returnedGst);
   const cost = amount(balance.cost, balance.returnedCost);
   const lineDiscount = Math.max(0, roundMoney(gross - subtotal));
 
-  balance.returnedQuantity = roundMoney(balance.returnedQuantity + requestedQuantity);
+  balance.returnedQuantity = roundQuantity(balance.returnedQuantity + requestedQuantity);
   balance.returnedGross = roundMoney(balance.returnedGross + gross);
   balance.returnedSubtotal = roundMoney(balance.returnedSubtotal + subtotal);
   balance.returnedGst = roundMoney(balance.returnedGst + gst);
@@ -179,7 +183,7 @@ export function unlinkedReturnLineAmount(input: {
     ? Math.abs(input.soldLineTotal)
     : Math.max(0, pricedQty * (Number(input.ratePerRateUnit) || 0) - (Number(input.lineDiscount) || 0));
   const net = roundMoney(soldNet * fraction);
-  const tax = input.gstMode === "exclusive" ? roundMoney(net * (Number(input.gstRate) || 0) / 100) : 0;
+  const tax = input.gstMode === "exclusive" ? gstLineAmounts(net, Number(input.gstRate) || 0, input.gstMode).gst : 0;
   return { net, tax, total: roundMoney(net + tax) };
 }
 

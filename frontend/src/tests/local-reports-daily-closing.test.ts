@@ -194,6 +194,39 @@ describe("local reports and daily closing", () => {
     vi.useRealTimers();
   });
 
+  it("reconciles a hand-calculated day across reports, profit detail and cash closing", async () => {
+    const at = "2026-06-06T10:00:00";
+    setRows({
+      bills: [
+        bill("sale", at, { subtotal: 300, grandTotal: 270, discount: 30, waivedAmount: 2.5, paidAmount: 220,
+          creditAmount: 47.5, cashAmount: 100.25, upiAmount: 69.75, bankAmount: 50,
+          items: [{ productId: "a", quantity: 1, lineTotal: 100, lineCost: 60 }, { productId: "b", quantity: 1, lineTotal: 200, lineCost: 100 }],
+        }),
+        bill("return", at, { billType: "sales_return", grandTotal: -30.5, paidAmount: -20.25, cashAmount: -20.25, creditAmount: -10.25,
+          items: [{ productId: "a", quantity: -0.305, lineTotal: -30.5, lineCost: -18.3 }],
+        }),
+      ],
+      customer_ledger: [
+        ledger("old-debt", "2026-06-05T10:00:00", { type: "BILL", source_type: "bill", amount: 100 }),
+        ledger("new-debt", at, { type: "BILL", source_type: "bill", billId: "sale", amount: 47.5 }),
+        ledger("refund-debt", at, { type: "ADJUSTMENT", source_type: "sales_return", amount: -10.25 }),
+        ledger("old-payment", at, { type: "PAYMENT", amount: -20.25, mode: "cash" }),
+      ],
+      purchase_bills: [{ id: "purchase", billAmount: 100, purchasePaidAmount: 70.5, purchaseDueAmount: 29.5, purchasePaymentMode: "cash", createdAt: at, ...scope }],
+    });
+    const drawer = { openingCash: 100, cashIn: 25, cashOut: 10.25, cashExpenses: 12.25 };
+    const report = await buildLocalReportSnapshot({ from: "2026-06-06", to: "2026-06-06" }, drawer);
+    const closing = await buildDailyClosingReport("2026-06-06", drawer);
+    // Net sales 270 - 30.50; profit 300 - 160 - 30 - 2.50 - (30.50 - 18.30).
+    expect(report.selected).toMatchObject({ sales: 239.5, profitEstimate: 95.3, cashSales: 80, upiSales: 69.75, bankSales: 50, udharSales: 37.25 });
+    expect(report.pendingUdhar).toBe(117);
+    expect(report.topProducts.reduce((sum, row) => Math.round(sum + row.profitEstimate * 100), 0)).toBe(9530);
+    // 100 opening + 25 pay-in + 80 sales + 20.25 recovery - 70.50 supplier - 12.25 expense - 10.25 pay-out.
+    expect(closing).toMatchObject({ totalSales: 239.5, profitEstimate: 95.3, cashReceived: 100.25, upiReceived: 69.75,
+      bankReceived: 50, udharGiven: 37.25, oldUdharCashReceived: 20.25, purchaseCashPaid: 70.5, expectedCashInDrawer: 132.25 });
+    expect(report.paymentBreakdown.netCashInHand).toBe(132.25);
+  });
+
   it("prepares fresh history after a local edit and never reuses another shop's rows", async () => {
     const sale = { ...bill("same-id", "2026-06-06T10:00:00.000Z", { grandTotal: 100 }), cashAmount: 100 };
     setRows({ bills: [sale] });

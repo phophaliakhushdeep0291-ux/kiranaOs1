@@ -2,7 +2,7 @@ import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
 import { billPayload, createCustomer, createPaidBillViaApi, createProduct, createStaff, createTenant, login } from "./factories.js";
-import { restoreCancelledBill } from "../../src/modules/bills/bills.service.js";
+import { confirmBill, restoreCancelledBill } from "../../src/modules/bills/bills.service.js";
 import { redeemPoints } from "../../src/modules/loyalty/loyalty.service.js";
 import { env } from "../../src/config/env.js";
 
@@ -976,6 +976,42 @@ if (ctx.skip) {
         assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 10);
       });
     }
+
+    test("tax ties match the counter and preserve already collected legacy offline payments", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 2.9, costPerRateUnit: 1, gstRate: 5 });
+      const payload = (total) => billPayload(product, { quantity: 1, gstMode: "exclusive", gstRate: 5,
+        actualAmount: total, buyerPaidAmount: total, payments: [{ mode: "cash", amount: total }] });
+      const current = assertSuccess(await ctx.post("/api/bills/confirm", payload(3.05), { token: ownerAuth.accessToken }), 201);
+      assert.equal(current.gst, 0.15);
+      assert.equal(current.grandTotal, 3.05);
+      assertFailure(await ctx.post("/api/bills/confirm", payload(3.04), { token: ownerAuth.accessToken }), 400);
+      const legacy = await confirmBill(tenant.shop.id, payload(3.04), {
+        userId: tenant.owner.id, deviceId: "calculation-audit", isOfflineReplay: true, allowStockShortfall: true,
+      });
+      assert.equal(legacy.gst, 0.14);
+      assert.equal(legacy.grandTotal, 3.04);
+      assert.equal(legacy.paidAmount, 3.04);
+    });
+
+    test("repeated partial returns never refund more GST than the original invoice", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 0.03, costPerRateUnit: 0, gstRate: 18 });
+      const sale = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, { quantity: 4, gstMode: "exclusive", gstRate: 18,
+        actualAmount: 0.14, buyerPaidAmount: 0.14, payments: [{ mode: "cash", amount: 0.14 }] }), { token: ownerAuth.accessToken }), 201);
+      assert.equal(sale.gst, 0.02);
+      const refunds = [];
+      for (let index = 0; index < 4; index++) {
+        refunds.push(assertSuccess(await ctx.post("/api/bills/returns", {
+          refundMode: "cash", returnOfBillId: sale.id, reason: "Partial paise audit", clientBillId: `paise-return-${index}`, idempotencyKey: `paise-return-${index}`,
+          items: [{ originalBillItemId: sale.items[0].id, productId: product.id, name: product.name, quantity: 1, enteredUnit: "piece", ratePerRateUnit: 0.03, gstRate: 18 }],
+        }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 201));
+      }
+      assert.deepEqual(refunds.map((row) => Number(row.gst) || 0), [-0.01, -0.01, 0, 0]);
+      assert.equal(refunds.reduce((sum, row) => sum + Math.round(row.grandTotal * 100), 0), -14);
+      const payments = await ctx.db.payment.findMany({ where: { shopId: tenant.shop.id } });
+      assert.equal(payments.reduce((sum, row) => sum + Number(row.amountPaise), 0), 0);
+    });
 
     test("partial returns reverse invoice discount and GST exactly without refresh-era drift", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
