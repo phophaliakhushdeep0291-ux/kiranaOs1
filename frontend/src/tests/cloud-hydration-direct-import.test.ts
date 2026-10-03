@@ -71,13 +71,13 @@ describe("cloud hydration direct import wiring", () => {
   });
 
   it("removes dependent rows again after incremental sync can reintroduce them", () => {
-    expect(reconcile).toContain("async function removeOrphanedDependentRows()");
-    expect(reconcile).toContain('offlineDB.removeOrphans(\n      "inventory_movements"');
-    expect(reconcile).toContain('offlineDB.removeOrphans(\n      "bill_items"');
-    expect(reconcile).toContain('offlineDB.removeOrphans(\n      "payments"');
+    expect(reconcile).toContain("async function removeOrphanedDependentRows(");
+    expect(reconcile).toMatch(/offlineDB\.removeOrphans\(\s*"inventory_movements"/);
+    expect(reconcile).toMatch(/offlineDB\.removeOrphans\(\s*"bill_items"/);
+    expect(reconcile).toMatch(/offlineDB\.removeOrphans\(\s*"payments"/);
     expect(reconcile).toContain("{ removeWhenForeignKeyMissing: false }");
-    expect(reconcile.indexOf("await removeOrphanedDependentRows()")).toBeLessThan(
-      reconcile.indexOf('listRows("inventory_movements"'),
+    expect(reconcile.indexOf("await removeOrphanedDependentRows(")).toBeLessThan(
+      reconcile.indexOf('writeInstantCache(table, rows'),
     );
   });
 });

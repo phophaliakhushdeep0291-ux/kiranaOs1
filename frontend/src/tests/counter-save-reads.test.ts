@@ -83,8 +83,8 @@ describe("targeted offline reads", () => {
 });
 
 describe("bill identity index", () => {
-  it("version 7 indexes both spellings of the open-bill identity", () => {
-    expect(dexieDB.verno).toBe(7);
+  it("version 8 retains both spellings of the open-bill identity", () => {
+    expect(dexieDB.verno).toBe(8);
     const indexes = dexieDB.table("bills").schema.idxByName;
     expect(Object.keys(indexes)).toEqual(expect.arrayContaining(["clientBillId", "client_bill_id"]));
   });

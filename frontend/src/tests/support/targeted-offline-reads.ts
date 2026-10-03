@@ -1,3 +1,4 @@
+import { offlineReadIndexes } from "@/lib/offline/read-indexes";
 type ReadableMock = { getAll: (table: string) => Promise<unknown[]> };
 type Row = Record<string, unknown>;
 
@@ -24,7 +25,10 @@ export function withTargetedReads<T extends object>(db: T): T {
   };
   mock.getWhere = async (table: string, field: string, values: Iterable<string | null | undefined>) => {
     const keys = keySet(values);
-    return keys.size ? (await rows(table)).filter((row) => keys.has(row[field] as string)) : [];
+    return keys.size ? (await rows(table)).filter((row) => {
+      const value = field.startsWith("_read_") ? offlineReadIndexes(table, row)[field] : row[field];
+      return Array.isArray(value) ? value.some((key) => keys.has(key)) : keys.has(value as string);
+    }) : [];
   };
   return db;
 }

@@ -1,4 +1,8 @@
-import { offlineDB } from "@/lib/offline/db";
+import { customerReference, customerReadIdentityKeys, customerIdentityGraph, firstString } from "@/lib/offline/read-indexes";
+import { offlineDB, assertCurrentOfflineScope } from "@/lib/offline/db";
+import { getOfflineScope } from "@/lib/offline/context";
+import { expandIndexedCustomerIds, readIndexedCustomerLedger } from "@/features/core/customers/indexed-reads";
+import { readBillIdentityTwins } from "@/features/core/sync/bill-reconciliation";
 import { readInstantCache } from "@/lib/offline/instant-cache";
 import { formatMoney as formatRupees } from "@/lib/money";
 import type { Bill, Customer, UdharSummary } from "@/types/api";
@@ -32,8 +36,7 @@ export interface CustomerDetailData {
 const LOCAL_BALANCE_STATUSES = new Set(["pending_sync", "syncing", "failed", "conflict", "local_only"]);
 
 function customerIdentityValues(customer: Customer & Record<string, unknown>): string[] {
-  return [customer.id, customer.local_id, customer.localId, customer.server_id, customer.serverId]
-    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  return customerReadIdentityKeys(customer);
 }
 
 /** True while this device holds udhar movement the server has not accepted yet. */
@@ -255,45 +258,11 @@ function isDeleted(row: Record<string, unknown>): boolean {
 }
 
 function readStringField(row: Record<string, unknown>, keys: string[]): string | null {
-  for (const key of keys) {
-    const value = row[key];
-    if (typeof value === "string" && value.trim().length > 0) return value.trim();
-    if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  }
-  return null;
+  return firstString(row, keys, true) ?? null;
 }
 
 function getCustomerId(row: Partial<CustomerLedgerEntry>): string | null {
-  return readStringField(row as Record<string, unknown>, [
-    "customerId",
-    "customer_id",
-    "serverCustomerId",
-    "server_customer_id",
-    "localCustomerId",
-    "local_customer_id",
-  ]);
-}
-
-function getBillCustomerId(row: Record<string, unknown>): string | null {
-  return readStringField(row, [
-    "customerId",
-    "customer_id",
-    "serverCustomerId",
-    "server_customer_id",
-    "localCustomerId",
-    "local_customer_id",
-  ]);
-}
-
-function getPaymentCustomerId(row: Record<string, unknown>): string | null {
-  return readStringField(row, [
-    "customerId",
-    "customer_id",
-    "serverCustomerId",
-    "server_customer_id",
-    "localCustomerId",
-    "local_customer_id",
-  ]);
+  return customerReference(row as Record<string, unknown>) ?? null;
 }
 
 function paymentFromLedger(entry: CustomerLedgerEntry): Record<string, unknown> | null {
@@ -335,41 +304,8 @@ function uniqueById<T extends { id: string }>(rows: T[]): T[] {
 }
 
 function customerIds(customer: Customer & Record<string, unknown>): Set<string> {
-  return new Set(
-    [
-      customer.id,
-      customer.local_id,
-      customer.localId,
-      customer.server_id,
-      customer.serverId,
-    ].filter((value): value is string => typeof value === "string" && value.length > 0),
-  );
+  return new Set(customerReadIdentityKeys(customer));
 }
-
-function expandIdsWithMappings(ids: Set<string>, mappings: Array<Record<string, unknown>>): Set<string> {
-  const expanded = new Set(ids);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const mapping of mappings) {
-      const entityType = String(mapping.entity_type ?? mapping.entityType ?? "");
-      if (entityType && entityType !== "customer" && entityType !== "customers") continue;
-      const localId = readStringField(mapping, ["local_id", "localId"]);
-      const serverId = readStringField(mapping, ["server_id", "serverId"]);
-      if (!localId || !serverId) continue;
-      if (expanded.has(localId) && !expanded.has(serverId)) {
-        expanded.add(serverId);
-        changed = true;
-      }
-      if (expanded.has(serverId) && !expanded.has(localId)) {
-        expanded.add(localId);
-        changed = true;
-      }
-    }
-  }
-  return expanded;
-}
-
 function ledgerCustomerName(entry?: CustomerLedgerEntry): string | null {
   if (!entry) return null;
   return readStringField(entry as Record<string, unknown>, [
@@ -455,6 +391,14 @@ function scheduleFinancialHardening(): void {
   }
 }
 
+function enrichCustomer(customer: Customer & Record<string, unknown>, entries: CustomerLedgerEntry[]): CustomerWithLedger {
+  const metrics = metricsWithCustomerBalanceFallback(customer, entries);
+  const balance = roundMoney(Math.max(0, metrics.balance));
+  return { ...customer, ledgerBalance: balance, rawLedgerBalance: metrics.balance,
+    hasUnsyncedLedgerEntries: hasUnsyncedLedgerEntries(entries), totalUdhar: balance,
+    udharAmount: balance, ledgerMetrics: metrics };
+}
+
 export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {
   scheduleFinancialHardening();
   const cached = readInstantCache<Customer[]>("customers", []);
@@ -465,9 +409,10 @@ export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {
     offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []),
     offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []),
   ]);
+  const expandIds = customerIdentityGraph(idMappings);
   const customers = uniqueById([...cached, ...dbCustomers].filter((customer) => !isDeleted(customer as unknown as Record<string, unknown>)) as Array<Customer & Record<string, unknown>>);
   const ledger = dedupeLedgerEntries(ledgerRows);
-  const knownCustomerIds = new Set(customers.flatMap((customer) => [...expandIdsWithMappings(customerIds(customer), idMappings)]));
+  const knownCustomerIds = new Set(customers.flatMap((customer) => [...expandIds(customerIds(customer))]));
   const ledgerByCustomerId = new Map<string, CustomerLedgerEntry[]>();
   const ledgerOnlyGroups = new Map<string, CustomerLedgerEntry[]>();
   for (const entry of ledger) {
@@ -487,66 +432,65 @@ export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {
     ...Array.from(ledgerOnlyGroups, ([id, entries]) => syntheticCustomerFromLedger(id, entries)),
   ];
   return allCustomers.map((customer) => {
-    const ids = expandIdsWithMappings(customerIds(customer), idMappings);
+    const ids = expandIds(customerIds(customer));
     const entries = [...ids].flatMap((id) => ledgerByCustomerId.get(id) ?? []);
-    const metrics = metricsWithCustomerBalanceFallback(customer, entries);
-    const balance = roundMoney(Math.max(0, metrics.balance));
-    return {
-      ...customer,
-      ledgerBalance: balance,
-      rawLedgerBalance: metrics.balance,
-      hasUnsyncedLedgerEntries: hasUnsyncedLedgerEntries(entries),
-      totalUdhar: balance,
-      udharAmount: balance,
-      ledgerMetrics: metrics,
-    };
+    return enrichCustomer(customer, entries);
   }).sort((a, b) => b.ledgerBalance - a.ledgerBalance || a.name.localeCompare(b.name));
 }
 
 export async function loadCustomerDetail(customerId: string): Promise<CustomerDetailData | null> {
-  const [customers, idMappings] = await Promise.all([
-    loadCustomersWithLedger(),
-    offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []),
-  ]);
-  const customer = customers.find((row) => expandIdsWithMappings(customerIds(row), idMappings).has(customerId));
-  if (!customer) return null;
-  const ids = expandIdsWithMappings(customerIds(customer), idMappings);
-  // Everything below reads a different table and filters it by `ids`. The reads
-  // do not depend on each other, so they go out together — this is a screen the
-  // user is sitting in front of. Issued only once the customer is known to
-  // exist, so a miss still costs nothing extra.
-  const [ledgerRows, dbBills, paymentRows, auditRows] = await Promise.all([
-    offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []),
-    offlineDB.getAll<Bill & Record<string, unknown>>("bills").catch(() => []),
-    offlineDB.getAll<Record<string, unknown>>("payments").catch(() => []),
-    offlineDB.getAll<Record<string, unknown>>("local_audit_logs").catch(() => []),
-  ]);
-  const ledgerSource = dedupeLedgerEntries(ledgerRows);
-  const ledgerEntries = ledgerSource
-    .filter((entry) => {
+  scheduleFinancialHardening();
+  const scope = getOfflineScope();
+  const cached = readInstantCache<Customer[]>("customers", []) as Array<Customer & Record<string, unknown>>;
+  let ids = await expandIndexedCustomerIds([customerId]);
+  const stored = await offlineDB.getWhere<Customer & Record<string, unknown>>("customers", "_read_customer_ids", ids);
+  let candidates = uniqueById([...cached, ...stored].filter((row) => !isDeleted(row)))
+    .filter((row) => customerIdentityValues(row).some((id) => ids.has(id)));
+  ids = await expandIndexedCustomerIds([...ids, ...candidates.flatMap(customerIdentityValues)]);
+  // Read the ledger once. Its rows also allow the existing ledger-only customer
+  // recovery when no customer master row has reached this device yet.
+  const linkedLedger = await readIndexedCustomerLedger(ids);
+  if (!candidates.length) {
+    const groups = new Map<string, CustomerLedgerEntry[]>();
+    for (const entry of linkedLedger) {
       const id = getCustomerId(entry);
-      return id ? ids.has(id) : false;
+      if (id) groups.set(id, [...(groups.get(id) ?? []), entry]);
+    }
+    candidates = [...groups].map(([id, entries]) => syntheticCustomerFromLedger(id, entries));
+  }
+  const enriched = await Promise.all(candidates.map(async (row) => {
+    const linked = candidates.length === 1 ? ids : await expandIndexedCustomerIds(customerIds(row));
+    const entries = linkedLedger.filter((entry) => {
+      const id = getCustomerId(entry);
+      return id ? linked.has(id) : false;
     });
+    return { customer: enrichCustomer(row, entries), ids: linked, entries };
+  }));
+  enriched.sort((a, b) => b.customer.ledgerBalance - a.customer.ledgerBalance || a.customer.name.localeCompare(b.customer.name));
+  const selected = enriched[0];
+  assertCurrentOfflineScope(scope);
+  if (!selected) return null;
+  const { customer, entries: ledgerEntries } = selected;
+  ids = selected.ids;
+  const [ownBills, paymentRows, auditRows] = await Promise.all([
+    offlineDB.getWhere<Bill & Record<string, unknown>>("bills", "_read_customer_id", ids),
+    offlineDB.getWhere<Record<string, unknown>>("payments", "_read_customer_id", ids),
+    offlineDB.getWhere<Record<string, unknown>>("local_audit_logs", "_read_audit_customer_ids", [customer.id]),
+  ]);
   const cachedBills = readInstantCache<Array<Bill & Record<string, unknown>>>("bills", []);
-  const bills = dedupeBillsForDisplay(uniqueById([...cachedBills, ...dbBills].filter((bill) => !isDeleted(bill)) as Array<Bill & Record<string, unknown>>))
-    .filter((bill) => {
-      const id = getBillCustomerId(bill);
-      return id ? ids.has(id) : false;
-    })
+  const ownCachedBills = cachedBills.filter((bill) => { const id = getCustomerId(bill); return id ? ids.has(id) : false; });
+  const dbBills = await readBillIdentityTwins([...ownCachedBills, ...ownBills]);
+  const bills = dedupeBillsForDisplay(uniqueById([...cachedBills, ...dbBills].filter((bill) => !isDeleted(bill))))
+    .filter((bill) => { const id = getCustomerId(bill); return id ? ids.has(id) : false; })
     .sort((a, b) => String(b.businessDate ?? b.business_date ?? b.createdAt ?? b.created_at ?? "").localeCompare(String(a.businessDate ?? a.business_date ?? a.createdAt ?? a.created_at ?? "")));
-  const storedPayments = paymentRows
-    .filter((payment) => {
-      const id = getPaymentCustomerId(payment);
-      return id ? ids.has(id) : false;
-    });
   const ledgerPayments = ledgerEntries
     .map(paymentFromLedger)
     .filter((payment): payment is Record<string, unknown> => payment !== null);
-  const payments = dedupePaymentsForDisplay([...storedPayments, ...ledgerPayments])
+  const payments = dedupePaymentsForDisplay([...paymentRows, ...ledgerPayments])
     .sort((a, b) => String(b.paidAt ?? b.paid_at ?? b.createdAt ?? b.created_at ?? "").localeCompare(String(a.paidAt ?? a.paid_at ?? a.createdAt ?? a.created_at ?? "")));
   const audit = auditRows
-    .filter((row) => String(row.entity_id ?? "") === customer.id || String(row.customerId ?? row.customer_id ?? "") === customer.id)
     .sort((a, b) => String(b.createdAt ?? b.created_at ?? "").localeCompare(String(a.createdAt ?? a.created_at ?? "")));
+  assertCurrentOfflineScope(scope);
   return { customer, bills, payments, ledger: buildLedgerStatement(ledgerEntries), audit };
 }
 

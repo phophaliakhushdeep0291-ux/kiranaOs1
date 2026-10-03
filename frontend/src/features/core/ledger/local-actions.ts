@@ -1,3 +1,4 @@
+import { customerReadIdentityKeys } from "@/lib/offline/read-indexes";
 import { offlineDB } from "@/lib/offline/db";
 import { addMoney, formatMoney, toPaise } from "@/lib/money";
 import { createLocalId, emitLocalDataChanged, upsertCachedListItem } from "@/lib/offline/instant-cache";
@@ -14,15 +15,7 @@ const CUSTOMER_CACHE_KEY = "customers";
 const LEDGER_CACHE_KEY = "customer_ledger";
 
 function customerIdentitySet(customer: (Customer & Record<string, unknown>) | undefined): Set<string> {
-  return new Set(
-    [
-      customer?.id,
-      customer?.local_id,
-      customer?.localId,
-      customer?.server_id,
-      customer?.serverId,
-    ].filter((value): value is string => typeof value === "string" && value.length > 0),
-  );
+  return new Set(customerReadIdentityKeys(customer ?? {}));
 }
 
 function readStringField(row: Record<string, unknown>, keys: string[]): string | null {

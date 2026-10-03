@@ -1,3 +1,4 @@
+import { billReadIdentityKeys, firstString } from "@/lib/offline/read-indexes";
 import { roundMoney } from "@/lib/money";
 import type { Table } from "dexie";
 import {
@@ -28,14 +29,7 @@ function isRecord(value: unknown): value is MutableRow {
 }
 
 function getStringFrom(record: unknown, keys: string[]): string | undefined {
-  if (!isRecord(record)) return undefined;
-  for (const key of keys) {
-    const value = record[key];
-    if (typeof value === "string" && value.trim().length > 0) return value;
-    if (typeof value === "number" && Number.isFinite(value))
-      return String(value);
-  }
-  return undefined;
+  return isRecord(record) ? firstString(record, keys) : undefined;
 }
 
 function getArrayFrom(record: unknown, keys: string[]): MutableRow[] {
@@ -56,10 +50,6 @@ function getNumberFrom(record: unknown, keys: string[]): number | undefined {
   }
   return undefined;
 }
-
-
-
-
 function readMoney(record: unknown, keys: string[], fallback = 0): number {
   const value = getNumberFrom(record, keys);
   return value === undefined ? fallback : roundMoney(value);
@@ -567,27 +557,9 @@ async function getRowsByBillId(
       const id = getStringFrom(item, ["id"]);
       if (id) rows.set(id, item);
     });
-  await table
-    .where("bill_id")
-    .equals(billId)
-    .filter(rowMatchesCurrentScope)
-    .toArray()
-    .then(add)
-    .catch(() => undefined);
-  await table
-    .where("billId")
-    .equals(billId)
-    .filter(rowMatchesCurrentScope)
-    .toArray()
-    .then(add)
-    .catch(() => undefined);
-  await table
-    .where("reference_id")
-    .equals(billId)
-    .filter(rowMatchesCurrentScope)
-    .toArray()
-    .then(add)
-    .catch(() => undefined);
+  const batches = await Promise.all(["bill_id", "billId", "reference_id"].map((field) => table
+    .where(field).equals(billId).filter(rowMatchesCurrentScope).toArray().catch(() => [])));
+  batches.forEach(add);
   return [...rows.values()];
 }
 
@@ -1032,18 +1004,7 @@ export async function reconcileSyncedBillFromPush(
   return true;
 }
 
-export function billIdentityKeys(bill: Record<string, unknown>): string[] {
-  return [
-    getStringFrom(bill, ["id"]),
-    getStringFrom(bill, ["server_id", "serverId"]),
-    getStringFrom(bill, ["local_id", "localId"]),
-    getStringFrom(bill, ["merged_into_id", "mergedIntoId"]),
-    getStringFrom(bill, ["localBillId", "local_bill_id"]),
-    getStringFrom(bill, ["clientBillId", "client_bill_id"]),
-    getStringFrom(bill, ["idempotency_key", "idempotencyKey"]),
-    getStringFrom(bill, ["uniqueBillId", "unique_bill_id"]),
-  ].filter((key): key is string => Boolean(key));
-}
+export const billIdentityKeys = billReadIdentityKeys;
 
 /**
  * Deterministic same-bill check based only on the client-generated identity
@@ -1570,4 +1531,27 @@ export async function refreshBillAndPaymentCaches(): Promise<void> {
     pruneRecentRows(dedupePaymentsForDisplay(payments), 30),
     30,
   );
+}
+
+export function uniqueRows<T extends { id: string }>(rows: T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const row of rows) byId.set(row.id, { ...byId.get(row.id), ...row });
+  return [...byId.values()].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
+
+/** Bring in identity twins before deduplication, even if an older twin was cancelled. */
+export async function readBillIdentityTwins<T extends Record<string, unknown> & { id: string }>(seeds: T[]): Promise<T[]> {
+  let rows = uniqueRows(seeds);
+  const seen = new Set<string>();
+  for (;;) {
+    // Legacy content/time matching is global. Keep that established fallback;
+    // ordinary bills with durable client IDs never need a whole-history read.
+    if (rows.some((row) => !hasDurableClientIdentity(row))) {
+      return uniqueRows([...rows, ...await offlineDB.getAll<T>("bills")]);
+    }
+    const frontier = [...new Set(rows.flatMap(billIdentityKeys))].filter((id) => !seen.has(id));
+    if (!frontier.length) return rows;
+    frontier.forEach((id) => seen.add(id));
+    rows = uniqueRows([...rows, ...await offlineDB.getWhere<T>("bills", "_read_bill_ids", frontier)]);
+  }
 }

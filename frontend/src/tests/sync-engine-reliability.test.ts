@@ -327,6 +327,9 @@ vi.mock("@/lib/offline/db", async () => {
     dexieDB,
     offlineDB,
     MAX_AUTOMATIC_RETRY_ATTEMPTS: 12,
+    assertCurrentOfflineScope: (scope: { tenant_id: string; store_id: string }) => {
+      if (scope.tenant_id !== dbState.scope.tenant_id || scope.store_id !== dbState.scope.store_id) throw new Error("different shop");
+    },
     rowMatchesCurrentScope: (row: Row) => dbState.matchesScope(row),
     filterRowsForCurrentScope: <T extends Row>(rows: T[]) =>
       rows.filter((row) => dbState.matchesScope(row)),

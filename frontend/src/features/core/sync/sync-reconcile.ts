@@ -1,7 +1,10 @@
+import { customerReadIdentityKeys, customerIdentityGraph } from "@/lib/offline/read-indexes";
 import type { Table } from "dexie";
+import { BUSINESS_CACHE_LIMITS, cacheTablesForEntity } from "@/features/core/sync/cache-dependencies";
 import {
   dexieDB,
   offlineDB,
+  assertCurrentOfflineScope,
   rowMatchesCurrentScope,
 } from "@/lib/offline/db";
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
@@ -52,37 +55,26 @@ function collectIdentityValues(rows: Array<Record<string, unknown>>, keys: strin
  * not only during the earlier authoritative snapshot import, otherwise the
  * incremental pull immediately recreates the leaked rows.
  */
-async function removeOrphanedDependentRows(): Promise<void> {
+type ReadRows = <T>(table: string) => Promise<T[]>;
+
+async function removeOrphanedDependentRows(readRows: ReadRows, tables: Set<string>): Promise<void> {
   // Some recovery/test adapters can expose only the legacy read/write facade.
   // Missing cleanup capability must never turn a successful bill push into a
   // failed sync; the production facade always provides this method.
   if (typeof offlineDB.removeOrphans !== "function") return;
   const scope = getOfflineScope();
-  const [products, bills] = await Promise.all([
-    offlineDB.getAll<Record<string, unknown>>("products"),
-    offlineDB.getAll<Record<string, unknown>>("bills"),
-  ]);
-  await Promise.all([
-    offlineDB.removeOrphans(
-      "inventory_movements",
-      collectIdentityValues(products, PRODUCT_PARENT_ID_KEYS),
-      ["product_id", "productId"],
-      scope,
-    ),
-    offlineDB.removeOrphans(
-      "bill_items",
-      collectIdentityValues(bills, BILL_PARENT_ID_KEYS),
-      ["bill_id", "billId"],
-      scope,
-    ),
-    offlineDB.removeOrphans(
-      "payments",
-      collectIdentityValues(bills, BILL_PARENT_ID_KEYS),
-      ["bill_id", "billId"],
-      scope,
-      { removeWhenForeignKeyMissing: false },
-    ),
-  ]);
+  const cleanupProducts = tables.has("products") || tables.has("inventory_movements");
+  const cleanupBills = tables.has("bills") || tables.has("payments");
+  if (cleanupProducts) {
+    const products = await readRows<Record<string, unknown>>("products");
+    await offlineDB.removeOrphans("inventory_movements", collectIdentityValues(products, PRODUCT_PARENT_ID_KEYS), ["product_id", "productId"], scope);
+  }
+  if (cleanupBills) {
+    const bills = await readRows<Record<string, unknown>>("bills");
+    const ids = collectIdentityValues(bills, BILL_PARENT_ID_KEYS);
+    await offlineDB.removeOrphans("bill_items", ids, ["bill_id", "billId"], scope);
+    await offlineDB.removeOrphans("payments", ids, ["bill_id", "billId"], scope, { removeWhenForeignKeyMissing: false });
+  }
 }
 
 async function findExistingServerRow(
@@ -267,6 +259,7 @@ export async function mergeServerChange(
 ): Promise<MergeServerChangeStatus> {
   const entityType = String(change.entity_type ?? change.entityType ?? "");
   const tableName = tableNameForEntity(entityType);
+  markDirty(entityType);
   if (!tableName) return "ignored";
 
   if (tableName === "settings") {
@@ -449,10 +442,7 @@ export async function mergeServerChange(
 
 
 function rowIdSet(row: Record<string, unknown>): Set<string> {
-  return new Set(
-    [row.id, row.local_id, row.localId, row.server_id, row.serverId]
-      .filter((value): value is string => typeof value === "string" && value.length > 0),
-  );
+  return new Set(customerReadIdentityKeys(row));
 }
 
 function ledgerCustomerId(row: Partial<CustomerLedgerEntry>): string | null {
@@ -460,40 +450,31 @@ function ledgerCustomerId(row: Partial<CustomerLedgerEntry>): string | null {
   return typeof id === "string" && id.length > 0 ? id : null;
 }
 
-async function refreshCustomerBalancesFromLocalLedger(): Promise<void> {
-  const customers = await offlineDB.getAll<Record<string, unknown>>("customers").catch(() => []);
-  const ledger = dedupeLedgerEntries(await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []));
-  const mappings = await offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []);
+async function refreshCustomerBalancesFromLocalLedger(readRows: ReadRows, assertScope: () => void): Promise<void> {
+  const customers = await readRows<Record<string, unknown>>("customers");
+  const ledger = dedupeLedgerEntries(await readRows<CustomerLedgerEntry>("customer_ledger"));
+  const mappings = await readRows<Record<string, unknown>>("id_mappings");
   if (customers.length === 0 || ledger.length === 0) return;
 
+  const ledgerByCustomer = new Map<string, CustomerLedgerEntry[]>();
+  for (const entry of ledger) {
+    const id = ledgerCustomerId(entry);
+    if (!id || entry.deleted_at != null || entry.deletedAt != null) continue;
+    const rows = ledgerByCustomer.get(id) ?? [];
+    rows.push(entry);
+    ledgerByCustomer.set(id, rows);
+  }
+  const expandIds = customerIdentityGraph(mappings, false);
   const table = dexieDB.customers as Table<Record<string, unknown>, string>;
   const now = nowIso();
   for (const customer of customers) {
-    const ids = rowIdSet(customer);
-    let expanded = true;
-    while (expanded) {
-      expanded = false;
-      for (const mapping of mappings) {
-        const entityType = String(mapping.entity_type ?? mapping.entityType ?? "");
-        if (entityType && entityType !== "customer" && entityType !== "customers") continue;
-        const localId = getStringFrom(mapping, ["local_id", "localId"]);
-        const serverId = getStringFrom(mapping, ["server_id", "serverId"]);
-        if (!localId || !serverId) continue;
-        if (ids.has(localId) && !ids.has(serverId)) { ids.add(serverId); expanded = true; }
-        if (ids.has(serverId) && !ids.has(localId)) { ids.add(localId); expanded = true; }
-      }
-    }
-    if (ids.size === 0) continue;
-    const entries = ledger.filter((entry) => {
-      if (entry.deleted_at != null || entry.deletedAt != null) return false;
-      const customerId = ledgerCustomerId(entry);
-      return customerId ? ids.has(customerId) : false;
-    });
+    const ids = expandIds(rowIdSet(customer));
+    const entries = [...ids].flatMap((id) => ledgerByCustomer.get(id) ?? []);
     if (entries.length === 0) continue;
     const balance = Math.max(0, Math.round((calculateLedgerBalance(entries) + Number.EPSILON) * 100) / 100);
     const current = Number(customer.udharAmount ?? customer.totalUdhar ?? 0);
     if (Number.isFinite(current) && Math.abs(current - balance) < 0.005) continue;
-    await table.put({
+    const updated = {
       ...customer,
       type: balance > 0 ? "udhar" : (customer.type ?? "regular"),
       udharAmount: balance,
@@ -502,87 +483,100 @@ async function refreshCustomerBalancesFromLocalLedger(): Promise<void> {
       total_udhar: balance,
       updatedAt: typeof customer.updatedAt === "string" ? customer.updatedAt : now,
       updated_at: typeof customer.updated_at === "string" ? customer.updated_at : now,
-    });
+    };
+    assertScope();
+    await table.put(updated);
+    Object.assign(customer, updated);
   }
 }
 
-/**
- * Whether the screens' quick-start caches may be out of date. Starts true, so
- * the first sync after the app loads always rebuilds them. Any local change
- * marks them stale again; sync's own announcements do not, because sync
- * refreshes before it announces.
- */
-let businessCachesStale = true;
+/** Null means a full recovery rebuild. Otherwise only these caches are dirty. */
+let dirtyCaches: Set<string> | null = null;
+let cacheScope = "";
+let refreshTail: Promise<void> = Promise.resolve();
+
+function markDirty(entity?: unknown) {
+  if (dirtyCaches === null) return;
+  const affected = typeof entity === "string" ? cacheTablesForEntity(entity) : null;
+  if (affected === null) dirtyCaches = null;
+  else affected.forEach((table) => dirtyCaches!.add(table));
+}
+
 if (typeof window !== "undefined") {
   window.addEventListener("kirana:local-data-changed", (event) => {
-    if ((event as CustomEvent<{ type?: unknown } | undefined>).detail?.type !== "sync") businessCachesStale = true;
+    const detail = (event as CustomEvent<Record<string, unknown> | undefined>).detail;
+    if (detail?.type !== "sync") markDirty(detail?.type ?? detail?.entityType);
   });
 }
 
-/**
- * Rebuild the quick-start caches, reconcile orphaned children and re-derive
- * customer balances. This reads most of the offline database, so a pull that
- * received nothing passes `onlyIfStale`: an idle counter used to repeat all of
- * it every sync cycle (2.5 to 45 seconds) with nothing new to show.
- */
-export async function refreshBusinessCaches({ onlyIfStale = false }: { onlyIfStale?: boolean } = {}): Promise<void> {
-  if (onlyIfStale && !businessCachesStale) return;
-  // Cleared before reading, so a change made during the rebuild marks it again.
-  businessCachesStale = false;
+type RefreshOptions = { onlyIfStale?: boolean; affectedEntities?: Iterable<string | undefined> };
+
+/** Serialize refreshes; changes arriving during a read remain dirty for the next one. */
+export function refreshBusinessCaches(options: RefreshOptions = {}): Promise<void> {
+  // Materialize iterators now: a caller can mutate its batch after this returns.
+  const affectedEntities = options.affectedEntities ? [...options.affectedEntities] : undefined;
+  const next = refreshTail.then(() => refreshCachesNow({ ...options, affectedEntities }));
+  refreshTail = next.catch(() => undefined);
+  return next;
+}
+
+async function refreshCachesNow({ onlyIfStale = false, affectedEntities }: RefreshOptions): Promise<void> {
+  const scope = getOfflineScope();
+  const key = `${scope.tenant_id}::${scope.store_id}`;
+  if (cacheScope !== key) { dirtyCaches = null; cacheScope = key; }
+  if (affectedEntities) for (const entity of affectedEntities) markDirty(entity);
+  else if (!onlyIfStale) dirtyCaches = null;
+  if (dirtyCaches !== null && dirtyCaches.size === 0) return;
+  const tables = dirtyCaches ?? new Set(Object.keys(BUSINESS_CACHE_LIMITS));
+  dirtyCaches = new Set();
+  const assertScope = () => assertCurrentOfflineScope(scope);
   try {
-    await rebuildBusinessCaches();
+    await rebuildBusinessCaches(tables, assertScope);
   } catch (error) {
-    businessCachesStale = true;
+    // Restore exactly the failed work without discarding changes that arrived meanwhile.
+    if (dirtyCaches !== null) for (const table of tables) dirtyCaches.add(table);
     throw error;
   }
 }
 
-async function rebuildBusinessCaches(): Promise<void> {
-  await removeOrphanedDependentRows();
-  await refreshCustomerBalancesFromLocalLedger().catch(() => undefined);
-  const listRows = async <T extends Record<string, unknown>>(
-    tableName: string,
-    limit = 500,
-  ) => {
-    const rows = await offlineDB.getAll<T>(tableName).catch(() => []);
-    return rows
-      .filter((row) => row.deleted_at == null && row.deletedAt == null)
-      .sort((a, b) =>
-        String(
-          b.updated_at ?? b.updatedAt ?? b.created_at ?? b.createdAt ?? "",
-        ).localeCompare(
-          String(
-            a.updated_at ?? a.updatedAt ?? a.created_at ?? a.createdAt ?? "",
-          ),
-        ),
-      )
-      .slice(0, limit);
+async function rebuildBusinessCaches(tables: Set<string>, assertScope: () => void): Promise<void> {
+  const reads = new Map<string, Promise<unknown[]>>();
+  const readRows: ReadRows = <T>(table: string) => {
+    if (!reads.has(table)) reads.set(table, offlineDB.getAll(table).then((rows) => { assertScope(); return rows; }));
+    return reads.get(table)! as Promise<T[]>;
   };
-
-  await Promise.all([
-    listRows("products", 1000).then((rows) =>
-      writeInstantCache("products", rows, 30),
-    ),
-    listRows("customers", 1000).then((rows) =>
-      writeInstantCache("customers", rows, 30),
-    ),
-    listRows("bills", 500).then((rows) =>
-      writeInstantCache("bills", dedupeBillsForDisplay(rows), 30),
-    ),
-    listRows("payments", 1000).then((rows) =>
-      writeInstantCache("payments", dedupePaymentsForDisplay(rows), 30),
-    ),
-    listRows("customer_ledger", 1000).then((rows) =>
-      writeInstantCache("customer_ledger", dedupeLedgerEntries(rows as CustomerLedgerEntry[]), 30),
-    ),
-    listRows("suppliers", 500).then((rows) =>
-      writeInstantCache("suppliers", rows, 30),
-    ),
-    listRows("inventory_movements", 1000).then((rows) =>
-      writeInstantCache("inventory_movements", rows, 30),
-    ),
-    listRows("purchase_bills", 1000).then((rows) =>
-      writeInstantCache("purchase_bills", rows, 30),
-    ),
-  ]);
+  await removeOrphanedDependentRows(readRows, tables);
+  if (tables.has("customers") || tables.has("customer_ledger")) {
+    // Keep the ledger snapshot and derived balance writes in one transaction:
+    // a payment made during refresh must not be overwritten by an older sum.
+    if (typeof dexieDB.transaction === "function") {
+      const scope = getOfflineScope();
+      await dexieDB.transaction("rw", [dexieDB.customers, dexieDB.customer_ledger, dexieDB.id_mappings], () => {
+        const readFinancialRows: ReadRows = <T>(table: string) => {
+          // Issue the Dexie request directly inside this transaction. Awaiting
+          // facade initialization here can release the transaction's zone.
+          const pending = dexieDB.table(table).where("[tenant_id+store_id]")
+            .equals([scope.tenant_id, scope.store_id]).toArray().then((rows) => { assertScope(); return rows; });
+          reads.set(table, pending);
+          return pending as Promise<T[]>;
+        };
+        return refreshCustomerBalancesFromLocalLedger(readFinancialRows, assertScope);
+      });
+    } else {
+      await refreshCustomerBalancesFromLocalLedger(readRows, assertScope);
+    }
+  }
+  assertScope();
+  await Promise.all([...tables].map(async (table) => {
+    const all = await readRows<Record<string, unknown>>(table);
+    let rows = all.filter((row) => row.deleted_at == null && row.deletedAt == null)
+      .sort((a, b) => String(b.updated_at ?? b.updatedAt ?? b.created_at ?? b.createdAt ?? "")
+        .localeCompare(String(a.updated_at ?? a.updatedAt ?? a.created_at ?? a.createdAt ?? "")))
+      .slice(0, BUSINESS_CACHE_LIMITS[table]);
+    if (table === "bills") rows = dedupeBillsForDisplay(rows);
+    if (table === "payments") rows = dedupePaymentsForDisplay(rows);
+    if (table === "customer_ledger") rows = dedupeLedgerEntries(rows as CustomerLedgerEntry[]);
+    assertScope();
+    writeInstantCache(table, rows, 30);
+  }));
 }
