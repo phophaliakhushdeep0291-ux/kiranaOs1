@@ -589,7 +589,8 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
   const cashDelta = pctChange(dashboard.cashCollected, dashboard.previousCashCollected);
   const upiDelta = pctChange(dashboard.upiCollected, dashboard.previousUpiCollected);
   const bankDelta = pctChange(dashboard.bankCollected, dashboard.previousBankCollected);
-  const outstandingDelta = pctChange(dashboard.totalOutstanding, dashboard.previousOutstanding);
+  // Current balances cannot reconstruct yesterday after manual adjustments or reversals.
+  const outstandingDelta: number | null = null;
   const profitDelta = pctChange(dashboard.grossProfit, dashboard.previousGrossProfit);
   const expenseDelta = pctChange(dashboard.expensesToday, dashboard.previousExpenses);
   const avgBillValue = dashboard.billCount > 0 ? Math.round(dashboard.revenue / dashboard.billCount) : 0;
@@ -712,7 +713,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
             icon={<AlertTriangle size={18} />}
             iconBg="border border-[#ffcfd7] bg-[#ffecef] text-[#ff2748] shadow-[0_0_0_4px_rgba(255,39,72,0.035),0_10px_26px_rgba(255,39,72,0.20)]"
             color="#ff304f"
-            spark={mobileSparkline(dashboard.previousOutstanding, dashboard.totalOutstanding)}
+            spark={[]}
             loading={isLoading}
           />
         </Link>

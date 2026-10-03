@@ -34,7 +34,6 @@ export interface DashboardStats {
   previousCashCollected: number;
   previousUpiCollected: number;
   previousBankCollected: number;
-  previousOutstanding: number;
   expensesToday: number;
   previousExpenses: number;
   source: string;
@@ -81,8 +80,6 @@ export function buildDashboardStats({ date, financialSnapshot, previousFinancial
     ? Math.round((grossProfit / revenue) * 100)
     : 0;
   const totalOutstanding = roundMoney(money(finance?.totalOutstandingUdhar ?? ownerReport?.pendingUdhar ?? cached?.totalOutstanding ?? udharSummary?.totalOutstanding));
-  const recoveredToday = roundMoney(money(finance?.cashUdharRecoveryToday) + money(finance?.upiUdharRecoveryToday) + money(finance?.bankUdharRecoveryToday));
-  const previousOutstanding = roundMoney(Math.max(0, totalOutstanding - todayUdhar + recoveredToday));
   // An empty result from IndexedDB is authoritative after the last debt is paid.
   const outstandingCustomers = finance?.outstandingCustomers
     ?? (ownerReport?.pendingUdhar === 0 ? [] : cached?.outstandingCustomers ?? udharSummary?.customers ?? []);
@@ -98,7 +95,6 @@ export function buildDashboardStats({ date, financialSnapshot, previousFinancial
     previousCashCollected: roundMoney(money(previousFinancialSnapshot?.totalCashCollectedToday)),
     previousUpiCollected: roundMoney(money(previousFinancialSnapshot?.totalUpiCollectedToday)),
     previousBankCollected: roundMoney(money(previousFinancialSnapshot?.totalBankCollectedToday)),
-    previousOutstanding,
     expensesToday: roundMoney(money(finance?.expensesToday)),
     previousExpenses: roundMoney(money(previousFinancialSnapshot?.expensesToday)),
     source: useLocal ? "IndexedDB" : "backend refresh",
