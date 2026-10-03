@@ -206,6 +206,19 @@ describe("customer ledger correctness", () => {
     seedCustomer();
   });
 
+  it.each([
+    ["exclusive", 2.9, 5, 3.05, 0.15], ["inclusive", 0.42, 12, 0.42, 0.04], ["none", 2.9, 5, 2.9, 0],
+  ] as const)("stores the same %s tax on the offline bill and its line", async (gstMode, price, rate, total, gst) => {
+    const bill = await createBillLocalFirst(creditBillInput({ gstMode, actualAmount: total,
+      items: [{ name: "Tax fixture", quantity: 1, enteredUnit: "piece", ratePerRateUnit: price, gstRate: rate }],
+      payments: [{ mode: BillPaymentMode.credit, amount: total }],
+    }));
+    expect(bill).toMatchObject({ grandTotal: total, gst });
+    expect(scopedRows("bill_items")[0]).toMatchObject({ line_gst: gst });
+    expect(calculateLedgerBalance(scopedRows("customer_ledger"))).toBe(total);
+    expect(scopedRows("sync_outbox").some((row) => row.operation_type === "CREATE_BILL")).toBe(true);
+  });
+
   it("BILL increases customer balance", async () => {
     const bill = await createBillLocalFirst(creditBillInput());
     const ledger = scopedRows("customer_ledger");

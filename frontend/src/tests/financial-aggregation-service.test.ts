@@ -495,9 +495,9 @@ describe("FinancialAggregationService", () => {
     expect(snapshot.udharSalesToday).toBe(200);
     expect(snapshot.totalOutstandingUdhar).toBe(200);
     expect(snapshot.profitByProduct.map((row) => [row.productId, row.revenue])).toEqual([
-      ["chai", 580],
-      ["sugar", 86],
-      ["aata", 76],
+      ["chai", 578.44],
+      ["sugar", 85.77],
+      ["aata", 75.79],
     ]);
   });
 

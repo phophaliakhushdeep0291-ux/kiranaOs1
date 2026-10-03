@@ -1,3 +1,4 @@
+import { allocateAmountByWeights } from "@/lib/gst";
 import { roundMoney } from "@/lib/money";
 import { mergeSupplierPaymentHistory, supplierPurchaseKeys } from "./supplier-payment-history";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
@@ -764,35 +765,48 @@ function calculateProfitByProduct(
       ? embeddedItems
       : dedupeBillItemsForDisplay(rawItems, expectedItemTotal) as LocalBillItem[];
 
-    for (const item of uniqueItems) {
-    const productId = getProductId(item) ?? `custom:${readString(item, ["name", "productName", "product_name"], "item")}`;
-    const product = productById.get(productId);
-    const rawQuantity = readNumber(item.quantity ?? item.qty, 0);
-    const isReturn = billTotal(bill) < 0;
-    const quantity = isReturn ? -Math.abs(rawQuantity) : rawQuantity;
-    const rate = readNumber(
-      item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate ?? item.price,
-      productPrice(product),
-    );
-    const rawRevenue = readNumber(item.line_total ?? item.lineTotal ?? item.total, quantity * rate);
-    const revenue = roundMoney(isReturn ? -Math.abs(rawRevenue) : rawRevenue);
-    const cost = roundMoney(quantity * itemUnitCost(item, product));
-    const profit = roundMoney(revenue - cost);
-    const existing = rows.get(productId) ?? {
-      productId,
-      productName: product?.name ?? readString(item, ["name", "productName", "product_name"], "Custom item"),
-      quantity: 0,
-      revenue: 0,
-      cost: 0,
-      profit: 0,
-      marginPct: 0,
-    };
-    existing.quantity = roundMoney(existing.quantity + quantity);
-    existing.revenue = roundMoney(existing.revenue + revenue);
-    existing.cost = roundMoney(existing.cost + cost);
-    existing.profit = roundMoney(existing.profit + profit);
-    existing.marginPct = existing.revenue > 0 ? Math.round((existing.profit / existing.revenue) * 100) : 0;
-    rows.set(productId, existing);
+    // Item totals precede invoice discounts. Allocate concessions in paise so
+    // the product drilldown reconciles with the bill's profit, including write-offs.
+    const weights = uniqueItems.map((item) => Math.abs(readNumber(
+      item.line_total ?? item.lineTotal ?? item.total,
+      readNumber(item.quantity ?? item.qty, 0) * readNumber(item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate ?? item.price, productPrice(productById.get(getProductId(item) ?? ""))),
+    )));
+    const discount = billDiscount(bill);
+    const waived = readNumber(bill.waivedAmount ?? bill.waived_amount, 0);
+    const discounts = allocateAmountByWeights(weights, Math.abs(discount));
+    const writeOffs = allocateAmountByWeights(weights, Math.abs(waived));
+    for (const [index, item] of uniqueItems.entries()) {
+      const productId = getProductId(item) ?? `custom:${readString(item, ["name", "productName", "product_name"], "item")}`;
+      const product = productById.get(productId);
+      const rawQuantity = readNumber(item.quantity ?? item.qty, 0);
+      const isReturn = billTotal(bill) < 0;
+      const quantity = isReturn ? -Math.abs(rawQuantity) : rawQuantity;
+      const rate = readNumber(
+        item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate ?? item.price,
+        productPrice(product),
+      );
+      const rawRevenue = readNumber(item.line_total ?? item.lineTotal ?? item.total, quantity * rate);
+      const revenue = roundMoney((isReturn ? -Math.abs(rawRevenue) : rawRevenue) - Math.sign(discount) * discounts[index]);
+      // Synced lines retain the original converted unit cost; using today's
+      // product price or multiplying grams by a per-kg cost changes old profits.
+      const rawCost = readNumber(item.lineCost ?? item.line_cost, quantity * itemUnitCost(item, product));
+      const cost = roundMoney(isReturn ? -Math.abs(rawCost) : rawCost);
+      const profit = roundMoney(revenue - cost - Math.sign(waived) * writeOffs[index]);
+      const existing = rows.get(productId) ?? {
+        productId,
+        productName: product?.name ?? readString(item, ["name", "productName", "product_name"], "Custom item"),
+        quantity: 0,
+        revenue: 0,
+        cost: 0,
+        profit: 0,
+        marginPct: 0,
+      };
+      existing.quantity = Math.round((existing.quantity + quantity) * 1000) / 1000;
+      existing.revenue = roundMoney(existing.revenue + revenue);
+      existing.cost = roundMoney(existing.cost + cost);
+      existing.profit = roundMoney(existing.profit + profit);
+      existing.marginPct = existing.revenue > 0 ? Math.round((existing.profit / existing.revenue) * 100) : 0;
+      rows.set(productId, existing);
     }
   }
 
@@ -814,13 +828,9 @@ function calculateTotalBillProfit(
     todayBills.reduce((sum, bill) => {
       const stored = billStoredProfit(bill);
       if (stored !== null) return sum + stored;
-      const itemProfit = calculateProfitByProduct([bill], lookup)
-        .reduce((itemSum, row) => itemSum + row.profit, 0);
-      // Older/offline bills may not have a stored grossProfit. Their item rows hold
-      // pre-discount selling prices, so the bill discount must be netted once here.
-      // Keeping this calculation inside the deduped bill loop prevents both item
-      // echoes and local/server bill echoes from inflating dashboard profit.
-      return sum + itemProfit - billDiscount(bill);
+      const items = calculateProfitByProduct([bill], lookup);
+      const itemProfit = items.reduce((itemSum, row) => itemSum + row.profit, 0);
+      return sum + (items.length ? itemProfit : -billDiscount(bill) - readNumber(bill.waivedAmount ?? bill.waived_amount, 0));
     }, 0),
   );
 }

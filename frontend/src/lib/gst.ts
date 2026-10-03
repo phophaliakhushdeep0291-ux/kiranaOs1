@@ -25,8 +25,8 @@ export interface GstLineInput {
   /** Percentage, e.g. 18 for 18%. */
   gstRate: number;
   /**
-   * Flat rupee discount for the whole line. Unlike the bill-level discount
-   * (post-tax concession), a line discount reduces the line's taxable value.
+   * Flat rupee discount for the whole line, applied before invoice discount
+   * allocation and tax calculation.
    */
   lineDiscount?: number;
 }
@@ -127,6 +127,23 @@ export function allocateAmountByWeights(weights: number[], amount: number): numb
   });
 }
 
+/** Tax on one already discounted line, shared by counter and printed invoice. */
+export function gstLineAmounts(lineTotal: number, rate: number, mode: GstMode) {
+  if (mode === "none" || rate <= 0) return { taxable: lineTotal, gst: 0 };
+  // Divide integer paise by an integer tax factor. Rupee float arithmetic
+  // can turn an exact half-paisa into 0.499999 and disagree after sync.
+  const linePaise = BigInt(Math.round(lineTotal * 100));
+  const rateUnits = BigInt(Math.round(rate * 10000)); // the input contract allows four rate decimals
+  const scale = 1000000n;
+  const denominator = mode === "exclusive" ? scale : scale + rateUnits;
+  const numerator = linePaise * (mode === "exclusive" ? rateUnits : scale);
+  const rounded = (2n * numerator + denominator) / (2n * denominator);
+  const taxable = mode === "exclusive" ? lineTotal : Number(rounded) / 100;
+  const gst = Number(mode === "exclusive" ? rounded : linePaise - rounded) / 100;
+
+  return { taxable, gst };
+}
+
 export function computeGstBreakdown(
   lines: GstLineInput[],
   mode: GstMode = "inclusive",
@@ -151,15 +168,7 @@ export function computeGstBreakdown(
     const rate = line.rate;
     if (rate <= 0 || lineTotal <= 0) continue;
 
-    let taxable: number;
-    let gst: number;
-    if (mode === "exclusive") {
-      taxable = lineTotal;
-      gst = round2(lineTotal * (rate / 100));
-    } else {
-      taxable = round2(lineTotal / (1 + rate / 100));
-      gst = round2(lineTotal - taxable);
-    }
+    const { taxable, gst } = gstLineAmounts(lineTotal, rate, mode);
 
     const bucket = byRateMap.get(rate) ?? { taxable: 0, gst: 0 };
     bucket.taxable = round2(bucket.taxable + taxable);

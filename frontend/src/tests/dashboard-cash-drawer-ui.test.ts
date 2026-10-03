@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const source = readFileSync("src/features/core/dashboard/pages/DashboardPage.tsx", "utf8");
+const source = readFileSync("src/features/core/dashboard/financial-display.ts", "utf8");
 
 describe("dashboard cash and drawer math", () => {
   it("keeps collected cash/UPI separate from net drawer or bank totals", () => {
@@ -13,6 +13,6 @@ describe("dashboard cash and drawer math", () => {
 
   it("uses the explicit drawer total when finance or local reports provide it", () => {
     expect(source).toContain("financialSnapshot?.cashDrawer.expectedClosingCash");
-    expect(source).toContain("ownerReport?.paymentBreakdown.netCashInHand");
+    expect(source).toContain("ownerReport.paymentBreakdown.netCashInHand");
   });
 });

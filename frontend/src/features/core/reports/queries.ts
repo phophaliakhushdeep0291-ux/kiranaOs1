@@ -11,10 +11,9 @@ import * as reportsApi from "@/features/core/reports/api";
 import { cacheProducts } from "@/features/core/products/queries";
 import { cacheCustomers } from "@/features/core/customers/queries";
 import { cacheBills, withBillAliases } from "@/features/core/bills/queries";
-import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/core/sync/bill-reconciliation";
+import { aggregateFinancialRows } from "@/features/core/finance/services/FinancialAggregationService";
 import type { Bill, Customer, MonthlyBreakdownRow, PaymentSummary, PnLReport, Product, QueryParams, TopProductRow } from "@/types/api";
-import { BillPaymentMode } from "@/types/api";
-import { calculateLedgerBalance, dedupeLedgerEntries, getLedgerCustomerId, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
+import type { CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 
 const CACHE_KEYS = {
   products: "products",
@@ -50,156 +49,30 @@ type MonthlyBreakdownQueryKey = ReturnType<typeof getGetMonthlyBreakdownQueryKey
 type TopProductsQueryKey = ReturnType<typeof getGetTopProductsQueryKey>;
 type PaymentSummaryQueryKey = ReturnType<typeof getGetPaymentSummaryQueryKey>;
 
-function sameLocalDate(dateLike: unknown, yyyyMmDd: string) {
-  if (!dateLike) return false;
-  const date = new Date(String(dateLike));
-  if (!Number.isFinite(date.getTime())) return false;
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}` === yyyyMmDd;
-}
-
-
-
-function normaliseCustomerForCache(customer: Customer): Customer {
-  const udhar = Number(customer.udharAmount ?? customer.totalUdhar ?? 0);
-  return { ...customer, udharAmount: udhar, totalUdhar: udhar };
-}
-
-function billTenderFromCacheBill(bill: Bill): { cash: number; upi: number; bank: number } {
-  const record = bill as Bill & Record<string, unknown> & { payments?: Array<Record<string, unknown>> };
-  const billId = String(record.id ?? record.billId ?? record.bill_id ?? "");
-  const customerId = String(record.customerId ?? record.customer_id ?? "");
-  if (Array.isArray(record.payments) && record.payments.length > 0) {
-    const normalizedPayments: Array<Record<string, unknown>> = (record.payments as Array<Record<string, unknown>>).map((payment) => ({
-      ...payment,
-      billId: payment.billId ?? payment.bill_id ?? billId,
-      bill_id: payment.bill_id ?? payment.billId ?? billId,
-      customerId: payment.customerId ?? payment.customer_id ?? customerId,
-      customer_id: payment.customer_id ?? payment.customerId ?? customerId,
-      paid_at: String(payment.paid_at ?? payment.paidAt ?? payment.created_at ?? payment.createdAt ?? record.created_at ?? record.createdAt ?? ""),
-      paidAt: String(payment.paidAt ?? payment.paid_at ?? payment.createdAt ?? payment.created_at ?? record.createdAt ?? record.created_at ?? ""),
-    }));
-    const payments = dedupePaymentsForDisplay(normalizedPayments);
-    return payments.reduce<{ cash: number; upi: number; bank: number }>(
-      (sum, payment) => {
-        const amount = Number(payment.amount ?? 0);
-        const mode = String(payment.mode ?? "").toLowerCase();
-        if (mode === BillPaymentMode.cash) sum.cash += amount;
-        if (mode === BillPaymentMode.upi) sum.upi += amount;
-        if (mode === BillPaymentMode.bank) sum.bank += amount;
-        return sum;
-      },
-      { cash: 0, upi: 0, bank: 0 },
-    );
-  }
-  return {
-    cash: Number(record.cashAmount ?? record.cash_amount ?? 0),
-    upi: Number(record.upiAmount ?? record.upi_amount ?? 0),
-    bank: Number(record.bankAmount ?? record.bank_amount ?? 0),
-  };
-}
-
+/** Fast cached paint uses the same signed/deduped arithmetic as the full report. */
 export function getLocalDashboardSnapshot(date = new Date()): LocalDashboardSnapshot {
-  const yyyyMmDd = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  const bills = dedupeBillsForDisplay(readInstantCache<Bill[]>(CACHE_KEYS.bills, []).map(withBillAliases)) as unknown as Bill[];
-  const customers = readInstantCache<Customer[]>(CACHE_KEYS.customers, []).map(normaliseCustomerForCache);
-  const ledger = dedupeLedgerEntries(readInstantCache<CustomerLedgerEntry[]>("customer_ledger", []));
-  const todayBills = bills.filter((bill) => bill.status !== "cancelled" && sameLocalDate(bill.businessDate ?? bill.business_date ?? bill.createdAt, yyyyMmDd));
-
-  let cash = 0;
-  let upi = 0;
-  let bank = 0;
-  let credit = 0;
-  let revenue = 0;
-  let grossProfit = 0;
-
-  for (const bill of todayBills) {
-    revenue += Number(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0);
-    grossProfit += Number(bill.grossProfit ?? 0);
-    const payments = Array.isArray(bill.payments) ? bill.payments : [];
-    let legacyCreditFromPaymentRows = 0;
-    for (const payment of payments as Array<{ mode?: string; amount?: number }>) {
-      const amount = Number(payment.amount ?? 0);
-      if (String(payment.mode ?? "").toLowerCase() === BillPaymentMode.credit) legacyCreditFromPaymentRows += amount;
-    }
-    const tender = billTenderFromCacheBill(bill);
-    cash += tender.cash;
-    upi += tender.upi;
-    bank += tender.bank;
-
-    // Credit/udhar is debt, not a real tender payment. Count it from the
-    // normalized bill amount even for partial bills with cash/UPI rows.
-    const explicitCreditAmount = Number(bill.creditAmount ?? (bill as unknown as Record<string, unknown>).dueAmount ?? 0);
-    credit += explicitCreditAmount > 0 ? explicitCreditAmount : legacyCreditFromPaymentRows;
-
-    if (payments.length === 0 && tender.cash === 0 && tender.upi === 0 && tender.bank === 0) {
-      const paid = Number(bill.paidAmount ?? bill.buyerPaidAmount ?? 0);
-      if (paid > 0) cash += paid;
-    }
-  }
-
-  const customersById = new Map(customers.map((customer) => [customer.id, customer]));
-  const ledgerByCustomer = new Map<string, CustomerLedgerEntry[]>();
-  for (const entry of ledger) {
-    const customerId = getLedgerCustomerId(entry);
-    if (!customerId) continue;
-    const group = ledgerByCustomer.get(customerId) ?? [];
-    group.push(entry);
-    ledgerByCustomer.set(customerId, group);
-  }
-
-  const outstandingCustomers = (ledgerByCustomer.size > 0
-    ? Array.from(ledgerByCustomer.entries())
-        .map(([customerId, rows]) => {
-          const customer = customersById.get(customerId);
-          const firstLedgerRow = rows[0] as Record<string, unknown> | undefined;
-          const ledgerCustomerName = typeof firstLedgerRow?.customerName === "string" ? firstLedgerRow.customerName : undefined;
-          const outstanding = roundMoney(Math.max(0, calculateLedgerBalance(rows)));
-          return {
-            customerId,
-            customerName: customer?.name ?? ledgerCustomerName ?? "Customer",
-            mobile: customer?.mobile ?? undefined,
-            amount: outstanding,
-            outstanding,
-          };
-        })
-        .filter((row) => row.outstanding > 0)
-    : customers
-        .filter((customer) => Number(customer.udharAmount ?? customer.totalUdhar ?? 0) > 0)
-        .map((customer) => ({
-          customerId: customer.id,
-          customerName: customer.name,
-          mobile: customer.mobile ?? undefined,
-          amount: roundMoney(Number(customer.udharAmount ?? customer.totalUdhar ?? 0)),
-          outstanding: roundMoney(Number(customer.udharAmount ?? customer.totalUdhar ?? 0)),
-        })))
-    .slice(0, 50);
-
-  const totalOutstanding = roundMoney(outstandingCustomers.reduce((sum, customer) => sum + customer.outstanding, 0));
-  revenue = roundMoney(revenue);
-  grossProfit = roundMoney(grossProfit);
-  cash = roundMoney(cash);
-  upi = roundMoney(upi);
-  bank = roundMoney(bank);
-  credit = roundMoney(credit);
-
+  const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const snapshot = aggregateFinancialRows({
+    date: day,
+    bills: readInstantCache<Bill[]>(CACHE_KEYS.bills, []).map(withBillAliases) as (Bill & Record<string, unknown>)[],
+    customers: readInstantCache<Customer[]>(CACHE_KEYS.customers, []),
+    ledger: readInstantCache<CustomerLedgerEntry[]>("customer_ledger", []),
+  });
   return {
     source: "local_cache",
-    hasCache: bills.length > 0 || customers.length > 0,
-    updatedAt: new Date().toISOString(),
-    revenue,
-    grossProfit,
-    grossMarginPct: revenue > 0 ? roundMoney((grossProfit / revenue) * 100) : 0,
-    billCount: todayBills.length,
-    cash,
-    upi,
-    bank,
-    credit,
-    paymentTotal: roundMoney(cash + upi + bank + credit),
-    totalOutstanding,
-    outstandingCustomers,
+    hasCache: snapshot.hasLocalData,
+    updatedAt: snapshot.generatedAt,
+    revenue: snapshot.revenueToday,
+    grossProfit: snapshot.profitToday,
+    grossMarginPct: snapshot.grossMarginPct,
+    billCount: snapshot.totalBillsToday,
+    cash: snapshot.cashSalesToday,
+    upi: snapshot.upiSalesToday,
+    bank: snapshot.bankSalesToday,
+    credit: snapshot.udharSalesToday,
+    paymentTotal: roundMoney(snapshot.cashSalesToday + snapshot.upiSalesToday + snapshot.bankSalesToday + snapshot.udharSalesToday),
+    totalOutstanding: snapshot.totalOutstandingUdhar,
+    outstandingCustomers: snapshot.outstandingCustomers.map((row) => ({ ...row, mobile: row.mobile ?? undefined, amount: row.outstanding })),
   };
 }
 

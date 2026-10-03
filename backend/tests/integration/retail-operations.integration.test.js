@@ -1935,6 +1935,7 @@ if (ctx.skip) {
         lineDiscount: 36,
       }), { token: auth.accessToken }), 201);
       assert.equal(sale.grandTotal, 200);
+      assert.equal(sale.gst, 30.51);
       assert.equal(sale.items[0].lineDiscount, 36);
       assert.equal(sale.items[0].hsn, "1905");
 
@@ -1960,7 +1961,8 @@ if (ctx.skip) {
 
       assert.match(creditNote.billNo, /^RET-\d{4}-000001$/);
       assert.equal(creditNote.grandTotal, -100, "refund must use the original line's net value");
-      assert.equal(creditNote.gst, -15.25, "return must reverse the original inclusive GST mode and rate");
+      // Half of the stored 3,051 paise rounds to 1,526; the last return gets 1,525.
+      assert.equal(creditNote.gst, -15.26, "return must allocate the original stored GST");
       assert.equal(creditNote.buyerGstin, "29AAPFU0939F1ZR");
       assert.equal(creditNote.items[0].originalBillItemId, sale.items[0].id);
       assert.equal(creditNote.items[0].ratePerRateUnit, 118);
@@ -1969,7 +1971,7 @@ if (ctx.skip) {
       assert.equal(creditNote.items[0].hsn, "1905", "later product edits must not rewrite a credit note's HSN");
 
       const returnLedger = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, billId: creditNote.id }, orderBy: { entryType: "asc" } });
-      assert.deepEqual(returnLedger.map((row) => [row.entryType, row.amountPaise]), [["cash_in", -10000n], ["cost_of_goods_sold", -6000n], ["gst_output", -1525n], ["gst_sales_reclassification", -1525n], ["inventory_sale", -6000n], ["sale", -10000n]], "the append-only financial ledger must reverse tender, revenue, COGS, inventory, and aggregate output GST without rewriting the original sale");
+      assert.deepEqual(returnLedger.map((row) => [row.entryType, row.amountPaise]), [["cash_in", -10000n], ["cost_of_goods_sold", -6000n], ["gst_output", -1526n], ["gst_sales_reclassification", -1526n], ["inventory_sale", -6000n], ["sale", -10000n]], "the append-only financial ledger must reverse tender, revenue, COGS, inventory, and aggregate output GST without rewriting the original sale");
 
       const working = assertSuccess(await ctx.get("/api/compliance/gstr1-working?range=monthly", { token: auth.accessToken }));
       assert.equal(working.cdnr.length, 1);
@@ -1981,6 +1983,21 @@ if (ctx.skip) {
       assert.equal(gstReport.cgst, 0);
       assert.equal(gstReport.sgst, 0);
       assert.equal(gstReport.igst, gstReport.gstCollected, "interstate invoice and return tax must remain IGST after netting");
+      assert.equal(gstReport.gstCollected, 15.25);
+
+      const finalCreditNote = assertSuccess(await ctx.post("/api/bills/returns", {
+        refundMode: "cash",
+        returnOfBillId: sale.id,
+        reason: "Remaining pack returned",
+        items: [{ originalBillItemId: sale.items[0].id, productId: product.id, name: product.name,
+          quantity: 1, enteredUnit: "piece", ratePerRateUnit: 118, gstRate: 18, damaged: false }],
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(finalCreditNote.grandTotal, -100);
+      assert.equal(finalCreditNote.gst, -15.25, "the final return consumes the original tax remainder");
+      const netTax = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, entryType: "gst_output" } });
+      assert.equal(netTax.reduce((total, row) => total + row.amountPaise, 0n), 0n);
+      const finalGstReport = assertSuccess(await ctx.get("/api/reports/gst?range=monthly", { token: auth.accessToken }));
+      assert.equal(finalGstReport.gstCollected, 0, "the report must fully reverse the original stored tax");
     });
 
     test("issues and atomically redeems gift value across branches with cancellation recovery", async () => {
