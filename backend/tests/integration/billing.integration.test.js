@@ -1013,6 +1013,34 @@ if (ctx.skip) {
       assert.equal(payments.reduce((sum, row) => sum + Number(row.amountPaise), 0), 0);
     });
 
+    test("mixed-rate partial returns reload without creating tax on fully returned lines", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234", gstNumber: "27AAPFU0939F1ZV" });
+      const ownerAuth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+      const inputs = [[3, 14.19, 0, 28], [4, 7.47, 0.02, 5], [5, 9.94, 0.03, 12], [2, 41.96, 0, 18]];
+      const products = await Promise.all(inputs.map(([, price, , rate]) => createProduct(ctx.db, tenant.shop.id,
+        { stockBaseQty: 10, defaultPricePerRateUnit: price, costPerRateUnit: 0, gstRate: rate, hsn: "1905" })));
+      const sale = assertSuccess(await ctx.post("/api/bills/confirm", {
+        gstMode: "inclusive", billType: "gst_invoice", actualAmount: 206.02, buyerPaidAmount: 206.02, reason: "Mixed tax discount audit",
+        payments: [{ mode: "cash", amount: 206.02 }],
+        items: inputs.map(([quantity, ratePerRateUnit, lineDiscount, gstRate], index) => ({ productId: products[index].id,
+          name: products[index].name, quantity, enteredUnit: "piece", ratePerRateUnit, lineDiscount, gstRate })),
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(sale.gst, 28.85);
+      let returnedTax = 0;
+      for (let step = 0; step < 5; step++) {
+        const result = assertSuccess(await ctx.post("/api/bills/returns", {
+          refundMode: "cash", returnOfBillId: sale.id, reason: "Mixed tax reload audit",
+          items: sale.items.filter((line) => step < line.quantity).map((line) => ({ originalBillItemId: line.id,
+            productId: line.productId, name: line.name, quantity: 1, enteredUnit: "piece", ratePerRateUnit: line.ratePerRateUnit, gstRate: line.gstRate })),
+        }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 201);
+        returnedTax -= Math.round(result.gst * 100);
+        assert.ok(returnedTax <= 2885);
+      }
+      assert.equal(returnedTax, 2885);
+      const taxLedger = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, entryType: "gst_output" } });
+      assert.equal(taxLedger.reduce((sum, row) => sum + row.amountPaise, 0n), 0n);
+    });
+
     test("partial returns reverse invoice discount and GST exactly without refresh-era drift", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, {

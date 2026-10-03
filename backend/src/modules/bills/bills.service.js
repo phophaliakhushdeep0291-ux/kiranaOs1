@@ -2,7 +2,7 @@ import db from "../../db.js";
 import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { addMoney, moneyEquals, moneyShadows, multiplyMoney, round2, subtractMoney, sumMoney } from "../../utils/money.js";
-import { roundReturnQuantity, takeReturnAmount } from "../../utils/returnMath.js";
+import { reconcileReturnTaxBalances, roundReturnQuantity, takeReturnAmount } from "../../utils/returnMath.js";
 import { toBaseQty, baseQtyToRateQty } from "../../utils/units.js";
 import { generateBillNo } from "../../utils/billNumber.js";
 import { rangeEndInclusive, rangeStart } from "../../utils/dateRange.js";
@@ -1564,6 +1564,11 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
             financial.returnedGst = addMoney(financial.returnedGst, exactReturnTax[index] ?? 0);
             financial.returnedCost = addMoney(financial.returnedCost, Math.abs(Number(returnedItem.lineCost ?? 0)));
           });
+        }
+        if (previouslyReturned.length > 0) {
+          reconcileReturnTaxBalances([...originalFinancialByLine.values()], Math.max(0, subtractMoney(
+            Math.abs(Number(original.gst ?? 0)), sumMoney(previouslyReturned.map((bill) => Math.abs(Number(bill.gst ?? 0)))),
+          )));
         }
       }
 

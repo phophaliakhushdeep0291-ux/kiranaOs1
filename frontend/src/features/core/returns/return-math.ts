@@ -40,6 +40,17 @@ export interface ReturnLineBalance {
   returnedCost: number;
 }
 
+/** Invoice tax is authoritative when historical returns lack per-line tax. A
+ * fully returned line cannot retain tax for a later refund to consume. */
+export function reconcileReturnTaxBalances(balances: ReturnLineBalance[], remainingGst: number): void {
+  const open = balances.map((line) => roundQuantity(line.soldQuantity - line.returnedQuantity) > 0);
+  const weights = balances.map((line, index) => open[index] ? Math.max(0, roundMoney(line.gst - line.returnedGst)) : 0);
+  const fallback = balances.map((line, index) => open[index] ? Math.max(0, roundMoney(line.subtotal - line.returnedSubtotal)) : 0);
+  const allocation = allocateAmountByWeights(weights.some((value) => value > 0) ? weights
+    : fallback.some((value) => value > 0) ? fallback : open.map((value) => value ? 1 : 0), remainingGst);
+  balances.forEach((line, index) => { line.gst = (toPaise(line.returnedGst) + toPaise(allocation[index])) / 100; });
+}
+
 function lineGst(lineTotal: number, gstRate: number, mode: GstMode): number {
   const total = Math.max(0, roundMoney(lineTotal));
   const rate = Math.max(0, Number(gstRate) || 0);
@@ -110,6 +121,10 @@ export function buildReturnLineBalances(input: {
     });
   }
 
+  if (input.previousReturns?.length) {
+    reconcileReturnTaxBalances([...balances.values()], Math.max(0, (toPaise(input.gst)
+      - input.previousReturns.reduce((sum, row) => sum + toPaise(Math.abs(row.gst)), 0)) / 100));
+  }
   return balances;
 }
 
