@@ -30,8 +30,10 @@ import {
 } from "@/features/core/ledger/accounting";
 import {
   authoritativeOutstandingWithPendingLedger,
+  confirmedLedgerFingerprints,
   loadCachedAuthoritativeSummary,
   readCachedAuthoritativeSummary,
+  snapshotCoversCustomer,
 } from "@/features/core/ledger/authoritative-balances";
 import type { Customer, UdharPaymentInput, UdharSummary } from "@/types/api";
 import {
@@ -176,7 +178,9 @@ function pendingLedgerDeltas(entries: CustomerLedgerEntry[]): Map<string, number
  * The udhar summary without touching the network. Prefers the last snapshot the
  * server gave this device (plus any local movement since) over the raw device
  * ledger, which can have drifted — the offline page must show the same number
- * as the online one.
+ * as the online one. A customer whose confirmed ledger has moved since that
+ * snapshot is the exception: the snapshot predates the movement, so the device
+ * ledger is the newer truth (see snapshotCoversCustomer).
  */
 function buildLocalUdharSummary(input: {
   customers: CustomerRecord[];
@@ -189,9 +193,20 @@ function buildLocalUdharSummary(input: {
   );
   const ledgerEntries = dedupeLedgerEntries(input.ledgerEntries);
   const idMappings = input.idMappings ?? [];
+  const deviceOutstanding = (customer: CustomerRecord | undefined, ids: Set<string>) => {
+    const customerLedger = ledgerEntries.filter((entry) => {
+      const id = getLedgerCustomerId(entry);
+      return id ? ids.has(id) : false;
+    });
+    const rawBalance = customerLedger.length > 0
+      ? calculateLedgerBalance(customerLedger)
+      : readNumber(customer?.udharAmount ?? customer?.totalUdhar, 0);
+    return roundMoney(Math.max(0, rawBalance));
+  };
   const authoritative = input.authoritative;
   if (authoritative) {
     const deltas = pendingLedgerDeltas(ledgerEntries);
+    const confirmed = confirmedLedgerFingerprints(ledgerEntries);
     const rows = new Map<string, UdharSummary["customers"][number]>();
     const handledCustomerIds = new Set<string>();
 
@@ -204,16 +219,18 @@ function buildLocalUdharSummary(input: {
         idMappings,
       );
       ids.forEach((id) => handledCustomerIds.add(id));
-      const outstanding = roundMoney(
-        Math.max(0, Number(row.outstanding ?? 0) + pendingDeltaForIds(deltas, ids)),
-      );
+      const outstanding = snapshotCoversCustomer(authoritative.summary, ids, confirmed)
+        ? roundMoney(Math.max(0, Number(row.outstanding ?? 0) + pendingDeltaForIds(deltas, ids)))
+        : deviceOutstanding(customer, ids);
       if (outstanding > 0) rows.set(row.customerId, normaliseOutstandingRow(row, outstanding));
     }
 
     for (const customer of customers) {
       const ids = expandIdsWithMappings(customerIdentitySet(customer), idMappings);
       if ([...ids].some((id) => handledCustomerIds.has(id))) continue;
-      const outstanding = roundMoney(Math.max(0, pendingDeltaForIds(deltas, ids)));
+      const outstanding = snapshotCoversCustomer(authoritative.summary, ids, confirmed)
+        ? roundMoney(Math.max(0, pendingDeltaForIds(deltas, ids)))
+        : deviceOutstanding(customer, ids);
       if (outstanding <= 0) continue;
       rows.set(customer.id, {
         customerId: customer.id,
@@ -233,14 +250,7 @@ function buildLocalUdharSummary(input: {
   const rows = customers
     .map((customer) => {
       const ids = expandIdsWithMappings(customerIdentitySet(customer), idMappings);
-      const customerLedger = ledgerEntries.filter((entry) => {
-        const id = getLedgerCustomerId(entry);
-        return id ? ids.has(id) : false;
-      });
-      const rawBalance = customerLedger.length > 0
-        ? calculateLedgerBalance(customerLedger)
-        : readNumber(customer.udharAmount ?? customer.totalUdhar, 0);
-      const outstanding = roundMoney(Math.max(0, rawBalance));
+      const outstanding = deviceOutstanding(customer, ids);
       return {
         customerId: customer.id,
         customerName: customer.name,

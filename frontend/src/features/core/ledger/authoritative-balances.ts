@@ -1,5 +1,6 @@
 import { getUdharSummary } from "@/features/core/ledger/api";
 import { isBrowserOnline } from "@/lib/api/http";
+import { offlineDB } from "@/lib/offline/db";
 import { readIndexedRecentCache, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import type { UdharSummary } from "@/types/api";
 import { dedupeLedgerEntries, getLedgerCustomerId, ledgerSignedAmount, roundMoney, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
@@ -22,15 +23,27 @@ export const AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY = "udhar_authoritative_summar
 /** Long TTL on purpose: a stale server balance still beats a drifted local sum. */
 const CACHE_DAYS = 365;
 
+/** Count and signed sum of the server-confirmed device ledger rows, per customer id. */
+export type ConfirmedLedgerFingerprints = Record<string, { count: number; total: number }>;
+
+/** A server summary together with the device ledger it was requested against. */
+export interface AuthoritativeUdharSnapshot extends UdharSummary {
+  /**
+   * The device's server-confirmed ledger when the request was sent. Absent on
+   * snapshots cached before it was recorded; those are trusted as they were.
+   */
+  confirmedLedger?: ConfirmedLedgerFingerprints;
+}
+
 export interface CachedAuthoritativeSummary {
-  summary: UdharSummary;
+  summary: AuthoritativeUdharSnapshot;
   capturedAt: string;
 }
 
 export type AuthoritativeSummarySource = "server" | "cache" | "none";
 
 export interface ResolvedAuthoritativeSummary {
-  summary: UdharSummary | null;
+  summary: AuthoritativeUdharSnapshot | null;
   source: AuthoritativeSummarySource;
   /** When the summary was fetched from the server, for "as of" labelling. */
   capturedAt: string | null;
@@ -59,10 +72,75 @@ export async function loadCachedAuthoritativeSummary(): Promise<CachedAuthoritat
   return isCachedSummary(stored) ? stored : null;
 }
 
-export function cacheAuthoritativeSummary(summary: UdharSummary): CachedAuthoritativeSummary {
+export function cacheAuthoritativeSummary(summary: AuthoritativeUdharSnapshot): CachedAuthoritativeSummary {
   const row: CachedAuthoritativeSummary = { summary, capturedAt: new Date().toISOString() };
   writeInstantCache(AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY, row, CACHE_DAYS);
   return row;
+}
+
+const UNCONFIRMED_LEDGER_STATUSES = new Set(["pending_sync", "syncing", "failed", "conflict", "local_only"]);
+
+export function confirmedLedgerFingerprints(entries: CustomerLedgerEntry[]): ConfirmedLedgerFingerprints {
+  const fingerprints: ConfirmedLedgerFingerprints = {};
+  for (const entry of dedupeLedgerEntries(entries)) {
+    const id = getLedgerCustomerId(entry);
+    if (!id || UNCONFIRMED_LEDGER_STATUSES.has(String(entry.sync_status ?? "").toLowerCase())) continue;
+    const row = fingerprints[id] ?? (fingerprints[id] = { count: 0, total: 0 });
+    row.count += 1;
+    row.total = roundMoney(row.total + ledgerSignedAmount(entry));
+  }
+  return fingerprints;
+}
+
+function fingerprintFor(fingerprints: ConfirmedLedgerFingerprints, ids: Set<string>) {
+  let count = 0;
+  let total = 0;
+  for (const id of ids) {
+    const row = fingerprints[id];
+    if (!row) continue;
+    count += row.count;
+    total = roundMoney(total + row.total);
+  }
+  return { count, total };
+}
+
+/**
+ * Whether a snapshot still speaks for this customer.
+ *
+ * The cached summary is replaced only when a udhar screen fetches a new one, and
+ * a till spends its day on the billing screen. Sync meanwhile keeps landing
+ * server-confirmed movement in the device ledger — another counter's udhar sale,
+ * this counter's own sale once accepted — and, offline, a snapshot taken before
+ * it overrode a correct ledger: ₹0 shown for a customer owing ₹120, and the
+ * collection refused. A customer whose confirmed ledger has moved since the
+ * snapshot was requested is read from the device ledger until the next summary;
+ * every other customer keeps the snapshot's protection against drift.
+ */
+export function snapshotCoversCustomer(
+  summary: AuthoritativeUdharSnapshot,
+  customerIds: Iterable<string>,
+  current: ConfirmedLedgerFingerprints,
+): boolean {
+  if (!summary.confirmedLedger) return true;
+  const ids = new Set(customerIds);
+  const before = fingerprintFor(summary.confirmedLedger, ids);
+  const now = fingerprintFor(current, ids);
+  return before.count === now.count && Math.abs(before.total - now.total) < 0.005;
+}
+
+/** A fresh server summary, stamped with the device ledger it was requested against. */
+export async function fetchAuthoritativeSnapshot(): Promise<AuthoritativeUdharSnapshot> {
+  // Read before the request, never after: a row confirmed while it is in flight
+  // may or may not be in the server's answer, so it must count as movement the
+  // snapshot does not cover rather than be assumed included.
+  let confirmedLedger: ConfirmedLedgerFingerprints | undefined;
+  try {
+    confirmedLedger = confirmedLedgerFingerprints(await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger"));
+  } catch {
+    confirmedLedger = undefined;
+  }
+  const summary = await getUdharSummary();
+  return confirmedLedger ? { ...summary, confirmedLedger } : summary;
 }
 
 /**
@@ -73,7 +151,7 @@ export function cacheAuthoritativeSummary(summary: UdharSummary): CachedAuthorit
 export async function resolveAuthoritativeUdharSummary(): Promise<ResolvedAuthoritativeSummary> {
   if (isBrowserOnline()) {
     try {
-      const summary = await getUdharSummary();
+      const summary = await fetchAuthoritativeSnapshot();
       const cached = cacheAuthoritativeSummary(summary);
       return { summary, source: "server", capturedAt: cached.capturedAt };
     } catch {
@@ -100,12 +178,17 @@ export function authoritativeOutstandingFor(
   return row ? Math.max(0, Number(row.outstanding ?? 0)) : 0;
 }
 
-/** One balance rule for all local financial mutations, including corrections. */
+/**
+ * One balance rule for all local financial mutations, including corrections.
+ * Null when the snapshot no longer covers this customer's confirmed ledger, so
+ * the caller falls back to the device's own balance.
+ */
 export function authoritativeOutstandingWithPendingLedger(
-  summary: UdharSummary,
+  summary: AuthoritativeUdharSnapshot,
   customerIds: string[],
   entries: CustomerLedgerEntry[],
 ): number | null {
+  if (!snapshotCoversCustomer(summary, customerIds, confirmedLedgerFingerprints(entries))) return null;
   const base = authoritativeOutstandingFor(summary, customerIds);
   if (base === null) return null;
   const ids = new Set(customerIds);
