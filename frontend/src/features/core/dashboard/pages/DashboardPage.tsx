@@ -37,6 +37,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { translateCategory, useBusinessType, type BusinessType, type BusinessTypeDefinition, type QuickAction, type QuickActionIconKey, type QuickActionColorKey } from "@/features/core/settings/business-types";
 import { useModuleVisibility } from "@/features/core/settings/modules";
 import { getShopWorkflow } from "@/features/core/settings/shop-workflows";
+import { userHasPermission } from "@/features/core/staff/role-access";
 import { cn } from "@/lib/utils";
 import type { Bill, Product } from "@/types/api";
 import { orderByUsage, usageScores, usePersonalization } from "@/lib/activity";
@@ -351,6 +352,8 @@ interface LayoutProps {
   onLoadDemo: () => void;
   openDrilldown: (t: DrilldownType) => void;
   drilldownKeyHandler: (t: DrilldownType) => (e: KeyboardEvent<HTMLDivElement>) => void;
+  /** Whether this role may see profit and margin (`view_profit`). */
+  canViewProfit: boolean;
 }
 
 // ─── main data-loading shell ─────────────────────────────────────────────────
@@ -370,7 +373,12 @@ export default function Dashboard() {
   const [drilldown, setDrilldown] = useState<DrilldownType | null>(null);
   const [seedingDemo, setSeedingDemo] = useState(false);
   const profitEstimateFeature = useFeature("profit_loss_estimate");
-  const canFetchBackendPnL = profitEstimateFeature.allowed;
+  // Profit is the owner's number (`view_profit`). Without it the server refuses
+  // the P&L, and a cashier's device is never sent cost prices — so the local
+  // fallback reckoned every item at zero cost and the card showed the day's
+  // sales as profit. A role that cannot see profit is not shown a figure at all.
+  const canViewProfit = userHasPermission(user, "view_profit");
+  const canFetchBackendPnL = profitEstimateFeature.allowed && canViewProfit;
 
   useEffect(() => {
     const refreshLocal = () => setLocalSnapshot(getLocalDashboardSnapshot());
@@ -470,7 +478,10 @@ export default function Dashboard() {
   const pendingSyncCount = ownerReport?.pendingSyncCount ?? 0;
   const hasUnsyncedOperations = Boolean(ownerReport?.hasUnsyncedOperations);
 
-  const openDrilldown = (next: DrilldownType) => setDrilldown(next);
+  const openDrilldown = (next: DrilldownType) => {
+    if (next === "profit" && !canViewProfit) return;
+    setDrilldown(next);
+  };
   const drilldownKeyHandler = (next: DrilldownType) => (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openDrilldown(next); }
   };
@@ -496,6 +507,7 @@ export default function Dashboard() {
     seedingDemo, userName: user?.name ?? "Owner",
     onLoadDemo: () => void loadDemoShop(),
     openDrilldown, drilldownKeyHandler,
+    canViewProfit,
   };
 
   const variant = btDef.dashboardVariant;
@@ -521,7 +533,7 @@ export default function Dashboard() {
 
 type PaymentSlice = { label: string; value: number; color: string; dot: string };
 
-function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowStockCount, seedingDemo, onLoadDemo, openDrilldown }: LayoutProps) {
+function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowStockCount, seedingDemo, onLoadDemo, openDrilldown, canViewProfit }: LayoutProps) {
   const { t } = useAppLanguage();
   const billingWords = useShopBillingWords();
   const { isOnline, isSyncing, pendingCount, failedCount, conflictCount, queueStatus } = useOfflineStatus();
@@ -750,6 +762,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         salesDelta={salesDelta}
         outstandingDelta={outstandingDelta}
         profitDelta={profitDelta}
+        canViewProfit={canViewProfit}
         expenseDelta={expenseDelta}
         lowStockCount={lowStockCount}
         period={period}
@@ -779,7 +792,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
       <ShopWorkflowPanel businessType={businessType} compact />
 
       {/* Counter focus */}
-      <div className="grid min-w-0 auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+      <div className={cn("grid min-w-0 auto-rows-fr gap-4 sm:grid-cols-2", canViewProfit ? "xl:grid-cols-4 2xl:grid-cols-7" : "xl:grid-cols-4 2xl:grid-cols-6")}>
         <KpiCard
           label={t("dashboard.kpi.todaySales")}
           value={fmtRs(dashboard.revenue)}
@@ -843,7 +856,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
             loading={isLoading}
           />
         </Link>
-        <KpiCard
+        {canViewProfit ? <KpiCard
           label={t("dashboard.kpi.profitEst")}
           value={fmtRs(dashboard.grossProfit)}
           delta={profitDelta}
@@ -854,7 +867,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
           spark={mobileSparkline(dashboard.previousGrossProfit, dashboard.grossProfit)}
           loading={isLoading}
           onClick={() => openDrilldown("profit")}
-        />
+        /> : null}
         <Link href="/inventory" className="block h-full min-w-0">
           <KpiCard
             label={t("dashboard.kpi.lowStockItems")}
@@ -1108,6 +1121,7 @@ interface MobileGeneralDashboardProps {
   salesDelta: number | null;
   outstandingDelta: number | null;
   profitDelta: number | null;
+  canViewProfit: boolean;
   expenseDelta: number | null;
   lowStockCount: number;
   period: DashboardPeriod;
@@ -1131,6 +1145,7 @@ function MobileGeneralDashboard({
   salesDelta,
   outstandingDelta,
   profitDelta,
+  canViewProfit,
   expenseDelta,
   lowStockCount,
   period,
@@ -1201,7 +1216,7 @@ function MobileGeneralDashboard({
           <Link href="/reports" className="inline-flex min-h-11 items-center gap-1 rounded-[12px] px-3 text-[12px] font-black text-[var(--brand)]">{t("dashboard.allReports")} <ChevronRight size={15} /></Link>
         </div>
         <div className="grid grid-cols-2 gap-2.5">
-          <MobileHealthCard href="/reports" label={t("dashboard.kpi.grossProfit")} value={fmtCompactRs(dashboard.grossProfit)} detail={t("dashboard.kpi.estimatedToday")} delta={profitDelta} icon={<TrendingUp size={18} />} tone="green" />
+          {canViewProfit ? <MobileHealthCard href="/reports" label={t("dashboard.kpi.grossProfit")} value={fmtCompactRs(dashboard.grossProfit)} detail={t("dashboard.kpi.estimatedToday")} delta={profitDelta} icon={<TrendingUp size={18} />} tone="green" /> : null}
           <MobileHealthCard href="/customers?filter=udhar" label={t("dashboard.kpi.udharDue")} value={fmtCompactRs(dashboard.totalOutstanding)} detail={t("dashboard.mobile.customerCount", { count: dashboard.outstandingCustomers.length })} delta={outstandingDelta} positiveIsBad icon={<AlertTriangle size={18} />} tone="red" />
           <MobileHealthCard href="/expenses" label={t("dashboard.kpi.expenses")} value={fmtCompactRs(dashboard.expensesToday)} detail={t("dashboard.kpi.recordedToday")} delta={expenseDelta} positiveIsBad icon={<Wallet size={18} />} tone="amber" />
           <MobileHealthCard href="/inventory" label={t("dashboard.lowStock")} value={lowStockCount.toLocaleString("en-IN")} detail={lowStockCount > 0 ? t("dashboard.signal.itemsToReorder") : t("dashboard.signal.stockHealthy")} icon={<Package size={18} />} tone={lowStockCount > 0 ? "violet" : "green"} />
@@ -1782,7 +1797,7 @@ function fmtRs(n: number | undefined | null) {
 
 // ─── RESTAURANT layout ────────────────────────────────────────────────────────
 
-function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
+function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler, canViewProfit }: LayoutProps) {
   const { t, language } = useAppLanguage();
   const dbCfg = btDef.dashboard;
   const quickActions = usePersonalizedQuickActions(dbCfg.quickActions);
@@ -1858,10 +1873,10 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
 
       <ShopWorkflowPanel businessType={businessType} />
 
-      <StatsGrid className="mb-6">
+      <StatsGrid className="mb-6" columns={canViewProfit ? 4 : 3}>
         <StatCard label={t(dbCfg.kpi.revenue)} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} orders`} icon={<ChefHat size={20} aria-hidden="true" />} loading={isLoading} tone="green" data-testid="metric-revenue" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />
         <StatCard label={t("dashboard.kpi.ordersToday")} value={String(dashboard.billCount)} description={avgOrder > 0 ? `Avg ${fmt(avgOrder)} per order` : t("dashboard.restaurant.noOrders")} icon={<ReceiptText size={20} aria-hidden="true" />} loading={isLoading} tone="blue" />
-        <StatCard label={t(dbCfg.kpi.profit)} value={fmt(dashboard.grossProfit)} description={`${Math.round(dashboard.grossMarginPct)}% margin`} icon={<TrendingUp size={20} aria-hidden="true" />} loading={isLoading} tone="amber" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("profit")} onKeyDown={drilldownKeyHandler("profit")} />
+        {canViewProfit ? <StatCard label={t(dbCfg.kpi.profit)} value={fmt(dashboard.grossProfit)} description={`${Math.round(dashboard.grossMarginPct)}% margin`} icon={<TrendingUp size={20} aria-hidden="true" />} loading={isLoading} tone="amber" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("profit")} onKeyDown={drilldownKeyHandler("profit")} /> : null}
         <StatCard label={t(dbCfg.kpi.cash)} value={fmt(dashboard.cashCollected)} description={`Drawer ${fmt(cashInDrawer)}`} icon={<Wallet size={20} aria-hidden="true" />} loading={isLoading} tone="violet" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("collection")} onKeyDown={drilldownKeyHandler("collection")} />
       </StatsGrid>
 
@@ -1913,7 +1928,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
 
 // ─── TECHNICAL layout (auto_parts) ───────────────────────────────────────────
 
-function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
+function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler, canViewProfit }: LayoutProps) {
   const { t, language } = useAppLanguage();
   const dbCfg = btDef.dashboard;
   const quickActions = usePersonalizedQuickActions(dbCfg.quickActions);
@@ -1951,7 +1966,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t("dashboard.salesToday")}</p>
                 <p className="mt-1 font-display text-4xl font-black tracking-tight text-foreground">{fmt(dashboard.revenue)}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{t("dashboard.tile.grossMargin", { percent: Math.round(dashboard.grossMarginPct) })}</p>
+                {canViewProfit ? <p className="mt-1 text-xs text-muted-foreground">{t("dashboard.tile.grossMargin", { percent: Math.round(dashboard.grossMarginPct) })}</p> : null}
               </div>
               <div className={`rounded-xl p-4 ring-1 ${dashboard.supplierDue > 0 ? "bg-rose-50 ring-rose-200/60 dark:bg-rose-950/30 dark:ring-rose-900" : "bg-muted/40 ring-black/[0.06]"}`}>
                 <p className={`text-xs font-bold uppercase tracking-widest ${dashboard.supplierDue > 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground"}`}>{t("dashboard.supplierDue")}</p>

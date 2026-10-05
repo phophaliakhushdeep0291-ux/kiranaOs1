@@ -67,6 +67,11 @@ import { BankReconciliationPanel } from "@/features/core/reports/components/Bank
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ACTIVITY_EVENTS, trackEvent, useReportView } from "@/lib/activity";
+import { useAuth } from "@/features/core/auth/useAuth";
+import { userHasPermission } from "@/features/core/staff/role-access";
+
+/** The overview tiles that are profit figures, shown only to a role with `view_profit`. */
+const PROFIT_KPI_IDS = new Set(["profit", "net"]);
 
 const PANEL = "min-w-0 overflow-hidden rounded-[16px] border border-[#e2e9f3] bg-white shadow-[0_10px_30px_rgba(31,60,110,0.055)]";
 const GRID_STROKE = "#e7edf5";
@@ -180,6 +185,11 @@ export default function ReportsPage() {
   // money owed is called, and what the best-seller table is a table of.
   const businessType = useBusinessTypeKey();
   const tradeProfile = getShopReportsProfile(businessType);
+  // Reports are open to every role, profit only to the owner (`view_profit`).
+  // A cashier's device is never sent cost prices, so these figures would have
+  // reckoned every item at zero cost and shown sales as profit.
+  const { user } = useAuth();
+  const canViewProfit = userHasPermission(user, "view_profit");
   const creditWord = t(tradeProfile.creditWordKey);
   const salesLabel = t(tradeProfile.salesLabelKey);
   const isPhoneLayout = usePhoneReportLayout();
@@ -514,6 +524,7 @@ export default function ReportsPage() {
           bank={snapshot?.paymentBreakdown.bankIn ?? 0}
           profit={selected?.profitEstimate ?? 0}
           netProfit={netProfit ?? 0}
+          canViewProfit={canViewProfit}
           expenses={expenseTotal ?? 0}
           udhar={snapshot?.pendingUdhar ?? 0}
         />
@@ -521,7 +532,7 @@ export default function ReportsPage() {
 
       {!isPhoneLayout ? (
         <section className="hidden min-w-0 grid-cols-2 gap-2 md:grid lg:grid-cols-4">
-          {kpis.map((kpi) => (
+          {kpis.filter((kpi) => canViewProfit || !PROFIT_KPI_IDS.has(kpi.id)).map((kpi) => (
             <KpiCard key={kpi.id} {...kpi} loading={loading} />
           ))}
         </section>
@@ -640,9 +651,9 @@ export default function ReportsPage() {
       </section>
 
       <section className="hidden items-start gap-4 md:grid xl:grid-cols-3">
-        <DenseTable title={t(tradeProfile.topItemsKey)} action="View all" actionHref="/products" headers={["Product", "Category", "Qty Sold", "Sales (₹)", "Margin (%)"]} loading={loading} empty={!snapshot?.topProducts.length}>
-          {snapshot?.topProducts.slice(0, 5).map((row) => <tr key={row.productId}><Td strong>{row.name}</Td><Td>{reportCategoryLabel(row.category, t)}</Td><Td right>{row.quantitySold}</Td><Td right strong>{fmt(row.revenue)}</Td><Td right>{row.marginPct.toFixed(1)}%</Td></tr>)}
-          {snapshot?.topProducts.length ? <tr className="font-bold"><Td>Total</Td><Td /><Td right>—</Td><Td right>{fmt(snapshot.topProducts.reduce((sum, row) => sum + row.revenue, 0))}</Td><Td /></tr> : null}
+        <DenseTable title={t(tradeProfile.topItemsKey)} action="View all" actionHref="/products" headers={["Product", "Category", "Qty Sold", "Sales (₹)", ...(canViewProfit ? ["Margin (%)"] : [])]} loading={loading} empty={!snapshot?.topProducts.length}>
+          {snapshot?.topProducts.slice(0, 5).map((row) => <tr key={row.productId}><Td strong>{row.name}</Td><Td>{reportCategoryLabel(row.category, t)}</Td><Td right>{row.quantitySold}</Td><Td right strong>{fmt(row.revenue)}</Td>{canViewProfit ? <Td right>{row.marginPct.toFixed(1)}%</Td> : null}</tr>)}
+          {snapshot?.topProducts.length ? <tr className="font-bold"><Td>Total</Td><Td /><Td right>—</Td><Td right>{fmt(snapshot.topProducts.reduce((sum, row) => sum + row.revenue, 0))}</Td>{canViewProfit ? <Td /> : null}</tr> : null}
         </DenseTable>
 
         <DenseTable title={t("reports.table.topCustomers", { credit: creditWord })} action="View all" actionHref="/customers" headers={["Customer", "Total Due (₹)", "Last Purchase", "Risk"]} loading={loading} empty={!snapshot?.topCustomers.length}>
@@ -780,6 +791,7 @@ function MobileReportsOverview({
   bank,
   profit,
   netProfit,
+  canViewProfit,
   expenses,
   udhar,
 }: {
@@ -794,6 +806,7 @@ function MobileReportsOverview({
   bank: number;
   profit: number;
   netProfit: number;
+  canViewProfit: boolean;
   expenses: number;
   udhar: number;
 }) {
@@ -832,8 +845,8 @@ function MobileReportsOverview({
       </article>
 
       <div className="grid grid-cols-2 gap-2.5">
-        <MobilePulseTile label="Profit (Est.)" value={profit} detail="Before expenses" icon={<CircleDollarSign size={17} />} tone="emerald" />
-        <MobilePulseTile label="Net Profit" value={netProfit} detail="After expenses" icon={<TrendingUp size={17} />} tone="blue" />
+        {canViewProfit ? <MobilePulseTile label="Profit (Est.)" value={profit} detail="Before expenses" icon={<CircleDollarSign size={17} />} tone="emerald" /> : null}
+        {canViewProfit ? <MobilePulseTile label="Net Profit" value={netProfit} detail="After expenses" icon={<TrendingUp size={17} />} tone="blue" /> : null}
         <MobilePulseTile label="Expenses" value={expenses} detail="Selected period" icon={<Box size={17} />} tone="amber" />
         <MobilePulseTile label={creditLabel} value={udhar} detail="Needs collection" icon={<ReceiptIndianRupee size={17} />} tone="rose" />
       </div>
