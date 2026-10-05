@@ -72,8 +72,8 @@ outbox rows.
 back to the top the moment anything is queued or the network returns. So a queued
 sale is retried faster than the old fixed interval managed, while an idle till
 stops waking the radio. `useMultiDeviceSync` keeps only what is uniquely its own:
-the cross-tab BroadcastChannel, focus/online catch-up, and the 10-minute
-authoritative snapshot.
+the cross-tab BroadcastChannel, focus/online catch-up, the 10-minute
+authoritative snapshot, and the live stream below.
 
 **The snapshot is a repair path, not a delivery path — keep it rare.** It
 re-downloads every product, customer, bill, stock row and udhar entry, rebuilds
@@ -83,6 +83,20 @@ counter, two-counter measurement); changes already arrive through the
 incremental pull. Do not shorten it to make something "show up faster" — fix the
 pull. The header's /health dot polls every 30s for the same reason; every sync
 cycle probes before it sends anyway.
+
+**Other counters hear about a change at once, not on their cadence.** An idle
+till's 45s rung was how long a sale took to reach the next counter. The visible
+leader tab holds `GET /api/sync/events` open (`live-changes.ts`, read with fetch
+because EventSource cannot send the auth and device headers); when a push applies
+fresh events, or a REST write on a core data router succeeds, the server sends the
+shop's *other* devices a bare `changes` nudge (`sync-live.js`) and they run a
+cycle. Traps: the nudge carries no data — the pull is the same role-redacted read
+as ever, and a lost nudge only falls back to the cadence; never mount the write
+hook on `/api/sync`, because every pull acks with a write and counters would
+prompt each other forever; the hub is in-process, so behind several API instances
+a counter on another instance gets no nudge (slower, never wrong); and a nudge
+arriving mid-cycle must queue one follow-up, since its write may have landed after
+that cycle's pull.
 
 **Database triggers populate the incremental feed.** Core mutations write
 `ChangeLog` in the same transaction; a rollback also rolls back its feed entries.

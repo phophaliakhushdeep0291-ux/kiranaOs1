@@ -3,6 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { hydrateFromBackendSnapshot, runSyncCycle } from "@/features/core/sync/deferred-runtime";
 import { probeBackendConnection } from "@/features/core/sync/backend-health";
+import { startLiveChanges } from "@/features/core/sync/live-changes";
+import { isBrowserOnline } from "@/lib/api/http";
 import {
   shouldPassSharedThrottle,
   shouldRunScheduledNetworkWork,
@@ -55,14 +57,16 @@ function makeChannel(): BroadcastChannel | null {
  * - Interactive actions stay independent: any visible tab/device can create bills,
  *   open customers, or run reports.
  * - Scheduled sync is coordinated per browser profile: one visible tab pushes/pulls.
- * - Different devices/browsers still run their own light sync loop, so Device B can
- *   see a bill created on Device A after a short delay or on focus.
+ * - Different devices/browsers still run their own light sync loop, and the leader
+ *   tab also holds the server's live stream, so Device B pulls a bill created on
+ *   Device A within a second or two rather than on its idle cadence.
  * - Browser tabs use BroadcastChannel so a sync in one tab refreshes local UI in the others.
  */
 export function useMultiDeviceSync() {
   const { isAuthenticated, accessToken, user, shop } = useAuth();
   const queryClient = useQueryClient();
   const inFlightRef = useRef(false);
+  const liveFollowUpRef = useRef<string | null>(null);
   const lastSnapshotAtRef = useRef(0);
   const localWriteTimerRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
@@ -127,7 +131,20 @@ export function useMultiDeviceSync() {
         }
       } finally {
         inFlightRef.current = false;
+        // A nudge that arrived mid-run may describe a write this run's pull
+        // already missed; dropping it would leave it to the idle cadence.
+        const followUp = liveFollowUpRef.current;
+        liveFollowUpRef.current = null;
+        if (followUp && !disposed) void run(followUp, { force: true });
       }
+    };
+
+    const runFromLive = (reason: string) => {
+      if (inFlightRef.current) {
+        liveFollowUpRef.current = reason;
+        return;
+      }
+      void run(reason, { force: true });
     };
 
     const scheduleAfterLocalWrite = () => {
@@ -161,14 +178,26 @@ export function useMultiDeviceSync() {
       if ((event as CustomEvent<{ type?: string }>).detail?.type === "sync") return;
       scheduleAfterLocalWrite();
     };
+    // One stream per device: only the visible leader tab holds it, as with the
+    // scheduled sync. It reconnects with backoff and closes itself when the gate
+    // fails, so an offline or hidden till holds no socket.
+    const live = startLiveChanges({
+      shouldConnect: () => !disposed && isVisible() && isBrowserOnline() && shouldRunScheduledNetworkWork(),
+      onChange: () => runFromLive("live-change"),
+      onReconnect: () => runFromLive("live-reconnect"),
+    });
+
     const onOnline = () => {
+      live.wake();
       if (shouldPassSharedThrottle(focusThrottleKey, FOCUS_THROTTLE_MS)) void run("online", { force: true, snapshot: true });
     };
     const onFocus = () => {
       if (isVisible() && shouldPassSharedThrottle(focusThrottleKey, FOCUS_THROTTLE_MS)) void run("focus", { force: true });
     };
     const onVisibility = () => {
-      if (isVisible()) onFocus();
+      if (!isVisible()) return;
+      live.wake();
+      onFocus();
     };
 
     if (channel) {
@@ -207,6 +236,8 @@ export function useMultiDeviceSync() {
 
     return () => {
       disposed = true;
+      live.stop();
+      liveFollowUpRef.current = null;
       if (localWriteTimerRef.current !== null) window.clearTimeout(localWriteTimerRef.current);
       if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
       channelRef.current?.close();

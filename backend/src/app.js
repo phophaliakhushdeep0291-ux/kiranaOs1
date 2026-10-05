@@ -24,7 +24,7 @@ import { customerRoutes, creditLedgerRoutes as udharRoutes } from "./domains/cus
 import { inventoryRoutes, inventoryLotRoutes as inventoryLotsRoutes, storeRoutes } from "./domains/inventory/index.js";
 import { supplierRoutes } from "./domains/suppliers/index.js";
 import reportRoutes from "./modules/reports/reports.routes.js";
-import { syncRoutes } from "./core/sync/index.js";
+import { announceShopChangesAfterWrite, syncRoutes } from "./core/sync/index.js";
 import aiRoutes from "./modules/ai/ai.routes.js";
 import planRoutes from "./modules/subscription/plans.routes.js";
 import { subscriptionRoutes } from "./core/subscriptions/index.js";
@@ -259,6 +259,23 @@ app.get("/metrics", requireMetricsAccess, (_req, res) => {
 app.use("/api/", apiLimiter);
 app.use("/api/auth", authLimiter);
 app.use("/api/ai", aiLimiter);
+
+// Writes here land in the sync feed, so the shop's other counters are told to
+// pull now rather than on their idle cadence. Never /api/sync: see sync-live.js.
+app.use([
+  "/api/products",
+  "/api/customers",
+  "/api/bills",
+  "/api/inventory",
+  "/api/udhar",
+  "/api/suppliers",
+  "/api/expenses",
+  "/api/purchase-orders",
+  "/api/purchase-returns",
+  "/api/inventory-lots",
+  "/api/product-units",
+  "/api/shops",
+], announceShopChangesAfterWrite);
 
 // ── API Routes ────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
