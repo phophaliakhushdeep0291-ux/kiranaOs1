@@ -1,3 +1,4 @@
+import { assertLiveMarket, settingsWithMarketPolicy } from "../shops/market-policy.js";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import db from "../../db.js";
@@ -96,7 +97,8 @@ async function findReplayedRegistration({ shopName, mobile, password }) {
   return null;
 }
 
-export async function registerShop({ shopName, ownerName, city, address, mobile, email, password, ownerPin, gstNumber, phone, businessType }, reqMeta = {}) {
+export async function registerShop({ shopName, ownerName, city, address, mobile, email, password, ownerPin, gstNumber, phone, businessType, countryCode, currencyCode }, reqMeta = {}) {
+  assertLiveMarket(countryCode, currencyCode);
   assertBusinessTypeOffered(businessType);
 
   const replayed = await findReplayedRegistration({ shopName, mobile, password });
@@ -127,7 +129,7 @@ export async function registerShop({ shopName, ownerName, city, address, mobile,
         // with its owner's — otherwise every new shop prints bills with no contact
         // on them and the setup checklist demands a field signup already collected.
         phone: phone || mobile,
-        settingsJson: JSON.stringify(settingsForBusinessType(businessType)),
+        settingsJson: JSON.stringify(settingsWithMarketPolicy(settingsForBusinessType(businessType))),
       },
     });
     const user = await tx.user.create({

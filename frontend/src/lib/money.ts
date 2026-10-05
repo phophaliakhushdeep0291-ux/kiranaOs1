@@ -1,3 +1,5 @@
+import type { CurrencyCode } from "./market";
+
 /**
  * The single money-rounding helper for the whole frontend.
  *
@@ -79,8 +81,14 @@ const RUPEE_PAISE_FORMAT = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
-export function formatMoney(value: unknown): string {
+const AED_FORMAT = new Intl.NumberFormat("en-AE", {
+  style: "currency", currency: "AED", currencyDisplay: "code",
+  minimumFractionDigits: 2, maximumFractionDigits: 2,
+});
+
+export function formatMoney(value: unknown, currency: CurrencyCode = "INR"): string {
   const rounded = roundMoney(Number(value));
+  if (currency === "AED") return AED_FORMAT.format(rounded);
   const hasPaise = Math.abs(toPaise(rounded)) % 100 !== 0;
   return (hasPaise ? RUPEE_PAISE_FORMAT : RUPEE_FORMAT).format(rounded);
 }

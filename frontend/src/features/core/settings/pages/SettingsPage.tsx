@@ -92,10 +92,11 @@ export default function SettingsPage() {
   ].filter(Boolean).join(", ") || "Add your store address";
   const shopEmail = stringValue(storeProfile.email) || (shop.data as { email?: string } | undefined)?.email || user?.email || "-";
   const shopPhone = shop.data?.phone || stringValue(storeProfile.phone) || stringValue(storeProfile.altPhone) || "-";
-  const shopCurrency = stringValue(storeProfile.currency) || "Indian Rupee (INR)";
+  const shopCurrency = "Indian Rupee (INR)";
 
   return (
     <SettingsShell>
+      <Link href="/settings/uae-pilot" className="block rounded-xl border bg-card p-4 font-semibold text-primary">{t("settings.market.open")}</Link>
       <section className="space-y-4 lg:hidden" aria-label={t("settings.hub.shortcuts")}>
         {/* Keep this surface solid so its small status text has one definite,
             testable background under every accent theme. */}

@@ -3,6 +3,10 @@
 import type { settingsPagesEn } from "./settings-pages";
 
 export const settingsPagesHi: Record<keyof typeof settingsPagesEn, string> = {
+  "settings.market.title": "UAE पायलट पूर्वावलोकन",
+  "settings.market.locked": "देश और मुद्रा दुकान के खातों से जुड़े हैं। यहाँ पुराने शेष की मुद्रा नहीं बदली जा सकती।",
+  "settings.market.open": "UAE पायलट देखें",
+
   "settings.taxRecon.title": "खरीद / GSTR-2B तुलना",
   "settings.taxRecon.intro": "आप या आपके अकाउंटेंट द्वारा तैयार बिल-स्तर की पुस्तकों और विवरण का मिलान करें। फ़ाइलें इस ऐप के सर्वर पर जाँची जाती हैं; यह तुलना सहेजी नहीं जाती।",
   "settings.taxRecon.format": "JSON टेम्पलेट इस्तेमाल करें, सीधे GST पोर्टल डाउनलोड नहीं। अपना सेट किया प्राप्तकर्ता GSTIN, आपूर्तिकर्ता GSTIN, अवधि और वास्तविक बिल विवरण भरें। राशियाँ पूर्णांक पैसों में हैं (₹100 = 10000), क्रेडिट नोट भी धनात्मक राशि में। प्रत्येक पक्ष में अधिकतम 2,000 दस्तावेज़ और फ़ाइल 1.8 MB तक।",

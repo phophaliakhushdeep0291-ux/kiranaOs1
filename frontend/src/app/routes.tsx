@@ -84,6 +84,7 @@ const BillingSettings = lazy(() => import("@/features/core/settings/pages/Billin
 const StaffSettings = lazy(() => import("@/features/core/settings/pages/StaffSettingsPage"));
 const DevicesSettings = lazy(() => import("@/features/core/settings/pages/DevicesSettingsPage"));
 const SyncSettings = lazy(() => import("@/features/core/settings/pages/SyncSettingsPage"));
+const UaePilotSettings = lazy(cloudPage(() => import("@/features/core/settings/pages/UaePilotPage")));
 const TaxesSettings = lazy(() => import("@/features/core/settings/pages/TaxesSettingsPage"));
 const SecuritySettings = lazy(() => import("@/features/core/settings/pages/SecuritySettingsPage"));
 const NotificationsSettings = lazy(() => import("@/features/core/settings/pages/NotificationsSettingsPage"));
@@ -590,6 +591,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/settings/sync">
         <ProtectedRoute component={SyncSettings} />
+      </Route>
+      <Route path="/settings/uae-pilot">
+        <ProtectedRoute component={UaePilotSettings} onlineOnly />
       </Route>
       <Route path="/settings/taxes">
         <ProtectedRoute component={TaxesSettings} />

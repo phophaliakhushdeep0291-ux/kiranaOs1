@@ -52,6 +52,8 @@ const deviceMetadataSchema = z.object({
 }).strict();
 
 export const registerSchema = z.object({
+  countryCode: z.string().default("IN"),
+  currencyCode: z.string().default("INR"),
   shopName:  trimmedString(2),
   ownerName: trimmedString(2),
   city:      trimmedString(2),

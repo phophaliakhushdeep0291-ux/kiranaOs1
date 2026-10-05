@@ -14,12 +14,14 @@
 // moving assurance + devices out of the two deferred halves is -13.2 kB gzip of
 // precache, 6.4 of it English and 6.8 Hindi.
 //
-// Only two modules qualify, and the other two candidates were checked rather than
+// The original two modules qualify, and the other two candidates were checked rather than
 // assumed — this is the whole test for admitting a table here:
 //
 //   assurance  -> read only under features/core/assurance/**, and all nine
 //                 Assurance routes are onlineOnly. Qualifies.
 //   devices    -> read only by DevicesPage, which is onlineOnly. Qualifies.
+//   marketPreview -> read only by the online UAE setup preview. Its navigation
+//                    labels stay in settings-pages so the offline shell is complete.
 //   accounting -> REJECTED. Layout.tsx and MobileAppChrome.tsx read accounting.*
 //                 for the nav, and ReportsPage reads it too. Both are shell/core
 //                 and must render offline.
@@ -33,16 +35,19 @@
 // Loaded on demand by `loadCloudTranslations()` and held afterwards by the
 // worker's `cacheFirstStatic`, the same runtime path that has always covered lazy
 // route chunks. Nothing here may be imported statically from shell code.
+import { marketPreviewEn } from "./market-preview";
 import { assuranceEn } from "./assurance";
 import { devicesEn } from "./devices";
 
 export const englishCloudTranslations = {
+  ...marketPreviewEn,
   ...assuranceEn,
   ...devicesEn,
 };
 
 /** Registered cloud-only modules. `english.ts` re-exports these into EN_MODULES. */
 export const EN_CLOUD_MODULES = {
+  marketPreview: marketPreviewEn,
   assurance: assuranceEn,
   devices: devicesEn,
 } as const;
