@@ -4,6 +4,7 @@ import { incrementMetric } from "../../lib/metrics.js";
 import { getEffectivePlan, hasSubscriptionAccess } from "../subscription/subscription.service.js";
 import { markDeviceSynced } from "../devices/devices.service.js";
 import { getSyncDiagnostics } from "./sync-diagnostics.service.js";
+import { announceShopChanges } from "./sync-live.js";
 
 // ── Sync logger ───────────────────────────────────────────────────────────────
 // Follows the same pattern as the global requestLogger in security.js:
@@ -216,6 +217,9 @@ export async function push(req, res, next) {
         retryable:  data.summary?.retryable  ?? null,
       });
     }
+
+    // Duplicates are retries of work already applied, so only fresh writes nudge.
+    if ((data.summary?.synced ?? 0) > 0) announceShopChanges(req.shopId, req.device?.deviceId ?? null);
 
     // `results` is also exposed at the top level so the Step 7 frontend helper can
     // consume it without waiting for frontend changes.

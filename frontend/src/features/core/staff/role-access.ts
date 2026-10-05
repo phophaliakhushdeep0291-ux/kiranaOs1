@@ -123,6 +123,11 @@ export function hasPermission(role: StaffRole, permission: PermissionName, grant
   return effectivePermissions(role, granted).includes(permission);
 }
 
+/** Whether a signed-in user's role holds a permission, preferring the list the server sent. */
+export function userHasPermission(user: { role?: string | null } | null | undefined, permission: PermissionName): boolean {
+  return hasPermission(normalizeStaffRole(user?.role), permission, serverPermissions(user));
+}
+
 /**
  * Screens a role may not open, and why.
  *

@@ -9,6 +9,7 @@ import {
   isBusinessType,
   saveBusinessType,
 } from "@/features/core/settings/business-types";
+import { isReadOnlySession } from "@/features/core/staff/role-access";
 
 // One reconcile per shop per app load — the shop id guard also covers switching
 // accounts on the same device without a full page reload.
@@ -45,6 +46,14 @@ export function useBusinessTypeServerSync() {
 
     if (isBusinessType(serverKey)) {
       if (serverKey !== getStoredBusinessType()) saveBusinessType(serverKey);
+      return;
+    }
+
+    // Pushing the local choice up is a write a view-only login is refused, once
+    // per app load. Leave it for the next login that can make it — which is why
+    // the guard is lifted again rather than marking this shop reconciled.
+    if (isReadOnlySession()) {
+      reconciledShopId = null;
       return;
     }
 
