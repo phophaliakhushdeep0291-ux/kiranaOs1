@@ -10,7 +10,17 @@ import {
   shouldRunScheduledNetworkWork,
 } from "@/lib/browser/multiTabCoordinator";
 
-const SNAPSHOT_INTERVAL_MS = 60_000;
+// The snapshot re-downloads every product, customer, bill, stock row and udhar
+// entry, rebuilds the local caches, and its announcement makes every query on
+// screen refetch. Run every minute, that was most of an idle till's traffic —
+// about 30 requests a minute per counter, measured on two idle counters. Changes
+// already arrive through the incremental pull; the snapshot is the catch-up and
+// repair path, which sign-in, reconnect and focus after a gap still trigger.
+const SNAPSHOT_INTERVAL_MS = 10 * 60_000;
+// The timer fires one interval after mount, but the boot snapshot ran about half
+// a second after it — so a throttle of the full interval refused every on-time
+// tick by that half second, and the snapshot ran at twice its interval.
+const SNAPSHOT_THROTTLE_MS = SNAPSHOT_INTERVAL_MS - 30_000;
 const FOCUS_THROTTLE_MS = 2_000;
 const LOCAL_WRITE_SYNC_DELAY_MS = 250;
 const CHANNEL_NAME = "kirana:multi-device-sync";
@@ -107,7 +117,7 @@ export function useMultiDeviceSync() {
         }
 
         const shouldSnapshot = options.snapshot || Date.now() - lastSnapshotAtRef.current > SNAPSHOT_INTERVAL_MS;
-        if (shouldSnapshot && shouldPassSharedThrottle(snapshotThrottleKey, SNAPSHOT_INTERVAL_MS)) {
+        if (shouldSnapshot && shouldPassSharedThrottle(snapshotThrottleKey, SNAPSHOT_THROTTLE_MS)) {
           lastSnapshotAtRef.current = Date.now();
           const snapshot = await hydrateFromBackendSnapshot();
           notifyLocalRefresh(`${reason}:snapshot`, snapshot);

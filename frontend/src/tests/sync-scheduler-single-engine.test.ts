@@ -114,7 +114,7 @@ describe("sync scheduling runs one engine, not one per caller", () => {
     // loop. It keeps the jobs only it does — cross-tab broadcast, focus/online
     // catch-up, and the periodic authoritative snapshot — but no sync interval.
     expect(multi).not.toContain("SYNC_INTERVAL_MS");
-    expect(multi).toContain("const SNAPSHOT_INTERVAL_MS = 60_000");
+    expect(multi).toContain("const SNAPSHOT_INTERVAL_MS = 10 * 60_000");
     expect(multi).toContain("BroadcastChannel");
     // The one remaining timer is the snapshot, and it must stay on the snapshot
     // interval rather than quietly becoming a sync loop again.
