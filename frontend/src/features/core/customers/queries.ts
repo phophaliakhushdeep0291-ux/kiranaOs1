@@ -5,7 +5,7 @@ import { getMutationOptions, getQueryOptions, type MutationHookOptions, type Que
 import { instantCacheUpdatedAt, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import * as customersApi from "@/features/core/customers/api";
 import * as ledgerApi from "@/features/core/ledger/api";
-import { cacheAuthoritativeSummary } from "@/features/core/ledger/authoritative-balances";
+import { cacheAuthoritativeSummary, fetchAuthoritativeSnapshot } from "@/features/core/ledger/authoritative-balances";
 import { createCustomerLocalFirst, deleteCustomerLocalFirst, updateCustomerLocalFirst } from "@/features/core/customers/local-actions";
 import { getLocalUdharLedger, getLocalUdharSummary, getLocalUdharSummaryAsync, recordPaymentLocalFirst } from "@/features/core/payments/local-actions";
 import { loadIdMap } from "@/features/core/sync/sync-id-mapping";
@@ -309,7 +309,7 @@ export function useGetUdharSummary(options?: QueryHookOptions<UdharSummary, Udha
       // since) rather than the raw device ledger — see authoritative-balances.
       if (!isBrowserOnline()) return getLocalUdharSummaryAsync();
       try {
-        const summary = await ledgerApi.getUdharSummary();
+        const summary = await fetchAuthoritativeSnapshot();
         cacheAuthoritativeSummary(summary);
         return summary;
       } catch (error) {

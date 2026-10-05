@@ -74,6 +74,52 @@ describe("customer ledger accounting", () => {
     expect(calculateLedgerBalance(rows)).toBe(540);
   });
 
+  it("keeps a second same-amount udhar sale that is still waiting to sync", () => {
+    // Two-counter QA run: a ₹120 udhar sale synced, then a second ₹120 sale to the
+    // same customer was made offline 90 seconds later. The server row names the
+    // first sale's local write, so it cannot be an echo of the second.
+    const synced = {
+      id: "server_ledger_1",
+      customerId: "c1",
+      customer_id: "c1",
+      type: "debit",
+      amount: 120,
+      source_type: "bill",
+      source_id: "server_bill_1",
+      billId: "server_bill_1",
+      clientLedgerId: "ledger_bill_first_credit",
+      sync_status: "synced",
+      createdAt: "2026-10-05T07:36:19.221Z",
+    };
+    const pending = {
+      id: "ledger_bill_second_credit",
+      local_id: "ledger_bill_second_credit",
+      clientLedgerId: "ledger_bill_second_credit",
+      client_ledger_id: "ledger_bill_second_credit",
+      customerId: "c1",
+      customer_id: "c1",
+      type: "BILL",
+      amount: 120,
+      source_type: "bill",
+      source_id: "bill_second",
+      billId: "bill_second",
+      sync_status: "pending_sync",
+      createdAt: "2026-10-05T07:37:48.626Z",
+    };
+    const rows = dedupeLedgerEntries([synced, pending] as CustomerLedgerEntry[]);
+    expect(rows).toHaveLength(2);
+    expect(calculateLedgerBalance(rows)).toBe(240);
+
+    // Once the second sale's own server row arrives, that row and its local
+    // original collapse to one — whichever order the two server rows come in.
+    const secondEcho = { ...synced, id: "server_ledger_2", source_id: "server_bill_2", billId: "server_bill_2", clientLedgerId: "ledger_bill_second_credit", createdAt: "2026-10-05T07:40:02.000Z" };
+    for (const order of [[synced, secondEcho, pending], [secondEcho, synced, pending]]) {
+      const settled = dedupeLedgerEntries(order as CustomerLedgerEntry[]);
+      expect(settled.map((row) => row.id).sort()).toEqual(["server_ledger_1", "server_ledger_2"]);
+      expect(calculateLedgerBalance(settled)).toBe(240);
+    }
+  });
+
   it("keeps separate same-amount udhar payments in the same sync window", () => {
     const rows = dedupeLedgerEntries([
       {

@@ -37,6 +37,10 @@ vi.mock("@/lib/offline/db", () => ({
   },
 }));
 
+vi.mock("@/features/core/ledger/api", () => ({
+  getUdharSummary: vi.fn(),
+}));
+
 vi.mock("@/features/core/sync/cloud-hydration", () => ({
   resyncUdharLedgerFromServer: vi.fn(async () => {
     cacheState.resyncCalls += 1;
@@ -52,7 +56,10 @@ vi.mock("@/features/core/sync/sync-reconcile", () => ({
 
 import {
   AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY,
+  authoritativeOutstandingWithPendingLedger,
   cacheAuthoritativeSummary,
+  confirmedLedgerFingerprints,
+  fetchAuthoritativeSnapshot,
   readCachedAuthoritativeSummary,
 } from "@/features/core/ledger/authoritative-balances";
 import {
@@ -61,7 +68,10 @@ import {
   resetLedgerDriftRepairThrottle,
 } from "@/features/core/ledger/ledger-drift-repair";
 import { getLocalUdharSummary } from "@/features/core/payments/local-actions";
-import { metricsWithCustomerBalanceFallback } from "@/features/core/customers/customer-ledger-data";
+import { applyAuthoritativeUdharSummary, metricsWithCustomerBalanceFallback, type CustomerWithLedger } from "@/features/core/customers/customer-ledger-data";
+import { getUdharSummary } from "@/features/core/ledger/api";
+import { offlineDB } from "@/lib/offline/db";
+import type { CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 
 const SERVER_SUMMARY = {
   totalOutstanding: 300,
@@ -256,5 +266,97 @@ describe("udhar offline/online parity", () => {
       ),
     ).resolves.toBe(false);
     expect(cacheState.resyncCalls).toBe(0);
+  });
+});
+
+/**
+ * Two-counter QA run: both tills sat on the billing screen, so the cached
+ * summary was the one fetched before any udhar existed. A ₹120 udhar sale synced
+ * to both devices, the network dropped, and the udhar page showed the customer
+ * as "Cleared" at ₹0 — and refused a ₹100 collection — while both device
+ * ledgers correctly held the ₹120.
+ */
+describe("a cached udhar summary older than the confirmed ledger", () => {
+  const RAMESH = "customer_ramesh";
+  const syncedSale: CustomerLedgerEntry = {
+    id: "srv_ledger_1",
+    customerId: RAMESH,
+    type: "debit",
+    amount: 120,
+    clientLedgerId: "ledger_bill_1_credit",
+    sync_status: "synced",
+    createdAt: "2026-10-05T07:36:19.221Z",
+  };
+  const settledSnapshot = { totalOutstanding: 0, customers: [], confirmedLedger: {} };
+
+  beforeEach(() => {
+    cacheState.instant.clear();
+    vi.mocked(offlineDB.getAll).mockReset().mockResolvedValue([]);
+    vi.mocked(getUdharSummary).mockReset();
+  });
+
+  it("reads the device ledger for a customer whose confirmed movement postdates the snapshot", () => {
+    cacheState.instant.set(AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY, { summary: settledSnapshot, capturedAt: "2026-10-05T07:31:51.600Z" });
+    cacheState.instant.set("customers", [{ id: RAMESH, name: "Ramesh" }]);
+    cacheState.instant.set("customer_ledger", [syncedSale]);
+
+    expect(getLocalUdharSummary()).toEqual(expect.objectContaining({
+      totalOutstanding: 120,
+      customers: [expect.objectContaining({ customerId: RAMESH, outstanding: 120 })],
+    }));
+    // The collection guard asks the same question: no trusted snapshot answer,
+    // so it falls back to the device balance instead of refusing at ₹0.
+    expect(authoritativeOutstandingWithPendingLedger(settledSnapshot, [RAMESH], [syncedSale])).toBeNull();
+  });
+
+  it("keeps the snapshot over a drifted ledger it was taken against", () => {
+    // Same confirmed rows as when the snapshot was requested: the ledger has not
+    // moved, so its −₹330 is drift and the server's ₹300 still stands.
+    const drifted: CustomerLedgerEntry = { id: "srv_old", customerId: "customer_gops", type: "PAYMENT", amount: 330, sync_status: "synced", entry_at: "2026-07-25T09:00:00.000Z" };
+    const snapshot = { ...SERVER_SUMMARY, confirmedLedger: confirmedLedgerFingerprints([drifted]) };
+    cacheState.instant.set(AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY, { summary: snapshot, capturedAt: "2026-07-25T12:00:00.000Z" });
+    cacheState.instant.set("customers", [{ id: "customer_gops", name: "gops" }]);
+    cacheState.instant.set("customer_ledger", [drifted]);
+
+    expect(getLocalUdharSummary().customers).toEqual([expect.objectContaining({ customerId: "customer_gops", outstanding: 300 })]);
+    expect(authoritativeOutstandingWithPendingLedger(snapshot, ["customer_gops"], [drifted])).toBe(300);
+  });
+
+  it("counts a sale confirmed while the summary request was in flight as not covered", async () => {
+    vi.mocked(getUdharSummary).mockImplementation(async () => {
+      // The pull lands the sale between the request leaving and the answer
+      // arriving; the server may or may not have counted it.
+      vi.mocked(offlineDB.getAll).mockResolvedValue([syncedSale]);
+      return { totalOutstanding: 0, customers: [] };
+    });
+
+    const snapshot = await fetchAuthoritativeSnapshot();
+
+    expect(snapshot.confirmedLedger).toEqual({});
+    expect(authoritativeOutstandingWithPendingLedger(snapshot, [RAMESH], [syncedSale])).toBeNull();
+  });
+
+  it("shows the device balance on the customer list until a newer summary arrives", () => {
+    const customer = {
+      id: RAMESH,
+      name: "Ramesh",
+      type: "udhar",
+      ledgerBalance: 120,
+      rawLedgerBalance: 120,
+      udharAmount: 120,
+      totalUdhar: 120,
+      confirmedLedger: confirmedLedgerFingerprints([syncedSale]),
+      ledgerMetrics: { balance: 120, ageing: { total: 120, zeroToSeven: 120, sevenToThirty: 0, thirtyPlus: 0 }, paymentCount: 0, billCount: 1, trustScore: 75, isBadCustomer: false, warning: null },
+    } as unknown as CustomerWithLedger;
+
+    expect(applyAuthoritativeUdharSummary([customer], settledSnapshot)[0].ledgerBalance).toBe(120);
+    // A summary requested after the sale covers it, and its answer wins again —
+    // here it already knows of a ₹20 collection this device has not pulled yet.
+    const current = {
+      totalOutstanding: 100,
+      customers: [{ customerId: RAMESH, customerName: "Ramesh", amount: 100, outstanding: 100 }],
+      confirmedLedger: confirmedLedgerFingerprints([syncedSale]),
+    };
+    expect(applyAuthoritativeUdharSummary([customer], current)[0].ledgerBalance).toBe(100);
   });
 });
