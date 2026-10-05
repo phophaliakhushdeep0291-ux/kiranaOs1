@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { allocateAmountByWeights, allocateInvoiceDiscount, calculateInvoiceGst } from "../src/utils/gst.js";
+import { allocateAmountByWeights, allocateInvoiceDiscount, calculateInvoiceGst, calculateReplayCompatibleGst } from "../src/utils/gst.js";
 
 {
   const allocation = allocateInvoiceDiscount([100, 200, 0.01], 100.01);
@@ -35,4 +35,18 @@ import { allocateAmountByWeights, allocateInvoiceDiscount, calculateInvoiceGst }
   assert.equal(result.gst, 0);
 }
 
-console.log("GST invoice discount examples passed");
+// Exact half-paisa ties must survive binary floating point.
+assert.equal(calculateInvoiceGst([{ lineTotal: 2.9, gstRate: 5 }], 0, "exclusive").gst, 0.15);
+assert.equal(calculateInvoiceGst([{ lineTotal: 0.42, gstRate: 12 }], 0, "inclusive").gst, 0.04);
+assert.equal(calculateInvoiceGst([{ lineTotal: 4.64, gstRate: 28 }], 0, "inclusive").gst, 1.01);
+
+// An old offline counter has already collected 3.04, while a new counter collects 3.05.
+const line = [{ lineTotal: 2.9, gstRate: 5 }];
+const replay = { isOfflineReplay: true, paymentCoverage: 3.04, actualAmount: 3.04 };
+assert.equal(calculateReplayCompatibleGst(line, 0, "exclusive", replay), 0.14);
+assert.equal(calculateReplayCompatibleGst(line, 0, "exclusive", { ...replay, isOfflineReplay: false }), 0.15);
+assert.equal(calculateReplayCompatibleGst(line, 0, "exclusive", { ...replay, paymentCoverage: 3.03, actualAmount: 3.03 }), 0.15);
+assert.equal(calculateReplayCompatibleGst(line, 0, "exclusive", { ...replay, actualAmount: 3.05 }), 0.15);
+assert.equal(calculateReplayCompatibleGst(line, 0, "exclusive", { ...replay, paymentCoverage: 3.05, actualAmount: 3.05 }), 0.15);
+assert.equal(calculateReplayCompatibleGst(line, 0, "exclusive", { ...replay, roundOff: true, paymentCoverage: 3, actualAmount: 3 }), 0.15);
+console.log("GST invoice discount, integer-paise rounding and legacy replay examples passed");

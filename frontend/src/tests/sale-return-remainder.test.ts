@@ -1,7 +1,83 @@
+import { takeReturnAmount, roundReturnQuantity, reconcileReturnTaxBalances as reconcileServerTax } from "../../../backend/src/utils/returnMath.js";
 import { describe, expect, it } from "vitest";
-import { buildReturnLineBalances, consumeReturnLine, linkedReturnRefundTotal, returnPreviewQuantity } from "@/features/core/returns/return-math";
+import { buildReturnLineBalances, consumeReturnLine, linkedReturnRefundTotal, returnPreviewQuantity, reconcileReturnTaxBalances, type PreviousReturnRecord } from "@/features/core/returns/return-math";
+import { computeGstBreakdown } from "@/lib/gst";
 
 describe("linked return remainder accounting", () => {
+  it.each(["inclusive", "exclusive"] as const)("fully reverses 1,000 mixed-line %s invoices after reloading every partial return", (mode) => {
+    let seed = 1003;
+    const next = (n: number) => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % n; };
+    for (let example = 0; example < 1000; example++) {
+      const lines = Array.from({ length: 2 + next(4) }, (_, index) => ({ id: String(index), quantity: 2 + next(4),
+        lineTotal: (1 + next(10000)) / 100, lineDiscount: 0, lineCost: 0, gstRate: [5, 12, 18, 28][next(4)] }));
+      const tax = computeGstBreakdown(lines.map((line) => ({ price: line.lineTotal, quantity: 1, gstRate: line.gstRate })), mode, {}, 0).gst;
+      const previousReturns: PreviousReturnRecord[] = [];
+      let refundedTax = 0;
+      for (let step = 0; step < 5; step++) {
+        const balances = buildReturnLineBalances({ lines, discount: 0, gst: tax, gstMode: mode, previousReturns });
+        const items: PreviousReturnRecord["items"] = [];
+        let partTax = 0;
+        for (const line of lines) if (step < line.quantity) {
+          const returned = consumeReturnLine(balances.get(line.id)!, 1);
+          partTax += Math.round(returned.gst * 100);
+          items.push({ originalBillItemId: line.id, quantity: 1, lineTotal: returned.subtotal,
+            lineDiscount: returned.lineDiscount, lineCost: returned.cost, gstRate: line.gstRate });
+        }
+        refundedTax += partTax;
+        expect(refundedTax, `invoice ${example}, return ${step}`).toBeLessThanOrEqual(Math.round(tax * 100));
+        previousReturns.push({ gst: partTax / 100, gstMode: mode, items });
+      }
+      expect(refundedTax, `invoice ${example}`).toBe(Math.round(tax * 100));
+    }
+  });
+
+  it("keeps the same exact invoice tax budget on client and server when a closed line retains a rounding residue", () => {
+    const base = { gross: 10, subtotal: 10, cost: 0, returnedGross: 5, returnedSubtotal: 5, returnedCost: 0 };
+    const client = [{ ...base, soldQuantity: 1, returnedQuantity: 1, gst: 1, returnedGst: 0.99 },
+      { ...base, soldQuantity: 2, returnedQuantity: 1, gst: 2, returnedGst: 1 }];
+    const server = structuredClone(client);
+    reconcileReturnTaxBalances(client, 1.01);
+    reconcileServerTax(server, 1.01);
+    expect(server).toEqual(client);
+    expect(client.map((row) => row.gst)).toEqual([0.99, 2.01]);
+    expect(consumeReturnLine(client[1], 1).gst).toBe(1.01);
+  });
+
+  it("retains five-gram quantities through a partial return and reload", () => {
+    const input = { lines: [{ id: "tiny", quantity: 0.015, lineTotal: 30, lineDiscount: 0, lineCost: 15, gstRate: 0 }], discount: 0, gst: 0, gstMode: "none" as const };
+    const balance = buildReturnLineBalances(input).get("tiny")!;
+    expect(returnPreviewQuantity(0.005, balance)).toBe(0.005);
+    expect(consumeReturnLine(balance, 0.005)).toMatchObject({ quantity: 0.005, subtotal: 10, cost: 5, finalReturn: false });
+    expect(roundReturnQuantity(0.015 - 0.005)).toBe(0.01);
+    const reloaded = buildReturnLineBalances({ ...input, previousReturns: [{ gst: 0, gstMode: "none", items: [
+      { originalBillItemId: "tiny", quantity: -0.005, lineTotal: -10, lineDiscount: 0, lineCost: -5, gstRate: 0 },
+    ] }] }).get("tiny")!;
+    expect(consumeReturnLine(reloaded, 0.01)).toMatchObject({ subtotal: 20, cost: 10, finalReturn: true });
+  });
+
+  it("caps each partial refund at the original line's remaining paise on both client and server", () => {
+    const balance = buildReturnLineBalances({ lines: [{ id: "tiny-tax", quantity: 4, lineTotal: 0.02, lineDiscount: 0, lineCost: 0.02, gstRate: 18 }],
+      discount: 0, gst: 0.02, gstMode: "exclusive" }).get("tiny-tax")!;
+    let returned = 0;
+    const parts = [];
+    for (let index = 0; index < 4; index++) {
+      const part = consumeReturnLine(balance, 1);
+      const server = takeReturnAmount(0.02, returned, 1, 4, index === 3);
+      expect(part).toMatchObject({ subtotal: server, gst: server, cost: server });
+      returned = Math.round((returned + server) * 100) / 100;
+      parts.push(part.gst);
+    }
+    expect(parts).toEqual([0.01, 0.01, 0, 0]);
+    expect(returned).toBe(0.02);
+  });
+
+  it("rounds a one-tenth refund of 1.15 to twelve paise on both client and server", () => {
+    const balance = buildReturnLineBalances({ lines: [{ id: "tie", quantity: 10, lineTotal: 1.15, lineDiscount: 0, lineCost: 1.15, gstRate: 0 }],
+      discount: 0, gst: 0, gstMode: "none" }).get("tie")!;
+    expect(consumeReturnLine(balance, 1).subtotal).toBe(0.12);
+    expect(takeReturnAmount(1.15, 0, 1, 10, false)).toBe(0.12);
+  });
+
   it("previews rounded final refunds and caps intermediate refunds at the remaining invoice", () => {
     expect(linkedReturnRefundTotal(199.5, 200, true)).toBe(200);
     expect(linkedReturnRefundTotal(199.4, 199, true)).toBe(199);

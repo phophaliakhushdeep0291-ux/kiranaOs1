@@ -183,8 +183,7 @@ function a4InvoiceRows(snapshot: ReceiptSnapshot) {
     const discount = lineDiscount + (invoiceDiscount.allocations[index] ?? 0);
     const rate = Math.max(0, Number(item.gstRate) || 0);
     const lineTotal = invoiceDiscount.discountedLineTotals[index] ?? 0;
-    const taxable = gstMode === "inclusive" && rate > 0 ? lineTotal / (1 + rate / 100) : lineTotal;
-    const tax = gstMode === "none" ? 0 : gstMode === "inclusive" ? Math.max(0, lineTotal - taxable) : taxable * rate / 100;
+    const { taxable, gst: tax } = gstLineAmounts(lineTotal, rate, gstMode);
     const invoiceLineTotal = gstMode === "exclusive" ? taxable + tax : lineTotal;
     return `<tr>
       <td>${index + 1}</td>
@@ -749,4 +748,4 @@ export function openConfiguredReceiptWindow(snapshot: ReceiptSnapshot, options: 
   writeConfiguredReceiptWindow(popup, snapshot, options);
   return true;
 }
-import { allocateInvoiceDiscount } from "@/lib/gst";
+import { allocateInvoiceDiscount, gstLineAmounts } from "@/lib/gst";

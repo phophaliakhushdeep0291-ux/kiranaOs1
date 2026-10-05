@@ -2,11 +2,12 @@ import db from "../../db.js";
 import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { addMoney, moneyEquals, moneyShadows, multiplyMoney, round2, subtractMoney, sumMoney } from "../../utils/money.js";
+import { reconcileReturnTaxBalances, roundReturnQuantity, takeReturnAmount } from "../../utils/returnMath.js";
 import { toBaseQty, baseQtyToRateQty } from "../../utils/units.js";
 import { generateBillNo } from "../../utils/billNumber.js";
 import { rangeEndInclusive, rangeStart } from "../../utils/dateRange.js";
 import { billSellerIdentity, locationSellerIdentity } from "../../utils/gstIdentity.js";
-import { allocateAmountByWeights, allocateInvoiceDiscount, calculateInvoiceGst } from "../../utils/gst.js";
+import { allocateAmountByWeights, allocateInvoiceDiscount, calculateInvoiceGst, calculateReplayCompatibleGst } from "../../utils/gst.js";
 import { ensureLegacyUdharOpeningLedger, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
 import { postBillCancelledLedger, postBillCreatedLedger, postBillDeletedLedger, postBillRestoredLedger, postBillUndeletedLedger, postSaleReturnLedger } from "../finance/financial-ledger.service.js";
 import {
@@ -783,11 +784,17 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null, t
     // Allocate the combined manual/coupon/loyalty discount across every rate
     // bucket first, then calculate GST. This same paise-exact algorithm runs in
     // the counter and offline save path.
-    totalGst = calculateInvoiceGst(
+    totalGst = calculateReplayCompatibleGst(
       billItems.map((item) => ({ lineTotal: item.lineTotal, gstRate: item.gstRate })),
       billDiscount,
       gstMode,
-    ).gst;
+      {
+        isOfflineReplay: actor.isOfflineReplay === true,
+        paymentCoverage: addMoney(sumMoney(billPayments.filter((payment) => payment.mode !== "credit").map((payment) => payment.amount)), requestedCreditAmount, inputWaivedAmount),
+        actualAmount: inputActualAmount,
+        roundOff: roundOffEnabled,
+      },
+    );
 
     const rawGrandTotal = gstMode === "exclusive"
       ? addMoney(subtractMoney(subtotal, billDiscount), totalGst)
@@ -1547,10 +1554,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
             const key = returnedItem.originalBillItemId ?? (legacyCandidates.length === 1 ? legacyCandidates[0].id : null);
             const financial = key ? originalFinancialByLine.get(key) : null;
             if (!financial) return;
-            financial.returnedQuantity = addMoney(
-              financial.returnedQuantity,
-              Math.abs(Number(returnedItem.quantityInBaseUnit ?? returnedItem.quantity ?? 0)),
-            );
+            financial.returnedQuantity = roundReturnQuantity(financial.returnedQuantity + Math.abs(Number(returnedItem.quantityInBaseUnit ?? returnedItem.quantity ?? 0)));
             financial.returnedGross = addMoney(
               financial.returnedGross,
               Math.abs(Number(returnedItem.lineTotal ?? 0)),
@@ -1560,6 +1564,11 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
             financial.returnedGst = addMoney(financial.returnedGst, exactReturnTax[index] ?? 0);
             financial.returnedCost = addMoney(financial.returnedCost, Math.abs(Number(returnedItem.lineCost ?? 0)));
           });
+        }
+        if (previouslyReturned.length > 0) {
+          reconcileReturnTaxBalances([...originalFinancialByLine.values()], Math.max(0, subtractMoney(
+            Math.abs(Number(original.gst ?? 0)), sumMoney(previouslyReturned.map((bill) => Math.abs(Number(bill.gst ?? 0)))),
+          )));
         }
       }
 
@@ -1593,13 +1602,13 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
         // loose and therefore has no packaging at all.
         const returnPack = originalItem ? null : resolveReturnPack(item, product);
         const qtyInBase = originalItem
-          ? round2(Math.abs(Number(originalItem.quantityInBaseUnit)) * returnFraction)
+          ? roundReturnQuantity(Math.abs(Number(originalItem.quantityInBaseUnit)) * returnFraction)
           : returnPack
-            ? round2(Math.abs(Number(item.quantity)) * Number(returnPack.conversionToBase))
+            ? roundReturnQuantity(Math.abs(Number(item.quantity)) * Number(returnPack.conversionToBase))
             : product ? toBaseQty(item.quantity, enteredUnit, product.baseUnit) : item.quantity;
         const originalFinancial = originalItem ? originalFinancialByLine.get(originalItem.id) : null;
         const availableQuantity = originalFinancial
-          ? Math.max(0, subtractMoney(originalFinancial.soldQuantity, originalFinancial.returnedQuantity))
+          ? Math.max(0, roundReturnQuantity(originalFinancial.soldQuantity - originalFinancial.returnedQuantity))
           : 0;
         if (originalFinancial && qtyInBase > availableQuantity + 0.000001) {
           const err = new AppError("Return quantity or price exceeds what remains on the original sale", 409);
@@ -1619,14 +1628,10 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
 
         const authoritativeRate = Number(originalItem?.ratePerRateUnit ?? item.ratePerRateUnit);
         const grossLineTotal = originalItem
-          ? isFinalLinkedReturn
-            ? Math.max(0, subtractMoney(originalFinancial.gross, originalFinancial.returnedGross))
-            : round2(originalFinancial.gross * returnFraction)
+          ? takeReturnAmount(originalFinancial.gross, originalFinancial.returnedGross, Math.abs(Number(item.quantity)), originalQuantity, isFinalLinkedReturn)
           : multiplyMoney(authoritativeRate, qtyInRateUnit);
         const lineTotal = originalItem
-          ? isFinalLinkedReturn
-            ? Math.max(0, subtractMoney(originalFinancial.subtotal, originalFinancial.returnedSubtotal))
-            : round2(originalFinancial.subtotal * returnFraction)
+          ? takeReturnAmount(originalFinancial.subtotal, originalFinancial.returnedSubtotal, Math.abs(Number(item.quantity)), originalQuantity, isFinalLinkedReturn)
           : subtractMoney(grossLineTotal, Math.min(round2(Math.max(0, Number(item.lineDiscount ?? 0))), grossLineTotal));
         // The return line embeds both the original line discount and its exact
         // share of the bill-level discount. That makes return subtotal/profit
@@ -1635,27 +1640,11 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
           ? Math.max(0, subtractMoney(grossLineTotal, lineTotal))
           : Math.min(round2(Math.max(0, Number(item.lineDiscount ?? 0))), grossLineTotal);
         const rate = Number(originalItem?.gstRate ?? item.gstRate ?? product?.gstRate ?? 0);
-        const remainingOriginalGst = originalFinancial
-          ? Math.max(0, subtractMoney(originalFinancial.gst, originalFinancial.returnedGst))
-          : 0;
-        const proportionalReturnGst = effectiveGstMode === "exclusive"
-          ? multiplyMoney(lineTotal, rate / 100)
-          : effectiveGstMode === "none" || rate <= 0
-            ? 0
-            : subtractMoney(lineTotal, round2(lineTotal / (1 + rate / 100)));
         const gstAmount = originalItem
-          ? isFinalLinkedReturn
-            ? remainingOriginalGst
-            : Math.min(remainingOriginalGst, proportionalReturnGst)
-          : effectiveGstMode === "exclusive"
-            ? multiplyMoney(lineTotal, rate / 100)
-            : effectiveGstMode === "none" || rate <= 0
-              ? 0
-              : subtractMoney(lineTotal, round2(lineTotal / (1 + rate / 100)));
+          ? takeReturnAmount(originalFinancial.gst, originalFinancial.returnedGst, Math.abs(Number(item.quantity)), originalQuantity, isFinalLinkedReturn)
+          : calculateInvoiceGst([{ lineTotal, gstRate: rate }], 0, effectiveGstMode).gst;
         const lineCost = originalItem
-          ? isFinalLinkedReturn
-            ? Math.max(0, subtractMoney(originalFinancial.cost, originalFinancial.returnedCost))
-            : round2(originalFinancial.cost * returnFraction)
+          ? takeReturnAmount(originalFinancial.cost, originalFinancial.returnedCost, Math.abs(Number(item.quantity)), originalQuantity, isFinalLinkedReturn)
           : multiplyMoney(costPerRateUnit, qtyInRateUnit);
         const lineProfit = subtractMoney(lineTotal, lineCost);
         const damaged = item.damaged === true;
@@ -1712,7 +1701,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
         }
 
         if (originalFinancial) {
-          originalFinancial.returnedQuantity = addMoney(originalFinancial.returnedQuantity, qtyInBase);
+          originalFinancial.returnedQuantity = roundReturnQuantity(originalFinancial.returnedQuantity + qtyInBase);
           originalFinancial.returnedGross = addMoney(originalFinancial.returnedGross, grossLineTotal);
           originalFinancial.returnedSubtotal = addMoney(originalFinancial.returnedSubtotal, lineTotal);
           originalFinancial.returnedGst = addMoney(originalFinancial.returnedGst, gstAmount);

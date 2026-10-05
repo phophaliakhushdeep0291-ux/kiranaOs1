@@ -1,5 +1,7 @@
+import { reportCalendarDay } from "@/features/core/reports/report-calendar";
 import { LocalDataUnavailable } from "@/features/core/sync/LocalDataUnavailable";
-import { roundMoney } from "@/lib/money";
+import { roundMoney, formatMoney as fmt } from "@/lib/money";
+import { buildDashboardStats, dashboardCashInDrawer, summariseDashboardPayments, dashboardHourlyChart, type DashboardStats } from "@/features/core/dashboard/financial-display";
 import { resolveBillPaymentMode } from "@/features/core/bills/payment-mode";
 import { useShopBillingWords } from "@/features/core/settings/shop-billing";
 import { useEffect, useId, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
@@ -20,7 +22,7 @@ import {
 } from "recharts";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { getLocalDashboardSnapshot, useGetPaymentSummary, useGetPnL, useGetUdharSummary, useListBills, warmRecentLocalCache, type LocalDashboardSnapshot } from "@/lib/api/client";
-import { buildLocalReportSnapshot, type LocalReportSnapshot } from "@/features/core/reports/local-reporting";
+import { buildLocalReportSnapshot, calculateHourlySales, type LocalReportSnapshot } from "@/features/core/reports/local-reporting";
 import { FinancialAggregationService, type FinancialAggregationSnapshot } from "@/features/core/finance/services/FinancialAggregationService";
 import { offlineDB } from "@/lib/offline/db";
 import { dashboardChangeAffects, loadRecentDashboardBills } from "@/features/core/dashboard/local-reads";
@@ -152,9 +154,7 @@ function money(n: number | undefined | null) {
 
 
 
-function fmt(n: number | undefined | null) {
-  return `Rs ${money(n).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
+
 
 function pctChange(current: number, previous: number): number | null {
   const prev = money(previous);
@@ -221,7 +221,7 @@ function longDate(language: string, value: Date = new Date()) {
 
 function billDateKey(bill: Bill): string {
   const record = bill as Bill & { created_at?: string; billDate?: string; date?: string };
-  return String(bill.createdAt ?? record.created_at ?? record.billDate ?? record.date ?? "").slice(0, 10);
+  return reportCalendarDay(String(bill.businessDate ?? bill.business_date ?? bill.createdAt ?? record.created_at ?? record.billDate ?? record.date ?? "")) ?? "";
 }
 
 function dashboardBillAmount(bill: Bill): number {
@@ -231,7 +231,7 @@ function dashboardBillAmount(bill: Bill): number {
 function isDashboardSaleBill(bill: Bill): boolean {
   // Estimates (kacha bills) count as sales — same money/stock effects, only the EST- series differs.
   const status = String(bill.status ?? "").toLowerCase();
-  return !status.includes("cancel");
+  return !status.includes("cancel") && String(bill.sync_status ?? "").toLowerCase() !== "conflict";
 }
 
 function billsInsideRange(bills: Bill[], range: { from: string; to: string }): Bill[] {
@@ -243,15 +243,7 @@ function billsInsideRange(bills: Bill[], range: { from: string; to: string }): B
 
 function buildDashboardSalesChart(period: DashboardPeriod, range: { from: string; to: string }, bills: Bill[]) {
   if (period === "today") {
-    const points = Array.from({ length: 6 }, (_, index) => ({ key: index, date: `${String(index * 4).padStart(2, "0")}:00`, sales: 0 }));
-    for (const bill of bills) {
-      const record = bill as Bill & { created_at?: string };
-      const raw = String(bill.createdAt ?? record.created_at ?? "");
-      const parsed = new Date(raw);
-      const hour = Number.isFinite(parsed.getTime()) ? parsed.getHours() : 0;
-      points[Math.min(5, Math.floor(hour / 4))].sales += dashboardBillAmount(bill);
-    }
-    return points.map(({ date, sales }) => ({ date, sales: roundMoney(sales) }));
+    return dashboardHourlyChart(calculateHourlySales(bills as (Bill & Record<string, unknown>)[], range));
   }
 
   const start = new Date(`${range.from}T00:00:00`);
@@ -268,73 +260,10 @@ function buildDashboardSalesChart(period: DashboardPeriod, range: { from: string
   return points.map(({ date, sales }) => ({ date, sales: roundMoney(sales) }));
 }
 
-function summariseDashboardPayments(bills: Bill[]) {
-  const summary = { cash: 0, upi: 0, bank: 0, credit: 0, other: 0, total: 0 };
-  for (const bill of bills) {
-    const record = bill as Bill & Record<string, unknown>;
-    const total = dashboardBillAmount(bill);
-    const paid = Math.max(0, money(bill.paidAmount ?? bill.buyerPaidAmount));
-    const explicitCredit = money(Number(bill.creditAmount ?? record.credit_amount ?? record.dueAmount ?? record.due_amount ?? 0));
-    const mode = recentBillPaymentMode(record);
-    const credit = Math.max(0, Math.min(total, explicitCredit || (mode === "udhar" ? total - paid : 0)));
-    const payments = Array.isArray(bill.payments) ? bill.payments as Array<Record<string, unknown>> : [];
-    let tenderAccounted = 0;
-    for (const payment of payments) {
-      const amount = Math.max(0, money(payment.amount as number));
-      const paymentMode = String(payment.mode ?? "").toLowerCase();
-      if (paymentMode === "cash") summary.cash += amount;
-      else if (paymentMode === "upi") summary.upi += amount;
-      else if (["bank", "bank_transfer", "card"].includes(paymentMode)) summary.bank += amount;
-      else if (paymentMode !== "credit") summary.other += amount;
-      if (paymentMode !== "credit") tenderAccounted += amount;
-    }
-    const remainingPaid = Math.max(0, Math.min(total - credit, paid || total - credit) - tenderAccounted);
-    if (remainingPaid > 0) {
-      if (mode === "cash") summary.cash += remainingPaid;
-      else if (mode === "upi") summary.upi += remainingPaid;
-      else if (["bank", "bank_transfer", "card"].includes(mode)) summary.bank += remainingPaid;
-      else summary.other += remainingPaid;
-    }
-    summary.credit += credit;
-    summary.total += total;
-  }
-  return Object.fromEntries(Object.entries(summary).map(([key, value]) => [key, roundMoney(value)])) as typeof summary;
-}
-
 // ─── shared prop types ────────────────────────────────────────────────────────
 
 type DrilldownType = "revenue" | "profit" | "collection";
 
-interface DashboardStats {
-  revenue: number;
-  grossProfit: number;
-  grossMarginPct: number;
-  billCount: number;
-  totalOutstanding: number;
-  outstandingCustomers: { customerId: string; customerName: string; mobile?: string | null; outstanding: number; }[];
-  cash: number;
-  upi: number;
-  bank: number;
-  credit: number;
-  cashCollected: number;
-  upiCollected: number;
-  bankCollected: number;
-  supplierCashPaid: number;
-  supplierUpiPaid: number;
-  supplierBankPaid: number;
-  supplierDue: number;
-  purchaseDue: number;
-  previousRevenue: number;
-  previousGrossProfit: number;
-  previousCashCollected: number;
-  previousUpiCollected: number;
-  previousBankCollected: number;
-  previousOutstanding: number;
-  expensesToday: number;
-  previousExpenses: number;
-  source: string;
-  hasBusinessData: boolean;
-}
 
 interface LayoutProps {
   businessType: BusinessType;
@@ -395,8 +324,10 @@ export default function Dashboard() {
         FinancialAggregationService.buildSnapshot(today),
         FinancialAggregationService.buildSnapshot(yesterday),
       ]).then(([current, previous]) => {
-        setFinancialSnapshot(current);
-        setPreviousFinancialSnapshot(previous);
+        if (generation === reportGeneration) {
+          setFinancialSnapshot(current);
+          setPreviousFinancialSnapshot(previous);
+        }
       }).catch(() => undefined);
     };
     refreshReport();
@@ -412,68 +343,17 @@ export default function Dashboard() {
 
   const pnl = useGetPnL({ from: today, to: today }, { query: { enabled: canFetchBackendPnL, staleTime: 2 * 60_000, retry: 0 } });
   const udharSummary = useGetUdharSummary({ query: { staleTime: 2 * 60_000, retry: 1 } });
-  const paymentSummary = useGetPaymentSummary(undefined, { query: { staleTime: 2 * 60_000, retry: 1 } });
+  const paymentSummary = useGetPaymentSummary({ from: today, to: today }, { query: { staleTime: 2 * 60_000, retry: 1 } });
   const billsToday = useListBills({ from: today, to: today, limit: 1 }, { query: { staleTime: 2 * 60_000, retry: 1 } });
   const backendPnL = canFetchBackendPnL ? pnl.data : undefined;
 
-  const dashboard = useMemo((): DashboardStats => {
-    const reportToday = ownerReport?.today;
-    const reportPayments = ownerReport?.paymentBreakdown;
-    const finance = financialSnapshot;
-    const revenue = roundMoney(money(finance?.revenueToday ?? reportToday?.sales ?? localSnapshot.revenue ?? backendPnL?.revenue));
-    const grossProfit = roundMoney(money(finance?.profitToday ?? reportToday?.profitEstimate ?? localSnapshot.grossProfit ?? backendPnL?.grossProfit));
-    const cash = finance?.cashSalesToday ?? reportToday?.cashSales ?? localSnapshot.cash ?? paymentSummary.data?.cash;
-    const upi = finance?.upiSalesToday ?? reportToday?.upiSales ?? localSnapshot.upi ?? paymentSummary.data?.upi;
-    const bank = finance?.bankSalesToday ?? reportToday?.bankSales ?? localSnapshot.bank ?? paymentSummary.data?.bank;
-    const credit = finance?.udharSalesToday ?? reportToday?.udharSales ?? localSnapshot.credit ?? paymentSummary.data?.credit;
-    const todayUdhar = roundMoney(money(credit));
-    const cashIn = roundMoney(money(cash));
-    const upiIn = roundMoney(money(upi));
-    const bankIn = roundMoney(money(bank));
-    const supplierCashPaid = roundMoney(money(finance?.supplierCashPaidToday ?? reportPayments?.purchaseCashPaid));
-    const supplierUpiPaid = roundMoney(money(finance?.supplierUpiPaidToday ?? reportPayments?.purchaseUpiPaid));
-    const supplierBankPaid = roundMoney(money(finance?.supplierBankPaidToday ?? reportPayments?.purchaseBankPaid));
-    const purchaseDue = roundMoney(money(finance?.purchaseDueToday ?? reportPayments?.purchaseDue));
-    const supplierDue = roundMoney(money(finance?.supplierDue ?? reportPayments?.purchaseDue));
-    const cashCollected = roundMoney(money(finance?.totalCashCollectedToday ?? reportPayments?.cashIn ?? cashIn));
-    const upiCollected = roundMoney(money(finance?.totalUpiCollectedToday ?? reportPayments?.upiIn ?? upiIn));
-    const bankCollected = roundMoney(money(finance?.totalBankCollectedToday ?? reportPayments?.bankIn ?? bankIn));
-    const grossMarginPct = revenue > 0
-      ? Math.round((grossProfit / revenue) * 100)
-      : roundMoney(money(localSnapshot.grossMarginPct ?? backendPnL?.grossMarginPct));
-    const totalOutstanding = roundMoney(money(finance?.totalOutstandingUdhar ?? ownerReport?.pendingUdhar ?? localSnapshot.totalOutstanding ?? udharSummary.data?.totalOutstanding));
-    const recoveredToday = roundMoney(money(finance?.cashUdharRecoveryToday) + money(finance?.upiUdharRecoveryToday) + money(finance?.bankUdharRecoveryToday));
-    const previousOutstanding = roundMoney(Math.max(0, totalOutstanding - todayUdhar + recoveredToday));
-    const outstandingCustomers = finance?.outstandingCustomers?.length
-      ? finance.outstandingCustomers
-      : localSnapshot.outstandingCustomers.length > 0
-        ? localSnapshot.outstandingCustomers
-        : udharSummary.data?.customers ?? [];
-    const useLocal = finance?.hasLocalData || ownerReport?.hasLocalData || localSnapshot.hasCache;
-    return {
-      revenue, grossProfit, grossMarginPct,
-      billCount: finance?.totalBillsToday ?? reportToday?.bills ?? localSnapshot.billCount ?? billsToday.data?.total ?? 0,
-      totalOutstanding, outstandingCustomers,
-      cash: cashIn, upi: upiIn, bank: bankIn, credit: todayUdhar,
-      cashCollected, upiCollected, bankCollected, supplierCashPaid, supplierUpiPaid, supplierBankPaid, supplierDue, purchaseDue,
-      previousRevenue: roundMoney(money(previousFinancialSnapshot?.revenueToday)),
-      previousGrossProfit: roundMoney(money(previousFinancialSnapshot?.profitToday)),
-      previousCashCollected: roundMoney(money(previousFinancialSnapshot?.totalCashCollectedToday)),
-      previousUpiCollected: roundMoney(money(previousFinancialSnapshot?.totalUpiCollectedToday)),
-      previousBankCollected: roundMoney(money(previousFinancialSnapshot?.totalBankCollectedToday)),
-      previousOutstanding,
-      expensesToday: roundMoney(money(finance?.expensesToday)),
-      previousExpenses: roundMoney(money(previousFinancialSnapshot?.expensesToday)),
-      source: useLocal ? "IndexedDB" : "backend refresh",
-      hasBusinessData: Boolean(useLocal || revenue > 0 || totalOutstanding > 0 || billsToday.data?.total),
-    };
-  }, [financialSnapshot, previousFinancialSnapshot, ownerReport, localSnapshot, backendPnL, billsToday.data, udharSummary.data, paymentSummary.data]);
+  const dashboard = useMemo(() => buildDashboardStats({
+    date: today, financialSnapshot, previousFinancialSnapshot, ownerReport, localSnapshot,
+    backendPnL, billsToday: billsToday.data, udharSummary: udharSummary.data, paymentSummary: paymentSummary.data,
+  }), [today, financialSnapshot, previousFinancialSnapshot, ownerReport, localSnapshot, backendPnL, billsToday.data, udharSummary.data, paymentSummary.data]);
 
   const isLoading = !financialSnapshot && !ownerReport && !localSnapshot.hasCache && (pnl.isLoading || udharSummary.isLoading || paymentSummary.isLoading);
-  const cashInDrawer = Math.max(
-    0,
-    roundMoney(money(financialSnapshot?.cashDrawer.expectedClosingCash ?? ownerReport?.paymentBreakdown.netCashInHand ?? dashboard.cashCollected - dashboard.supplierCashPaid)),
-  );
+  const cashInDrawer = dashboardCashInDrawer(financialSnapshot, ownerReport, dashboard);
   const lowStockCount = ownerReport?.lowStock.length ?? 0;
   const pendingSyncCount = ownerReport?.pendingSyncCount ?? 0;
   const hasUnsyncedOperations = Boolean(ownerReport?.hasUnsyncedOperations);
@@ -655,7 +535,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
     () => billsInsideRange(previousPeriodBillsQuery.data?.bills ?? [], previousPeriodRange),
     [previousPeriodBillsQuery.data?.bills, previousPeriodRange],
   );
-  const periodPaymentSummary = useMemo(() => summariseDashboardPayments(periodBills), [periodBills]);
+  const periodPaymentSummary = useMemo(() => summariseDashboardPayments(periodBills, periodRange), [periodBills, periodRange]);
   const previousPeriodSales = useMemo(
     () => previousPeriodBills.reduce((sum, bill) => sum + dashboardBillAmount(bill), 0),
     [previousPeriodBills],
@@ -679,18 +559,11 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
   const salesChartData = useMemo(() => {
     if (activePeriodReport) {
       if (period === "today") {
-        return Array.from({ length: 6 }, (_, index) => ({
-          date: `${String(index * 4).padStart(2, "0")}:00`,
-          sales: index === 5 ? activePeriodReport.selected.sales : 0,
-        }));
+        return dashboardHourlyChart(activePeriodReport.hourlySales);
       }
       return activePeriodReport.dailyTrend.map((point) => ({ date: point.label, sales: point.sales }));
     }
-    const points = buildDashboardSalesChart(period, periodRange, periodBills);
-    if (period === "today" && periodBills.length === 0 && dashboard.revenue > 0 && points.length > 0) {
-      points[points.length - 1].sales = dashboard.revenue;
-    }
-    return points;
+    return buildDashboardSalesChart(period, periodRange, periodBills);
   }, [activePeriodReport, period, periodRange, periodBills, dashboard.revenue]);
 
   const paymentBreakdown = useMemo<PaymentSlice[]>(() => {
@@ -700,9 +573,9 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
     const bank = activePeriodReport?.selected.bankSales ?? (useDailyFallback ? dashboard.bank : periodPaymentSummary.bank);
     const credit = activePeriodReport?.selected.udharSales ?? (useDailyFallback ? dashboard.credit : periodPaymentSummary.credit);
     const other = useDailyFallback
-      ? Math.max(0, roundMoney(dashboard.revenue - cash - upi - bank - credit))
+      ? roundMoney(dashboard.revenue - cash - upi - bank - credit)
       : activePeriodReport
-        ? Math.max(0, roundMoney(periodSales - cash - upi - bank - credit))
+        ? roundMoney(periodSales - cash - upi - bank - credit)
         : periodPaymentSummary.other;
     return [
       { label: t("billing.pay.cash"), value: cash, color: "#2fc45a", dot: "bg-[#2fc45a]" },
@@ -713,7 +586,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
       // literal "{credit}" — which is what this legend used to show.
       { label: t("billing.pay.udhar", { credit: billingWords.credit }), value: credit, color: "#f2a20b", dot: "bg-[#f2a20b]" },
       { label: t("inventory.transfers.reason.other"), value: other, color: "#7557e8", dot: "bg-[#7557e8]" },
-    ].filter((row) => row.value > 0);
+    ].filter((row) => row.value !== 0);
   }, [activePeriodReport, billingWords.credit, dashboard.bank, dashboard.cash, dashboard.credit, dashboard.revenue, dashboard.upi, period, periodBills.length, periodPaymentSummary, periodSales, t]);
 
   const recentBills = useMemo(
@@ -722,13 +595,14 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
       .sort((a, b) => sortTime(b.createdAt ?? (b as Bill & { created_at?: string }).created_at) - sortTime(a.createdAt ?? (a as Bill & { created_at?: string }).created_at)),
     [recentBillsQuery.data?.bills, localRecentBills],
   );
-  const yesterdaySales = dashboard.previousRevenue || salesChartData[5]?.sales || 0;
+  const yesterdaySales = dashboard.previousRevenue;
   // null = no prior-day baseline to compare against → shown as "—" rather than a misleading 0%.
   const salesDelta = pctChange(dashboard.revenue, yesterdaySales);
   const cashDelta = pctChange(dashboard.cashCollected, dashboard.previousCashCollected);
   const upiDelta = pctChange(dashboard.upiCollected, dashboard.previousUpiCollected);
   const bankDelta = pctChange(dashboard.bankCollected, dashboard.previousBankCollected);
-  const outstandingDelta = pctChange(dashboard.totalOutstanding, dashboard.previousOutstanding);
+  // Current balances cannot reconstruct yesterday after manual adjustments or reversals.
+  const outstandingDelta: number | null = null;
   const profitDelta = pctChange(dashboard.grossProfit, dashboard.previousGrossProfit);
   const expenseDelta = pctChange(dashboard.expensesToday, dashboard.previousExpenses);
   const avgBillValue = dashboard.billCount > 0 ? Math.round(dashboard.revenue / dashboard.billCount) : 0;
@@ -736,7 +610,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
     const rows = [
       { tone: "emerald" as const, icon: <Package size={16} />, label: t("chrome.dashboard.salesByCategory"), value: ownerReport?.topProducts[0]?.name ? "View breakdown" : "No sales yet", href: "/reports" },
       { tone: "blue" as const, icon: <PackagePlus size={16} />, label: t("chrome.dashboard.topSellingProduct"), value: ownerReport?.topProducts[0]?.name ?? "No product yet", href: "/reports" },
-      { tone: "violet" as const, icon: <CreditCard size={16} />, label: t("billing.bills.stats.average"), value: avgBillValue > 0 ? fmtRs(avgBillValue) : fmtRs(0), href: "/bills" },
+      { tone: "violet" as const, icon: <CreditCard size={16} />, label: t("billing.bills.stats.average"), value: avgBillValue > 0 ? fmt(avgBillValue) : fmt(0), href: "/bills" },
       { tone: "orange" as const, icon: <Users size={16} />, label: t("chrome.dashboard.activeCustomers"), value: String(ownerReport?.topCustomers.length ?? 0), href: "/customers" },
     ];
     return orderByUsage(rows, (row) => row.href, usageScores(insightsPersonalization.data?.dashboardOrder));
@@ -795,7 +669,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
       <div className={cn("grid min-w-0 auto-rows-fr gap-4 sm:grid-cols-2", canViewProfit ? "xl:grid-cols-4 2xl:grid-cols-7" : "xl:grid-cols-4 2xl:grid-cols-6")}>
         <KpiCard
           label={t("dashboard.kpi.todaySales")}
-          value={fmtRs(dashboard.revenue)}
+          value={fmt(dashboard.revenue)}
           delta={salesDelta}
           deltaLabel="vs yesterday"
           icon={<ShoppingCart size={18} />}
@@ -807,7 +681,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         />
         <KpiCard
           label={t("dashboard.cashCollected")}
-          value={fmtRs(dashboard.cashCollected)}
+          value={fmt(dashboard.cashCollected)}
           delta={cashDelta}
           deltaLabel="vs yesterday"
           icon={<Wallet size={18} />}
@@ -819,7 +693,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         />
         <KpiCard
           label={t("dashboard.kpi.upiCollected")}
-          value={fmtRs(dashboard.upiCollected)}
+          value={fmt(dashboard.upiCollected)}
           delta={upiDelta}
           deltaLabel="vs yesterday"
           icon={<Smartphone size={18} />}
@@ -832,7 +706,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         <Link href="/money-statement?mode=bank" className="block h-full min-w-0">
           <KpiCard
             label={t("dashboard.kpi.bankCollected")}
-            value={fmtRs(dashboard.bankCollected)}
+            value={fmt(dashboard.bankCollected)}
             delta={bankDelta}
             deltaLabel="vs yesterday"
             icon={<Landmark size={18} />}
@@ -845,20 +719,20 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         <Link href="/customers?filter=udhar" className="block h-full min-w-0">
           <KpiCard
             label={t("dashboard.kpi.outstandingUdhar")}
-            value={fmtRs(dashboard.totalOutstanding)}
+            value={fmt(dashboard.totalOutstanding)}
             delta={outstandingDelta}
             deltaLabel="vs yesterday"
             deltaPositiveIsBad
             icon={<AlertTriangle size={18} />}
             iconBg="border border-[#ffcfd7] bg-[#ffecef] text-[#ff2748] shadow-[0_0_0_4px_rgba(255,39,72,0.035),0_10px_26px_rgba(255,39,72,0.20)]"
             color="#ff304f"
-            spark={mobileSparkline(dashboard.previousOutstanding, dashboard.totalOutstanding)}
+            spark={[]}
             loading={isLoading}
           />
         </Link>
         {canViewProfit ? <KpiCard
           label={t("dashboard.kpi.profitEst")}
-          value={fmtRs(dashboard.grossProfit)}
+          value={fmt(dashboard.grossProfit)}
           delta={profitDelta}
           deltaLabel="vs yesterday"
           icon={<TrendingUp size={18} />}
@@ -893,7 +767,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
                 <span className="grid h-[18px] w-[18px] place-items-center rounded-full border border-[#b9c7dc] text-[10px] font-black text-[#60708a]">i</span>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2.5">
-                <p className="font-sans text-[24px] font-bold leading-none text-[var(--brand-ink)] dark:text-card-foreground">{fmtRs(periodSales)}</p>
+                <p className="font-sans text-[24px] font-bold leading-none text-[var(--brand-ink)] dark:text-card-foreground">{fmt(periodSales)}</p>
                 <DashboardPeriodSelect value={period} onChange={setPeriod} />
                 {periodSalesDelta !== null && (
                   <span className="flex items-center gap-1.5 text-[11px] font-semibold">
@@ -938,7 +812,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
                   cursor={{ stroke: "#9bb7ff", strokeWidth: 1, strokeDasharray: "4 4" }}
                   contentStyle={{ background: "#071735", border: "0", borderRadius: "10px", boxShadow: "0 14px 30px rgba(15,35,80,0.20)", color: "#fff", fontSize: 12, fontWeight: 700 }}
                   labelStyle={{ color: "#dce7ff", fontSize: 11, marginBottom: 4 }}
-                  formatter={(v: number) => [fmtRs(v), "Sales"]}
+                  formatter={(v: number) => [fmt(v), "Sales"]}
                 />
                 <Area
                   type="monotone"
@@ -1013,7 +887,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
                         <td className={cn("whitespace-nowrap px-4 py-1.5 font-medium", DASH_MUTED)}>{bill.createdAt ? format(new Date(bill.createdAt), "hh:mm a") : "—"}</td>
                         <td className="max-w-32 truncate px-4 py-1.5 font-medium">{bill.customerName ?? "Walk-in"}</td>
                         <td className={cn("px-4 py-1.5 font-medium", DASH_MUTED)}>{Array.isArray(bill.items) ? bill.items.length : "—"}</td>
-                        <td className="whitespace-nowrap px-4 py-1.5 font-semibold">{fmtRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</td>
+                        <td className="whitespace-nowrap px-4 py-1.5 font-semibold">{fmt(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</td>
                         <td className="px-4 py-1.5">
                           <RecentBillPaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} />
                         </td>
@@ -1036,7 +910,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
             </div>
             <div className="flex items-center justify-between gap-3 px-4 py-2.5 sm:border-l sm:border-[#e8edf4]">
               <p className={cn("text-[10px] font-medium", DASH_MUTED)}>{t("dashboard.salesToday")}</p>
-              <p className="text-[15px] font-extrabold text-[#13223f] dark:text-card-foreground">{fmtRs(dashboard.revenue)}</p>
+              <p className="text-[15px] font-extrabold text-[#13223f] dark:text-card-foreground">{fmt(dashboard.revenue)}</p>
             </div>
           </div>
         </section>
@@ -1165,7 +1039,7 @@ function MobileGeneralDashboard({
         <div className="relative flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75">{t("dashboard.netSalesToday")}</p>
-            <p className="mt-2 break-words font-display text-[38px] font-black leading-tight tracking-[-0.04em] tabular-nums">{fmtCompactRs(dashboard.revenue)}</p>
+            <p className="mt-2 break-words font-display text-[38px] font-black leading-tight tracking-[-0.04em] tabular-nums">{fmt(dashboard.revenue)}</p>
             <div className="mt-2 flex items-center gap-2 text-[12px] font-semibold text-blue-100/75">
               <MobileDelta delta={salesDelta} inverse />
               <span>·</span>
@@ -1216,9 +1090,9 @@ function MobileGeneralDashboard({
           <Link href="/reports" className="inline-flex min-h-11 items-center gap-1 rounded-[12px] px-3 text-[12px] font-black text-[var(--brand)]">{t("dashboard.allReports")} <ChevronRight size={15} /></Link>
         </div>
         <div className="grid grid-cols-2 gap-2.5">
-          {canViewProfit ? <MobileHealthCard href="/reports" label={t("dashboard.kpi.grossProfit")} value={fmtCompactRs(dashboard.grossProfit)} detail={t("dashboard.kpi.estimatedToday")} delta={profitDelta} icon={<TrendingUp size={18} />} tone="green" /> : null}
-          <MobileHealthCard href="/customers?filter=udhar" label={t("dashboard.kpi.udharDue")} value={fmtCompactRs(dashboard.totalOutstanding)} detail={t("dashboard.mobile.customerCount", { count: dashboard.outstandingCustomers.length })} delta={outstandingDelta} positiveIsBad icon={<AlertTriangle size={18} />} tone="red" />
-          <MobileHealthCard href="/expenses" label={t("dashboard.kpi.expenses")} value={fmtCompactRs(dashboard.expensesToday)} detail={t("dashboard.kpi.recordedToday")} delta={expenseDelta} positiveIsBad icon={<Wallet size={18} />} tone="amber" />
+          {canViewProfit ? <MobileHealthCard href="/reports" label={t("dashboard.kpi.grossProfit")} value={fmt(dashboard.grossProfit)} detail={t("dashboard.kpi.estimatedToday")} delta={profitDelta} icon={<TrendingUp size={18} />} tone="green" /> : null}
+          <MobileHealthCard href="/customers?filter=udhar" label={t("dashboard.kpi.udharDue")} value={fmt(dashboard.totalOutstanding)} detail={t("dashboard.mobile.customerCount", { count: dashboard.outstandingCustomers.length })} delta={outstandingDelta} positiveIsBad icon={<AlertTriangle size={18} />} tone="red" />
+          <MobileHealthCard href="/expenses" label={t("dashboard.kpi.expenses")} value={fmt(dashboard.expensesToday)} detail={t("dashboard.kpi.recordedToday")} delta={expenseDelta} positiveIsBad icon={<Wallet size={18} />} tone="amber" />
           <MobileHealthCard href="/inventory" label={t("dashboard.lowStock")} value={lowStockCount.toLocaleString("en-IN")} detail={lowStockCount > 0 ? t("dashboard.signal.itemsToReorder") : t("dashboard.signal.stockHealthy")} icon={<Package size={18} />} tone={lowStockCount > 0 ? "violet" : "green"} />
         </div>
       </section>
@@ -1240,7 +1114,7 @@ function MobileGeneralDashboard({
                   </div>
                   <span className="mt-1 block truncate text-[11px] font-semibold text-[#718096]">{bill.customerName ?? t("dashboard.tile.walkIn")}</span>
                 </div>
-                <span className="whitespace-nowrap text-[13px] font-black text-[var(--brand-ink)]">{fmtCompactRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</span>
+                <span className="whitespace-nowrap text-[13px] font-black text-[var(--brand-ink)]">{fmt(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</span>
                 <ChevronRight size={16} className="text-[#a2adbd]" />
               </Link>
             ))}
@@ -1255,7 +1129,7 @@ function MobileGeneralDashboard({
             <h2 className="font-display text-[20px] font-black text-[#071333]">{t("dashboard.salesTrend")}</h2>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               <span className="text-[13px] font-medium text-[#33456b]">{t("dashboard.totalSales")}</span>
-              <span className="text-[15px] font-black text-[#071333]">{fmtCompactRs(periodSales)}</span>
+              <span className="text-[15px] font-black text-[#071333]">{fmt(periodSales)}</span>
               <MobileDelta delta={periodSalesDelta} label={t("dashboard.vsPreviousPeriod")} />
             </div>
           </div>
@@ -1277,7 +1151,7 @@ function MobileGeneralDashboard({
                   than letting the bigger glyphs collide. */}
               <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b", fontWeight: 600 }} tickLine={false} axisLine={false} tickMargin={8} minTickGap={12} />
               <YAxis tick={{ fontSize: 11, fill: "#64748b", fontWeight: 600 }} tickLine={false} axisLine={false} width={46} tickFormatter={(value) => value >= 1000 ? `₹${Math.round(value / 1000)}K` : `₹${value}`} />
-              <Tooltip formatter={(value: number) => [fmtCompactRs(value), "Sales"]} />
+              <Tooltip formatter={(value: number) => [fmt(value), "Sales"]} />
               <Area type="monotone" dataKey="sales" stroke="var(--brand)" strokeWidth={2.5} fill="url(#mobileSalesFill)" dot={{ r: 3, fill: "white", stroke: "var(--brand)", strokeWidth: 2 }} />
             </AreaChart>
           </ResponsiveContainer>
@@ -1309,7 +1183,7 @@ function MobileGeneralDashboard({
                   <p className="truncate text-[13px] font-black text-[var(--brand-ink)]">{row.name}</p>
                   <p className="mt-0.5 text-[11px] font-semibold text-[#718096]">{t("dashboard.tile.soldCount", { count: row.quantitySold.toLocaleString("en-IN") })}</p>
                 </div>
-                <span className="whitespace-nowrap text-[13px] font-black text-[var(--brand-ink)]">{fmtCompactRs(row.revenue)}</span>
+                <span className="whitespace-nowrap text-[13px] font-black text-[var(--brand-ink)]">{fmt(row.revenue)}</span>
                 <ChevronRight size={16} className="text-[#a2adbd]" />
               </Link>
             ))}
@@ -1322,11 +1196,11 @@ function MobileGeneralDashboard({
   );
 }
 
-function MobileHeroStat({ label, value }: { label: string; value: number }) {
+export function MobileHeroStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="min-w-0">
       <p className="truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60">{label}</p>
-      <p className="mt-1 truncate font-display text-[15px] font-black text-white">{fmtCompactRs(value)}</p>
+      <p className="mt-1 truncate font-display text-[15px] font-black text-white">{fmt(value)}</p>
     </div>
   );
 }
@@ -1394,15 +1268,11 @@ function MobileInsight({ tone, icon, title, subtitle }: { tone: "emerald" | "ora
 }
 
 function mobileSparkline(previous: number, current: number): Array<{ value: number }> {
-  const start = previous > 0 ? previous : current > 0 ? current * 0.72 : 1;
-  const end = current > 0 ? current : start;
-  const spread = Math.max(start, end) * 0.08;
-  return [start, start + spread, start - spread * 0.35, start + spread * 1.35, start + spread * 0.2, end + spread * 0.55, end].map((value) => ({ value: Math.max(0, value) }));
+  // These are the two observed daily values, not an invented intra-day trend.
+  return [{ value: previous }, { value: current }];
 }
 
-function fmtCompactRs(n: number | undefined | null): string {
-  return `₹${money(n).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-}
+
 
 function DashboardPeriodSelect({ value, onChange, compact = false }: { value: DashboardPeriod; onChange: (period: DashboardPeriod) => void; compact?: boolean }) {
   return (
@@ -1553,11 +1423,12 @@ function QuickStartLink({ href, step, icon, title, detail }: { href: string; ste
   );
 }
 
-function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: PaymentSlice[]; total: number; period: DashboardPeriod; onPeriodChange: (period: DashboardPeriod) => void }) {
+export function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: PaymentSlice[]; total: number; period: DashboardPeriod; onPeriodChange: (period: DashboardPeriod) => void }) {
   const { t } = useAppLanguage();
   const realTotal = rows.reduce((sum, row) => sum + row.value, 0);
-  const displayTotal = total > 0 ? total : realTotal;
-  const chartRows = rows.length > 0 ? rows : [{ label: t("chrome.dashboard.noSales"), value: 1, color: "#e5e7eb", dot: "bg-muted" }];
+  const displayTotal = total;
+  const hasRefund = rows.some((row) => row.value < 0);
+  const chartRows = rows.length > 0 && !hasRefund ? rows : [{ label: t("chrome.dashboard.noSales"), value: 1, color: "#e5e7eb", dot: "bg-muted" }];
   const chartAnimationKey = chartRows.map((row) => `${row.label}:${row.value}`).join("|");
 
   return (
@@ -1592,7 +1463,7 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
           <div>
-            <p className="font-sans text-[17px] font-extrabold leading-none text-[var(--brand-ink)] dark:text-card-foreground">{fmtRs(displayTotal)}</p>
+            <p className="font-sans text-[17px] font-extrabold leading-none text-[var(--brand-ink)] dark:text-card-foreground">{fmt(displayTotal)}</p>
             <p className={cn("mt-1 text-[11px] font-semibold", DASH_MUTED)}>{t("dashboard.totalSales")}</p>
           </div>
         </div>
@@ -1612,7 +1483,7 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
                 <span className={cn("h-2 w-2 rounded-full", row.dot)} />
                 <span className="truncate">{row.label}</span>
               </span>
-              <span className="shrink-0 whitespace-nowrap font-black text-[var(--brand-ink)] dark:text-card-foreground">{fmtRs(row.value)} {realTotal > 0 ? `(${pct}%)` : ""}</span>
+              <span className="shrink-0 whitespace-nowrap font-black text-[var(--brand-ink)] dark:text-card-foreground">{fmt(row.value)} {realTotal > 0 && !hasRefund ? `(${pct}%)` : ""}</span>
             </div>
           );
         })}
@@ -1752,7 +1623,7 @@ function RecentProductsRail({ products }: { products: Product[] }) {
                 <div className="min-w-0">
                   <p className="truncate text-[12px] font-black text-[var(--brand-ink)]">{product.name}</p>
                   <p className={cn("mt-0.5 text-[11px] font-semibold", DASH_MUTED)}>{inventoryStockLabel(product)}</p>
-                  <p className="mt-1 text-[12px] font-black text-[var(--brand-ink)]">{fmtRs(productPrice(product))}</p>
+                  <p className="mt-1 text-[12px] font-black text-[var(--brand-ink)]">{fmt(productPrice(product))}</p>
                 </div>
               </div>
             </Link>
@@ -1789,11 +1660,7 @@ function productPrice(product: Product): number {
   return money(product.sellingPrice ?? product.defaultPricePerRateUnit ?? product.retailPrice ?? 0);
 }
 
-function fmtRs(n: number | undefined | null) {
-  const value = Number(n ?? 0);
-  const safe = Number.isFinite(value) ? value : 0;
-  return `₹${safe.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+
 
 // ─── RESTAURANT layout ────────────────────────────────────────────────────────
 

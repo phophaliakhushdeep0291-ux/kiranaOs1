@@ -135,9 +135,14 @@ export function calculateInvoiceGst(lines, discount, mode = "inclusive") {
   const lineGst = allocation.discountedLineTotals.map((lineTotal, index) => {
     const rate = Math.max(0, Number(lines[index]?.gstRate) || 0);
     if (rate <= 0 || lineTotal <= 0) return 0;
-    return mode === "exclusive"
-      ? round2(lineTotal * rate / 100)
-      : round2(lineTotal - round2(lineTotal / (1 + rate / 100)));
+    // Match the counter in integer paise, including exact half-paisa ties.
+    const linePaise = BigInt(toPaise(lineTotal));
+    const rateUnits = BigInt(Math.round(rate * 10000));
+    const scale = 1000000n;
+    const denominator = mode === "exclusive" ? scale : scale + rateUnits;
+    const numerator = linePaise * (mode === "exclusive" ? rateUnits : scale);
+    const rounded = (2n * numerator + denominator) / (2n * denominator);
+    return fromPaise(Number(mode === "exclusive" ? rounded : linePaise - rounded));
   });
   return {
     gst: fromPaise(lineGst.reduce((sum, value) => sum + toPaise(value), 0)),
@@ -145,4 +150,32 @@ export function calculateInvoiceGst(lines, discount, mode = "inclusive") {
     discount: allocation.discount,
     discountedLineTotals: allocation.discountedLineTotals,
   };
+}
+
+/**
+ * Preserve the money already collected by older offline counters. Only a trusted
+ * replay may use an exact historical float result; ordinary invoices always use
+ * integer-paise tax. This is not a payment tolerance or a client tax override.
+ */
+export function calculateReplayCompatibleGst(lines, discount, mode, { isOfflineReplay, paymentCoverage, actualAmount, roundOff } = {}) {
+  const current = calculateInvoiceGst(lines, discount, mode);
+  if (!isOfflineReplay || mode !== "exclusive") return current.gst;
+  const subtotal = current.discountedLineTotals.reduce((sum, value) => sum + toPaise(value), 0);
+  const payable = (gst) => {
+    const amount = fromPaise(subtotal + toPaise(gst));
+    return roundOff ? Math.round(amount) : amount;
+  };
+  if (!Number.isFinite(paymentCoverage) || payable(current.gst) === paymentCoverage) return current.gst;
+  if (actualAmount != null && actualAmount !== paymentCoverage) return current.gst;
+  // Both historical expressions were in released counter/server code. They can
+  // differ at half-paisa ties even though their algebra is identical.
+  for (const frontend of [true, false]) {
+    const legacy = fromPaise(current.discountedLineTotals.reduce((sum, amount, index) => {
+      const rate = Math.max(0, Number(lines[index]?.gstRate) || 0);
+      const tax = frontend ? Math.round((amount * (rate / 100) + Number.EPSILON) * 100) : Math.round(amount * rate / 100 * 100);
+      return sum + tax;
+    }, 0));
+    if (payable(legacy) === paymentCoverage) return legacy;
+  }
+  return current.gst;
 }

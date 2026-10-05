@@ -6,7 +6,7 @@ import { createLocalId, emitLocalDataChanged, normaliseInstantCacheValue, readIn
 import { buildOutboxOperation } from "@/features/core/sync/outbox";
 import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/offline/actions/utils";
 import { applyRoundOff } from "@/lib/money";
-import { allocateInvoiceDiscount, computeGstBreakdown } from "@/lib/gst";
+import { allocateInvoiceDiscount, computeGstBreakdown, gstLineAmounts } from "@/lib/gst";
 import { normaliseLocalCustomer } from "@/features/core/customers/local-actions";
 import type { Bill, BillInput, BillInputItem, BillPayment, Customer, Product } from "@/types/api";
 import { buildAuditLogOutboxInput, buildAuditLogRow, type AuditLogRow } from "@/features/core/audit-logs/local-actions";
@@ -246,9 +246,7 @@ function buildBillItems(billId: string, items: BillInputItem[], gstMode: GstMode
     const rate = readNumber(item.gstRate, 0);
     // Inclusive (default): tax is extracted from the entered price, line total
     // stays the entered amount. Exclusive: tax is added on top.
-    const gst = gstMode === "exclusive"
-      ? roundMoney(taxableLineValue * rate / 100)
-      : rate > 0 ? roundMoney(taxableLineValue - taxableLineValue / (1 + rate / 100)) : 0;
+    const { gst } = gstLineAmounts(taxableLineValue, rate, gstMode);
     return makeLocalEntity({
       id: createLocalId("bill_item"),
       billId,
