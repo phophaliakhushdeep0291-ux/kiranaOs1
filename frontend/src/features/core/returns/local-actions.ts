@@ -1,3 +1,4 @@
+import { accountingMarketSnapshot, activeAccountingMarketSnapshot, assertAccountingMarketClaim, type AccountingMarketFields } from "@/lib/accounting-market";
 import { gstLineAmounts, type GstMode } from "@/lib/gst";
 import { offlineDB } from "@/lib/offline/db";
 import { getOfflineScope } from "@/lib/offline/context";
@@ -40,7 +41,7 @@ export interface SaleReturnItemInput {
   damaged?: boolean;
 }
 
-export interface SaleReturnInput {
+export interface SaleReturnInput extends AccountingMarketFields {
   items: SaleReturnItemInput[];
   refundMode: RefundMode;
   gstMode?: "inclusive" | "exclusive" | "none";
@@ -122,6 +123,10 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
   const originalBill = input.originalBillId
     ? reconciledBills.find((row) => row.id === input.originalBillId || row.local_id === input.originalBillId || row.server_id === input.originalBillId)
     : undefined;
+  const shopMarket = activeAccountingMarketSnapshot();
+  const marketSnapshot = originalBill ? accountingMarketSnapshot(originalBill) : shopMarket;
+  assertAccountingMarketClaim(marketSnapshot, shopMarket);
+  assertAccountingMarketClaim(input, marketSnapshot);
   const gstMode = originalBill?.billType === "estimate" ? "none" : originalBill?.gstMode ?? input.gstMode ?? "inclusive";
   const recordIds = (record: Record<string, unknown>) => new Set([
     record.id, record.local_id, record.localId, record.server_id, record.serverId,
@@ -264,6 +269,7 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
   }
 
   const negativeBill = makeLocalEntity({
+    ...marketSnapshot,
     id: billId,
     billNo: `RET-${billId.slice(-6).toUpperCase()}`,
     billNumber: `RET-${billId.slice(-6).toUpperCase()}`,
@@ -428,6 +434,7 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
     operation_type: "CREATE_SALE_RETURN",
     idempotency_key: idempotencyKey,
     payload: {
+      ...marketSnapshot,
       localBillId: billId,
       clientBillId: billId,
       idempotencyKey,

@@ -1,3 +1,4 @@
+import type { AccountingMarketFields } from "@/lib/accounting-market";
 export type ID = string;
 export type QueryParams = Record<string, unknown>;
 
@@ -15,7 +16,7 @@ export interface User {
   updatedAt?: string;
 }
 
-export interface Shop {
+export interface Shop extends AccountingMarketFields {
   id: string;
   name: string;
   ownerName: string;
@@ -548,7 +549,7 @@ export interface BillInputItem {
   hsn?: string;
 }
 
-export interface BillInput {
+export interface BillInput extends AccountingMarketFields {
   /** The register entry authorising this sale. Required only when the bill holds
    *  a Schedule H, H1 or X medicine; every other sale ignores it. */
   prescriptionId?: string;
@@ -596,7 +597,7 @@ export interface BillInput {
   sensitiveActions?: string[];
 }
 
-export interface Bill {
+export interface Bill extends AccountingMarketFields {
   id: string;
   billNo: string;
   billNumber?: string;

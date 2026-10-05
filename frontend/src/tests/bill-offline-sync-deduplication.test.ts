@@ -6,6 +6,24 @@ import {
 } from "@/features/core/sync/bill-reconciliation";
 
 describe("offline bill sync deduplication", () => {
+  it.each([true, false])("keeps equal amounts in different currencies distinct (items: %s)", (withItems) => {
+    const sale = {
+      customerName: "Walk-in",
+      grandTotal: 105,
+      paidAmount: 105,
+      createdAt: "2026-10-05T10:00:00.000Z",
+      ...(withItems ? { items: [{ productId: "product-1", quantity: 1, rate: 105 }] } : {}),
+    };
+    const pending = { ...sale, id: "bill_local_inr", billNo: "PENDING-INR", sync_status: "pending_sync" };
+    const synced = { ...sale, id: "server_aed", billNo: "AE-001", currencyCode: "AED", sync_status: "synced" };
+    expect(isLikelySyncedCopyOfPendingBill(pending, synced)).toBe(false);
+    expect(dedupeBillsForDisplay([pending, synced])).toHaveLength(2);
+    // A legacy row still reconciles with its explicit INR server snapshot.
+    const rupeeEcho = { ...synced, currencyCode: "INR" };
+    expect(isLikelySyncedCopyOfPendingBill(pending, rupeeEcho)).toBe(true);
+    expect(dedupeBillsForDisplay([pending, rupeeEcho])).toHaveLength(1);
+  });
+
   it("prefers the synced server bill over its pending offline copy", () => {
     const pending = {
       id: "bill_local_1",

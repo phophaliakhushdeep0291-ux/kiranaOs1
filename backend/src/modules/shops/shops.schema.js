@@ -2,6 +2,8 @@ import { z } from "zod";
 import { BUSINESS_TYPES } from "../../verticals/profile.js";
 
 export const updateShopSchema = z.object({
+  accountingTimeZone: z.string().optional(),
+  taxRegime: z.string().optional(),
   countryCode: z.string().optional(),
   currencyCode: z.string().optional(),
   name: z.string().min(2).optional(),

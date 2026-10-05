@@ -1,4 +1,4 @@
-import { assertLiveMarket, settingsWithMarketPolicy } from "../shops/market-policy.js";
+import { assertLiveMarket, accountingMarketSnapshot, settingsWithMarketPolicy } from "../shops/market-policy.js";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import db from "../../db.js";
@@ -119,6 +119,7 @@ export async function registerShop({ shopName, ownerName, city, address, mobile,
   const result = await db.$transaction(async (tx) => {
     const shop = await tx.shop.create({
       data: {
+        ...accountingMarketSnapshot({ countryCode, currencyCode }),
         name: shopName,
         ownerName,
         city,

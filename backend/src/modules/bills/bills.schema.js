@@ -77,6 +77,10 @@ const paymentSchema = z.object({
 });
 
 export const confirmBillSchema = z.object({
+  countryCode: z.string().max(2).optional(),
+  currencyCode: z.string().max(3).optional(),
+  accountingTimeZone: z.string().max(64).optional(),
+  taxRegime: z.string().max(16).optional(),
   locationId: z.string().min(1).optional(),
   billType: z.enum(["estimate", "normal_sale", "gst_invoice", "udhar_entry"]).default("normal_sale"),
   // inclusive (default): entered prices already contain GST — the payable stays
@@ -169,6 +173,10 @@ export const emailReceiptSchema = z.object({
 });
 
 export const saleReturnSchema = z.object({
+  countryCode: z.string().max(2).optional(),
+  currencyCode: z.string().max(3).optional(),
+  accountingTimeZone: z.string().max(64).optional(),
+  taxRegime: z.string().max(16).optional(),
   locationId: z.string().min(1).optional(),
   refundMode: z.enum(["cash", "upi", "bank", "udhar", "gift_card"]).default("cash"),
   gstMode: z.enum(["inclusive", "exclusive", "none"]).default("inclusive"),

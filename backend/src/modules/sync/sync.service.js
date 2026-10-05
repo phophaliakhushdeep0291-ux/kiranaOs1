@@ -1,3 +1,4 @@
+import { accountingMarketSnapshot, assertAccountingMarketClaim } from "../shops/market-policy.js";
 import { z } from "zod";
 import db from "../../db.js";
 import { env } from "../../config/env.js";
@@ -1896,7 +1897,10 @@ async function applyCreateBill(shopId, event, user, context) {
   const payload = getEventPayload(event);
   const billBody = payload.bill ?? payload;
   const existingResult = await findExistingCreateBillResultByIdempotency(shopId, event, payload, billBody);
-  if (existingResult) return existingResult;
+  if (existingResult) {
+    assertAccountingMarketClaim(billBody, accountingMarketSnapshot(existingResult.bill ?? {}));
+    return existingResult;
+  }
 
   const billIdentity = getCreateBillIdentity(event, payload, billBody);
   const resolvedBillBody = {

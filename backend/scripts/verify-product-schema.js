@@ -36,6 +36,7 @@ const REQUIRED_PRODUCT_COLUMNS = [
 ];
 
 const REQUIRED_BILL_COLUMNS = [
+  "countryCode", "currencyCode", "accountingTimeZone", "taxRegime",
   "id",
   "shopId",
   "billNo",
@@ -51,6 +52,8 @@ const REQUIRED_BILL_COLUMNS = [
   "createdAt",
   "updatedAt",
 ];
+
+const REQUIRED_SHOP_COLUMNS = ["countryCode", "currencyCode", "accountingTimeZone", "taxRegime"];
 
 function databaseKind(url = process.env.DATABASE_URL || "") {
   if (/^postgres(?:ql)?:\/\//i.test(url)) return "postgresql";
@@ -124,12 +127,26 @@ async function main() {
 
   await db.product.findMany({ take: 1 });
   await db.bill.findMany({ take: 1 });
+  const shopRows = kind === "postgresql"
+    ? await db.$queryRaw`SELECT column_name AS name FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'Shop'`
+    : await db.$queryRawUnsafe('PRAGMA table_info("Shop")');
+  const shopColumns = new Set(shopRows.map((row) => row.name));
+  const missingShopColumns = REQUIRED_SHOP_COLUMNS.filter((column) => !shopColumns.has(column));
+  if (missingShopColumns.length) {
+    const error = new Error(
+      `Shop table is missing accounting columns: ${missingShopColumns.join(", ")}. Run Prisma migrate deploy and generate before starting the API.`
+    );
+    error.missingColumns = missingShopColumns;
+    throw error;
+  }
+  await db.shop.findMany({ take: 1 });
 
   console.log(JSON.stringify({
     type: "product_schema_check",
     status: "passed",
     database: kind,
-    columnsChecked: REQUIRED_PRODUCT_COLUMNS.length + REQUIRED_BILL_COLUMNS.length,
+    columnsChecked: REQUIRED_PRODUCT_COLUMNS.length + REQUIRED_BILL_COLUMNS.length + REQUIRED_SHOP_COLUMNS.length,
   }));
 }
 

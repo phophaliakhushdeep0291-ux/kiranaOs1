@@ -210,6 +210,10 @@ export const billPaymentSchema = z.object({
 
 export const billCreationSchema = z
   .object({
+    countryCode: z.string().max(2).optional(),
+    currencyCode: z.string().max(3).optional(),
+    accountingTimeZone: z.string().max(64).optional(),
+    taxRegime: z.string().max(16).optional(),
     locationId: optionalText,
     billType: z.enum(["normal_sale", "udhar_entry", "gst_invoice", "estimate"]),
     gstMode: z.enum(["inclusive", "exclusive", "none"]).default("inclusive"),

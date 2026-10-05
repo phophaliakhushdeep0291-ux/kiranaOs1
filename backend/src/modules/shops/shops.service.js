@@ -4,7 +4,7 @@ import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
 import { BUSINESS_PROFILES, assertBusinessTypeOffered, bootstrapForShop, businessTypeFromSettings, parseShopSettings, requestedBusinessTypeFromSettings, settingsForBusinessType } from "./businessProfiles.js";
 import { RESTAURANT_MARKETPLACE_PROVIDERS, withMarketplaceNavigation } from "../integrations/restaurant-marketplace/registry.js";
 
-import { assertLiveMarket, settingsWithMarketPolicy } from "./market-policy.js";
+import { assertLiveMarket, accountingMarketSnapshot, assertAccountingMarketClaim, settingsWithMarketPolicy } from "./market-policy.js";
 
 async function writeRequiredShopAudit(client, entry) {
   const audit = await createAuditLog({ ...entry, client });
@@ -35,12 +35,13 @@ export async function getBootstrap(shopId, role) {
 
 export async function updateShop(shopId, data, actor = {}) {
   const startedAt = Date.now();
-  const { countryCode, currencyCode, ...requestedData } = data ?? {};
+  const { countryCode, currencyCode, accountingTimeZone, taxRegime, ...requestedData } = data ?? {};
   assertLiveMarket(countryCode, currencyCode);
   return serializableTransaction(async (tx) => {
     const previous = await tx.shop.findUnique({ where: { id: shopId } });
     if (!previous) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
 
+    assertAccountingMarketClaim({ countryCode, currencyCode, accountingTimeZone, taxRegime }, accountingMarketSnapshot(previous));
     let nextData = requestedData;
     if (requestedData.settingsJson) {
       const beforeSettings = parseShopSettings(previous.settingsJson);

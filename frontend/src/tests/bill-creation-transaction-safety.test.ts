@@ -123,6 +123,26 @@ describe("bill creation transaction safety", () => {
     };
   });
 
+  it("preserves accounting snapshots and accepts retries from legacy persisted bills", async () => {
+    const bill = await createBillLocalFirst(baseInput({ clientBillId: "market-snapshot" }));
+    const expected = { countryCode: "IN", currencyCode: "INR", accountingTimeZone: "Asia/Kolkata", taxRegime: "GST" };
+    expect(JSON.parse(JSON.stringify(bill))).toMatchObject(expected);
+    const op = tableRows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL");
+    expect(JSON.parse(JSON.stringify(op?.payload))).toMatchObject(expected);
+    const saved = tableRows("bills")[0];
+    for (const key of Object.keys(expected)) delete saved[key];
+    const retry = await createBillLocalFirst(baseInput({ clientBillId: "market-snapshot" }));
+    expect(retry.id).toBe(bill.id);
+    expect(tableRows("bills")).toHaveLength(1);
+    expect(tableRows("products")[0].stockBaseQty).toBe(18);
+  });
+
+  it.each([{ currencyCode: "AED" }, { countryCode: "AE" }, { accountingTimeZone: "Asia/Dubai" }, { taxRegime: "VAT" }])("rejects mismatched offline markets before any writes: %j", async (claim) => {
+    const before = JSON.stringify(dbState.committed);
+    await expect(createBillLocalFirst(baseInput(claim))).rejects.toMatchObject({ code: "ACCOUNTING_MARKET_MISMATCH" });
+    expect(JSON.stringify(dbState.committed)).toBe(before);
+  });
+
   it("successfully creates bill and all related records in one transaction", async () => {
     const bill = await createBillLocalFirst(baseInput({
       buyerPaidAmount: 40,

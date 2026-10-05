@@ -35,6 +35,11 @@ datasource db {
 // SHOP — top-level tenant. All data is shopId-scoped.
 // ─────────────────────────────────────────────
 model Shop {
+  // Accounting identity is captured by the server; never inferred from profile labels.
+  countryCode        String @default("IN")
+  currencyCode       String @default("INR")
+  accountingTimeZone String @default("Asia/Kolkata")
+  taxRegime          String @default("GST")
   id           String   @id @default(cuid())
   name         String
   ownerName    String
@@ -721,6 +726,11 @@ model Customer {
 // BILL
 // ─────────────────────────────────────────────
 model Bill {
+  // Accounting identity is captured by the server; never inferred from profile labels.
+  countryCode        String @default("IN")
+  currencyCode       String @default("INR")
+  accountingTimeZone String @default("Asia/Kolkata")
+  taxRegime          String @default("GST")
   id                        String    @id @default(cuid())
   shopId                    String
   locationId                String?

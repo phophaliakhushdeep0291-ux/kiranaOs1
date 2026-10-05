@@ -40,3 +40,27 @@ export function settingsWithMarketPolicy(next, previous = {}) {
       ? { storeProfile: { ...profile, country: "India", currency: "Indian Rupee (INR)" } } : {}),
   };
 }
+
+// Column snapshot for invoices and linked returns. Missing fields are legacy INR
+// records; explicit unsupported values must never silently become rupees.
+export function accountingMarketSnapshot(source = {}) {
+  const snapshot = {
+    countryCode: source.countryCode === undefined ? "IN" : source.countryCode,
+    currencyCode: source.currencyCode === undefined ? "INR" : source.currencyCode,
+    accountingTimeZone: source.accountingTimeZone === undefined ? "Asia/Kolkata" : source.accountingTimeZone,
+    taxRegime: source.taxRegime === undefined ? "GST" : source.taxRegime,
+  };
+  assertLiveMarket(snapshot.countryCode, snapshot.currencyCode);
+  if (snapshot.accountingTimeZone !== "Asia/Kolkata" || snapshot.taxRegime !== "GST") {
+    throw new AppError("Unsupported accounting market", 409, "MARKET_NOT_LIVE");
+  }
+  return snapshot;
+}
+
+export function assertAccountingMarketClaim(input, snapshot) {
+  for (const key of ["countryCode", "currencyCode", "accountingTimeZone", "taxRegime"]) {
+    if (input[key] !== undefined && input[key] !== snapshot[key]) {
+      throw new AppError("Transaction market does not match the original accounting record", 409, "ACCOUNTING_MARKET_MISMATCH");
+    }
+  }
+}

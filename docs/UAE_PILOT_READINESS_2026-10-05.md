@@ -17,7 +17,9 @@ or certify tax compliance. Existing shops still operate in INR.
 | Return arithmetic | A pure preview helper apportions the saved original net/VAT across cumulative partial returns. Tests serialize/reload the snapshot and conserve every fils. This helper is not connected to live returns. |
 | Local dates | An explicit Asia/Dubai business-date helper with tests on either side of midnight, independent of the device time zone. Existing live reporting is not yet migrated to this helper. |
 | Contact formats | UAE mobile normalization retains +971 and checks the published mobile prefixes. TRN helper checks 15-digit syntax only. Neither verifies ownership or FTA registration; live signup remains India-only. |
-| Accounting identity | New Indian registrations and settings saves receive a canonical INR/GST region. Backend rejects unimplemented markets and region/currency/time-zone edits. The old free-text profile currency cannot establish the denomination of a ledger. |
+| Accounting identity | Shop and Bill records now persist country, currency, accounting time zone and tax regime. Sales capture the shop snapshot; linked returns inherit the original sale. New registrations remain INR/GST. Backend rejects unsupported markets and edits through shop/bill APIs. These are application guards, not database immutability constraints. |
+| Offline accounting identity | Local sale/return records and their outbox payloads retain the same four fields. Mismatches are rejected before local financial writes. Backend push, pull and idempotent retries preserve the snapshot; fuzzy bill reconciliation keeps equal INR/AED amounts distinct. Actual AED writes remain disabled. |
+| Old-client compatibility | Absent fields mean the previously supported INR/GST ledger. Explicit foreign values are rejected. Existing offline checkout fingerprints remain compatible, so adding metadata does not turn a retry into a second sale. |
 | Display repair | The settings hub shows the actual INR denomination. Store Profile shows India as read-only. An unchanged legacy cosmetic foreign-country/currency label is corrected on a later settings save, without changing balances. |
 
 Example: AED 105 inclusive → AED 100 net + AED 5 VAT. A discount of AED 10.50
@@ -55,7 +57,7 @@ or an approval from the FTA. Recheck the official sources before onboarding.
 
 | Priority | Deliverable | Acceptance evidence |
 | --- | --- | --- |
-| 1 | Immutable market/currency on the shop, bill, payment, return and ledger snapshots; mirrored SQLite/Postgres migrations | An INR shop cannot be relabeled; AED snapshots survive restart, sync, reprint, restore and shop switches. Any migration is explicit and audited. |
+| 1 | Complete accounting snapshots across payments, ledgers, exports, backup/restore and every document path | Shop and sale/return Bill columns plus offline payloads are implemented for INR. Still prove AED snapshots across restart, sync, reprint, restore and shop switches before enabling AE. Verify PostgreSQL deployment/backfill; any market migration must be explicit and audited. |
 | 1 | UAE signup, staff/customer/supplier identities, TRN-aware seller/location and buyer validation | +971 identities survive login/recovery/invites/offline reads; unregistered sellers cannot collect VAT through a toggle. |
 | 1 | VAT invoices and credit notes, including receipt/A4/export paths | Seller identity, TRN, sequential references, dates, buyer details where required, original-invoice reference, taxable values and AED VAT totals reconcile. No CGST/SGST/IGST or GSTIN labels appear on UAE documents. |
 | 1 | All live AED calculations and displayed amounts | Counter, saved bill, partial return, customer credit, supplier balance, reports, exports and accounting agree to the fils. India subscription pricing is not silently relabeled in AED. |
@@ -73,15 +75,21 @@ Arabic layouts and provider automation need separate work.
 ## Verification
 
 Backend local API regressions passed on a disposable SQLite database with the
-copied `.env` disabled: market policy, auth and settings/reminders, 24 tests total.
+copied `.env` disabled: market policy, auth, settings/reminders, billing and sync,
+122 tests total (12 + 37 + 8 + 4 + 61).
 They include failed-write rollback, old-client compatibility and rejection of an
 unsupported registration before any tenant is created.
 
-`frontend/npm run prod:check` passed: 3,349 tests passed, one skipped; typecheck,
+A separate isolated database regression exercises saved sale/return market fields,
+reloads, rejected relabeling, shop-edit guards, duplicate bill/event replay,
+cross-counter pull responses and one-time stock deductions. It is wired into
+`backend/npm run test:market-snapshot` and the isolated regression suite.
+
+`frontend/npm run prod:check` passed: 3,358 tests passed, one skipped; typecheck,
 translation checks, production build, bundle and production-app checks passed.
-The largest shop's offline JavaScript payload is 1,279.3 KB gzip against the
+The largest shop's offline JavaScript payload is 1,279.8 KB gzip against the
 unchanged 1,280 KB limit; initial JavaScript is 273.5 KB against 300 KB.
-`backend/npm run prod:check` also passed.
+`backend/npm run prod:check` and migration safety checks also passed.
 
 Frontend validation includes INR compatibility, AED formatting, invalid input,
 fractional quantities, discounts, zero/exempt distinction, return conservation,
@@ -92,3 +100,18 @@ No real UAE merchant, live payment-provider credentials, accredited eInvoicing
 connection or physical printer was exercised. Browser interaction/screenshot
 verification remains outstanding; static rendering is not a substitute. No
 production deployment or data migration was performed.
+
+## Deployment ordering for the accounting snapshot changes
+
+The mirrored Prisma schemas add four non-null columns to each of Shop and Bill.
+PostgreSQL migration `000142_accounting_market_snapshot` adds them with explicit
+IN/INR/Asia-Kolkata/GST defaults (the time-zone value is `Asia/Kolkata`).
+Existing money and stock are not recalculated and free-text profile labels are
+not used for the backfill. Startup schema verification checks both tables.
+
+Deploy the additive migration and generate the matching Prisma client before
+starting the updated API. Local SQLite uses the repository's schema-update
+command. An application rollback can retain these additive columns; it must not
+delete them. No deployment has been performed here. The local SQLite results and
+SQL safety check do not constitute a PostgreSQL migration/backfill proof; obtain
+that release-certification evidence before merging or deploying.
