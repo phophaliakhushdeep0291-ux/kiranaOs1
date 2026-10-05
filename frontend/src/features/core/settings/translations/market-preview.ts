@@ -19,7 +19,7 @@ export const marketPreviewEn = {
   "settings.market.total": "Total including VAT",
   "settings.market.invalid": "Enter a valid price and discount with up to 2 decimal places, and a positive quantity with up to 3. Discount cannot exceed the line value.",
   "settings.market.simplified": "Simplified tax invoice example",
-  "settings.market.full": "Full tax invoice required",
+  "settings.market.full": "Full tax invoice example",
   "settings.market.documentHelp": "A VAT-registered buyer above AED 10,000 needs a full tax invoice with buyer details. This calculator does not issue an invoice.",
   "settings.market.date": "Dubai business date",
   "settings.market.contact": "UAE mobile format check",

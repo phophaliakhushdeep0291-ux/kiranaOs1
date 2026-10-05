@@ -12,6 +12,7 @@ describe("UAE pilot arithmetic and regional contract", () => {
     expect(formatMoney(1000000, "AED").replace(/\s/g, " ")).toBe("AED 1,000,000.00");
     expect(formatMoney(1000000)).toBe("₹10,00,000");
     expect(formatMoney(-0, "AED")).not.toContain("-");
+    expect(() => formatMoney(100, "USD" as never)).toThrow("UNSUPPORTED_CURRENCY");
     expect(MARKETS.AE.tradingEnabled).toBe(false);
   });
 
@@ -53,6 +54,8 @@ describe("UAE pilot arithmetic and regional contract", () => {
     expect(marketBusinessDate("2026-10-05T19:00:00Z", "IN")).toBe("2026-10-06");
     expect(marketBusinessDate("2026-10-05T19:00:00Z", "AE")).toBe("2026-10-05");
     expect(() => marketBusinessDate("bad", "AE")).toThrow();
+    expect(() => marketBusinessDate("2026-10-05T23:00:00", "AE")).toThrow();
+    expect(marketBusinessDate("2026-10-06T00:00:00+04:00", "AE")).toBe("2026-10-06");
   });
 
   it("retains +971 and validates mobile prefixes without touching India identities", () => {

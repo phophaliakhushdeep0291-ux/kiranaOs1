@@ -89,6 +89,8 @@ export function previewVatReturn(line: VatPreviewResultLine, alreadyReturnedMill
   return { netMinor, vatMinor, totalMinor: netMinor + vatMinor };
 }
 
+/** Chooses a form for a tax invoice; does not determine whether a supply
+ * requires one. In particular, exempt-only supplies must not use this label. */
 export function uaeInvoiceKind(buyerVatRegistered: boolean, totalMinor: number): "full" | "simplified" {
   integer(totalMinor);
   return buyerVatRegistered && totalMinor > 1_000_000 ? "full" : "simplified";

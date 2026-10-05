@@ -21,7 +21,7 @@ export const marketPreviewHi: Record<keyof typeof marketPreviewEn, string> = {
   "settings.market.total": "VAT सहित कुल",
   "settings.market.invalid": "मूल्य व छूट में अधिकतम 2 और धनात्मक मात्रा में अधिकतम 3 दशमलव रखें। छूट बिल मूल्य से अधिक नहीं हो सकती।",
   "settings.market.simplified": "सरल कर बिल उदाहरण",
-  "settings.market.full": "पूरा कर बिल आवश्यक",
+  "settings.market.full": "पूरे कर बिल का उदाहरण",
   "settings.market.documentHelp": "VAT-पंजीकृत खरीदार का बिल AED 10,000 से ऊपर हो तो खरीदार की जानकारी वाला पूरा कर बिल चाहिए। यह कैलकुलेटर बिल जारी नहीं करता।",
   "settings.market.date": "दुबई की व्यावसायिक तारीख",
   "settings.market.contact": "UAE मोबाइल प्रारूप जाँच",

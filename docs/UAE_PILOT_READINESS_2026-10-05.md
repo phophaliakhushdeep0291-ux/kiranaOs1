@@ -79,8 +79,8 @@ unsupported registration before any tenant is created.
 
 `frontend/npm run prod:check` passed: 3,349 tests passed, one skipped; typecheck,
 translation checks, production build, bundle and production-app checks passed.
-The largest shop's offline JavaScript payload is 1,279.2 KB gzip against the
-unchanged 1,280 KB limit; initial JavaScript is 273.4 KB against 300 KB.
+The largest shop's offline JavaScript payload is 1,279.3 KB gzip against the
+unchanged 1,280 KB limit; initial JavaScript is 273.5 KB against 300 KB.
 `backend/npm run prod:check` also passed.
 
 Frontend validation includes INR compatibility, AED formatting, invalid input,

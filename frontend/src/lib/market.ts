@@ -11,6 +11,9 @@ export type CurrencyCode = (typeof MARKETS)[MarketCode]["currencyCode"];
 
 const dates = new Map<MarketCode, Intl.DateTimeFormat>();
 export function marketBusinessDate(instant: string | Date, market: MarketCode): string {
+  // A timestamp with no offset uses the device timezone in Date.parse. It is
+  // not an instant and cannot safely determine a shop's accounting day.
+  if (typeof instant === "string" && !/T.*(?:Z|[+-]\d{2}:\d{2})$/i.test(instant)) throw new Error("INVALID_TRANSACTION_INSTANT");
   const date = new Date(instant);
   if (!Number.isFinite(date.getTime())) throw new Error("Invalid transaction date");
   let formatter = dates.get(market);

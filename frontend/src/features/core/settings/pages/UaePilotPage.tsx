@@ -51,14 +51,14 @@ export default function UaePilotPage() {
 
       <section className="rounded-2xl border bg-card p-5 text-card-foreground" aria-live="polite" aria-atomic="true">
         {result ? <>
-          <h2 className="font-bold">{t(uaeInvoiceKind(buyerRegistered, result.totalMinor) === "full" ? "settings.market.full" : "settings.market.simplified")}</h2>
+          <h2 className="font-bold">{t(treatment === "exempt" ? "settings.market.exempt" : uaeInvoiceKind(buyerRegistered, result.totalMinor) === "full" ? "settings.market.full" : "settings.market.simplified")}</h2>
           <dl className="mt-5 space-y-4 text-sm">
             <div className="flex justify-between gap-3"><dt>{t("settings.market.net")}</dt><dd className="font-semibold tabular-nums">{money(result.netMinor)}</dd></div>
             <div className="flex justify-between gap-3"><dt>{t("settings.market.vat")}</dt><dd className="font-semibold tabular-nums">{money(result.vatMinor)}</dd></div>
             <div className="flex justify-between gap-3 border-t pt-4 text-lg"><dt className="font-bold">{t("settings.market.total")}</dt><dd className="font-bold tabular-nums">{money(result.totalMinor)}</dd></div>
             <div className="flex justify-between gap-3 text-muted-foreground"><dt>{t("settings.market.date")}</dt><dd>{marketBusinessDate(openedAt, "AE")}</dd></div>
           </dl>
-          <p className="mt-5 text-xs leading-relaxed text-muted-foreground">{t("settings.market.documentHelp")}</p>
+          <p className="mt-5 text-xs leading-relaxed text-muted-foreground">{t(treatment === "exempt" ? "settings.market.taxHelp" : "settings.market.documentHelp")}</p>
         </> : <p role="alert" className="text-sm text-destructive">{t("settings.market.invalid")}</p>}
       </section>
     </div>
