@@ -9,7 +9,10 @@ import {
 import { shouldPassSharedThrottle, shouldRunScheduledNetworkWork } from "@/lib/browser/multiTabCoordinator";
 import { nextIdleStep, syncDelayForStep } from "@/features/core/sync/sync-cadence";
 
-const BACKEND_STATUS_INTERVAL_MS = 8_000;
+// Every sync cycle probes /health before it sends anything, so this timer only
+// keeps the header's reachability dot fresh between cycles. At 8s it was the
+// single most frequent request an idle till made.
+const BACKEND_STATUS_INTERVAL_MS = 30_000;
 const LOCAL_QUEUE_RECOVERY_THROTTLE_MS = 3_000;
 const LOCAL_QUEUE_RECOVERY_THROTTLE_KEY = "kirana.sync.localQueueRecovery.lastRun";
 

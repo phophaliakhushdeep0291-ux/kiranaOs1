@@ -13,7 +13,7 @@ describe("multi-device sync daemon", () => {
     // now owns the cadence for the tab. The loop this test protects is still
     // here — it is just driven by focus, reconnect, local writes and the
     // snapshot timer rather than by a clock of its own.
-    expect(daemon).toContain("const SNAPSHOT_INTERVAL_MS = 60_000");
+    expect(daemon).toContain("const SNAPSHOT_INTERVAL_MS = 10 * 60_000");
     expect(daemon).toContain("runSyncCycle");
     expect(daemon).toContain("hydrateFromBackendSnapshot");
     expect(daemon).toContain("shouldRunScheduledNetworkWork");

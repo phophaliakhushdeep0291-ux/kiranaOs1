@@ -72,16 +72,25 @@ outbox rows.
 back to the top the moment anything is queued or the network returns. So a queued
 sale is retried faster than the old fixed interval managed, while an idle till
 stops waking the radio. `useMultiDeviceSync` keeps only what is uniquely its own:
-the cross-tab BroadcastChannel, focus/online catch-up, and the 60s authoritative
-snapshot.
+the cross-tab BroadcastChannel, focus/online catch-up, and the 10-minute
+authoritative snapshot.
+
+**The snapshot is a repair path, not a delivery path — keep it rare.** It
+re-downloads every product, customer, bill, stock row and udhar entry, rebuilds
+the local caches, and its announcement makes every query on screen refetch. At
+60s it was most of an idle till's traffic (about 30 requests a minute per
+counter, two-counter measurement); changes already arrive through the
+incremental pull. Do not shorten it to make something "show up faster" — fix the
+pull. The header's /health dot polls every 30s for the same reason; every sync
+cycle probes before it sends anyway.
 
 **Database triggers populate the incremental feed.** Core mutations write
 `ChangeLog` in the same transaction; a rollback also rolls back its feed entries.
 PostgreSQL installs these through migrations (`000053`, `000076`, `000101`).
 SQLite schema push does not run migrations, so both local setup/reset and the
 test setup explicitly run `backend/scripts/install-sqlite-sync-triggers.js`.
-Use the repository's `db:push` command, not a bare Prisma push. The 60s snapshot
-hydration remains a catch-up path. The ack must keep firing regardless: it writes
+Use the repository's `db:push` command, not a bare Prisma push. The 10-minute
+snapshot hydration remains a catch-up path. The ack must keep firing regardless: it writes
 `lastSeenAt`/`lastActiveAt` on the device row for device health and remote support.
 
 - `useOfflineStatus` is a **subscription to one module-level engine**, not an
