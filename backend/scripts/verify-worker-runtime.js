@@ -1,4 +1,5 @@
 import "dotenv/config";
+import crypto from "node:crypto";
 import { Worker, QueueEvents } from "bullmq";
 
 process.env.DATABASE_URL ||= "file:./prisma/test.db";
@@ -31,6 +32,9 @@ async function main() {
     import("../src/workers/workerUtils.js"),
   ]);
 
+  // Reading the event stream before the job is added. A completion that lands
+  // before waitUntilFinished subscribes is still caught: that call also reads the
+  // job's finished state from Redis, which only works while the job exists.
   const queueEvents = new QueueEvents(QUEUE_NAMES.syncCleanupQueue, { connection });
   await queueEvents.waitUntilReady();
 
@@ -40,28 +44,58 @@ async function main() {
     { connection, concurrency: 1 }
   );
 
-  await worker.waitUntilReady();
-  const result = await addJob(QUEUE_NAMES.syncCleanupQueue, JOB_NAMES.WORKER_HEALTHCHECK, {
-    shopId: "worker-verify",
-    requestedAt: new Date().toISOString(),
-  }, { jobId: `worker-healthcheck-${Date.now()}`, removeOnComplete: true, removeOnFail: true });
+  let job = null;
+  let processed;
+  try {
+    await worker.waitUntilReady();
+    // The job is kept after it finishes and removed below, once verified. When
+    // BullMQ removed it on completion, the worker could finish and delete it before
+    // waitUntilFinished looked, and the check then failed with "Missing key for
+    // job … isFinished" although the worker had done its work. The random
+    // suffix matters now that the job outlives the run: BullMQ ignores an add whose
+    // jobId already exists, and this run would then wait on another run's job.
+    const result = await addJob(QUEUE_NAMES.syncCleanupQueue, JOB_NAMES.WORKER_HEALTHCHECK, {
+      shopId: "worker-verify",
+      requestedAt: new Date().toISOString(),
+    }, {
+      jobId: `worker-healthcheck-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+      attempts: 1,
+      removeOnComplete: false,
+      removeOnFail: false,
+    });
 
-  if (!result.success) {
-    const error = new Error(`Worker verification enqueue failed: ${result.code}`);
-    error.code = result.code || "WORKER_VERIFY_ENQUEUE_FAILED";
-    throw error;
+    if (!result.success) {
+      const error = new Error(`Worker verification enqueue failed: ${result.code}`);
+      error.code = result.code || "WORKER_VERIFY_ENQUEUE_FAILED";
+      throw error;
+    }
+
+    const q = await queueModule.getQueue(QUEUE_NAMES.syncCleanupQueue);
+    job = await q.getJob(result.jobId);
+    if (!job) {
+      const error = new Error("Queued worker verification job could not be read back");
+      error.code = "WORKER_VERIFY_JOB_MISSING";
+      throw error;
+    }
+
+    processed = await job.waitUntilFinished(queueEvents, 15000);
+    const state = await job.getState();
+    if (state !== "completed" || processed?.status !== "ok" || processed?.jobName !== JOB_NAMES.WORKER_HEALTHCHECK) {
+      const error = new Error(`Worker verification job finished as ${state} with an unexpected result`);
+      error.code = "WORKER_VERIFY_RESULT_INVALID";
+      throw error;
+    }
+  } finally {
+    // The worker closes first so the job is no longer locked when it is removed.
+    await worker.close().catch(() => null);
+    await job?.remove().catch(() => null);
+    await queueEvents.close().catch(() => null);
   }
 
-  const q = await queueModule.getQueue(QUEUE_NAMES.syncCleanupQueue);
-  const job = await q.getJob(result.jobId);
-  const processed = await job.waitUntilFinished(queueEvents, 15000);
-
-  await worker.close();
-  await queueEvents.close();
   await closeQueues();
   await closeRedis();
 
-  console.log(JSON.stringify({ type: "worker_verify_success", jobId: result.jobId, processed, time: new Date().toISOString() }));
+  console.log(JSON.stringify({ type: "worker_verify_success", jobId: job.id, processed, time: new Date().toISOString() }));
 }
 
 main().catch(async (error) => {
