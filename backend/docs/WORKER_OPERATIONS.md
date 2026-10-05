@@ -46,7 +46,7 @@ npm run worker:verify
 npm run worker:health
 ```
 
-`worker:verify` enqueues and processes a harmless `WORKER_HEALTHCHECK` job on the sync-cleanup queue. `worker:health` checks Redis heartbeat freshness and fails if no fresh worker heartbeat exists.
+`worker:verify` enqueues and processes a harmless `WORKER_HEALTHCHECK` job on the sync-cleanup queue, confirms the job completed with the healthcheck result, and then removes it, so repeated runs leave nothing in Redis. `worker:health` checks Redis heartbeat freshness and fails if no fresh worker heartbeat exists.
 
 ## What to alert on
 
