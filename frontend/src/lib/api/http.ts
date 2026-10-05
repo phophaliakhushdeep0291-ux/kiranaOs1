@@ -355,6 +355,48 @@ export function refreshStoredAuthSession(refreshToken = getStoredRefreshToken())
   return getSharedRefreshedAuth(refreshToken);
 }
 
+function applyDeviceHeaders(headers: Headers) {
+  if (headers.has("x-device-id")) return;
+  try {
+    const device = getDeviceMetadata();
+    headers.set("x-device-id", device.deviceId);
+    headers.set("x-device-name", device.deviceName);
+    headers.set("x-device-platform", device.platform);
+    headers.set("x-device-type", device.deviceType);
+    headers.set("x-device-os", device.operatingSystem);
+    headers.set("x-device-browser", device.browser);
+    headers.set("x-app-version", device.appVersion);
+  } catch {
+    // Device ID is best-effort on non-browser/test environments.
+  }
+}
+
+function applyLocationHeader(headers: Headers) {
+  if (headers.has("x-location-id")) return;
+  try {
+    const locationId = getActiveLocationId();
+    if (locationId) headers.set("x-location-id", locationId);
+  } catch {
+    // The server safely defaults legacy clients to the primary location.
+  }
+}
+
+/**
+ * The headers apiRequest sends, for a long-lived stream that cannot go through
+ * it: apiRequest's timeout and abort relay end once response headers arrive, so
+ * a stream it opened could be neither bounded nor closed. Null without a token —
+ * the caller waits for the regular sync to refresh the session.
+ */
+export async function authenticatedStreamHeaders(): Promise<Headers | null> {
+  await hydrateDeviceIdentity();
+  const token = getStoredAccessToken();
+  if (!token) return null;
+  const headers = new Headers({ Accept: "text/event-stream", Authorization: `Bearer ${token}` });
+  applyDeviceHeaders(headers);
+  applyLocationHeader(headers);
+  return headers;
+}
+
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const { ownerPin, responseType = "json", skipAuth, skipRefresh, skipDevice, background, timeoutMs, ...fetchOptions } = options;
   // Capture before the first await. Every authenticated response belongs only to
@@ -392,29 +434,9 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     headers.set("Content-Type", "application/json");
   }
   if (token && !skipAuth) headers.set("Authorization", `Bearer ${token}`);
-  if (!skipDevice && !headers.has("x-device-id")) {
-    try {
-      const device = getDeviceMetadata();
-      headers.set("x-device-id", device.deviceId);
-      headers.set("x-device-name", device.deviceName);
-      headers.set("x-device-platform", device.platform);
-      headers.set("x-device-type", device.deviceType);
-      headers.set("x-device-os", device.operatingSystem);
-      headers.set("x-device-browser", device.browser);
-      headers.set("x-app-version", device.appVersion);
-    } catch {
-      // Device ID is best-effort on non-browser/test environments.
-    }
-  }
+  if (!skipDevice) applyDeviceHeaders(headers);
   if (ownerPin) headers.set("x-owner-pin", ownerPin);
-  if (!headers.has("x-location-id")) {
-    try {
-      const locationId = getActiveLocationId();
-      if (locationId) headers.set("x-location-id", locationId);
-    } catch {
-      // The server safely defaults legacy clients to the primary location.
-    }
-  }
+  applyLocationHeader(headers);
 
   const method = getMethod(fetchOptions);
   assertNoBackgroundCooldown(path, method, background);
