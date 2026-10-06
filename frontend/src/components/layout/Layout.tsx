@@ -39,6 +39,7 @@ import {
   Wallet,
   WifiOff,
 } from "lucide-react";
+import { UNAFFECTED_BY_LOCAL_DATA } from "@/lib/api/query-meta";
 import { PlanBadge } from "@/features/core/subscription/components/PlanBadge";
 import { SubscriptionStatusBanner } from "@/features/core/subscription/components/SubscriptionStatusBanner";
 import { subscriptionBlocksSync, useSubscriptionSnapshot } from "@/features/core/subscription/access";
@@ -454,6 +455,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
     queryKey: ["store-locations", "active-context"],
     queryFn: () => apiRequest<StoreLocationsResponse>("/stores"),
     staleTime: 60_000,
+    meta: UNAFFECTED_BY_LOCAL_DATA,
   });
   const locations = (locationsQuery.data?.locations ?? []).filter((row) => row.active);
   const [activeLocationId, setActiveLocationId] = useState(() => getActiveLocationId());

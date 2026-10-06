@@ -13,6 +13,7 @@ import { refreshServerConflictCache } from "@/features/core/sync/sync-conflict-c
 import { loadAuthSession } from "@/lib/storage/auth-storage";
 import { isReadOnlySession } from "@/features/core/staff/role-access";
 import { settleLocalOnlyOutboxOperations } from "@/features/core/sync/sync-operation-normalizer";
+import { markSyncCycleFinished, markSyncCycleStarted } from "@/features/core/sync/sync-cycle-state";
 
 async function canSubscriptionSync(): Promise<boolean> {
   const snapshot = await getCurrentSubscriptionSnapshot();
@@ -94,12 +95,14 @@ export function runSyncCycle(): Promise<SyncRunResult> {
 }
 
 async function runExclusiveSyncCycle(): Promise<SyncRunResult> {
+  markSyncCycleStarted();
   try {
     return await runWithCrossTabSyncLock(runSyncCycleBody);
   } finally {
     // Cleared before this promise settles, so a queued follow-up always finds the
     // slot free and starts a genuinely fresh cycle.
     inFlightCycle = null;
+    markSyncCycleFinished();
   }
 }
 

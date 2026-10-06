@@ -56,7 +56,8 @@ describe("sync scheduling runs one engine, not one per caller", () => {
     // Both needles are code shapes rather than bare identifiers, because the
     // comment explaining this ordering names shouldPassSharedThrottle too.
     const body = source.slice(source.indexOf("async function recoverLocalQueueIfNeeded"));
-    const guardAt = body.indexOf("if (isSyncing) return;");
+    // The guard also covers a cycle another caller is running in this tab.
+    const guardAt = body.indexOf("if (isSyncing || isSyncCycleInFlight()) return;");
     const throttleAt = body.indexOf("if (!shouldPassSharedThrottle(");
     expect(guardAt).toBeGreaterThan(0);
     expect(throttleAt).toBeGreaterThan(guardAt);

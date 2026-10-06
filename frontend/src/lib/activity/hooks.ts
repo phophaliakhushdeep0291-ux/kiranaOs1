@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { UNAFFECTED_BY_LOCAL_DATA } from "@/lib/api/query-meta";
 import {
   fetchActivityAnalytics,
   fetchInsights,
@@ -57,6 +58,7 @@ export function usePersonalization(enabled = true) {
     queryKey: activityQueryKeys.personalization,
     queryFn: () => fetchPersonalization(),
     enabled,
+    meta: UNAFFECTED_BY_LOCAL_DATA,
     ...SUGGESTION_QUERY,
   });
 }
