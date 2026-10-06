@@ -432,8 +432,15 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
   );
 
   const recentBillsQuery = useListBills({ limit: 10 }, { query: { staleTime: 60_000 } });
-  const periodBillsQuery = useListBills({ ...periodRange, limit: 1000 }, { query: { staleTime: 60_000 } });
-  const previousPeriodBillsQuery = useListBills({ ...previousPeriodRange, limit: 1000 }, { query: { staleTime: 60_000 } });
+  // The period cards and chart show the local report below; when it cannot be
+  // read the page shows LocalDataUnavailable, never these. They only paint the
+  // moment before that report lands, from the cached bills the query is seeded
+  // with, so they never go to the server. Fetched, they downloaded up to 1,000
+  // bills each after every sale on any counter while Home was open — about
+  // 1.2 MB of JSON a sale for a shop doing a hundred bills a day — for numbers
+  // the report replaced as soon as it was read.
+  const periodBillsQuery = useListBills({ ...periodRange, limit: 1000 }, { query: { enabled: false } });
+  const previousPeriodBillsQuery = useListBills({ ...previousPeriodRange, limit: 1000 }, { query: { enabled: false } });
 
   const lowStockItems = ownerReport?.lowStock ?? [];
   const lowStockPacks = ownerReport?.lowStockPacks ?? [];
