@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { isLiveStreamOpen } from "@/features/core/sync/live-stream-state";
 import {
   LIVE_GATE_CHECK_MS,
   LIVE_RECONNECT_DELAYS_MS,
+  LIVE_SILENCE_LIMIT_MS,
   createSseParser,
   startLiveChanges,
   type LiveChangesHandle,
@@ -107,6 +109,42 @@ describe("live change stream", () => {
     await vi.advanceTimersByTimeAsync(25_000);
     expect(fetchImpl.mock.calls.length).toBeGreaterThanOrEqual(3);
     expect(fetchImpl.mock.calls.length).toBeLessThanOrEqual(4);
+  });
+
+  it("counts as open only between the server's ready and the stream's end", async () => {
+    // While open, the scheduled sync relaxes to three minutes; a stream that has
+    // ended must hand the cadence straight back.
+    const { fetchImpl, streams } = controllableFetch();
+    handle = startLiveChanges({ shouldConnect: () => true, onChange: vi.fn(), onReconnect: vi.fn(), fetchImpl, headers });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(isLiveStreamOpen()).toBe(false); // connected, but the server has not spoken
+    streams[0].send("event: ready\ndata: {}\n\n");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(isLiveStreamOpen()).toBe(true);
+    streams[0].end();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(isLiveStreamOpen()).toBe(false);
+  });
+
+  it("treats a stream the server has gone quiet on as dead", async () => {
+    // A proxy can keep a socket open that delivers nothing. The server sends a
+    // keep-alive every 25s, so a minute of silence means reconnect — and until
+    // then the till must not sit on the three-minute rung.
+    const { fetchImpl, streams } = controllableFetch();
+    handle = startLiveChanges({ shouldConnect: () => true, onChange: vi.fn(), onReconnect: vi.fn(), fetchImpl, headers });
+    await vi.advanceTimersByTimeAsync(0);
+    streams[0].send("event: ready\ndata: {}\n\n");
+    await vi.advanceTimersByTimeAsync(LIVE_SILENCE_LIMIT_MS - 10_000);
+    streams[0].send(": keep-alive\n\n"); // heard from: the clock restarts
+    await vi.advanceTimersByTimeAsync(LIVE_SILENCE_LIMIT_MS - 10_000);
+    expect(streams[0].signal.aborted).toBe(false);
+    expect(isLiveStreamOpen()).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(LIVE_SILENCE_LIMIT_MS);
+    expect(streams[0].signal.aborted).toBe(true);
+    expect(isLiveStreamOpen()).toBe(false);
+    await vi.advanceTimersByTimeAsync(LIVE_RECONNECT_DELAYS_MS[0] * 1.2 + 10);
+    expect(fetchImpl).toHaveBeenCalledTimes(2); // and it reconnects
   });
 
   it("does not connect without a session, and stops for good on stop()", async () => {

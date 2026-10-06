@@ -98,6 +98,20 @@ a counter on another instance gets no nudge (slower, never wrong); and a nudge
 arriving mid-cycle must queue one follow-up, since its write may have landed after
 that cycle's pull.
 
+**With the stream open, an idle till's backstop cycle is three minutes, not 45s.**
+At 45s the idle loop was most of what a quiet till still sent (status, pull,
+support commands and ack, every cycle). The ladder's last rung becomes 180s only
+while a stream is open (`live-stream-state.ts`, read by `useOfflineStatus`), and
+"open" means the server has spoken within the last 60s — it sends a keep-alive
+every 25s, so a socket a proxy keeps alive but no longer delivers on is dropped
+and reconnected rather than trusted. Work in the outbox still runs the fast rungs.
+Traps: a stream change re-arms the timer from now without resetting the ladder,
+so a dropped stream never leaves a three-minute wait running and a reconnect does
+not buy a burst of fast cycles; keep the rung under the server's five-minute
+"online" window, since each cycle's ack is what refreshes `lastSeenAt`; and
+remote-support commands are drained at the top of a cycle, so queuing one nudges
+its device (`nudgeDevice`) instead of waiting for the backstop.
+
 **Database triggers populate the incremental feed.** Core mutations write
 `ChangeLog` in the same transaction; a rollback also rolls back its feed entries.
 PostgreSQL installs these through migrations (`000053`, `000076`, `000101`).

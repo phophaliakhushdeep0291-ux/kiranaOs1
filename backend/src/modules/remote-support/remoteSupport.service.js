@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
+import { nudgeDevice } from "../sync/sync-live.js";
 import {
   COMMAND_SCOPES,
   COMMAND_STATUS,
@@ -462,6 +463,9 @@ async function insertCommand({
       expiresAt: new Date(Date.now() + COMMAND_TTL_MS),
     },
   });
+  // An idle till cycles every three minutes while its live stream is open; this
+  // gets the command drained now instead.
+  nudgeDevice(shopId, String(deviceId));
 
   return presentCommand(command);
 }

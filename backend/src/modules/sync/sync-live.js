@@ -88,6 +88,25 @@ function deliver(shopId, origins) {
   }
 }
 
+/**
+ * Tells one device to run a sync cycle now. Remote-support commands are drained
+ * at the top of every cycle, and an idle till with a live stream only cycles every
+ * three minutes — too long for an operator waiting on a command.
+ */
+export function nudgeDevice(shopId, deviceId) {
+  const streams = streamsByShop.get(shopId);
+  if (!streams || !deviceId) return;
+  const data = { at: new Date().toISOString() };
+  for (const entry of [...streams]) {
+    if (entry.deviceId !== deviceId) continue;
+    try {
+      entry.stream.send("changes", data);
+    } catch {
+      // A broken socket closes itself; the command waits for the next cycle.
+    }
+  }
+}
+
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /**
