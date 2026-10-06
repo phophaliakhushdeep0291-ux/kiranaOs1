@@ -1,6 +1,7 @@
 import { getUdharSummary } from "@/features/core/ledger/api";
 import { isBrowserOnline } from "@/lib/api/http";
-import { offlineDB } from "@/lib/offline/db";
+import { dexieDB, offlineDB } from "@/lib/offline/db";
+import { getOfflineScope } from "@/lib/offline/context";
 import { readIndexedRecentCache, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import type { UdharSummary } from "@/types/api";
 import { dedupeLedgerEntries, getLedgerCustomerId, ledgerSignedAmount, roundMoney, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
@@ -80,9 +81,15 @@ export function cacheAuthoritativeSummary(summary: AuthoritativeUdharSnapshot): 
 
 const UNCONFIRMED_LEDGER_STATUSES = new Set(["pending_sync", "syncing", "failed", "conflict", "local_only"]);
 
-export function confirmedLedgerFingerprints(entries: CustomerLedgerEntry[]): ConfirmedLedgerFingerprints {
+/**
+ * Fingerprints of entries that have already been through dedupeLedgerEntries —
+ * one counting pass. Every reader of the customer ledger dedupes it first, and a
+ * second dedupe here was most of this check's cost: on a 10,000-entry ledger the
+ * pass took as long as the read's own dedupe, and the customer list paid it again.
+ */
+export function fingerprintDedupedLedger(entries: CustomerLedgerEntry[]): ConfirmedLedgerFingerprints {
   const fingerprints: ConfirmedLedgerFingerprints = {};
-  for (const entry of dedupeLedgerEntries(entries)) {
+  for (const entry of entries) {
     const id = getLedgerCustomerId(entry);
     if (!id || UNCONFIRMED_LEDGER_STATUSES.has(String(entry.sync_status ?? "").toLowerCase())) continue;
     const row = fingerprints[id] ?? (fingerprints[id] = { count: 0, total: 0 });
@@ -90,6 +97,56 @@ export function confirmedLedgerFingerprints(entries: CustomerLedgerEntry[]): Con
     row.total = roundMoney(row.total + ledgerSignedAmount(entry));
   }
   return fingerprints;
+}
+
+export function confirmedLedgerFingerprints(entries: CustomerLedgerEntry[]): ConfirmedLedgerFingerprints {
+  return fingerprintDedupedLedger(dedupeLedgerEntries(entries));
+}
+
+/**
+ * Index counts that change whenever the ledger gains or loses a row, or a row
+ * becomes server-confirmed, without reading a single row.
+ */
+async function ledgerChangeKey(): Promise<string> {
+  await offlineDB.init();
+  const scope = getOfflineScope();
+  const [rows, synced] = await Promise.all([
+    dexieDB.customer_ledger.where("[tenant_id+store_id]").equals([scope.tenant_id, scope.store_id]).count(),
+    dexieDB.customer_ledger.where("sync_status").equals("synced").count(),
+  ]);
+  return `${scope.tenant_id}|${scope.store_id}|${rows}|${synced}`;
+}
+
+const FINGERPRINT_MEMO_MAX_AGE_MS = 5 * 60_000;
+let fingerprintMemo: { key: string; at: number; fingerprints: ConfirmedLedgerFingerprints } | null = null;
+
+/**
+ * The device's confirmed fingerprints, recomputed only when the ledger changed.
+ *
+ * A summary is requested every few seconds while the Customers page is open and
+ * after every sync, and each request read and deduped the whole ledger even
+ * though most syncs carry no udhar. A change the counts cannot see (a row soft-
+ * deleted in place) leaves the memo older than the device, and an older capture
+ * can only make a customer read as not covered — the device ledger is used — never
+ * trust a snapshot that misses movement. The memo also expires, bounding even that.
+ */
+async function deviceConfirmedLedgerFingerprints(): Promise<ConfirmedLedgerFingerprints> {
+  let key: string | null = null;
+  try {
+    key = await ledgerChangeKey();
+  } catch {
+    key = null;
+  }
+  if (key && fingerprintMemo?.key === key && Date.now() - fingerprintMemo.at < FINGERPRINT_MEMO_MAX_AGE_MS) {
+    return fingerprintMemo.fingerprints;
+  }
+  const fingerprints = confirmedLedgerFingerprints(await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger"));
+  fingerprintMemo = key ? { key, at: Date.now(), fingerprints } : null;
+  return fingerprints;
+}
+
+export function resetLedgerFingerprintMemo(): void {
+  fingerprintMemo = null;
 }
 
 function fingerprintFor(fingerprints: ConfirmedLedgerFingerprints, ids: Set<string>) {
@@ -135,7 +192,7 @@ export async function fetchAuthoritativeSnapshot(): Promise<AuthoritativeUdharSn
   // snapshot does not cover rather than be assumed included.
   let confirmedLedger: ConfirmedLedgerFingerprints | undefined;
   try {
-    confirmedLedger = confirmedLedgerFingerprints(await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger"));
+    confirmedLedger = await deviceConfirmedLedgerFingerprints();
   } catch {
     confirmedLedger = undefined;
   }
@@ -188,13 +245,14 @@ export function authoritativeOutstandingWithPendingLedger(
   customerIds: string[],
   entries: CustomerLedgerEntry[],
 ): number | null {
-  if (!snapshotCoversCustomer(summary, customerIds, confirmedLedgerFingerprints(entries))) return null;
+  const deduped = dedupeLedgerEntries(entries);
+  if (!snapshotCoversCustomer(summary, customerIds, fingerprintDedupedLedger(deduped))) return null;
   const base = authoritativeOutstandingFor(summary, customerIds);
   if (base === null) return null;
   const ids = new Set(customerIds);
   const pending = new Set(["pending_sync", "syncing", "failed", "local_only"]);
   let balance = base;
-  for (const entry of dedupeLedgerEntries(entries)) {
+  for (const entry of deduped) {
     const id = getLedgerCustomerId(entry);
     // Conflicts were rejected by the server and must not change its balance.
     if (!id || !ids.has(id) || !pending.has(String(entry.sync_status ?? "").toLowerCase())) continue;

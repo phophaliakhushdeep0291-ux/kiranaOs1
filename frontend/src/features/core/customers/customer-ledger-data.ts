@@ -9,7 +9,7 @@ import type { Bill, Customer } from "@/types/api";
 import { buildLedgerStatement, calculateTrustScore, dedupeLedgerEntries, getLedgerDate, isManualAdjustmentEntry, normaliseLedgerType, roundMoney, type CustomerLedgerEntry, type LedgerMetrics, type LedgerStatementRow } from "@/features/core/ledger/accounting";
 import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/core/sync/bill-reconciliation";
 import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
-import { confirmedLedgerFingerprints, snapshotCoversCustomer, type AuthoritativeUdharSnapshot, type ConfirmedLedgerFingerprints } from "@/features/core/ledger/authoritative-balances";
+import { fingerprintDedupedLedger, snapshotCoversCustomer, type AuthoritativeUdharSnapshot, type ConfirmedLedgerFingerprints } from "@/features/core/ledger/authoritative-balances";
 
 export interface CustomerWithLedger extends Customer, Record<string, unknown> {
   /**
@@ -412,7 +412,7 @@ function enrichCustomer(customer: Customer & Record<string, unknown>, entries: C
   const balance = roundMoney(Math.max(0, metrics.balance));
   return { ...customer, ledgerBalance: balance, rawLedgerBalance: metrics.balance,
     hasUnsyncedLedgerEntries: hasUnsyncedLedgerEntries(entries), totalUdhar: balance,
-    udharAmount: balance, confirmedLedger: confirmedLedgerFingerprints(entries), ledgerMetrics: metrics };
+    udharAmount: balance, confirmedLedger: fingerprintDedupedLedger(entries), ledgerMetrics: metrics };
 }
 
 export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {

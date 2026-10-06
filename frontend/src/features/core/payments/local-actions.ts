@@ -30,7 +30,7 @@ import {
 } from "@/features/core/ledger/accounting";
 import {
   authoritativeOutstandingWithPendingLedger,
-  confirmedLedgerFingerprints,
+  fingerprintDedupedLedger,
   loadCachedAuthoritativeSummary,
   readCachedAuthoritativeSummary,
   snapshotCoversCustomer,
@@ -206,7 +206,7 @@ function buildLocalUdharSummary(input: {
   const authoritative = input.authoritative;
   if (authoritative) {
     const deltas = pendingLedgerDeltas(ledgerEntries);
-    const confirmed = confirmedLedgerFingerprints(ledgerEntries);
+    const confirmed = fingerprintDedupedLedger(ledgerEntries);
     const rows = new Map<string, UdharSummary["customers"][number]>();
     const handledCustomerIds = new Set<string>();
 
