@@ -57,6 +57,17 @@ export interface LocalDataChangeMessage {
   source: "kirana-local-data";
   detail?: Record<string, unknown>;
   emittedAt: number;
+  sender?: string;
+}
+
+// A BroadcastChannel delivers to every other channel object, and the refresh
+// bridge's listening one lives in the posting tab too. Unmarked, every change
+// came back to its own tab as a "broadcast" about 25ms later, so each listener
+// ran twice per write.
+const THIS_TAB = createLocalId("tab");
+
+export function isFromThisTab(message: LocalDataChangeMessage): boolean {
+  return message.sender === THIS_TAB;
 }
 
 function postLocalDataChangeToOtherTabs(detail?: Record<string, unknown>) {
@@ -67,6 +78,7 @@ function postLocalDataChangeToOtherTabs(detail?: Record<string, unknown>) {
       source: "kirana-local-data",
       detail,
       emittedAt: Date.now(),
+      sender: THIS_TAB,
     } satisfies LocalDataChangeMessage);
     channel.close();
   } catch {

@@ -70,6 +70,7 @@ import { useAppLanguage } from "@/features/core/settings/i18n";
 import { translateCategory } from "@/features/core/settings/business-types";
 import { speechRecognitionLocale } from "@/features/core/voice/voice-recognition";
 import { Loader2 } from "lucide-react";
+import { UNAFFECTED_BY_LOCAL_DATA } from "@/lib/api/query-meta";
 import {
   ACTIVITY_EVENTS,
   matchSearchSuggestions,
@@ -398,8 +399,8 @@ export default function Billing() {
   const customers = useListCustomers();
   // Smart Adaptive Pricing — the shop's owner-defined rules (cached, offline-safe).
   const { rules: shopPricingRules } = useShopPricingRules();
-  const retailPaymentReadiness = useQuery({ queryKey: ["retail-payment-readiness"], queryFn: getRetailPaymentReadiness, staleTime: 5 * 60_000, retry: false });
-  const cardTerminalReadiness = useQuery({ queryKey: ["card-terminal-readiness"], queryFn: getCardTerminalReadiness, staleTime: 5 * 60_000, retry: false });
+  const retailPaymentReadiness = useQuery({ queryKey: ["retail-payment-readiness"], queryFn: getRetailPaymentReadiness, staleTime: 5 * 60_000, retry: false, meta: UNAFFECTED_BY_LOCAL_DATA });
+  const cardTerminalReadiness = useQuery({ queryKey: ["card-terminal-readiness"], queryFn: getCardTerminalReadiness, staleTime: 5 * 60_000, retry: false, meta: UNAFFECTED_BY_LOCAL_DATA });
 
   const typedCustomerName = customerName.trim();
   const typedCustomerMobile = customerMobile.replace(/\D/g, "").trim();
@@ -428,6 +429,7 @@ export default function Billing() {
     enabled: isOnline && loyaltyFeature.allowed,
     staleTime: 5 * 60_000,
     retry: false,
+    meta: UNAFFECTED_BY_LOCAL_DATA,
   });
   const loyaltyAccount = useQuery({
     queryKey: ["loyalty-account", resolvedCustomerId],

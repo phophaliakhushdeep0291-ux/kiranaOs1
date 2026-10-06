@@ -9,6 +9,12 @@ import {
 import { shouldPassSharedThrottle, shouldRunScheduledNetworkWork } from "@/lib/browser/multiTabCoordinator";
 import { nextIdleStep, syncDelayForStep } from "@/features/core/sync/sync-cadence";
 import { LIVE_STREAM_STATE_EVENT, isLiveStreamOpen } from "@/features/core/sync/live-stream-state";
+import { isSyncCycleInFlight, msSinceLastSyncCycle } from "@/features/core/sync/sync-cycle-state";
+
+// A scheduled tick with nothing to send skips the network if a full cycle
+// finished this recently. Short of the 20s rung, so an idle till's own cadence
+// (45s, or three minutes with a live stream) is unchanged.
+const RECENT_CYCLE_MS = 15_000;
 
 // Every sync cycle probes /health before it sends anything, so this timer only
 // keeps the header's reachability dot fresh between cycles. At 8s it was the
@@ -145,7 +151,12 @@ async function runScheduledTick() {
     const counts = await refreshCount();
     const hadWork = !counts || counts.totalBlocking > 0;
     const canRun = navigator.onLine && document.visibilityState === "visible";
-    const pushed = canRun && shouldRunScheduledNetworkWork() ? await syncNow() : 0;
+    // Nothing to send, and a full cycle (push and pull) finished moments ago:
+    // another one would only ask the server the same questions again. This is
+    // the cadence reset after a sale, whose fast rungs otherwise each cost a
+    // cycle with nothing in it.
+    const recentlySynced = !hadWork && msSinceLastSyncCycle() < RECENT_CYCLE_MS;
+    const pushed = canRun && !recentlySynced && shouldRunScheduledNetworkWork() ? await syncNow() : 0;
     if (canRun) await recoverLocalQueueIfNeeded();
     // syncNow refreshed the counts before returning, so this reads the queue as
     // it stands after the batch rather than costing another IndexedDB pass.
@@ -185,6 +196,11 @@ async function refreshCount(): Promise<SyncQueueCounts | null> {
 export async function syncNow(options: { manual?: boolean; hydrate?: boolean } = {}): Promise<number> {
   if (isSyncing) return 0;
   if (!options.manual && !shouldRunScheduledNetworkWork()) return 0;
+  // A cycle already running started after whatever prompted this one was
+  // written, so it is sending it. Asking now would only chain a second, empty
+  // cycle behind it (the engine queues one follow-up per caller); new work that
+  // lands after it started still gets the reset cadence's next fast tick.
+  if (!options.manual && isSyncCycleInFlight()) return 0;
   const connection = await probeBackendConnection({ force: options.manual });
   setBackendStatus(connection);
   if (!connection.browserOnline || !connection.backendReachable) return 0;
@@ -213,7 +229,9 @@ async function recoverLocalQueueIfNeeded() {
   // token when it passes, so winning it and then returning at the re-entrancy
   // guard would lock every other tab out of recovery for three seconds having
   // done nothing — the queue then waits for a human to press Sync.
-  if (isSyncing) return;
+  // A cycle running in this tab (the multi-device hook's local-write run, say) is
+  // already pushing the rows that made the queue look stuck.
+  if (isSyncing || isSyncCycleInFlight()) return;
   if (!shouldPassSharedThrottle(LOCAL_QUEUE_RECOVERY_THROTTLE_KEY, LOCAL_QUEUE_RECOVERY_THROTTLE_MS)) return;
   await syncNow({ manual: true, hydrate: false });
 }
