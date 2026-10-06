@@ -62,7 +62,10 @@ describe("a truncated read must not quarantine the shop's history", () => {
   it("only replaces the synced snapshot when the window came back complete", () => {
     // replaceSyncedSnapshot removes synced bills absent from the result. Reached with
     // a partial page it would erase real history, which is worse than the 400 was.
-    expect(hydration).toMatch(/if \(complete\) \{\s*await offlineDB\.replaceSyncedSnapshot\("bills"/);
+    // The routine snapshot's recent window is never authoritative either (see
+    // snapshot-bill-window.test.ts), so both must hold before anything is removed.
+    expect(hydration).toContain("const authoritative = complete && billWindow.authoritative;");
+    expect(hydration).toMatch(/if \(authoritative\) \{\s*await offlineDB\.replaceSyncedSnapshot\("bills"/);
   });
 
   it("still keeps what it did fetch when the window was incomplete", () => {

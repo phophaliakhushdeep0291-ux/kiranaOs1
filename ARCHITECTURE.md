@@ -84,6 +84,20 @@ incremental pull. Do not shorten it to make something "show up faster" — fix t
 pull. The header's /health dot polls every 30s for the same reason; every sync
 cycle probes before it sends anyway.
 
+**The routine snapshot reads three days of bills; the two-year read is daily.**
+Bills are the one table whose snapshot grows with the shop's age: every bill
+carries its lines and payments, and a till doing a hundred bills a day reaches the
+20,000-bill paging cap. `useMultiDeviceSync` asks for a `routine` snapshot, which
+re-reads only the recent window and removes nothing. The full window — the only one
+allowed to quarantine a synced bill the server no longer has — runs once a day per
+device (`kirana.snapshot.fullBillWindowAt::<shop>`), and on every explicit repair:
+the cloud bootstrap after login, Sync now, remote support. Traps: a routine window
+must never quarantine, because its edge moves daily and a bill dated by
+`createdAt` rather than `businessDate` can sit just inside it on the device and
+just outside it on the server; and the daily stamp is written when the full read
+lands even if it was incomplete, or a shop past the cap would be sent back to it
+every ten minutes.
+
 **Other counters hear about a change at once, not on their cadence.** An idle
 till's 45s rung was how long a sale took to reach the next counter. The visible
 leader tab holds `GET /api/sync/events` open (`live-changes.ts`, read with fetch

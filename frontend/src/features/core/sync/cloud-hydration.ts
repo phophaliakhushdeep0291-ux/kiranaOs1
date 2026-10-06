@@ -15,6 +15,23 @@ const DIRECT_IMPORT_LIMIT = 5000;
 /** The maximum `/bills` accepts; asking for more answers 400. */
 const BILL_IMPORT_PAGE_LIMIT = 2000;
 const BILL_IMPORT_MAX_PAGES = 10;
+/**
+ * Which bills a snapshot reads, and whether it may remove local ones.
+ *
+ * The full window is the repair: two years, authoritative, so a synced bill the
+ * server no longer has is quarantined. Every bill carries its lines and payments,
+ * so on a shop with history that is megabytes — a till doing a hundred bills a day
+ * reaches the 20,000-bill paging cap — and the routine snapshot read it every ten
+ * minutes on every counter, while the incremental pull was already delivering each
+ * change. A routine snapshot now re-reads only the last few days and removes
+ * nothing, which also keeps the window's moving edge from ever quarantining a bill.
+ * The full window still runs once a day on each device, and for every explicit
+ * repair: the first cloud bootstrap, Sync now and remote support.
+ */
+const FULL_BILL_WINDOW = { days: 730, authoritative: true } as const;
+const RECENT_BILL_WINDOW = { days: 3, authoritative: false } as const;
+type BillWindow = typeof FULL_BILL_WINDOW | typeof RECENT_BILL_WINDOW;
+const FULL_BILL_REPAIR_EVERY_MS = 24 * 60 * 60_000;
 const PURCHASE_PULL_LIMIT = 1000;
 const PURCHASE_PULL_MAX_PAGES = 10;
 const SYNC_SKIP_CURSOR = "2099-12-31T23:59:59.999Z|~";
@@ -210,10 +227,33 @@ async function fetchBillWindow(from: string, to: string): Promise<{ bills: unkno
   return { bills, complete: false };
 }
 
-async function importBills() {
+function fullBillRepairKey(scope: { tenant_id: string; store_id: string }) {
+  return `kirana.snapshot.fullBillWindowAt::${scope.tenant_id}::${scope.store_id}`;
+}
+
+/** Due when this device has no record of a full read for the shop in the last day. */
+function fullBillRepairDue(scope: { tenant_id: string; store_id: string }): boolean {
+  try {
+    const at = Number(localStorage.getItem(fullBillRepairKey(scope)));
+    const age = Date.now() - at;
+    return !Number.isFinite(at) || at <= 0 || age < 0 || age >= FULL_BILL_REPAIR_EVERY_MS;
+  } catch {
+    return true; // Without storage there is no record, and the full read is the safe default.
+  }
+}
+
+function recordFullBillRepair(scope: { tenant_id: string; store_id: string }) {
+  try {
+    localStorage.setItem(fullBillRepairKey(scope), String(Date.now()));
+  } catch {
+    // The next routine snapshot reads the full window again, which is only slower.
+  }
+}
+
+async function importBills(billWindow: BillWindow) {
   const scope = getOfflineScope();
   const now = new Date();
-  const from = toDateInput(addDays(now, -730));
+  const from = toDateInput(addDays(now, -billWindow.days));
   const to = toDateInput(addDays(now, 1));
   const { bills, complete } = await fetchBillWindow(from, to);
   const billItems: AnyRecord[] = [];
@@ -242,8 +282,10 @@ async function importBills() {
   // Only a COMPLETE window may quarantine: this call removes synced bills the result
   // does not contain, so replacing from a truncated read would erase the shop's older
   // history. An incomplete read still writes what it fetched (below) and leaves the
-  // existing rows for the incremental pull to reconcile.
-  if (complete) {
+  // existing rows for the incremental pull to reconcile. A recent window is never
+  // authoritative, and writes what it fetched the same way.
+  const authoritative = complete && billWindow.authoritative;
+  if (authoritative) {
     await offlineDB.replaceSyncedSnapshot("bills", merged, scope, (row) => {
       const raw = row.businessDate ?? row.business_date ?? row.createdAt ?? row.created_at;
       const time = new Date(String(raw ?? "")).getTime();
@@ -253,7 +295,9 @@ async function importBills() {
     await offlineDB.putMany("bills", merged);
   }
   assertCurrentOfflineScope(scope);
-  writeInstantCache("bills", merged);
+  // A few days of bills is not the bills cache; refreshBusinessCaches rebuilds it
+  // from IndexedDB once the snapshot finishes.
+  if (billWindow.authoritative) writeInstantCache("bills", merged);
   if (billItems.length > 0) {
     assertCurrentOfflineScope(scope);
     await offlineDB.putMany("bill_items", uniqueById(billItems));
@@ -262,7 +306,7 @@ async function importBills() {
     assertCurrentOfflineScope(scope);
     await offlineDB.putMany("payments", uniqueById(payments));
     assertCurrentOfflineScope(scope);
-    writeInstantCache("payments", uniqueById(payments));
+    if (billWindow.authoritative) writeInstantCache("payments", uniqueById(payments));
   }
   const allCurrentBills = await offlineDB.getAll<AnyRecord>("bills");
   assertCurrentOfflineScope(scope);
@@ -275,6 +319,9 @@ async function importBills() {
     scope,
     { removeWhenForeignKeyMissing: false },
   );
+  // Recorded once the full read has landed, complete or not: a shop past the paging
+  // cap never gets a complete window, and must not be sent back to it every time.
+  if (billWindow.authoritative) recordFullBillRepair(scope);
   return { bills: bills.length, billItems: billItems.length, payments: payments.length };
 }
 
@@ -479,15 +526,21 @@ async function repairCursorsAheadOfLocalData(): Promise<string[]> {
   return repaired;
 }
 
-export async function hydrateFromBackendSnapshot(): Promise<CloudHydrationResult> {
+/**
+ * `routine` is the periodic catch-up (useMultiDeviceSync's load, reconnect and
+ * ten-minute runs): it reads the recent bill window unless this device's daily
+ * full read is due. Every other caller is an explicit repair and reads it all.
+ */
+export async function hydrateFromBackendSnapshot(options: { routine?: boolean } = {}): Promise<CloudHydrationResult> {
   const scope = getOfflineScope();
   await offlineDB.init();
+  const billWindow = options.routine && !fullBillRepairDue(scope) ? RECENT_BILL_WINDOW : FULL_BILL_WINDOW;
 
   const [subscription, products, customers, bills, udharLedger, purchaseHistory] = await Promise.all([
     safeFetch("subscription", importSubscription),
     safeFetch("products", importProducts),
     safeFetch("customers", importCustomers),
-    safeFetch("bills", importBills),
+    safeFetch("bills", () => importBills(billWindow)),
     safeFetch("udharLedger", importUdharLedger),
     safeFetch("purchaseHistory", hydratePurchaseHistoryFromSyncPull),
   ]);

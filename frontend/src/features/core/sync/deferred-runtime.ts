@@ -20,7 +20,7 @@ export async function runManualSyncCycle(): Promise<ManualSyncResult> {
   return runtime.runManualSyncCycle();
 }
 
-export async function hydrateFromBackendSnapshot(): Promise<CloudHydrationResult> {
+export async function hydrateFromBackendSnapshot(options?: { routine?: boolean }): Promise<CloudHydrationResult> {
   const runtime = await import("@/features/core/sync/cloud-hydration");
-  return runtime.hydrateFromBackendSnapshot();
+  return runtime.hydrateFromBackendSnapshot(options);
 }
