@@ -85,7 +85,7 @@ describe("the scheduler only hurries when rows are actually landing", () => {
     // A push that keeps failing leaves the same rows behind. Hurrying on a
     // backlog alone would turn a broken sync into a hot loop against the server.
     expect(hook).toContain("draining = pushed > 0 && state.pendingCount > 0;");
-    expect(hook).toContain("syncDelayForStep(idleStep, draining)");
+    expect(hook).toContain("syncDelayForStep(idleStep, draining, isLiveStreamOpen())");
   });
 
   it("drops back to the ladder when a tick throws", () => {

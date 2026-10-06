@@ -10,6 +10,7 @@ import {
   announceShopChangesAfterWrite,
   closeAllLiveStreams,
   liveStreamStats,
+  nudgeDevice,
   openLiveStream,
   streamShopChanges,
 } from "../src/modules/sync/sync-live.js";
@@ -125,6 +126,24 @@ function recorder(deviceId, shopId = "shop-1") {
   run("PATCH", 200);
   await settle();
   assert.equal(b.received.length, 1, "a successful write nudges the other counters");
+  closeAllLiveStreams();
+}
+
+// 7b) A remote-support command nudges only the device it is for, at once: an idle
+//     till with a live stream cycles every three minutes, and the command is
+//     drained at the top of a cycle.
+{
+  const target = recorder("dev-A");
+  const other = recorder("dev-B");
+  const elsewhere = recorder("dev-A", "shop-2");
+  nudgeDevice("shop-1", "dev-A");
+  assert.equal(target.received.length, 1, "no coalescing wait: an operator is watching");
+  assert.equal(target.received[0].event, "changes");
+  assert.equal(other.received.length, 0, "other counters have nothing to drain");
+  assert.equal(elsewhere.received.length, 0, "the same device id in another shop is someone else's till");
+  nudgeDevice("shop-1", null);
+  nudgeDevice("shop-without-streams", "dev-A");
+  assert.equal(target.received.length, 1, "no device or no stream is a no-op, not a broadcast");
   closeAllLiveStreams();
 }
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  LIVE_IDLE_DELAY_MS,
   MAX_IDLE_STEP,
+  SYNC_DRAINING_DELAY_MS,
   SYNC_INTERVAL_LADDER_MS,
   nextIdleStep,
   syncDelayForStep,
@@ -64,5 +66,18 @@ describe("sync cadence ladder", () => {
     const slowest = syncDelayForStep(MAX_IDLE_STEP);
     expect(slowest).toBeGreaterThan(18_000);
     expect(slowest).toBeLessThanOrEqual(60_000);
+  });
+
+  it("relaxes to three minutes only when idle with a live stream open", () => {
+    // With the stream open, another counter's change arrives as a nudge, so the
+    // loop is the backstop. Still under the server's five-minute online window.
+    expect(syncDelayForStep(MAX_IDLE_STEP, false, true)).toBe(LIVE_IDLE_DELAY_MS);
+    expect(LIVE_IDLE_DELAY_MS).toBeLessThan(5 * 60_000);
+    // Work, or a queue still draining, keeps the fast cadence whatever the stream.
+    expect(syncDelayForStep(0, false, true)).toBe(2_500);
+    expect(syncDelayForStep(2, false, true)).toBe(20_000);
+    expect(syncDelayForStep(MAX_IDLE_STEP, true, true)).toBe(SYNC_DRAINING_DELAY_MS);
+    // And with no stream, idle is the ladder's 45s as before.
+    expect(syncDelayForStep(MAX_IDLE_STEP, false, false)).toBe(45_000);
   });
 });

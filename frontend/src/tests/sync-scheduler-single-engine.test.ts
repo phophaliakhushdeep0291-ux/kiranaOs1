@@ -97,7 +97,9 @@ describe("sync scheduling runs one engine, not one per caller", () => {
     // The second argument is the drain rung: a cycle that SENT rows and left
     // more queued skips the wait, so a bulk import is not paced by a timer.
     // sync-bulk-queue-drain.test.ts holds the rule that gates it on progress.
-    expect(offline).toContain("syncDelayForStep(idleStep, draining)");
+    // The third is the live stream: while one is open, idle relaxes to the
+    // three-minute rung (live-sync-idle-cadence.test.ts runs that for real).
+    expect(offline).toContain("syncDelayForStep(idleStep, draining, isLiveStreamOpen())");
     expect(offline).toContain("idleStep = nextIdleStep(idleStep, hadWork);");
     expect(offline).toContain("function resetSyncCadence()");
     expect(offline).not.toContain("window.setInterval(() => {\n    void refreshCount();");

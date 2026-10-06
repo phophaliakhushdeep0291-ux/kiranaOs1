@@ -1,4 +1,5 @@
 import { authenticatedStreamHeaders, getApiBaseUrl } from "@/lib/api/http";
+import { markLiveStream } from "@/features/core/sync/live-stream-state";
 
 /**
  * Pulls the moment another counter changes the shop's data.
@@ -18,6 +19,13 @@ import { authenticatedStreamHeaders, getApiBaseUrl } from "@/lib/api/http";
 export const LIVE_RECONNECT_DELAYS_MS = [1_000, 2_000, 5_000, 15_000, 30_000] as const;
 /** How often the gate is re-checked, open or closed (offline, hidden, lost leadership). */
 export const LIVE_GATE_CHECK_MS = 5_000;
+/**
+ * The server sends a keep-alive every 25s. A stream silent for longer than this
+ * is treated as dead — a proxy can hold a socket open that no longer delivers —
+ * and reconnected, because while a stream counts as open the scheduled sync
+ * relaxes to its three-minute rung.
+ */
+export const LIVE_SILENCE_LIMIT_MS = 60_000;
 
 export interface SseEvent {
   event: string;
@@ -91,8 +99,9 @@ export function startLiveChanges(options: LiveChangesOptions): LiveChangesHandle
     if (!headers || stopped) return false;
     const abort = new AbortController();
     controller = abort;
+    let lastHeardAt = Date.now();
     const gate = setInterval(() => {
-      if (!options.shouldConnect()) abort.abort();
+      if (!options.shouldConnect() || Date.now() - lastHeardAt > LIVE_SILENCE_LIMIT_MS) abort.abort();
     }, LIVE_GATE_CHECK_MS);
     let ready = false;
     try {
@@ -102,6 +111,7 @@ export function startLiveChanges(options: LiveChangesOptions): LiveChangesHandle
       const decoder = new TextDecoder();
       const parse = createSseParser(({ event }) => {
         if (event === "ready") {
+          if (!ready) markLiveStream(true);
           ready = true;
           if (hasBeenReady) options.onReconnect();
           hasBeenReady = true;
@@ -112,13 +122,16 @@ export function startLiveChanges(options: LiveChangesOptions): LiveChangesHandle
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
+        lastHeardAt = Date.now();
         parse(decoder.decode(value, { stream: true }));
       }
     } catch {
-      // Aborted by the gate or stop(), or the network dropped: both end here.
+      // Aborted by the gate, the silence watchdog or stop(), or the network
+      // dropped: all end here.
     } finally {
       clearInterval(gate);
       if (controller === abort) controller = null;
+      if (ready) markLiveStream(false);
     }
     return ready;
   };

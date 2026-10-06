@@ -8,6 +8,7 @@ import {
 } from "@/features/core/sync/backend-health";
 import { shouldPassSharedThrottle, shouldRunScheduledNetworkWork } from "@/lib/browser/multiTabCoordinator";
 import { nextIdleStep, syncDelayForStep } from "@/features/core/sync/sync-cadence";
+import { LIVE_STREAM_STATE_EVENT, isLiveStreamOpen } from "@/features/core/sync/live-stream-state";
 
 // Every sync cycle probes /health before it sends anything, so this timer only
 // keeps the header's reachability dot fresh between cycles. At 8s it was the
@@ -111,7 +112,15 @@ let idleStep = 0;
 let draining = false;
 
 function scheduledSyncDelay() {
-  return syncDelayForStep(idleStep, draining);
+  return syncDelayForStep(idleStep, draining, isLiveStreamOpen());
+}
+
+// The idle rung depends on the live stream, so a change in it re-times the wait
+// from now: a stream that drops must not leave a three-minute timer running, and
+// one that opens can stretch the 45s one. The ladder position is kept, so a brief
+// reconnect does not buy a burst of fast cycles.
+function handleLiveStreamState() {
+  armScheduledSync();
 }
 
 // Called whenever work appears or the connection changes, so the next attempt is
@@ -273,6 +282,7 @@ function start() {
   window.addEventListener("kirana:sync-queue-updated", handleQueueUpdated);
   window.addEventListener("kirana:local-data-changed", handleQueueUpdated);
   window.addEventListener("kirana:backend-status-changed", handleBackendStatus);
+  window.addEventListener(LIVE_STREAM_STATE_EVENT, handleLiveStreamState);
   document.addEventListener("visibilitychange", handleVisibility);
 
   void refreshCount();
@@ -306,6 +316,7 @@ function stop() {
   window.removeEventListener("kirana:sync-queue-updated", handleQueueUpdated);
   window.removeEventListener("kirana:local-data-changed", handleQueueUpdated);
   window.removeEventListener("kirana:backend-status-changed", handleBackendStatus);
+  window.removeEventListener(LIVE_STREAM_STATE_EVENT, handleLiveStreamState);
   document.removeEventListener("visibilitychange", handleVisibility);
 
   for (const timer of [scheduledSyncTimer, bootSyncTimer, bootRecoveryTimer, queueRecoveryTimer, syncTimer]) {
