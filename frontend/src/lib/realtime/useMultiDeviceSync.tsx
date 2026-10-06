@@ -119,7 +119,8 @@ export function useMultiDeviceSync() {
         const shouldSnapshot = options.snapshot || Date.now() - lastSnapshotAtRef.current > SNAPSHOT_INTERVAL_MS;
         if (shouldSnapshot && shouldPassSharedThrottle(snapshotThrottleKey, SNAPSHOT_THROTTLE_MS)) {
           lastSnapshotAtRef.current = Date.now();
-          const snapshot = await hydrateFromBackendSnapshot();
+          // Routine: the last few days of bills, and the two-year repair once a day.
+          const snapshot = await hydrateFromBackendSnapshot({ routine: true });
           notifyLocalRefresh(`${reason}:snapshot`, snapshot);
           postBroadcast({ type: "cloud-import-complete", reason, timestamp: Date.now(), result: snapshot });
         }
