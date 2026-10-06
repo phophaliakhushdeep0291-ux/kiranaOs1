@@ -83,7 +83,7 @@ unsupported registration before any tenant is created.
 A separate isolated database regression exercises saved sale/return market fields,
 reloads, rejected relabeling, shop-edit guards, duplicate bill/event replay,
 cross-counter pull responses and one-time stock deductions. It is wired into
-`backend/npm run test:market-snapshot` and the isolated regression suite.
+`backend/npm run test:market-snapshot` and automatic SQLite/PostgreSQL integration-test discovery.
 
 `frontend/npm run prod:check` passed: 3,358 tests passed, one skipped; typecheck,
 translation checks, production build, bundle and production-app checks passed.
@@ -105,7 +105,7 @@ production deployment or data migration was performed.
 
 The mirrored Prisma schemas add four non-null columns to each of Shop and Bill.
 PostgreSQL migration `000142_accounting_market_snapshot` adds them with explicit
-IN/INR/Asia-Kolkata/GST defaults (the time-zone value is `Asia/Kolkata`).
+`IN` / `INR` / `Asia/Kolkata` / `GST` defaults.
 Existing money and stock are not recalculated and free-text profile labels are
 not used for the backfill. Startup schema verification checks both tables.
 

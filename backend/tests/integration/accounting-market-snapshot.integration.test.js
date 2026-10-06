@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import db from "../src/db.js";
-import { confirmBill, createSaleReturn, listBills } from "../src/modules/bills/bills.service.js";
-import { updateShop } from "../src/modules/shops/shops.service.js";
-import { pushOfflineActions, pullSince } from "../src/modules/sync/sync.service.js";
-import { accountingMarketSnapshot } from "../src/modules/shops/market-policy.js";
-import { createTenant, createProduct, billPayload } from "./integration/factories.js";
+import db from "../../src/db.js";
+import { confirmBill, createSaleReturn, listBills } from "../../src/modules/bills/bills.service.js";
+import { updateShop } from "../../src/modules/shops/shops.service.js";
+import { pushOfflineActions, pullSince } from "../../src/modules/sync/sync.service.js";
+import { accountingMarketSnapshot } from "../../src/modules/shops/market-policy.js";
+import { createTenant, createProduct, billPayload } from "./factories.js";
 
 test("persisted sale/return markets survive reload, retry and legacy requests without currency relabeling", async () => {
   await db.$connect();
