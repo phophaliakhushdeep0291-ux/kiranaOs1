@@ -2,7 +2,7 @@ import { loadAuthSession } from "@/lib/storage/auth-storage";
 
 export const LOCATION_CHANGED_EVENT = "kirana:location-changed";
 
-function storageKey(kind: "active" | "primary" = "active") {
+function storageKey(kind: "active" | "primary" | "count" = "active") {
   const session = loadAuthSession();
   const shopId = session.shop?.id ?? session.user?.shopId ?? "local";
   return `kirana:${kind}-location:${shopId}`;
@@ -11,6 +11,26 @@ function storageKey(kind: "active" | "primary" = "active") {
 export function getPrimaryLocationId(): string | null {
   try { return localStorage.getItem(storageKey("primary"))?.trim() || null; }
   catch { return null; }
+}
+
+/**
+ * True only when the shop is known to have exactly one location, counting
+ * inactive ones: a branch that still holds stock changes what the primary has.
+ * Unknown — before `/stores` has answered on this device, or when it answered
+ * for a user who sees only some locations — is not single.
+ */
+export function isSingleLocationShop(): boolean {
+  try { return localStorage.getItem(storageKey("count")) === "1"; }
+  catch { return false; }
+}
+
+/** `null` when the answer cannot speak for the whole shop (an access-scoped user). */
+export function cacheLocationCount(count: number | null) {
+  try {
+    const key = storageKey("count");
+    if (count === null || !Number.isInteger(count) || count < 1) localStorage.removeItem(key);
+    else if (localStorage.getItem(key) !== String(count)) localStorage.setItem(key, String(count));
+  } catch { /* storage is best effort; unknown reads as more than one */ }
 }
 
 export function cachePrimaryLocationId(locationId: string) {
