@@ -6,7 +6,7 @@ import {
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
 import { emitLocalDataChanged } from "@/lib/offline/instant-cache";
 import { acknowledgeSyncSequence, syncPull } from "@/features/core/sync/api";
-import { mergeServerChange, refreshBusinessCaches } from "@/features/core/sync/sync-reconcile";
+import { createLedgerTwinIndex, mergeServerChange, refreshBusinessCaches } from "@/features/core/sync/sync-reconcile";
 import { replaceReferencesMany } from "@/features/core/sync/sync-id-mapping";
 import {
   DEFAULT_CURSOR_ID,
@@ -307,11 +307,13 @@ export async function pullServerChanges(): Promise<{
       // One reference pass per page rather than per change: the rewrite walks
       // every offline table, so a 500-change page was 500 full walks.
       const mergedIds = new Map<string, string>();
+      // Likewise one read of the ledger per page, not one per udhar entry on it.
+      const ledgerTwins = createLedgerTwinIndex();
       for (const change of changes) {
         const record = change as Record<string, unknown>;
         const entity = record.entity_type ?? record.entityType ?? record.type;
         affectedEntities.add(typeof entity === "string" ? entity : undefined);
-        const status = await mergeServerChange(change, mergedIds);
+        const status = await mergeServerChange(change, mergedIds, ledgerTwins);
         if (status === "merged") pulled += 1;
         if (status === "conflict") conflicts += 1;
       }
