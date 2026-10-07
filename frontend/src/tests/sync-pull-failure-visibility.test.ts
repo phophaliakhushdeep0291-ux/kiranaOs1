@@ -82,6 +82,7 @@ vi.mock("@/features/core/sync/api", () => ({
 vi.mock("@/features/core/sync/sync-reconcile", () => ({
   mergeServerChange: vi.fn(async () => "merged"),
   refreshBusinessCaches: vi.fn(async () => undefined),
+  createLedgerTwinIndex: () => ({ candidates: async () => [], reread: async () => undefined }),
 }));
 
 import { refreshBusinessCaches } from "@/features/core/sync/sync-reconcile";
