@@ -19,8 +19,13 @@ const h = vi.hoisted(() => ({
   failBills: false,
 }));
 
+vi.mock("@/lib/storage/auth-storage", () => ({ loadAuthSession: () => ({ user: { id: "u1", role: "owner" } }) }));
 vi.mock("@/lib/offline/db", () => ({
-  dexieDB: { open: async () => undefined, table: () => ({ count: async () => 0, get: async () => undefined }) },
+  dexieDB: {
+    open: async () => undefined,
+    // The device already holds rows of every table, so the daily record decides.
+    table: () => ({ count: async () => 0, get: async () => undefined, where: () => ({ equals: () => ({ count: async () => 1 }) }) }),
+  },
   offlineDB: {
     init: async () => undefined,
     getAll: async () => [],

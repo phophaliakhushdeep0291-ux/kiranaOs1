@@ -84,19 +84,23 @@ incremental pull. Do not shorten it to make something "show up faster" — fix t
 pull. The header's /health dot polls every 30s for the same reason; every sync
 cycle probes before it sends anyway.
 
-**The routine snapshot reads three days of bills; the two-year read is daily.**
-Bills are the one table whose snapshot grows with the shop's age: every bill
-carries its lines and payments, and a till doing a hundred bills a day reaches the
-20,000-bill paging cap. `useMultiDeviceSync` asks for a `routine` snapshot, which
-re-reads only the recent window and removes nothing. The full window — the only one
-allowed to quarantine a synced bill the server no longer has — runs once a day per
-device (`kirana.snapshot.fullBillWindowAt::<shop>`), and on every explicit repair:
-the cloud bootstrap after login, Sync now, remote support. Traps: a routine window
-must never quarantine, because its edge moves daily and a bill dated by
-`createdAt` rather than `businessDate` can sit just inside it on the device and
-just outside it on the server; and the daily stamp is written when the full read
-lands even if it was incomplete, or a shop past the cap would be sent back to it
-every ten minutes.
+**A routine snapshot reads each table in full once a day, not every ten minutes.**
+`useMultiDeviceSync` and the cloud bootstrap on load ask for a `routine` snapshot.
+Each of bills, products (with the inventory stock merged onto them), customers, the
+udhar ledger and purchase history keeps its own record of the device's last full
+read, per shop, user and role (`kirana.snapshot.fullReadAt::<table>::<shop>::<user>:<role>`);
+a routine run reads a table in full only when that record is a day old or the device
+holds no rows of it, and otherwise leaves it to the incremental pull — except bills,
+which re-read the last three days and remove nothing. Every explicit repair reads
+everything: Sync now and remote support. The weight was real: bills grow with the shop's age (a
+till doing a hundred a day reaches the 20,000-bill paging cap), the catalogue is
+about 1.2 KB a product, and purchase history was re-pulled from its first row.
+Traps: only the full bill window may quarantine, because a routine window's edge
+moves daily and a bill dated by `createdAt` rather than `businessDate` can sit just
+inside it on the device and just outside it on the server; the bills record is
+written even when the paging cap cut the read short, or a shop past the cap would
+be sent back to it every time; and a read that failed records nothing, so only that
+table runs again.
 
 **Other counters hear about a change at once, not on their cadence.** An idle
 till's 45s rung was how long a sale took to reach the next counter. The visible

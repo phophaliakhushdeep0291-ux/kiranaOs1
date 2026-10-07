@@ -7,6 +7,7 @@ import { syncPull } from "@/features/core/sync/api";
 import { loadIdMap } from "@/features/core/sync/sync-id-mapping";
 import { loadPurchaseOverrideMatcher, rowMatchesPurchaseOverride } from "@/features/core/purchases/sync-guards";
 import { writeSubscriptionSnapshot } from "@/features/core/subscription/access";
+import { loadAuthSession } from "@/lib/storage/auth-storage";
 import type { Bill, BillListResult, Customer, Product } from "@/types/api";
 
 type AnyRecord = Record<string, unknown>;
@@ -15,6 +16,8 @@ const DIRECT_IMPORT_LIMIT = 5000;
 /** The maximum `/bills` accepts; asking for more answers 400. */
 const BILL_IMPORT_PAGE_LIMIT = 2000;
 const BILL_IMPORT_MAX_PAGES = 10;
+/** 100,000 entries; a ledger past that is read partly and left otherwise untouched. */
+const UDHAR_IMPORT_MAX_PAGES = 20;
 /**
  * Which bills a snapshot reads, and whether it may remove local ones.
  *
@@ -31,7 +34,19 @@ const BILL_IMPORT_MAX_PAGES = 10;
 const FULL_BILL_WINDOW = { days: 730, authoritative: true } as const;
 const RECENT_BILL_WINDOW = { days: 3, authoritative: false } as const;
 type BillWindow = typeof FULL_BILL_WINDOW | typeof RECENT_BILL_WINDOW;
-const FULL_BILL_REPAIR_EVERY_MS = 24 * 60 * 60_000;
+/**
+ * The tables a routine snapshot reads in full only once a day per device.
+ *
+ * The same reasoning as bills, for the rest of the snapshot. Products (with their
+ * stock), customers and the udhar ledger are each re-read whole — up to 5,000 rows
+ * apiece, about 1.2 KB a product — and purchase history is re-pulled from its very
+ * first row, then announced as an import that refreshes every screen. Every ten
+ * minutes on every counter, for rows the incremental pull had already delivered.
+ * A routine snapshot skips a table whose daily read is not due; an explicit repair
+ * reads them all.
+ */
+type FullReadTable = "bills" | "products" | "customers" | "udharLedger" | "purchaseHistory";
+const FULL_READ_EVERY_MS = 24 * 60 * 60_000;
 const PURCHASE_PULL_LIMIT = 1000;
 const PURCHASE_PULL_MAX_PAGES = 10;
 const SYNC_SKIP_CURSOR = "2099-12-31T23:59:59.999Z|~";
@@ -227,26 +242,55 @@ async function fetchBillWindow(from: string, to: string): Promise<{ bills: unkno
   return { bills, complete: false };
 }
 
-function fullBillRepairKey(scope: { tenant_id: string; store_id: string }) {
-  return `kirana.snapshot.fullBillWindowAt::${scope.tenant_id}::${scope.store_id}`;
+/**
+ * Per user and role, not only per shop: the pull hides cost and profit fields from
+ * a cashier, so the owner signing in on a counter a cashier has been syncing needs
+ * a full read of their own before routine reads may stand in for it.
+ */
+function fullReadKey(scope: { tenant_id: string; store_id: string }, table: FullReadTable) {
+  const user = loadAuthSession().user;
+  return `kirana.snapshot.fullReadAt::${table}::${scope.tenant_id}::${scope.store_id}::${user?.id ?? "-"}:${user?.role ?? "-"}`;
 }
 
-/** Due when this device has no record of a full read for the shop in the last day. */
-function fullBillRepairDue(scope: { tenant_id: string; store_id: string }): boolean {
+/** Due when this device has no record of a full read of the table for the shop in the last day. */
+function fullReadDue(scope: { tenant_id: string; store_id: string }, table: FullReadTable): boolean {
   try {
-    const at = Number(localStorage.getItem(fullBillRepairKey(scope)));
+    const at = Number(localStorage.getItem(fullReadKey(scope, table)));
     const age = Date.now() - at;
-    return !Number.isFinite(at) || at <= 0 || age < 0 || age >= FULL_BILL_REPAIR_EVERY_MS;
+    return !Number.isFinite(at) || at <= 0 || age < 0 || age >= FULL_READ_EVERY_MS;
   } catch {
     return true; // Without storage there is no record, and the full read is the safe default.
   }
 }
 
-function recordFullBillRepair(scope: { tenant_id: string; store_id: string }) {
+function recordFullRead(scope: { tenant_id: string; store_id: string }, table: FullReadTable) {
   try {
-    localStorage.setItem(fullBillRepairKey(scope), String(Date.now()));
+    localStorage.setItem(fullReadKey(scope, table), String(Date.now()));
   } catch {
-    // The next routine snapshot reads the full window again, which is only slower.
+    // The next routine snapshot reads the table in full again, which is only slower.
+  }
+}
+
+const LOCAL_TABLE: Record<FullReadTable, string> = {
+  bills: "bills",
+  products: "products",
+  customers: "customers",
+  udharLedger: "customer_ledger",
+  purchaseHistory: "purchase_bills",
+};
+
+/**
+ * A table the device holds nothing of is read in full whatever the record says: a
+ * fresh browser, or a local reset that cleared IndexedDB and left localStorage.
+ * A shop that genuinely has none of something pays one empty read.
+ */
+async function holdsRows(scope: { tenant_id: string; store_id: string }, table: FullReadTable): Promise<boolean> {
+  try {
+    const count = await dexieDB.table(LOCAL_TABLE[table])
+      .where("[tenant_id+store_id]").equals([scope.tenant_id, scope.store_id]).count();
+    return count > 0;
+  } catch {
+    return false;
   }
 }
 
@@ -319,9 +363,6 @@ async function importBills(billWindow: BillWindow) {
     scope,
     { removeWhenForeignKeyMissing: false },
   );
-  // Recorded once the full read has landed, complete or not: a shop past the paging
-  // cap never gets a complete window, and must not be sent back to it every time.
-  if (billWindow.authoritative) recordFullBillRepair(scope);
   return { bills: bills.length, billItems: billItems.length, payments: payments.length };
 }
 
@@ -362,26 +403,53 @@ export async function resyncUdharLedgerFromServer(): Promise<number> {
   return importUdharLedger();
 }
 
+/**
+ * The whole udhar ledger, a page at a time.
+ *
+ * `/udhar` answers newest first. This used to ask for one page of 5,000 and treat
+ * it as the ledger, so a shop past 5,000 entries lost its oldest udhar from every
+ * device at each snapshot — the pull never re-sends what is behind its cursor — and
+ * local balances, a sum over the device's entries, came out short.
+ *
+ * `complete` is the count the server reported, reached by distinct entries. Paging
+ * by offset can drop a row that moves between pages while they are read; a read
+ * one short must not be allowed to delete that row from the device.
+ */
+async function fetchUdharLedger(): Promise<{ entries: AnyRecord[]; complete: boolean }> {
+  const entries: AnyRecord[] = [];
+  let total = Number.NaN;
+  for (let page = 1; page <= UDHAR_IMPORT_MAX_PAGES; page++) {
+    const result = await apiRequest<{ entries?: unknown[]; ledger?: unknown[]; total?: number }>(
+      `/udhar?limit=${DIRECT_IMPORT_LIMIT}&page=${page}`,
+      { method: "GET", cache: "no-store", background: true },
+    );
+    const rows = (Array.isArray(result?.entries) ? result.entries : Array.isArray(result?.ledger) ? result.ledger : []).filter(isRecord);
+    entries.push(...rows);
+    total = Number(result?.total);
+    if (rows.length < DIRECT_IMPORT_LIMIT || (Number.isFinite(total) && entries.length >= total)) break;
+  }
+  const distinct = uniqueById(entries);
+  return { entries: distinct, complete: Number.isFinite(total) && distinct.length >= total };
+}
+
 async function importUdharLedger() {
   const scope = getOfflineScope();
-  const result = await apiRequest<{ entries?: unknown[]; ledger?: unknown[]; total?: number }>(`/udhar?limit=${DIRECT_IMPORT_LIMIT}`, {
-    method: "GET",
-    cache: "no-store", background: true,
-  });
-  const rows = Array.isArray(result?.entries) ? result.entries : Array.isArray(result?.ledger) ? result.ledger : [];
-  const entries = rows.filter(isRecord);
-  // The endpoint is a full server snapshot. Retaining old server rows makes
-  // balances device-dependent, but pending local work must survive hydration.
+  const { entries, complete } = await fetchUdharLedger();
   assertCurrentOfflineScope(scope);
-  const staleKeys = await dexieDB.customer_ledger
-    .filter((row) => {
-      if (row.tenant_id !== scope.tenant_id || row.store_id !== scope.store_id) return false;
-      const status = String(row.sync_status ?? "synced").toLowerCase();
-      return !["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(status);
-    })
-    .primaryKeys();
-  assertCurrentOfflineScope(scope);
-  if (staleKeys.length > 0) await dexieDB.customer_ledger.bulkDelete(staleKeys as string[]);
+  // A complete read stands for the ledger: synced rows it lacks are gone from the
+  // server, and keeping them would make balances device-dependent. Pending local
+  // work always survives. An incomplete read only adds what it fetched.
+  if (complete) {
+    const staleKeys = await dexieDB.customer_ledger
+      .filter((row) => {
+        if (row.tenant_id !== scope.tenant_id || row.store_id !== scope.store_id) return false;
+        const status = String(row.sync_status ?? "synced").toLowerCase();
+        return !["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(status);
+      })
+      .primaryKeys();
+    assertCurrentOfflineScope(scope);
+    if (staleKeys.length > 0) await dexieDB.customer_ledger.bulkDelete(staleKeys as string[]);
+  }
   if (entries.length > 0) {
     assertCurrentOfflineScope(scope);
     await offlineDB.putMany("customer_ledger", entries);
@@ -528,25 +596,43 @@ async function repairCursorsAheadOfLocalData(): Promise<string[]> {
 
 /**
  * `routine` is the periodic catch-up (useMultiDeviceSync's load, reconnect and
- * ten-minute runs): it reads the recent bill window unless this device's daily
- * full read is due. Every other caller is an explicit repair and reads it all.
+ * ten-minute runs): it reads each table in full only when this device's daily read
+ * of it is due — otherwise bills come from the recent window and the other tables
+ * are left to the incremental pull. Every other caller is an explicit repair and
+ * reads it all.
  */
 export async function hydrateFromBackendSnapshot(options: { routine?: boolean } = {}): Promise<CloudHydrationResult> {
   const scope = getOfflineScope();
   await offlineDB.init();
-  const billWindow = options.routine && !fullBillRepairDue(scope) ? RECENT_BILL_WINDOW : FULL_BILL_WINDOW;
+  // Decided once, up front: the record is checked again only after this run writes it.
+  const inFull = Object.fromEntries(await Promise.all(
+    (["bills", "products", "customers", "udharLedger", "purchaseHistory"] as const).map(async (table) => [
+      table,
+      !options.routine || fullReadDue(scope, table) || !(await holdsRows(scope, table)),
+    ]),
+  )) as Record<FullReadTable, boolean>;
+  const skipped = (label: string) => Promise.resolve({ label } as { label: string; data?: undefined; error?: string });
 
   const [subscription, products, customers, bills, udharLedger, purchaseHistory] = await Promise.all([
     safeFetch("subscription", importSubscription),
-    safeFetch("products", importProducts),
-    safeFetch("customers", importCustomers),
-    safeFetch("bills", () => importBills(billWindow)),
-    safeFetch("udharLedger", importUdharLedger),
-    safeFetch("purchaseHistory", hydratePurchaseHistoryFromSyncPull),
+    inFull.products ? safeFetch("products", importProducts) : skipped("products"),
+    inFull.customers ? safeFetch("customers", importCustomers) : skipped("customers"),
+    safeFetch("bills", () => importBills(inFull.bills ? FULL_BILL_WINDOW : RECENT_BILL_WINDOW)),
+    inFull.udharLedger ? safeFetch("udharLedger", importUdharLedger) : skipped("udharLedger"),
+    inFull.purchaseHistory ? safeFetch("purchaseHistory", hydratePurchaseHistoryFromSyncPull) : skipped("purchaseHistory"),
   ]);
   // Inventory merges stock onto products, so run it AFTER products to avoid a race where it reads
-  // a not-yet-written product and drops product-only fields (barcode/sku).
-  const inventory = await safeFetch("inventory", importInventory);
+  // a not-yet-written product and drops product-only fields (barcode/sku). It is part of the
+  // products read, and skipped with it.
+  const inventory = inFull.products ? await safeFetch("inventory", importInventory) : await skipped("inventory");
+
+  // Recorded once each full read has landed. Bills count even when the paging cap cut
+  // the window short: a shop past the cap never gets a complete one, and must not be
+  // sent back to it every time. A read that failed records nothing and runs again.
+  const outcomes: Record<FullReadTable, { error?: string }> = { bills, products, customers, udharLedger, purchaseHistory };
+  for (const table of Object.keys(outcomes) as FullReadTable[]) {
+    if (inFull[table] && outcomes[table].error === undefined) recordFullRead(scope, table);
+  }
 
   const billCounts = isRecord(bills.data) ? bills.data as unknown as { bills?: number; billItems?: number; payments?: number } : {};
   const result: CloudHydrationResult = {

@@ -16,7 +16,10 @@ export async function getUdharLedger(shopId, { from, to, customerId, type, page,
   const [entries, total] = await Promise.all([
     db.udharLedger.findMany({
       where,
-      orderBy: { businessDate: "desc" },
+      // id breaks ties, so a page always continues where the last one ended:
+      // entries share a businessDate, and offset paging over an unstable order
+      // skipped some and repeated others.
+      orderBy: [{ businessDate: "desc" }, { id: "desc" }],
       skip: (page - 1) * limit,
       take: limit,
     }),
