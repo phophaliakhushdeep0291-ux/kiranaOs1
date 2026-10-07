@@ -42,7 +42,10 @@ export function CloudDataBootstrap() {
           if (!shouldPassSharedThrottle(throttleKey, BOOTSTRAP_THROTTLE_MS)) return;
           // First run a direct server snapshot import. This is intentionally not blocked by
           // local subscription-cache state, because a fresh browser has no cache yet.
-          const snapshot = await hydrateFromBackendSnapshot();
+          // Routine: a fresh browser holds no rows and a new user or role has no record,
+          // so both still read everything; a reload of a till that read it all today
+          // does not download two years of bills again.
+          const snapshot = await hydrateFromBackendSnapshot({ routine: true });
           // Test contract marker: direct hydration must happen before `const syncResult = await runSyncCycle()`.
           const syncResult = shouldRunScheduledNetworkWork()
             ? await runSyncCycle().catch((error) => ({ error: error instanceof Error ? error.message : String(error) }))
