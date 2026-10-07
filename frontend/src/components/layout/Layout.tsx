@@ -58,7 +58,7 @@ import { SyncAlertBanner } from "@/features/core/sync/SyncAlertBanner";
 import { CommandPalette } from "./CommandPalette";
 import { MobileBottomNav, MobileTopBar } from "./MobileAppChrome";
 import { apiRequest, getApiBaseUrl } from "@/lib/api/http";
-import { cachePrimaryLocationId, getActiveLocationId, LOCATION_CHANGED_EVENT, setActiveLocationId as persistActiveLocationId } from "@/features/core/stores/location-context";
+import { cacheLocationCount, cachePrimaryLocationId, getActiveLocationId, LOCATION_CHANGED_EVENT, setActiveLocationId as persistActiveLocationId } from "@/features/core/stores/location-context";
 import { cn } from "@/lib/utils";
 import { normalizeStaffRole, routeAccessFor, serverPermissions } from "@/features/core/staff/role-access";
 import { preloadCoreRoute, scheduleCoreRoutePreload } from "@/app/route-preload";
@@ -237,7 +237,7 @@ interface NavSpecGroupItem extends Omit<GroupItem, "label" | "children"> {
 
 type NavSpecItem = NavSpecLinkItem | NavSpecGroupItem;
 type StoreLocationOption = { id: string; code: string; name: string; city?: string | null; isPrimary: boolean; active: boolean };
-type StoreLocationsResponse = { locations: StoreLocationOption[] };
+type StoreLocationsResponse = { locations: StoreLocationOption[]; accessScoped?: boolean };
 
 /**
  * The shared spine every shop gets, before its trade adds anything.
@@ -465,6 +465,14 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
     window.addEventListener(LOCATION_CHANGED_EVENT, syncLocation);
     return () => window.removeEventListener(LOCATION_CHANGED_EVENT, syncLocation);
   }, []);
+
+  useEffect(() => {
+    // Inactive rows count too: a closed branch can still hold stock. A user
+    // scoped to some branches is not shown the rest, so their count says nothing.
+    const data = locationsQuery.data;
+    if (!data?.locations?.length) return;
+    cacheLocationCount(data.accessScoped ? null : data.locations.length);
+  }, [locationsQuery.data]);
 
   useEffect(() => {
     if (!locations.length) return;

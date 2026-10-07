@@ -39,6 +39,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 
 vi.mock("@/features/core/stores/location-context", () => ({
   getActiveLocationId: vi.fn(() => null),
+  isSingleLocationShop: () => false,
 }));
 
 import { loadProductsForExport } from "@/features/core/products/queries";
