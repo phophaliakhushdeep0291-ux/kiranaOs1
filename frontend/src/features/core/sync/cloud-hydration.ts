@@ -15,6 +15,8 @@ const DIRECT_IMPORT_LIMIT = 5000;
 /** The maximum `/bills` accepts; asking for more answers 400. */
 const BILL_IMPORT_PAGE_LIMIT = 2000;
 const BILL_IMPORT_MAX_PAGES = 10;
+/** 100,000 entries; a ledger past that is read partly and left otherwise untouched. */
+const UDHAR_IMPORT_MAX_PAGES = 20;
 /**
  * Which bills a snapshot reads, and whether it may remove local ones.
  *
@@ -362,26 +364,53 @@ export async function resyncUdharLedgerFromServer(): Promise<number> {
   return importUdharLedger();
 }
 
+/**
+ * The whole udhar ledger, a page at a time.
+ *
+ * `/udhar` answers newest first. This used to ask for one page of 5,000 and treat
+ * it as the ledger, so a shop past 5,000 entries lost its oldest udhar from every
+ * device at each snapshot — the pull never re-sends what is behind its cursor — and
+ * local balances, a sum over the device's entries, came out short.
+ *
+ * `complete` is the count the server reported, reached by distinct entries. Paging
+ * by offset can drop a row that moves between pages while they are read; a read
+ * one short must not be allowed to delete that row from the device.
+ */
+async function fetchUdharLedger(): Promise<{ entries: AnyRecord[]; complete: boolean }> {
+  const entries: AnyRecord[] = [];
+  let total = Number.NaN;
+  for (let page = 1; page <= UDHAR_IMPORT_MAX_PAGES; page++) {
+    const result = await apiRequest<{ entries?: unknown[]; ledger?: unknown[]; total?: number }>(
+      `/udhar?limit=${DIRECT_IMPORT_LIMIT}&page=${page}`,
+      { method: "GET", cache: "no-store", background: true },
+    );
+    const rows = (Array.isArray(result?.entries) ? result.entries : Array.isArray(result?.ledger) ? result.ledger : []).filter(isRecord);
+    entries.push(...rows);
+    total = Number(result?.total);
+    if (rows.length < DIRECT_IMPORT_LIMIT || (Number.isFinite(total) && entries.length >= total)) break;
+  }
+  const distinct = uniqueById(entries);
+  return { entries: distinct, complete: Number.isFinite(total) && distinct.length >= total };
+}
+
 async function importUdharLedger() {
   const scope = getOfflineScope();
-  const result = await apiRequest<{ entries?: unknown[]; ledger?: unknown[]; total?: number }>(`/udhar?limit=${DIRECT_IMPORT_LIMIT}`, {
-    method: "GET",
-    cache: "no-store", background: true,
-  });
-  const rows = Array.isArray(result?.entries) ? result.entries : Array.isArray(result?.ledger) ? result.ledger : [];
-  const entries = rows.filter(isRecord);
-  // The endpoint is a full server snapshot. Retaining old server rows makes
-  // balances device-dependent, but pending local work must survive hydration.
+  const { entries, complete } = await fetchUdharLedger();
   assertCurrentOfflineScope(scope);
-  const staleKeys = await dexieDB.customer_ledger
-    .filter((row) => {
-      if (row.tenant_id !== scope.tenant_id || row.store_id !== scope.store_id) return false;
-      const status = String(row.sync_status ?? "synced").toLowerCase();
-      return !["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(status);
-    })
-    .primaryKeys();
-  assertCurrentOfflineScope(scope);
-  if (staleKeys.length > 0) await dexieDB.customer_ledger.bulkDelete(staleKeys as string[]);
+  // A complete read stands for the ledger: synced rows it lacks are gone from the
+  // server, and keeping them would make balances device-dependent. Pending local
+  // work always survives. An incomplete read only adds what it fetched.
+  if (complete) {
+    const staleKeys = await dexieDB.customer_ledger
+      .filter((row) => {
+        if (row.tenant_id !== scope.tenant_id || row.store_id !== scope.store_id) return false;
+        const status = String(row.sync_status ?? "synced").toLowerCase();
+        return !["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(status);
+      })
+      .primaryKeys();
+    assertCurrentOfflineScope(scope);
+    if (staleKeys.length > 0) await dexieDB.customer_ledger.bulkDelete(staleKeys as string[]);
+  }
   if (entries.length > 0) {
     assertCurrentOfflineScope(scope);
     await offlineDB.putMany("customer_ledger", entries);
