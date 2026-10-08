@@ -13,6 +13,7 @@ import {
   syncConflictListQuerySchema,
 } from "./sync.schema.js";
 import * as ctrl from "./sync.controller.js";
+import { streamShopChanges } from "./sync-live.js";
 import { requireDeviceActivated, requireDeviceAllowedForSync } from "../devices/device.middleware.js";
 
 const router = Router();
@@ -55,6 +56,7 @@ router.get("/conflicts", requireDeviceActivated(), requireRole("owner", "admin")
 router.post("/conflicts/report", requireDeviceActivated(), validate(reportSyncConflictSchema), ctrl.reportConflict);
 router.post("/resolve-conflict", requireDeviceActivated(), requireRole("owner", "admin"), validate(resolveSyncConflictSchema), ctrl.resolveConflict);
 router.get("/pull", requireDeviceAllowedForSync(), validateQuery(pullQuerySchema), ctrl.pull);
+router.get("/events", requireDeviceAllowedForSync(), streamShopChanges);
 router.post("/push", requireDeviceAllowedForSync(), checkPushBatchSize, validate(pushBodySchema), ctrl.push);
 
 export default router;

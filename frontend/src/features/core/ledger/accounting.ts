@@ -300,11 +300,44 @@ function removeOpeningBalanceBillDuplicates<T extends CustomerLedgerEntry>(entri
   });
 }
 
+const CLIENT_LEDGER_ORIGIN_KEYS = ["clientLedgerId", "client_ledger_id"];
+const LEDGER_ROW_IDENTITY_KEYS = [
+  "id", "local_id", "localId", "server_id", "serverId",
+  "clientLedgerId", "client_ledger_id",
+  "localLedgerId", "local_ledger_id",
+  "localLedgerEntryId", "local_ledger_entry_id",
+];
+
+function stringValues(entry: Partial<CustomerLedgerEntry>, keys: string[]): Set<string> {
+  const record = entry as Record<string, unknown>;
+  return new Set(keys.map((key) => record[key]).filter((value): value is string => typeof value === "string" && value.length > 0));
+}
+
+/**
+ * True when both rows name the device write they came from and the names differ.
+ *
+ * A local row's `clientLedgerId` is its own id, and the server stamps the row it
+ * creates from that write with the same value — so a genuine echo always shares
+ * it. Two separate udhar sales to one customer for the same amount inside one
+ * 15-minute window share everything else the echo signature looks at; collapsing
+ * them dropped a real ₹120 sale from the balance while it waited to sync.
+ * Rows without the stamp (older server rows) keep the amount-and-window rule.
+ */
+function provablyDifferentLedgerWrites(a: Partial<CustomerLedgerEntry>, b: Partial<CustomerLedgerEntry>): boolean {
+  const aOrigin = stringValues(a, CLIENT_LEDGER_ORIGIN_KEYS);
+  const bOrigin = stringValues(b, CLIENT_LEDGER_ORIGIN_KEYS);
+  if (aOrigin.size === 0 || bOrigin.size === 0) return false;
+  const aIds = stringValues(a, LEDGER_ROW_IDENTITY_KEYS);
+  const bIds = stringValues(b, LEDGER_ROW_IDENTITY_KEYS);
+  return ![...aOrigin].some((id) => bIds.has(id)) && ![...bOrigin].some((id) => aIds.has(id));
+}
+
 function shouldCollapseLedgerEcho(previous: Partial<CustomerLedgerEntry>, current: Partial<CustomerLedgerEntry>): boolean {
   const previousType = normaliseLedgerType(previous.type, previous.source_type);
   const currentType = normaliseLedgerType(current.type, current.source_type);
   if (previousType !== currentType) return false;
   if (!isEchoDedupableLedger(previous) || !isEchoDedupableLedger(current)) return false;
+  if (provablyDifferentLedgerWrites(previous, current)) return false;
   const oneLocal = isLocalPendingLedgerEcho(previous) || isLocalPendingLedgerEcho(current);
   const oneServer = isServerLedgerEcho(previous) || isServerLedgerEcho(current);
   return oneLocal && oneServer;
@@ -332,7 +365,9 @@ function adjustmentIdentityTokens(entry: Partial<CustomerLedgerEntry>): string[]
 
 export function dedupeLedgerEntries<T extends CustomerLedgerEntry>(entries: T[]): T[] {
   const pickedByBusinessKey = new Map<string, T>();
-  const pickedByEchoSignature = new Map<string, T>();
+  // Every row kept under a signature, not just the last: once two same-amount
+  // sales can both survive, a later echo must be checked against each of them.
+  const pickedByEchoSignature = new Map<string, T[]>();
   const claimedAdjustmentTokens = new Set<string>();
   const sorted = entries
     .filter((row) => row.deleted_at == null && row.deletedAt == null)
@@ -344,8 +379,8 @@ export function dedupeLedgerEntries<T extends CustomerLedgerEntry>(entries: T[])
     if (previousByBusinessKey && ledgerSyncPriority(previousByBusinessKey) >= ledgerSyncPriority(entry)) continue;
 
     const echoSignature = ledgerEchoSignature(entry);
-    const previousByEcho = echoSignature ? pickedByEchoSignature.get(echoSignature) : undefined;
-    if (previousByEcho && shouldCollapseLedgerEcho(previousByEcho, entry)) continue;
+    const previousByEcho = echoSignature ? pickedByEchoSignature.get(echoSignature) ?? [] : [];
+    if (previousByEcho.some((previous) => shouldCollapseLedgerEcho(previous, entry))) continue;
 
     // A manual adjustment echoes back typed as debit/payment (mode:"adjustment"), so it never
     // matches its local ADJUSTMENT twin by businessKey/echoSignature. Collapse the pair by any
@@ -354,7 +389,7 @@ export function dedupeLedgerEntries<T extends CustomerLedgerEntry>(entries: T[])
     if (adjustmentTokens.some((token) => claimedAdjustmentTokens.has(token))) continue;
 
     pickedByBusinessKey.set(businessKey, entry);
-    if (echoSignature) pickedByEchoSignature.set(echoSignature, entry);
+    if (echoSignature) pickedByEchoSignature.set(echoSignature, [...previousByEcho, entry]);
     for (const token of adjustmentTokens) claimedAdjustmentTokens.add(token);
   }
 

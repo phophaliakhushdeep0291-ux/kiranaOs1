@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { UNAFFECTED_BY_LOCAL_DATA } from "@/lib/api/query-meta";
 import { ApiClientError } from "@/lib/api/http";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import * as authApi from "@/features/core/auth/api";
@@ -34,6 +35,7 @@ export function useGetShop(options?: QueryHookOptions<Shop, ShopQueryKey>) {
   return useQuery<Shop, ApiClientError, Shop, ShopQueryKey>({
     queryKey: getGetShopQueryKey(),
     queryFn: () => settingsApi.getShop(),
+    meta: UNAFFECTED_BY_LOCAL_DATA,
     ...getQueryOptions<Shop, ShopQueryKey>(options),
   });
 }

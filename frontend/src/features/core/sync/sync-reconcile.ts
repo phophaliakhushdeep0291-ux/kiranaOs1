@@ -192,9 +192,77 @@ function isPaymentLedgerRow(row: Record<string, unknown>): boolean {
   return rawType === "payment" || sourceType === "payment" || sourceType === "udhar_payment";
 }
 
+type LedgerRow = Record<string, unknown>;
+
+/**
+ * The local ledger rows a pulled ledger entry could be a twin of, read once per
+ * pull page instead of once per entry.
+ *
+ * Every payment and bill entry the pull delivered used to read the device's whole
+ * udhar ledger to look for its twin: 5,200 entries made 5,200 full reads, and a
+ * counter catching up on that backlog sat at full CPU for minutes. Only three kinds
+ * of row can ever match (see the predicate below): the row whose key is the entry's
+ * server id, a row whose server_id names it, and a row with no server_id at all —
+ * a local entry not yet mapped. The first is read by key every time. The other two
+ * are few and are collected in one pass per page; one that matches is read again
+ * before it is used, since an earlier change on the page can have replaced it.
+ *
+ * Candidates are tried in key order, as the full read returned them, so the same
+ * row wins when more than one could match.
+ */
+export interface LedgerTwinIndex {
+  /** Candidates in key order; `stale` ones were read at the start of the page. */
+  candidates(serverId: string): Promise<Array<{ row: LedgerRow; stale: boolean }>>;
+  reread(row: LedgerRow): Promise<LedgerRow | undefined>;
+}
+
+async function currentLedgerRow(id: unknown): Promise<LedgerRow | undefined> {
+  if (typeof id !== "string" || !id) return undefined;
+  const row = await dexieDB.customer_ledger.get(id).catch(() => undefined) as LedgerRow | undefined;
+  return row && rowMatchesCurrentScope(row) ? row : undefined;
+}
+
+export function createLedgerTwinIndex(): LedgerTwinIndex {
+  let loaded: Promise<{ unmapped: LedgerRow[]; byServerId: Map<string, LedgerRow[]> }> | null = null;
+  const load = () => {
+    loaded ??= dexieDB.customer_ledger
+      .filter(rowMatchesCurrentScope)
+      .toArray()
+      .catch(() => [] as LedgerRow[])
+      .then((rows) => {
+        const unmapped: LedgerRow[] = [];
+        const byServerId = new Map<string, LedgerRow[]>();
+        for (const row of rows) {
+          const mapped = getStringFrom(row, ["server_id", "serverId"]);
+          if (!mapped) unmapped.push(row);
+          else if (mapped !== getStringFrom(row, ["id"])) byServerId.set(mapped, [...(byServerId.get(mapped) ?? []), row]);
+        }
+        return { unmapped, byServerId };
+      });
+    return loaded;
+  };
+  return {
+    async candidates(serverId) {
+      const { unmapped, byServerId } = await load();
+      const byId = new Map<string, { row: LedgerRow; stale: boolean }>();
+      for (const row of [...(byServerId.get(serverId) ?? []), ...unmapped]) {
+        const id = getStringFrom(row, ["id"]);
+        if (id) byId.set(id, { row, stale: true });
+      }
+      const keyed = await currentLedgerRow(serverId);
+      if (keyed) byId.set(serverId, { row: keyed, stale: false });
+      return [...byId.entries()]
+        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+        .map(([, candidate]) => candidate);
+    },
+    reread: (row) => currentLedgerRow(row.id),
+  };
+}
+
 async function findDuplicateLocalLedgerForServerLedger(
   serverLedger: Record<string, unknown>,
   serverId: string,
+  twins?: LedgerTwinIndex,
 ): Promise<Record<string, unknown> | undefined> {
   const sourceType = normalizeLedgerSourceType(serverLedger);
   const isServerPayment = isPaymentLedgerRow(serverLedger);
@@ -216,12 +284,7 @@ async function findDuplicateLocalLedgerForServerLedger(
     ),
   );
 
-  const rows = await dexieDB.customer_ledger
-    .filter(rowMatchesCurrentScope)
-    .toArray()
-    .catch(() => [] as Record<string, unknown>[]);
-
-  return rows.find((row) => {
+  const isTwin = (row: Record<string, unknown>) => {
     if (row.deleted_at != null || row.deletedAt != null) return false;
     if (getStringFrom(row, ["id"]) === serverId || getStringFrom(row, ["server_id", "serverId"]) === serverId) return true;
     if (getStringFrom(row, ["server_id", "serverId"])) return false;
@@ -243,7 +306,22 @@ async function findDuplicateLocalLedgerForServerLedger(
       !rowCustomerId ||
       equivalentCustomerIds.has(rowCustomerId)
     );
-  });
+  };
+
+  if (!twins) {
+    const rows = await dexieDB.customer_ledger
+      .filter(rowMatchesCurrentScope)
+      .toArray()
+      .catch(() => [] as Record<string, unknown>[]);
+    return rows.find(isTwin);
+  }
+  for (const { row, stale } of await twins.candidates(serverId)) {
+    if (!isTwin(row)) continue;
+    if (!stale) return row;
+    const now = await twins.reread(row);
+    if (now && isTwin(now)) return now;
+  }
+  return undefined;
 }
 
 export async function mergeServerChange(
@@ -256,6 +334,8 @@ export async function mergeServerChange(
    * flush the map with `replaceReferencesMany` before the page is acknowledged.
    */
   deferredReferences?: Map<string, string>,
+  /** One per pull page, so ledger entries do not each read the whole ledger. */
+  ledgerTwins?: LedgerTwinIndex,
 ): Promise<MergeServerChangeStatus> {
   const entityType = String(change.entity_type ?? change.entityType ?? "");
   const tableName = tableNameForEntity(entityType);
@@ -309,7 +389,7 @@ export async function mergeServerChange(
       : undefined;
   const duplicateLedger =
     tableName === "customer_ledger"
-      ? await findDuplicateLocalLedgerForServerLedger(entity, serverId)
+      ? await findDuplicateLocalLedgerForServerLedger(entity, serverId, ledgerTwins)
       : undefined;
   const duplicateLocalId = getStringFrom(duplicatePayment ?? duplicateLedger ?? {}, ["id", "local_id", "localId"]);
   const effectiveLocalId = localId ?? duplicateLocalId;

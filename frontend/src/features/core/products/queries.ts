@@ -6,7 +6,8 @@ import { getMutationOptions, getQueryOptions, type MutationHookOptions, type Que
 import * as productsApi from "@/features/core/products/api";
 import { createProductLocalFirst, deleteProductLocalFirst, updateProductLocalFirst } from "@/features/core/products/local-actions";
 import type { Product, ProductInput, QueryParams } from "@/types/api";
-import { getActiveLocationId } from "@/features/core/stores/location-context";
+import { getActiveLocationId, isSingleLocationShop } from "@/features/core/stores/location-context";
+import { getOfflineScope } from "@/lib/offline/context";
 
 const PRODUCTS_CACHE_KEY = "products";
 
@@ -92,6 +93,10 @@ function isProductTombstone(row: Product): boolean {
 
 function productsForActiveLocation(rows: Product[]): Product[] {
   const locationId = getActiveLocationId();
+  // With one location every row is that location's. A product another counter
+  // created arrives by pull without the server list's location tag, and the
+  // filter below would hide it until the next full read.
+  if (isSingleLocationShop()) return rows;
   return locationId && rows.some((row) => Boolean((row as Product & { inventoryLocationId?: string }).inventoryLocationId))
     ? rows.filter((row) => (row as Product & { inventoryLocationId?: string }).inventoryLocationId === locationId)
     : rows;
@@ -286,34 +291,71 @@ export function useListProducts(
     // screen's staleTime the catalogue was then never fetched at all — billing
     // sat on whatever the cache held until the user reloaded the page.
     initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(productsCacheKey()),
-    queryFn: async () => {
-      const liveCached = readCachedProducts();
-      const { active: fromDB, tombstones } = await readLocalProductState();
-      // Tombstones last: they have to land on top of any live copy of the same
-      // product still sitting in the cache or the database.
-      const localRows = mergeProducts([], [...liveCached, ...fromDB, ...tombstones], true);
-      if (!isBrowserOnline()) return filterCachedProducts(localRows, params);
-      try {
-        const fresh = await productsApi.listProducts(params);
-        if (params?.search || params?.category || params?.lowStock) {
-          // A filtered result is a patch, not a complete catalogue. Keep known
-          // rows and let pending local edits/tombstones win without issuing a
-          // second, unfiltered network request for every search.
-          const patched = mergeProducts(localRows, fresh, true);
-          void cacheProducts(mergeProducts(patched, localRows));
-          return filterCachedProducts(mergeProducts(fresh, localRows), params);
-        }
-        // The endpoint returns the full snapshot; `limit` is a display limit.
-        // Cache before slicing so a small picker cannot truncate master data.
-        const merged = mergeProducts(fresh, localRows);
-        void cacheProducts(merged);
-        return filterCachedProducts(merged, params);
-      } catch (error) {
-        if (isRecoverableNetworkError(error)) return filterCachedProducts(localRows, params);
-        throw error;
-      }
-    },
+    queryFn: () => loadProductList(params),
   });
+}
+
+/**
+ * How long a full catalogue read from the server stands in for the next ones.
+ *
+ * `/products` answers with the whole catalogue — about 1.2 KB a product — and the
+ * refresh after every sale re-ran this list on every counter showing Billing: the
+ * seller twice, everyone else once. For a 3,000-item shop that is several MB a
+ * sale, for rows the device already has. A sale's stock change and every product
+ * edit reach each counter's IndexedDB through the live pull within seconds, and
+ * the ten-minute snapshot re-reads the whole catalogue anyway; between full reads
+ * the list answers from there, as it always has offline.
+ *
+ * Only in a shop with a single location. The server list carries the active
+ * branch's stock, which only it computes; a pulled row carries the shop-wide
+ * figure, so a multi-branch catalogue keeps reading the server every time.
+ */
+const CATALOGUE_SERVER_READ_EVERY_MS = 10 * 60_000;
+const catalogueReadAt = new Map<string, number>();
+
+function catalogueReadKey(): string {
+  return `${getOfflineScope().store_id}::${productsCacheKey()}`;
+}
+
+function catalogueServerReadDue(localRows: Product[]): boolean {
+  if (!isSingleLocationShop()) return true;
+  // Nothing local to answer with — a new device, or one just cleared.
+  if (!localRows.some((row) => !isProductTombstone(row))) return true;
+  const at = catalogueReadAt.get(catalogueReadKey());
+  if (at === undefined) return true;
+  const age = Date.now() - at;
+  return age < 0 || age >= CATALOGUE_SERVER_READ_EVERY_MS;
+}
+
+export async function loadProductList(params?: ListProductsParams): Promise<Product[]> {
+  const liveCached = readCachedProducts();
+  const { active: fromDB, tombstones } = await readLocalProductState();
+  // Tombstones last: they have to land on top of any live copy of the same
+  // product still sitting in the cache or the database.
+  const localRows = mergeProducts([], [...liveCached, ...fromDB, ...tombstones], true);
+  if (!isBrowserOnline()) return filterCachedProducts(localRows, params);
+  const filtered = Boolean(params?.search || params?.category || params?.lowStock);
+  if (!filtered && !catalogueServerReadDue(localRows)) return filterCachedProducts(localRows, params);
+  try {
+    const fresh = await productsApi.listProducts(params);
+    if (filtered) {
+      // A filtered result is a patch, not a complete catalogue. Keep known
+      // rows and let pending local edits/tombstones win without issuing a
+      // second, unfiltered network request for every search.
+      const patched = mergeProducts(localRows, fresh, true);
+      void cacheProducts(mergeProducts(patched, localRows));
+      return filterCachedProducts(mergeProducts(fresh, localRows), params);
+    }
+    // The endpoint returns the full snapshot; `limit` is a display limit.
+    // Cache before slicing so a small picker cannot truncate master data.
+    const merged = mergeProducts(fresh, localRows);
+    void cacheProducts(merged);
+    catalogueReadAt.set(catalogueReadKey(), Date.now());
+    return filterCachedProducts(merged, params);
+  } catch (error) {
+    if (isRecoverableNetworkError(error)) return filterCachedProducts(localRows, params);
+    throw error;
+  }
 }
 
 export function useCreateProduct(options?: MutationHookOptions<Product, CreateProductVariables>) {

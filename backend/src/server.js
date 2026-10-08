@@ -3,6 +3,7 @@ import app from "./app.js";
 import db, { databaseEngine } from "./db.js";
 import { initErrorTracking, captureException, closeErrorTracking } from "./lib/errorTracking.js";
 import { closeRedis } from "./lib/redis.js";
+import { closeAllLiveStreams } from "./core/sync/index.js";
 import { seedPlans } from "./modules/subscription/subscription.service.js";
 import { assessStorageVolume } from "./lib/storageVolume.js";
 import { recoverWebhookDeliveries } from "./modules/integrations/integrations.service.js";
@@ -123,6 +124,8 @@ async function shutdown(signal, exitCode = 0) {
   console.log(JSON.stringify({ type: "shutdown_start", signal, time: new Date().toISOString() }));
 
   try {
+    // Open live sync streams would otherwise hold close() until the force-exit timer.
+    closeAllLiveStreams();
     await closeHttpServer();
     await closeRedis();
     await db.$disconnect();

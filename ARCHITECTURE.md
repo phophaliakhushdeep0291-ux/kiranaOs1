@@ -72,16 +72,71 @@ outbox rows.
 back to the top the moment anything is queued or the network returns. So a queued
 sale is retried faster than the old fixed interval managed, while an idle till
 stops waking the radio. `useMultiDeviceSync` keeps only what is uniquely its own:
-the cross-tab BroadcastChannel, focus/online catch-up, and the 60s authoritative
-snapshot.
+the cross-tab BroadcastChannel, focus/online catch-up, the 10-minute
+authoritative snapshot, and the live stream below.
+
+**The snapshot is a repair path, not a delivery path — keep it rare.** It
+re-downloads every product, customer, bill, stock row and udhar entry, rebuilds
+the local caches, and its announcement makes every query on screen refetch. At
+60s it was most of an idle till's traffic (about 30 requests a minute per
+counter, two-counter measurement); changes already arrive through the
+incremental pull. Do not shorten it to make something "show up faster" — fix the
+pull. The header's /health dot polls every 30s for the same reason; every sync
+cycle probes before it sends anyway.
+
+**A routine snapshot reads each table in full once a day, not every ten minutes.**
+`useMultiDeviceSync` and the cloud bootstrap on load ask for a `routine` snapshot.
+Each of bills, products (with the inventory stock merged onto them), customers, the
+udhar ledger and purchase history keeps its own record of the device's last full
+read, per shop, user and role (`kirana.snapshot.fullReadAt::<table>::<shop>::<user>:<role>`);
+a routine run reads a table in full only when that record is a day old or the device
+holds no rows of it, and otherwise leaves it to the incremental pull — except bills,
+which re-read the last three days and remove nothing. Every explicit repair reads
+everything: Sync now and remote support. The weight was real: bills grow with the shop's age (a
+till doing a hundred a day reaches the 20,000-bill paging cap), the catalogue is
+about 1.2 KB a product, and purchase history was re-pulled from its first row.
+Traps: only the full bill window may quarantine, because a routine window's edge
+moves daily and a bill dated by `createdAt` rather than `businessDate` can sit just
+inside it on the device and just outside it on the server; the bills record is
+written even when the paging cap cut the read short, or a shop past the cap would
+be sent back to it every time; and a read that failed records nothing, so only that
+table runs again.
+
+**Other counters hear about a change at once, not on their cadence.** An idle
+till's 45s rung was how long a sale took to reach the next counter. The visible
+leader tab holds `GET /api/sync/events` open (`live-changes.ts`, read with fetch
+because EventSource cannot send the auth and device headers); when a push applies
+fresh events, or a REST write on a core data router succeeds, the server sends the
+shop's *other* devices a bare `changes` nudge (`sync-live.js`) and they run a
+cycle. Traps: the nudge carries no data — the pull is the same role-redacted read
+as ever, and a lost nudge only falls back to the cadence; never mount the write
+hook on `/api/sync`, because every pull acks with a write and counters would
+prompt each other forever; the hub is in-process, so behind several API instances
+a counter on another instance gets no nudge (slower, never wrong); and a nudge
+arriving mid-cycle must queue one follow-up, since its write may have landed after
+that cycle's pull.
+
+**With the stream open, an idle till's backstop cycle is three minutes, not 45s.**
+At 45s the idle loop was most of what a quiet till still sent (status, pull,
+support commands and ack, every cycle). The ladder's last rung becomes 180s only
+while a stream is open (`live-stream-state.ts`, read by `useOfflineStatus`), and
+"open" means the server has spoken within the last 60s — it sends a keep-alive
+every 25s, so a socket a proxy keeps alive but no longer delivers on is dropped
+and reconnected rather than trusted. Work in the outbox still runs the fast rungs.
+Traps: a stream change re-arms the timer from now without resetting the ladder,
+so a dropped stream never leaves a three-minute wait running and a reconnect does
+not buy a burst of fast cycles; keep the rung under the server's five-minute
+"online" window, since each cycle's ack is what refreshes `lastSeenAt`; and
+remote-support commands are drained at the top of a cycle, so queuing one nudges
+its device (`nudgeDevice`) instead of waiting for the backstop.
 
 **Database triggers populate the incremental feed.** Core mutations write
 `ChangeLog` in the same transaction; a rollback also rolls back its feed entries.
 PostgreSQL installs these through migrations (`000053`, `000076`, `000101`).
 SQLite schema push does not run migrations, so both local setup/reset and the
 test setup explicitly run `backend/scripts/install-sqlite-sync-triggers.js`.
-Use the repository's `db:push` command, not a bare Prisma push. The 60s snapshot
-hydration remains a catch-up path. The ack must keep firing regardless: it writes
+Use the repository's `db:push` command, not a bare Prisma push. The 10-minute
+snapshot hydration remains a catch-up path. The ack must keep firing regardless: it writes
 `lastSeenAt`/`lastActiveAt` on the device row for device health and remote support.
 
 - `useOfflineStatus` is a **subscription to one module-level engine**, not an

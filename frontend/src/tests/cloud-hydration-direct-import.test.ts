@@ -46,8 +46,10 @@ describe("cloud hydration direct import wiring", () => {
   });
 
   it("runs direct cloud hydration before normal sync cycle after login", () => {
-    expect(bootstrap).toContain("const snapshot = await hydrateFromBackendSnapshot()");
-    expect(bootstrap.indexOf("const snapshot = await hydrateFromBackendSnapshot()")).toBeLessThan(bootstrap.indexOf("const syncResult = await runSyncCycle()"));
+    // Routine, so a reload does not re-read everything; a fresh browser (no rows) and a
+    // new user or role (no record) still read it all — see snapshot-daily-tables.test.ts.
+    expect(bootstrap).toContain("const snapshot = await hydrateFromBackendSnapshot({ routine: true })");
+    expect(bootstrap.indexOf("const snapshot = await hydrateFromBackendSnapshot({ routine: true })")).toBeLessThan(bootstrap.indexOf("const syncResult = await runSyncCycle()"));
   });
 
   it("does not rely only on empty local subscription cache before checking server sync status", () => {

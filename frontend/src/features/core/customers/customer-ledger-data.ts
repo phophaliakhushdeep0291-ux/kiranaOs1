@@ -5,10 +5,11 @@ import { expandIndexedCustomerIds, readIndexedCustomerLedger } from "@/features/
 import { readBillIdentityTwins } from "@/features/core/sync/bill-reconciliation";
 import { readInstantCache } from "@/lib/offline/instant-cache";
 import { formatMoney as formatRupees } from "@/lib/money";
-import type { Bill, Customer, UdharSummary } from "@/types/api";
+import type { Bill, Customer } from "@/types/api";
 import { buildLedgerStatement, calculateTrustScore, dedupeLedgerEntries, getLedgerDate, isManualAdjustmentEntry, normaliseLedgerType, roundMoney, type CustomerLedgerEntry, type LedgerMetrics, type LedgerStatementRow } from "@/features/core/ledger/accounting";
 import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/core/sync/bill-reconciliation";
 import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
+import { fingerprintDedupedLedger, snapshotCoversCustomer, type AuthoritativeUdharSnapshot, type ConfirmedLedgerFingerprints } from "@/features/core/ledger/authoritative-balances";
 
 export interface CustomerWithLedger extends Customer, Record<string, unknown> {
   /**
@@ -22,6 +23,8 @@ export interface CustomerWithLedger extends Customer, Record<string, unknown> {
   rawLedgerBalance: number;
   /** True while this device holds udhar rows the server has not accepted yet. */
   hasUnsyncedLedgerEntries?: boolean;
+  /** This customer's server-confirmed device ledger, to tell whether a cached summary still covers it. */
+  confirmedLedger?: ConfirmedLedgerFingerprints;
   ledgerMetrics: LedgerMetrics;
 }
 
@@ -105,44 +108,57 @@ export function toLedgerDriftCandidates(customers: CustomerWithLedger[]): Array<
     }));
 }
 
-function reconcileAgainstBalances(customer: CustomerWithLedger, balances: Map<string, number>): CustomerWithLedger {
-  if (hasPendingLocalBalance(customer)) return customer;
+/** False once server-confirmed movement for this customer has reached the device after the snapshot. */
+function snapshotCovers(customer: CustomerWithLedger, summary: AuthoritativeUdharSnapshot): boolean {
+  const confirmed = customer.confirmedLedger;
+  if (!confirmed) return true;
+  return snapshotCoversCustomer(summary, [...customerIdentityValues(customer), ...Object.keys(confirmed)], confirmed);
+}
+
+function reconcileAgainstBalances(
+  customer: CustomerWithLedger,
+  summary: AuthoritativeUdharSnapshot,
+  balances: Map<string, number>,
+): CustomerWithLedger {
+  if (hasPendingLocalBalance(customer) || !snapshotCovers(customer, summary)) return customer;
   const serverId = customerIdentityValues(customer).find((id) => balances.has(id));
   return withAuthoritativeBalance(customer, serverId ? Number(balances.get(serverId) ?? 0) : 0);
 }
 
 /**
  * Reconcile ONE already-loaded customer against the server's ledger-derived
- * summary, using the same rule as the customer list: a pending local write stays
- * device-authoritative, an unmatched customer is treated as settled (zero), and
- * every synced customer takes the server balance. Unlike
+ * summary, using the same rule as the customer list: a pending local write, or
+ * confirmed movement newer than the snapshot, stays device-authoritative, an
+ * unmatched customer is treated as settled (zero), and every other customer
+ * takes the server balance. Unlike
  * {@link applyAuthoritativeUdharSummary} it never appends synthetic ledger-only
  * rows, so the single-customer detail/ledger view can reuse the list's exact
  * balance instead of the raw (and possibly stale) local ledger sum.
  */
 export function reconcileCustomerWithAuthoritativeSummary(
   customer: CustomerWithLedger,
-  summary: UdharSummary,
+  summary: AuthoritativeUdharSnapshot,
 ): CustomerWithLedger {
   const balances = new Map(summary.customers.map((row) => [row.customerId, row.outstanding]));
-  return reconcileAgainstBalances(customer, balances);
+  return reconcileAgainstBalances(customer, summary, balances);
 }
 
 /**
  * Reconcile the device ledger view with the server's ledger-derived summary.
- * Pending local writes remain device-authoritative until they sync; every other
- * customer uses the server value, including an omitted summary row meaning zero.
+ * Pending local writes, and confirmed movement newer than the snapshot, remain
+ * device-authoritative; every other customer uses the server value, including
+ * an omitted summary row meaning zero.
  */
 export function applyAuthoritativeUdharSummary(
   customers: CustomerWithLedger[],
-  summary: UdharSummary,
+  summary: AuthoritativeUdharSnapshot,
 ): CustomerWithLedger[] {
   const balances = new Map(summary.customers.map((customer) => [customer.customerId, customer.outstanding]));
   const matchedServerIds = new Set<string>();
   const reconciled = customers.map((customer) => {
     const serverId = customerIdentityValues(customer).find((id) => balances.has(id));
     if (serverId) matchedServerIds.add(serverId);
-    return reconcileAgainstBalances(customer, balances);
+    return reconcileAgainstBalances(customer, summary, balances);
   });
 
   for (const serverCustomer of summary.customers) {
@@ -396,7 +412,7 @@ function enrichCustomer(customer: Customer & Record<string, unknown>, entries: C
   const balance = roundMoney(Math.max(0, metrics.balance));
   return { ...customer, ledgerBalance: balance, rawLedgerBalance: metrics.balance,
     hasUnsyncedLedgerEntries: hasUnsyncedLedgerEntries(entries), totalUdhar: balance,
-    udharAmount: balance, ledgerMetrics: metrics };
+    udharAmount: balance, confirmedLedger: fingerprintDedupedLedger(entries), ledgerMetrics: metrics };
 }
 
 export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {

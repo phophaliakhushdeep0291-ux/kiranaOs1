@@ -387,7 +387,18 @@ const MAX_SHOP_OFFLINE_JS_BYTES = 4.5 * 1024 * 1024;
 // what ships to a phone on a retail connection. That decision is a product call,
 // not a bundling one; the measurements for all three are recorded above so it can
 // be made without re-deriving them.
-const MAX_SHOP_OFFLINE_GZIP_BYTES = 1.25 * 1024 * 1024;
+//
+// ── 2026-10-05: raised 1280 -> 1290 kB, by the owner's decision ──────────────
+// It bound. main stood at 1279.8 kB (ad903f75, KIRANA_BUILD_ID pinned), 0.2 kB
+// from the line, and a bug fix needed 0.6: hiding profit from roles that may not
+// see it (a cashier's dashboard showed the day's sales as profit) and stopping a
+// refused settings save from retrying forever. Per the note above, the product
+// call was put to the owner — raise the line, or first take one of the three
+// scoping decisions — and the owner chose to raise it by 10 kB so fixes can land.
+//
+// This is that decision, not a new rate. The scoping decision is still owed: the
+// next time this line binds, it is the answer, not another raise.
+const MAX_SHOP_OFFLINE_GZIP_BYTES = 1290 * 1024;
 
 
 async function collectFiles(dir) {

@@ -37,9 +37,19 @@ export const SYNC_DRAINING_DELAY_MS = 150;
  * broken sync into a hot loop against the server — so a failing queue keeps the
  * ladder and its backoff.
  */
-export function syncDelayForStep(step: number, draining = false): number {
+/**
+ * The idle rung while the server's live stream is open (see live-changes.ts).
+ * Another counter's change then arrives as a nudge within a second, so this loop
+ * is only the backstop — and at 45s it was most of what an idle till still sent,
+ * four requests a cycle. Kept under the five minutes in which the server still
+ * shows a device as online, since each cycle's ack is what refreshes that.
+ */
+export const LIVE_IDLE_DELAY_MS = 180_000;
+
+export function syncDelayForStep(step: number, draining = false, liveStreamOpen = false): number {
   if (draining) return SYNC_DRAINING_DELAY_MS;
   const clamped = Math.max(0, Math.min(Math.trunc(step), MAX_IDLE_STEP));
+  if (liveStreamOpen && clamped === MAX_IDLE_STEP) return LIVE_IDLE_DELAY_MS;
   return SYNC_INTERVAL_LADDER_MS[clamped];
 }
 

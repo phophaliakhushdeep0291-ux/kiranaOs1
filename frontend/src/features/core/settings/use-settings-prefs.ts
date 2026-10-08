@@ -8,6 +8,8 @@ import { DEFAULT_PRINTER_CONFIG, setPrinterConfigCache, type PrinterConfig } fro
 import type { Shop } from "@/types/api";
 import { setPaymentConfigCache } from "@/features/core/settings/payment-config";
 import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
+import { isReadOnlySession } from "@/features/core/staff/role-access";
+import { isTransientSyncFailure } from "@/features/core/sync/sync-failure-classification";
 
 export const PREFS_KEY = "kirana:settings-prefs:v1";
 export const PREFS_PENDING_KEY = "kirana:settings-prefs-pending:v1";
@@ -53,6 +55,56 @@ export function settingsPrefsForSync(prefs: SettingsPrefs): SettingsPrefs {
   return synced;
 }
 
+export interface PersistSettingsDeps {
+  /** The one blob still owed to the server, shared with the hook's `patch`. */
+  pending: { current: SettingsPrefs | null };
+  save: (settingsJson: string) => Promise<Shop>;
+  onSaved: (updated: Shop) => Promise<void> | void;
+  /** Durable copy of `pending`, so a reload retries it; `null` clears it. */
+  storePending: (value: SettingsPrefs | null) => Promise<unknown>;
+}
+
+/**
+ * Sends one settings blob to the server and decides whether it is still owed.
+ *
+ * Only a failure that never got a verdict — offline, a 5xx, an expired session
+ * — leaves the blob pending for the next retry. A definite refusal (a 4xx) is
+ * the server's settled answer and resending the same blob cannot change it, so
+ * the change is kept on this device and the retry stops; before, a refused blob
+ * was resent every 30 seconds for as long as the app stayed open. A view-only
+ * login's choices (its printer, say) never leave the device at all: the server
+ * refuses its writes.
+ */
+export async function persistSettingsPrefs(next: SettingsPrefs, deps: PersistSettingsDeps): Promise<Shop | null> {
+  const settle = async () => {
+    // An older attempt finishing must never clear a newer pending value.
+    if (deps.pending.current !== next) return;
+    deps.pending.current = null;
+    await deps.storePending(null);
+  };
+
+  if (isReadOnlySession()) {
+    await settle();
+    return null;
+  }
+  try {
+    const updated = await deps.save(JSON.stringify(settingsPrefsForSync(next)));
+    await deps.onSaved(updated);
+    await settle();
+    return updated;
+  } catch (error) {
+    if (!isTransientSyncFailure(error)) {
+      await settle();
+      return null;
+    }
+    // Nor may an older attempt failing put itself back over a newer change.
+    if (deps.pending.current !== null && deps.pending.current !== next) return null;
+    deps.pending.current = next;
+    await deps.storePending(next);
+    return null;
+  }
+}
+
 /**
  * Loads the settings blob (IndexedDB instantly, server as source of truth on
  * first load) and returns a `patch` that writes through to both, debouncing the
@@ -68,21 +120,16 @@ export function useSettingsPrefs() {
   const pendingRef = useRef<SettingsPrefs | null>(null);
   const prefsRef = useRef<SettingsPrefs>({});
 
-  async function persistPrefsToServer(next: SettingsPrefs): Promise<Shop | null> {
-    try {
-      const updated = await updateShopOnServer({ settingsJson: JSON.stringify(settingsPrefsForSync(next)) });
-      queryClient.setQueryData(getGetShopQueryKey(), updated);
-      await offlineDB.setSetting("shop", updated).catch(() => undefined);
-      if (pendingRef.current === next) {
-        pendingRef.current = null;
-        await offlineDB.setSetting(PREFS_PENDING_KEY, null).catch(() => undefined);
-      }
-      return updated;
-    } catch {
-      pendingRef.current = next;
-      await offlineDB.setSetting(PREFS_PENDING_KEY, next).catch(() => undefined);
-      return null;
-    }
+  function persistPrefsToServer(next: SettingsPrefs): Promise<Shop | null> {
+    return persistSettingsPrefs(next, {
+      pending: pendingRef,
+      save: (settingsJson) => updateShopOnServer({ settingsJson }),
+      onSaved: async (updated) => {
+        queryClient.setQueryData(getGetShopQueryKey(), updated);
+        await offlineDB.setSetting("shop", updated).catch(() => undefined);
+      },
+      storePending: (value) => offlineDB.setSetting(PREFS_PENDING_KEY, value).catch(() => undefined),
+    });
   }
 
   useEffect(() => {

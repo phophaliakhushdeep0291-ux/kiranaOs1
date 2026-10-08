@@ -5,7 +5,9 @@ vi.mock("@tanstack/react-query", () => ({ useQuery: (options: unknown) => option
 vi.mock("@/lib/api/http", () => ({ ApiClientError: class extends Error {}, isBrowserOnline: () => state.online, isRecoverableNetworkError: () => true }));
 vi.mock("@/features/core/products/api", () => ({ listProducts: state.list }));
 vi.mock("@/features/core/products/local-actions", () => ({}));
-vi.mock("@/features/core/stores/location-context", () => ({ getActiveLocationId: () => null }));
+// Unknown location count: the catalogue reads the server every time, as these cases expect.
+// catalogue-server-reads.test.ts covers a single-location shop.
+vi.mock("@/features/core/stores/location-context", () => ({ getActiveLocationId: () => null, isSingleLocationShop: () => false }));
 vi.mock("@/lib/offline/db", () => ({ offlineDB: { getAll: async () => state.local, putMany: async () => {} } }));
 vi.mock("@/lib/offline/instant-cache", () => ({ KEEP_EVERY_ROW: Infinity, instantCacheUpdatedAt: () => 0, readInstantCache: () => state.cached, writeInstantCache: state.write }));
 import { useListProducts } from "@/features/core/products/queries";

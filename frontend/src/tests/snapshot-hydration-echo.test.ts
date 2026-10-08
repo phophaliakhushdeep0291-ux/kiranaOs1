@@ -351,7 +351,8 @@ describe("a snapshot hydration does not schedule another sync", () => {
   it.each(queues)("runs no follow-up after the daemon's own snapshot, with %s", async (_name, rows) => {
     for (const row of rows()) mocks.outbox.set(row.clientEventId, row);
     await mount();
-    await vi.advanceTimersByTimeAsync(3 * 60_000);
+    // Past the daemon's 10-minute snapshot interval, so its own snapshot runs.
+    await vi.advanceTimersByTimeAsync(11 * 60_000);
 
     const snapshots = mocks.hydrations.filter((entry) => entry.at - T0 >= BOOT_MS);
     expect(snapshots.length).toBeGreaterThanOrEqual(1);
@@ -414,5 +415,24 @@ describe("new work still prompts a sync from each listener", () => {
     const sent = mocks.cycles.find((entry) => entry.at >= enqueuedAt && entry.sent > 0);
     expect(sent?.cause).toMatch(/^timeout:(250|450|900)$/);
     expect((mocks.outbox.get("sale-1") as PendingSyncEvent).status).toBe("SYNCED");
+  });
+});
+
+describe("the daemon's scheduled snapshot", () => {
+  // The snapshot is the catch-up and repair path, and was the most expensive thing
+  // an idle till did: every minute it re-downloaded every list and set every query
+  // on screen refetching. It now runs every 10 minutes — and on time: the boot
+  // snapshot lands half a second after mount, and a throttle of the full interval
+  // refused every on-time tick by that half second, doubling the interval.
+  it("runs every 10 minutes after the boot snapshot, not every minute and not every 20", async () => {
+    await mount({ multiDevice: true });
+    const scheduled = () => mocks.hydrations.filter((entry) => entry.at - T0 >= BOOT_MS).length;
+
+    await vi.advanceTimersByTimeAsync(9.5 * 60_000);
+    expect(scheduled()).toBe(0);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(scheduled()).toBe(1);
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(scheduled()).toBe(2);
   });
 });

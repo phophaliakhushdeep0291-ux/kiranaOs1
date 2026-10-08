@@ -95,6 +95,16 @@ for (const snippet of ["WORKER_HEALTHCHECK", "QueueEvents", "Worker", "worker_ve
   assert(verifyWorker.includes(snippet), `worker verification missing ${snippet}`);
 }
 assert(!verifyWorker.includes("ownerPin") && !verifyWorker.includes("password"), "worker verification must not enqueue secrets");
+// The healthcheck job has to outlive the worker until it is verified. With
+// removeOnComplete: true a fast worker deleted it before waitUntilFinished read
+// it, and release certification failed with "Missing key for job … isFinished"
+// although the worker had processed the job (2026-10-05).
+assert(!/removeOn(Complete|Fail):\s*true/.test(verifyWorker), "worker verification must keep its job until it has been verified");
+for (const snippet of ["removeOnComplete: false", "removeOnFail: false", "randomUUID", "getState()", '"completed"', "job?.remove()"]) {
+  assert(verifyWorker.includes(snippet), `worker verification must verify its job before removing it: ${snippet}`);
+}
+assert(verifyWorker.indexOf("queueEvents.waitUntilReady()") < verifyWorker.indexOf("addJob("), "worker verification must be reading queue events before it adds the job");
+assert(verifyWorker.indexOf("waitUntilFinished") < verifyWorker.indexOf("job?.remove()"), "worker verification must remove its job only after waiting on it");
 
 const scheduling = read("docs/SCHEDULING.md");
 for (const snippet of ["2 AM Asia/Kolkata", "npm run daily-closing:run", "cron", "PM2", "Render", "Railway", "GitHub Actions", "systemd", "does not overwrite locked snapshots"]) {

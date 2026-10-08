@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { UNAFFECTED_BY_LOCAL_DATA } from "@/lib/api/query-meta";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { getShopBootstrap, readCachedShopBootstrap } from "./api";
 import { getStoredBusinessType, saveBusinessType } from "./business-type-store";
@@ -15,6 +16,7 @@ export function useShopBusinessProfile() {
     enabled: isAuthenticated,
     initialData: () => readCachedShopBootstrap(),
     staleTime: 30_000,
+    meta: UNAFFECTED_BY_LOCAL_DATA,
   });
 
   useEffect(() => {

@@ -3,12 +3,24 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { hydrateFromBackendSnapshot, runSyncCycle } from "@/features/core/sync/deferred-runtime";
 import { probeBackendConnection } from "@/features/core/sync/backend-health";
+import { startLiveChanges } from "@/features/core/sync/live-changes";
+import { isBrowserOnline } from "@/lib/api/http";
 import {
   shouldPassSharedThrottle,
   shouldRunScheduledNetworkWork,
 } from "@/lib/browser/multiTabCoordinator";
 
-const SNAPSHOT_INTERVAL_MS = 60_000;
+// The snapshot re-downloads every product, customer, bill, stock row and udhar
+// entry, rebuilds the local caches, and its announcement makes every query on
+// screen refetch. Run every minute, that was most of an idle till's traffic —
+// about 30 requests a minute per counter, measured on two idle counters. Changes
+// already arrive through the incremental pull; the snapshot is the catch-up and
+// repair path, which sign-in, reconnect and focus after a gap still trigger.
+const SNAPSHOT_INTERVAL_MS = 10 * 60_000;
+// The timer fires one interval after mount, but the boot snapshot ran about half
+// a second after it — so a throttle of the full interval refused every on-time
+// tick by that half second, and the snapshot ran at twice its interval.
+const SNAPSHOT_THROTTLE_MS = SNAPSHOT_INTERVAL_MS - 30_000;
 const FOCUS_THROTTLE_MS = 2_000;
 const LOCAL_WRITE_SYNC_DELAY_MS = 250;
 const CHANNEL_NAME = "kirana:multi-device-sync";
@@ -45,14 +57,16 @@ function makeChannel(): BroadcastChannel | null {
  * - Interactive actions stay independent: any visible tab/device can create bills,
  *   open customers, or run reports.
  * - Scheduled sync is coordinated per browser profile: one visible tab pushes/pulls.
- * - Different devices/browsers still run their own light sync loop, so Device B can
- *   see a bill created on Device A after a short delay or on focus.
+ * - Different devices/browsers still run their own light sync loop, and the leader
+ *   tab also holds the server's live stream, so Device B pulls a bill created on
+ *   Device A within a second or two rather than on its idle cadence.
  * - Browser tabs use BroadcastChannel so a sync in one tab refreshes local UI in the others.
  */
 export function useMultiDeviceSync() {
   const { isAuthenticated, accessToken, user, shop } = useAuth();
   const queryClient = useQueryClient();
   const inFlightRef = useRef(false);
+  const liveFollowUpRef = useRef<string | null>(null);
   const lastSnapshotAtRef = useRef(0);
   const localWriteTimerRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
@@ -103,9 +117,10 @@ export function useMultiDeviceSync() {
         }
 
         const shouldSnapshot = options.snapshot || Date.now() - lastSnapshotAtRef.current > SNAPSHOT_INTERVAL_MS;
-        if (shouldSnapshot && shouldPassSharedThrottle(snapshotThrottleKey, SNAPSHOT_INTERVAL_MS)) {
+        if (shouldSnapshot && shouldPassSharedThrottle(snapshotThrottleKey, SNAPSHOT_THROTTLE_MS)) {
           lastSnapshotAtRef.current = Date.now();
-          const snapshot = await hydrateFromBackendSnapshot();
+          // Routine: the last few days of bills, and the two-year repair once a day.
+          const snapshot = await hydrateFromBackendSnapshot({ routine: true });
           notifyLocalRefresh(`${reason}:snapshot`, snapshot);
           postBroadcast({ type: "cloud-import-complete", reason, timestamp: Date.now(), result: snapshot });
         }
@@ -117,7 +132,20 @@ export function useMultiDeviceSync() {
         }
       } finally {
         inFlightRef.current = false;
+        // A nudge that arrived mid-run may describe a write this run's pull
+        // already missed; dropping it would leave it to the idle cadence.
+        const followUp = liveFollowUpRef.current;
+        liveFollowUpRef.current = null;
+        if (followUp && !disposed) void run(followUp, { force: true });
       }
+    };
+
+    const runFromLive = (reason: string) => {
+      if (inFlightRef.current) {
+        liveFollowUpRef.current = reason;
+        return;
+      }
+      void run(reason, { force: true });
     };
 
     const scheduleAfterLocalWrite = () => {
@@ -151,14 +179,26 @@ export function useMultiDeviceSync() {
       if ((event as CustomEvent<{ type?: string }>).detail?.type === "sync") return;
       scheduleAfterLocalWrite();
     };
+    // One stream per device: only the visible leader tab holds it, as with the
+    // scheduled sync. It reconnects with backoff and closes itself when the gate
+    // fails, so an offline or hidden till holds no socket.
+    const live = startLiveChanges({
+      shouldConnect: () => !disposed && isVisible() && isBrowserOnline() && shouldRunScheduledNetworkWork(),
+      onChange: () => runFromLive("live-change"),
+      onReconnect: () => runFromLive("live-reconnect"),
+    });
+
     const onOnline = () => {
+      live.wake();
       if (shouldPassSharedThrottle(focusThrottleKey, FOCUS_THROTTLE_MS)) void run("online", { force: true, snapshot: true });
     };
     const onFocus = () => {
       if (isVisible() && shouldPassSharedThrottle(focusThrottleKey, FOCUS_THROTTLE_MS)) void run("focus", { force: true });
     };
     const onVisibility = () => {
-      if (isVisible()) onFocus();
+      if (!isVisible()) return;
+      live.wake();
+      onFocus();
     };
 
     if (channel) {
@@ -197,6 +237,8 @@ export function useMultiDeviceSync() {
 
     return () => {
       disposed = true;
+      live.stop();
+      liveFollowUpRef.current = null;
       if (localWriteTimerRef.current !== null) window.clearTimeout(localWriteTimerRef.current);
       if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
       channelRef.current?.close();

@@ -56,7 +56,8 @@ describe("sync scheduling runs one engine, not one per caller", () => {
     // Both needles are code shapes rather than bare identifiers, because the
     // comment explaining this ordering names shouldPassSharedThrottle too.
     const body = source.slice(source.indexOf("async function recoverLocalQueueIfNeeded"));
-    const guardAt = body.indexOf("if (isSyncing) return;");
+    // The guard also covers a cycle another caller is running in this tab.
+    const guardAt = body.indexOf("if (isSyncing || isSyncCycleInFlight()) return;");
     const throttleAt = body.indexOf("if (!shouldPassSharedThrottle(");
     expect(guardAt).toBeGreaterThan(0);
     expect(throttleAt).toBeGreaterThan(guardAt);
@@ -97,7 +98,9 @@ describe("sync scheduling runs one engine, not one per caller", () => {
     // The second argument is the drain rung: a cycle that SENT rows and left
     // more queued skips the wait, so a bulk import is not paced by a timer.
     // sync-bulk-queue-drain.test.ts holds the rule that gates it on progress.
-    expect(offline).toContain("syncDelayForStep(idleStep, draining)");
+    // The third is the live stream: while one is open, idle relaxes to the
+    // three-minute rung (live-sync-idle-cadence.test.ts runs that for real).
+    expect(offline).toContain("syncDelayForStep(idleStep, draining, isLiveStreamOpen())");
     expect(offline).toContain("idleStep = nextIdleStep(idleStep, hadWork);");
     expect(offline).toContain("function resetSyncCadence()");
     expect(offline).not.toContain("window.setInterval(() => {\n    void refreshCount();");
@@ -114,7 +117,7 @@ describe("sync scheduling runs one engine, not one per caller", () => {
     // loop. It keeps the jobs only it does — cross-tab broadcast, focus/online
     // catch-up, and the periodic authoritative snapshot — but no sync interval.
     expect(multi).not.toContain("SYNC_INTERVAL_MS");
-    expect(multi).toContain("const SNAPSHOT_INTERVAL_MS = 60_000");
+    expect(multi).toContain("const SNAPSHOT_INTERVAL_MS = 10 * 60_000");
     expect(multi).toContain("BroadcastChannel");
     // The one remaining timer is the snapshot, and it must stay on the snapshot
     // interval rather than quietly becoming a sync loop again.
