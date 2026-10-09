@@ -170,7 +170,9 @@ export const CORE_READ_TOOLS = [
 
   defineTool({
     name: "get_sales_summary",
-    keywords: ["sale", "sales", "sold", "revenue", "profit", "income", "turnover", "today", "yesterday", "week", "month", "year", "kitna hua", "dhanda", "बिक्री", "बेच", "कमा", "मुनाफ़ा", "मुनाफा", "आज", "कल", "हफ़्त", "हफ्त", "महीन", "धंधा", "कितना हुआ"],
+    // Romanised Hindi as well as Devanagari: shopkeepers type Hinglish, and a
+    // sentence no keyword matches is sent every tool definition there is.
+    keywords: ["sale", "sales", "sold", "revenue", "profit", "income", "turnover", "today", "yesterday", "week", "month", "year", "kitna hua", "dhanda", "bikri", "becha", "kamai", "munafa", "hafte", "hafta", "mahine", "mahina", "बिक्री", "बेच", "कमा", "मुनाफ़ा", "मुनाफा", "आज", "कल", "हफ़्त", "हफ्त", "महीन", "धंधा", "कितना हुआ"],
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:
@@ -196,7 +198,7 @@ export const CORE_READ_TOOLS = [
 
   defineTool({
     name: "get_top_products",
-    keywords: ["top", "best", "most", "selling", "fastest", "popular", "reorder", "सबसे", "ज़्यादा", "ज्यादा", "बिक", "चल", "लोकप्रिय"],
+    keywords: ["top", "best", "most", "selling", "fastest", "popular", "reorder", "sabse", "zyada", "jyada", "bika", "bikta", "bikti", "सबसे", "ज़्यादा", "ज्यादा", "बिक", "चल", "लोकप्रिय"],
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:
