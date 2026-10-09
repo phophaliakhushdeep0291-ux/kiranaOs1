@@ -75,7 +75,7 @@ const LINE_FIELDS_WITH_NO_READER = [
   "lineTotalPaise", "lineCostPaise", "lineProfitPaise", "originalUnitPricePaise",
 ];
 
-const PAYMENT_SHAPE = ["amount", "billId", "clientPaymentId", "createdAt", "id", "idempotencyKey", "mode", "status"];
+const PAYMENT_SHAPE = ["accountingTimeZone", "amount", "billId", "clientPaymentId", "countryCode", "createdAt", "currencyCode", "id", "idempotencyKey", "mode", "status", "taxRegime"];
 
 const PAYMENT_FIELDS_WITH_NO_READER = [
   "amountPaise", "shopId", "sourceDeviceId", "provider",
@@ -110,6 +110,9 @@ function assertReplicaShape(bill, protocolName) {
   );
   assert.equal(Number(tender.amount), 30, `${protocolName}: the tender's money must match`);
   assert.equal(tender.mode, "cash");
+  for (const [field, value] of Object.entries({ countryCode: "IN", currencyCode: "INR", accountingTimeZone: "Asia/Kolkata", taxRegime: "GST" })) {
+    assert.equal(tender[field], value, `${protocolName}: payment ${field} must retain its accounting identity`);
+  }
   for (const field of PAYMENT_FIELDS_WITH_NO_READER) {
     assert.ok(!(field in tender), `${protocolName}: ${field} has no reader that reaches it through a bill`);
   }
