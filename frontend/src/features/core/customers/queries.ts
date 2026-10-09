@@ -11,6 +11,7 @@ import { getLocalUdharLedger, getLocalUdharSummary, getLocalUdharSummaryAsync, r
 import { loadIdMap } from "@/features/core/sync/sync-id-mapping";
 import { isSupersededLocalEcho } from "@/features/core/sync/cloud-hydration";
 import { getLedgerCustomerId, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
+import { getOfflineScope } from "@/lib/offline/context";
 import type { Customer, CustomerInput, CustomerKhataResult, LedgerResult, QueryParams, UdharSummary } from "@/types/api";
 
 const CUSTOMERS_CACHE_KEY = "customers";
@@ -221,25 +222,57 @@ export function useListCustomers(
     // answer: undated initialData counts as fresh from now, so nothing refetches
     // until staleTime lapses and the screen stays pinned to the cache.
     initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(CUSTOMERS_CACHE_KEY),
-    queryFn: async () => {
-      const liveCached = readCachedCustomers(params);
-      const fromDB = await readCustomersFromIndexedDB(params);
-      const localRows = mergeCustomers([], [...liveCached, ...fromDB], true);
-      if (!isBrowserOnline()) return filterCachedCustomers(localRows, params).map(normaliseCustomerForCache);
-      try {
-        const fresh = (await customersApi.listCustomers(params)).map(normaliseCustomerForCache);
-        if (params?.search) {
-          const fullServerRows = await customersApi.listCustomers({ limit: 1000 });
-          const current = await cacheCustomers(fullServerRows);
-          return filterCachedCustomers(mergeCustomers(fresh, current), params).map(normaliseCustomerForCache);
-        }
-        return filterCachedCustomers(await cacheCustomers(fresh), params);
-      } catch (error) {
-        if (isRecoverableNetworkError(error)) return filterCachedCustomers(localRows, params).map(normaliseCustomerForCache);
-        throw error;
-      }
-    },
+    queryFn: () => loadCustomerList(params),
   });
+}
+
+/**
+ * How long a full customer read from the server stands in for the next ones.
+ *
+ * `/customers` answers with every customer, and the refresh after every sale
+ * re-ran this list on every counter showing Billing: the seller twice, everyone
+ * else once. A new customer and every udhar movement reach each counter's
+ * IndexedDB through the live pull within seconds, balances are recomputed there
+ * from a ledger the snapshot keeps whole, and the snapshot re-reads every
+ * customer once a day anyway; between full reads the list answers from the
+ * device, as it always has offline. The balance it shows is the device's ledger
+ * sum, which is also what cacheCustomers keeps for a customer with udhar still
+ * queued — the server's figure cannot include those entries yet.
+ */
+const CUSTOMER_LIST_SERVER_READ_EVERY_MS = 10 * 60_000;
+const customerListReadAt = new Map<string, number>();
+
+function customerListServerReadDue(localRows: Customer[]): boolean {
+  // Nothing local to answer with — a new device, or one just cleared.
+  if (!localRows.some((row) => row.deletedAt == null && (row as Customer & { deleted_at?: unknown }).deleted_at == null)) return true;
+  const at = customerListReadAt.get(getOfflineScope().store_id);
+  if (at === undefined) return true;
+  const age = Date.now() - at;
+  return age < 0 || age >= CUSTOMER_LIST_SERVER_READ_EVERY_MS;
+}
+
+export async function loadCustomerList(params?: ListCustomersParams): Promise<Customer[]> {
+  const liveCached = readCachedCustomers(params);
+  const fromDB = await readCustomersFromIndexedDB(params);
+  const localRows = mergeCustomers([], [...liveCached, ...fromDB], true);
+  if (!isBrowserOnline()) return filterCachedCustomers(localRows, params).map(normaliseCustomerForCache);
+  if (!params?.search && !customerListServerReadDue(localRows)) {
+    return filterCachedCustomers(localRows, params).map(normaliseCustomerForCache);
+  }
+  try {
+    const fresh = (await customersApi.listCustomers(params)).map(normaliseCustomerForCache);
+    if (params?.search) {
+      const fullServerRows = await customersApi.listCustomers({ limit: 1000 });
+      const current = await cacheCustomers(fullServerRows);
+      return filterCachedCustomers(mergeCustomers(fresh, current), params).map(normaliseCustomerForCache);
+    }
+    const cached = await cacheCustomers(fresh);
+    customerListReadAt.set(getOfflineScope().store_id, Date.now());
+    return filterCachedCustomers(cached, params);
+  } catch (error) {
+    if (isRecoverableNetworkError(error)) return filterCachedCustomers(localRows, params).map(normaliseCustomerForCache);
+    throw error;
+  }
 }
 
 export function useCreateCustomer(options?: MutationHookOptions<Customer, CreateCustomerVariables>) {
