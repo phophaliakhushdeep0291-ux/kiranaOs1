@@ -35,7 +35,7 @@ export async function getBootstrap(shopId, role) {
 
 export async function updateShop(shopId, data, actor = {}) {
   const startedAt = Date.now();
-  const { countryCode, currencyCode, accountingTimeZone, taxRegime, ...requestedData } = data ?? {};
+  const { countryCode, currencyCode, accountingTimeZone, taxRegime, tallyCompanyGuid: _tallyGuid, tallyCompanyName: _tallyName, ...requestedData } = data ?? {};
   assertLiveMarket(countryCode, currencyCode);
   return serializableTransaction(async (tx) => {
     const previous = await tx.shop.findUnique({ where: { id: shopId } });
@@ -45,7 +45,7 @@ export async function updateShop(shopId, data, actor = {}) {
     let nextData = requestedData;
     if (requestedData.settingsJson) {
       const beforeSettings = parseShopSettings(previous.settingsJson);
-      const nextSettings = settingsWithMarketPolicy(parseShopSettings(requestedData.settingsJson), beforeSettings);
+      const nextSettings = settingsWithMarketPolicy(parseShopSettings(requestedData.settingsJson), beforeSettings, previous);
       const beforeType = businessTypeFromSettings(beforeSettings);
       const nextType = requestedBusinessTypeFromSettings(nextSettings);
       const capabilitiesChanged = JSON.stringify(beforeSettings.businessProfile?.capabilities ?? null)

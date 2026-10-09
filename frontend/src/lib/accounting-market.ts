@@ -14,8 +14,11 @@ export const LEGACY_ACCOUNTING_MARKET = Object.freeze({
 /** Old installed clients/records have no fields. Their ledger was always INR.
  * An explicit foreign value is an error, never a request to relabel the money. */
 export function accountingMarketSnapshot(source: AccountingMarketFields = {}) {
-  assertAccountingMarketClaim(source, LEGACY_ACCOUNTING_MARKET);
-  return { ...LEGACY_ACCOUNTING_MARKET };
+  const expected = source.countryCode === "AE"
+    ? { countryCode: "AE", currencyCode: "AED", accountingTimeZone: "Asia/Dubai", taxRegime: "VAT" }
+    : LEGACY_ACCOUNTING_MARKET;
+  assertAccountingMarketClaim(source, expected);
+  return { ...expected };
 }
 
 export function assertAccountingMarketClaim(input: AccountingMarketFields, expected: AccountingMarketFields) {

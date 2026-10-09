@@ -1,3 +1,4 @@
+import { tallyEn } from "./tally";
 // The English tables that only an `onlineOnly` route can ever render.
 //
 // This is the string half of a rule the build already applies to code. Routes
@@ -40,6 +41,7 @@ import { assuranceEn } from "./assurance";
 import { devicesEn } from "./devices";
 
 export const englishCloudTranslations = {
+  ...tallyEn,
   ...marketPreviewEn,
   ...assuranceEn,
   ...devicesEn,
@@ -47,6 +49,7 @@ export const englishCloudTranslations = {
 
 /** Registered cloud-only modules. `english.ts` re-exports these into EN_MODULES. */
 export const EN_CLOUD_MODULES = {
+  tally: tallyEn,
   marketPreview: marketPreviewEn,
   assurance: assuranceEn,
   devices: devicesEn,

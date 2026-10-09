@@ -57,6 +57,10 @@ const billItemSchema = z.object({
 });
 
 const paymentSchema = z.object({
+  countryCode: z.string().max(2).optional(),
+  currencyCode: z.string().max(3).optional(),
+  accountingTimeZone: z.string().max(64).optional(),
+  taxRegime: z.string().max(16).optional(),
   mode: z.enum(["cash", "upi", "bank", "credit", "gift_card"]),
   amount: moneyAmount({ positive: true }),
   giftCardCode: z.string().trim().min(10).max(40).optional(),

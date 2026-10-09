@@ -544,6 +544,7 @@ function buildLedgerEntry(billId: string, customerId: string, amount: number, bi
   const now = new Date().toISOString();
   const ledgerId = `ledger_${billId}_credit`;
   return makeLocalEntity({
+    ...accountingMarketSnapshot(bill),
     id: ledgerId,
     local_id: ledgerId,
     clientLedgerId: ledgerId,
@@ -706,7 +707,7 @@ async function persistLocalBill(
     .filter((payment) => payment.mode !== BillPaymentMode.credit)
     .reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0)));
   const billItems = buildBillItems(billId, billData.items, calculatedAmounts.gstMode, calculatedAmounts.discount);
-  const billPayments = buildPayments(billId, billData.customerId, billData.payments);
+  const billPayments = buildPayments(billId, billData.customerId, billData.payments).map((payment) => ({ ...payment, ...accountingMarketSnapshot(billData) }));
   const saleMovements = buildSaleMovements(billId, billData.items, productsById);
   const updatedProducts = buildStockProjection(billData.items, productsById);
   // Carry the durable clientPaymentId into the sync payload so the server stores + echoes it.
@@ -714,6 +715,7 @@ async function persistLocalBill(
   // a fuzzy amount/time guess (which could collapse two distinct same-amount tenders).
   const tenderSources = billData.payments.filter((payment) => payment.mode !== BillPaymentMode.credit);
   const tenderPayments = billPayments.map((payment, index) => ({
+    ...accountingMarketSnapshot(payment),
     mode: payment.mode,
     amount: payment.amount,
     clientPaymentId: payment.id,

@@ -52,7 +52,7 @@ internal sealed class BridgeConfig
     [JsonPropertyName("customerDisplay")] public CustomerDisplayConfig CustomerDisplay { get; set; } = new();
     [JsonPropertyName("pairing")] public PairingState? Pairing { get; set; }
     // Saving this window rewrites the whole file, so a key it does not know
-    // about is a key it silently deletes. The Tally address is set by hand
+    // about is a key it silently deletes. The Tally address is configured locally
     // today, and losing it on the next printer change would take the counter's
     // accounting link down with no visible cause.
     [JsonPropertyName("tally")] public TallyConfig Tally { get; set; } = new();
@@ -80,26 +80,28 @@ internal sealed class SetupWindow : Form
     private readonly Label pairingCode = new() { AutoSize = false, Width = 440, Height = 58, Font = new Font("Segoe UI", 27, FontStyle.Bold), TextAlign = ContentAlignment.MiddleCenter };
     private readonly Label status = new() { AutoSize = false, Width = 440, Height = 56, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Label version = new() { AutoSize = true };
-    private readonly Button saveButton = new() { Text = "Save printer and create pairing code", Width = 440, Height = 44 };
+    private readonly Button saveButton = new() { Text = "Save and create pairing code", Width = 440, Height = 44 };
     private readonly Button testButton = new() { Text = "Test print", Width = 212, Height = 44, Enabled = false };
     private readonly Button refreshButton = new() { Text = "Refresh printers", Width = 212, Height = 44 };
     private readonly TextBox scaleAdapter = new() { Width = 340, ReadOnly = true, PlaceholderText = "Not configured" };
     private readonly TextBox displayAdapter = new() { Width = 340, ReadOnly = true, PlaceholderText = "Not configured" };
     private readonly Button chooseScaleAdapter = new() { Text = "Choose...", Width = 88, Height = 30 };
     private readonly Button chooseDisplayAdapter = new() { Text = "Choose...", Width = 88, Height = 30 };
+    private readonly CheckBox tallyEnabled = new() { Text = "Connect TallyPrime on this computer", AutoSize = true };
+    private readonly NumericUpDown tallyPort = new() { Minimum = 1, Maximum = 65535, Value = 9000, Width = 110 };
     private BridgeConfig config = new();
 
     public SetupWindow()
     {
         Text = "KiranaOS Hardware Bridge Setup";
-        ClientSize = new Size(500, 640);
+        ClientSize = new Size(500, 720);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 10);
 
-        var heading = new Label { Text = "Connect your receipt printer", AutoSize = true, Font = new Font("Segoe UI", 16, FontStyle.Bold) };
-        var explanation = new Label { Text = "Choose the printer used for bills. No terminal or private token is needed.", AutoSize = false, Width = 440, Height = 42 };
+        var heading = new Label { Text = "Connect your counter", AutoSize = true, Font = new Font("Segoe UI", 16, FontStyle.Bold) };
+        var explanation = new Label { Text = "Choose your printer or enable Tally. No terminal or private token is needed.", AutoSize = false, Width = 440, Height = 42 };
         var printerLabel = new Label { Text = "Installed printer", AutoSize = true };
         var scaleLabel = new Label { Text = "Optional weighing-scale vendor adapter (.exe)", AutoSize = true };
         var displayLabel = new Label { Text = "Optional customer-display vendor adapter (.exe)", AutoSize = true };
@@ -125,6 +127,12 @@ internal sealed class SetupWindow : Form
         panel.Controls.Add(scaleRow);
         panel.Controls.Add(displayLabel);
         panel.Controls.Add(displayRow);
+        panel.AutoScroll = true;
+        panel.Controls.Add(tallyEnabled);
+        var tallyRow = new FlowLayoutPanel { Width = 440, Height = 34, WrapContents = false };
+        tallyRow.Controls.Add(new Label { Text = "Tally server port", AutoSize = true, Padding = new Padding(0, 5, 8, 0) });
+        tallyRow.Controls.Add(tallyPort);
+        panel.Controls.Add(tallyRow);
         panel.Controls.Add(saveButton);
         panel.Controls.Add(codeLabel);
         panel.Controls.Add(pairingCode);
@@ -153,6 +161,8 @@ internal sealed class SetupWindow : Form
             }
             scaleAdapter.Text = config.Scale?.Executable ?? "";
             displayAdapter.Text = config.CustomerDisplay?.Executable ?? "";
+            tallyEnabled.Checked = !string.IsNullOrWhiteSpace(config.Tally?.Url);
+            if (Uri.TryCreate(config.Tally?.Url, UriKind.Absolute, out var tallyUri)) tallyPort.Value = tallyUri.IsDefaultPort ? 9000 : tallyUri.Port;
         }
         catch { status.Text = "Previous setup could not be read. Choose the printer again."; }
     }
@@ -202,9 +212,10 @@ internal sealed class SetupWindow : Form
 
     private async Task SaveAndPairAsync()
     {
-        if (printers.SelectedItem is not string printerName)
+        var printerName = printers.SelectedItem as string;
+        if (printerName is null && !tallyEnabled.Checked)
         {
-            status.Text = "Choose an installed printer first.";
+            status.Text = "Choose an installed printer or enable TallyPrime.";
             return;
         }
         foreach (var adapterPath in new[] { scaleAdapter.Text.Trim(), displayAdapter.Text.Trim() }.Where(value => value.Length > 0))
@@ -221,7 +232,8 @@ internal sealed class SetupWindow : Form
             // Creating a new pairing code is also the explicit credential-rotation
             // action. Any previously paired browser must use the new one-time code.
             config.Token = RandomToken();
-            config.Printer = new PrinterConfig { Transport = "windows", Name = printerName };
+            if (printerName is not null) config.Printer = new PrinterConfig { Transport = "windows", Name = printerName };
+            config.Tally = new TallyConfig { Url = tallyEnabled.Checked ? $"http://127.0.0.1:{(int)tallyPort.Value}" : "" };
             config.Scale ??= new ExecutableAdapterConfig();
             config.Scale.Executable = InstallProtectedAdapter(scaleAdapter.Text.Trim(), "scale");
             config.Scale.Args = [];
@@ -247,7 +259,7 @@ internal sealed class SetupWindow : Form
             await RefreshVersionNoticeAsync();
             pairingCode.Text = code;
             status.Text = "Ready. This code expires in 10 minutes and works once.";
-            testButton.Enabled = true;
+            testButton.Enabled = printerName is not null;
         }
         catch
         {

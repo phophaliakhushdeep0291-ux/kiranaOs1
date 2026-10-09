@@ -115,3 +115,21 @@ command. An application rollback can retain these additive columns; it must not
 delete them. No deployment has been performed here. The local SQLite results and
 SQL safety check do not constitute a PostgreSQL migration/backfill proof; obtain
 that release-certification evidence before merging or deploying.
+
+## 9 October follow-up: payment ledgers and Tally
+
+The user selected cash and recorded external payments for the eventual UAE pilot.
+Payment, customer-credit ledger, financial ledger and journal entry rows now also
+carry the four accounting market fields; reversals preserve their source snapshot.
+Additive migrations 143/144 prepare those fields and separate UAE tax identity
+columns. UAE mobile parsing and explicit AE market metadata are prepared, while
+public UAE registration/trading remains disabled. Cashier VAT issuance, AED UI,
+receipts, business-day reports and full live AED/offline acceptance remain open.
+
+The requested Tally connection is implemented with company discovery and binding,
+a review step, separate masters/voucher imports, strict acceptance counters,
+persistent duplicate/uncertain-outcome protection and signed confirmation recovery.
+It currently supports INR books; AE exports fail explicitly. See
+[Tally connection setup and acceptance boundaries](TALLY_CONNECTION_2026-10-09.md).
+Migration 145 adds the linked company identity. None of these migrations has been
+applied to a production database by this task.

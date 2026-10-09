@@ -59,13 +59,19 @@ This source-debug path is not part of shop installation. A shopkeeper never need
 
 A shop that keeps its books in Tally can push sales, purchases, receipts and expenses straight into the copy of TallyPrime running on the same counter, from Settings → Integrations. The browser cannot do this itself: it will not open a connection from an HTTPS page to a loopback port, and Tally answers no CORS preflight, so the bridge forwards the envelope.
 
-Set the address and restart the service:
+In Hardware Bridge Setup 1.5.0, enable **Connect TallyPrime on this computer**,
+set the port (normally 9000), and save. No printer is required for Tally-only use.
+Enter the six-character code directly in Settings → Integrations → Connect TallyPrime.
+The app discovers open companies; link the intended company with matching base
+currency and review the vouchers before sending.
+
+For development installations, set the address and restart the service:
 
 ```powershell
 $env:KIRANA_BRIDGE_TALLY_URL = "http://127.0.0.1:9000"
 ```
 
-or add `"tally": { "url": "http://127.0.0.1:9000" }` to `config.json`. Leaving it blank means the shop does not use Tally: `/v1/health` then reports `capabilities.tally: false` and the app hides the option rather than failing at the moment somebody presses send.
+or add `"tally": { "url": "http://127.0.0.1:9000" }` to `config.json`. Leaving it blank means the shop does not use Tally: `/v1/health` then reports `capabilities.tally: false` and the connection check explains how to enable it.
 
 Three constraints are deliberate:
 
@@ -73,9 +79,20 @@ Three constraints are deliberate:
 - **It must be loopback.** Tally has no authentication on this gateway, so reaching one across the shop's LAN would let any device on that network write to the books.
 - **An unusable address stops the service at startup**, where an installer or operator sees it, rather than at the counter on a Saturday evening.
 
-In Tally itself, the gateway must be switched on (F1 → Settings → Connectivity → Gateway of Tally) and the right company open. Tally answers HTTP 200 even when it imports nothing, so the bridge reads the counters in its reply and reports a rejection as a failure — the app records vouchers as sent only when Tally actually took them.
+In Tally itself, the gateway must be switched on (F1 → Settings → Connectivity → Client/Server Configuration, Server or Both) and the right company open. Tally answers HTTP 200 even when it imports nothing, so the bridge reads the counters in its reply and reports a rejection as a failure — the app records vouchers as sent only when Tally actually took them.
 
-Every voucher carries a `REMOTEID` derived from the shop and the document it came from, so an envelope that arrives twice is recognised as the same vouchers rather than a second set. The app additionally records what it has already pushed and asks only for the remainder.
+Vouchers carry deterministic `REMOTEID` and `GUID` values. Review Tally's **Overwrite
+vouchers with the same GUID** setting before repeat imports. A persistent journal
+next to the bridge config (`config.json.tally-transfers.json`) returns accepted
+batch results without resending and blocks uncertain or overlapping batches.
+The app also retains confirmation recovery and asks the server for unsent records.
+Masters and vouchers are imported separately so master counts cannot hide missing
+vouchers. Use **Ignore Duplicates** for existing masters; review existing ledger
+mappings with the accountant. A partial or lost response requires reconciliation.
+
+See [setup and acceptance checklist](../docs/TALLY_CONNECTION_2026-10-09.md).
+UAE VAT exports remain disabled. These paths have stub-server coverage; a real
+Windows/TallyPrime company must still be accepted before rollout.
 
 Print job ids, a SHA-256 fingerprint of the exact receipt payload, and per-copy progress are persisted at `~/.kiranaos/hardware-bridge-print-jobs.json` by default; override with `KIRANA_BRIDGE_JOB_JOURNAL`. Concurrent retries share one in-flight job, restarts resume only unfinished copies, and reusing a job id with different content, printer controls, or copy count is rejected. Pre-fingerprint legacy journal rows fail closed and require operator inspection plus a new job id. As with every raw printer protocol, a machine crash in the tiny interval after the printer accepts bytes but before the journal fsync can still require an operator to inspect the last receipt.
 

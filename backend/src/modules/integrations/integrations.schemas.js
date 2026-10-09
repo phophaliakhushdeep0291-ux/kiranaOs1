@@ -80,7 +80,15 @@ export const tallyExportQuerySchema = z.object({
 
 export const TALLY_DOCUMENT_TYPES = Object.freeze(["sale", "sales_return", "purchase", "purchase_return", "receipt", "expense", "production"]);
 
+export const tallyCompanySchema = z.object({
+  guid: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9-]+$/),
+  name: z.string().trim().min(1).max(200).regex(/^[^\x00-\x1f]+$/),
+  currencyCode: z.enum(["INR", "AED"]),
+}).strict();
+
 export const tallyPostedBodySchema = z.object({
+  companyGuid: z.string().min(8).max(128),
+  signature: z.string().regex(/^[a-f0-9]{64}$/),
   documents: z
     .array(
       z.object({

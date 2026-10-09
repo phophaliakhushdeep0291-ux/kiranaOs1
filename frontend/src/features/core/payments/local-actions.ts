@@ -1,3 +1,4 @@
+import { accountingMarketSnapshot, activeAccountingMarketSnapshot, assertAccountingMarketClaim, type AccountingMarketFields } from "@/lib/accounting-market";
 import { offlineDB } from "@/lib/offline/db";
 import {
   ownerPinRequiredActionSchema,
@@ -323,7 +324,7 @@ const PAYMENT_TRANSACTION_TABLES = [
   "sync_outbox",
 ];
 
-function buildPaymentLedgerEntry(input: {
+function buildPaymentLedgerEntry(input: AccountingMarketFields & {
   customerId: string;
   paymentId: string;
   ledgerEntryId: string;
@@ -336,6 +337,7 @@ function buildPaymentLedgerEntry(input: {
 }) {
   return makeLocalEntity(
     {
+      ...accountingMarketSnapshot(input),
       id: input.ledgerEntryId,
       customerId: input.customerId,
       customer_id: input.customerId,
@@ -409,6 +411,8 @@ async function recordPaymentsLocalFirstUnlocked(
   options: RecordPaymentOptions = {},
 ): Promise<LocalPaymentResult[]> {
   if (paymentInputs.length === 0) throw new Error("Add at least one payment");
+  const marketSnapshot = activeAccountingMarketSnapshot();
+  for (const data of paymentInputs) assertAccountingMarketClaim(data, marketSnapshot);
   const inputs = paymentInputs.map((data) => ({
     data,
     validated: parseOrThrow(paymentRecordingSchema, { ...data, customerId }),
@@ -469,6 +473,7 @@ async function recordPaymentsLocalFirstUnlocked(
     const note = typeof validated.note === "string" ? validated.note : undefined;
     const paidAt = typeof validated.paidAt === "string" ? validated.paidAt : now;
     const payment = makeLocalEntity({
+      ...marketSnapshot,
       id: paymentId,
       customerId,
       customer_id: customerId,
@@ -494,6 +499,7 @@ async function recordPaymentsLocalFirstUnlocked(
       status: "active",
     }, "payment", "pending_sync");
     const ledgerEntry = buildPaymentLedgerEntry({
+      ...marketSnapshot,
       customerId,
       paymentId,
       ledgerEntryId,
@@ -519,6 +525,7 @@ async function recordPaymentsLocalFirstUnlocked(
       operation_type: "RECORD_PAYMENT",
       idempotency_key: idempotencyKey,
       payload: {
+        ...marketSnapshot,
         paymentId,
         localPaymentId: paymentId,
         local_payment_id: paymentId,
@@ -534,6 +541,7 @@ async function recordPaymentsLocalFirstUnlocked(
         idempotency_key: idempotencyKey,
         customerId,
         payment: {
+          ...marketSnapshot,
           ...data,
           amount,
           mode: validated.mode,
@@ -707,6 +715,8 @@ async function reversePaymentWithOwnerPinLocalFirstUnlocked(
   if (amount <= 0)
     throw new Error("Payment reversal amount must be greater than zero");
 
+  const marketSnapshot = accountingMarketSnapshot(payment);
+  assertAccountingMarketClaim(marketSnapshot, activeAccountingMarketSnapshot());
   const reason = input.reason?.trim() || "Payment reversal";
   const updatedPayment = makeLocalEntity(
     {
@@ -728,6 +738,7 @@ async function reversePaymentWithOwnerPinLocalFirstUnlocked(
   const existingLedgerEntries = await readCustomerLedgerEntries(customerId);
   const correction = makeLocalEntity(
     {
+      ...marketSnapshot,
       id: createLocalId("ledger"),
       customerId,
       customer_id: customerId,

@@ -1,4 +1,4 @@
-import { accountingMarketSnapshot, assertAccountingMarketClaim } from "../shops/market-policy.js";
+import { accountingMarketSnapshot, assertAccountingMarketClaim, shopAccountingMarket } from "../shops/market-policy.js";
 import { z } from "zod";
 import db from "../../db.js";
 import { env } from "../../config/env.js";
@@ -2838,6 +2838,7 @@ async function applyLedgerAdjustment(shopId, event, user, context) {
       const ledgerAmount = round2(Math.abs(amount));
       const ledger = await tx.udharLedger.create({
         data: {
+          ...await shopAccountingMarket(tx, shopId),
           shopId,
           customerId: customer.id,
           customerName: customer.name,

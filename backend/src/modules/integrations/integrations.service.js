@@ -1,3 +1,4 @@
+import { tallyManifestSignature, verifyTallyManifest } from "./tally-connection.service.js";
 import crypto from "crypto";
 import dns from "dns/promises";
 import http from "http";
@@ -595,7 +596,12 @@ export async function listApiResource({ shopId, resource, scope, query }) {
 }
 
 export async function buildTallyExport(shopId, query) {
-  const timeZone = env.DAILY_CLOSING_TIMEZONE;
+  const shop = await db.shop.findUnique({ where: { id: shopId } });
+  if (!shop) throw new AppError("Shop not found", 404);
+  // UAE tax exports remain gated until the VAT voucher mapping is certified.
+  if (shop.currencyCode !== "INR") throw new AppError("Tally VAT mapping for this market is still under validation", 409, "TALLY_MARKET_NOT_READY");
+  if (query.unsent && !shop.tallyCompanyGuid) throw new AppError("Connect and verify a Tally company before sending", 409, "TALLY_CONNECTION_REQUIRED");
+  const timeZone = shop.accountingTimeZone || env.DAILY_CLOSING_TIMEZONE;
   const toKey = query.to || formatDateInTimeZone(new Date(), timeZone);
   const defaultFromDate = new Date(`${toKey}T12:00:00.000Z`);
   defaultFromDate.setUTCDate(defaultFromDate.getUTCDate() - 29);
@@ -612,8 +618,7 @@ export async function buildTallyExport(shopId, query) {
   const maxBills = inventory ? MAX_TALLY_INVENTORY_BILLS : MAX_TALLY_BILLS;
   const wants = (document) => query.include.includes(document);
 
-  const [shop, bills, purchases, purchaseReturns, receipts, expenses, productionRuns] = await Promise.all([
-    db.shop.findUnique({ where: { id: shopId }, select: { name: true, gstNumber: true } }),
+  const [bills, purchases, purchaseReturns, receipts, expenses, productionRuns] = await Promise.all([
 
     wants("sales")
       ? db.bill.findMany({
@@ -715,15 +720,27 @@ export async function buildTallyExport(shopId, query) {
     });
   }
 
-  const { xml, count, masterCount, counts, documents } = buildTallyEnvelope({
-    companyName: shop?.name || "KiranaOS",
+  const { xml, mastersXml, vouchersXml, count, masterCount, counts, documents } = buildTallyEnvelope({
+    companyName: shop.tallyCompanyName || shop.name,
     shopId,
     sellerStateCode: validateGstin(shop?.gstNumber).stateCode || "",
     ...selected,
     timeZone,
     inventory,
   });
-  return { filename: `kiranaos-tally-${fromKey}-${toKey}.xml`, xml, count, masterCount, counts, documents, skipped: documentCount - count };
+  if (Buffer.byteLength(JSON.stringify({ documents })) > 1_800_000
+    || Math.max(Buffer.byteLength(JSON.stringify({ xml: mastersXml })), Buffer.byteLength(JSON.stringify({ xml: vouchersXml }))) > 15 * 1024 * 1024) {
+    throw new AppError("This transfer is too large. Choose a shorter date range before sending.", 422, "TALLY_EXPORT_TOO_LARGE");
+  }
+  // Never export a row from a different denomination into the base-currency
+  // company, including accidental mixed imports in an otherwise INR shop.
+  for (const row of [...bills, ...receipts]) {
+    if ((row.currencyCode ?? "INR") !== shop.currencyCode) throw new AppError("A document currency differs from the shop", 409, "TALLY_CURRENCY_MISMATCH");
+  }
+  return { filename: `kiranaos-tally-${fromKey}-${toKey}.xml`, xml, mastersXml, vouchersXml, count, masterCount, counts, documents,
+    company: { name: shop.tallyCompanyName || shop.name, guid: shop.tallyCompanyGuid, currencyCode: shop.currencyCode },
+    signature: shop.tallyCompanyGuid ? tallyManifestSignature(shopId, shop.tallyCompanyGuid, documents) : null,
+    skipped: documentCount - count };
 }
 
 function saleDocumentType(bill) {
@@ -776,7 +793,10 @@ async function withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns,
  * every voucher also carries a derived REMOTEID — Tally recognises the repeat as
  * the same object instead of a second one.
  */
-export async function markTallyPosted(shopId, documents, actor = {}) {
+export async function markTallyPosted(shopId, documents, actor = {}, confirmation = {}) {
+  const shop = await db.shop.findUnique({ where: { id: shopId } });
+  if (!shop?.tallyCompanyGuid || confirmation.companyGuid !== shop.tallyCompanyGuid) throw new AppError("The Tally company does not match this transfer", 409, "TALLY_COMPANY_MISMATCH");
+  verifyTallyManifest(shopId, confirmation.companyGuid, documents, confirmation.signature);
   const rows = documents.map((document) => ({
     shopId,
     documentType: document.type,
@@ -835,25 +855,14 @@ export async function markTallyPosted(shopId, documents, actor = {}) {
 }
 
 export function parseTallyImportResponse(xml, expectedCount, status = 200) {
-  const metric = (name) => Number(String(xml).match(new RegExp(`<${name}>(\\d+)</${name}>`, "i"))?.[1] || 0);
+  const metric = (name) => Number(String(xml).match(new RegExp(`<${name}>\\s*(-?\\d+)\\s*</${name}>`, "i"))?.[1] || 0);
   const created = metric("CREATED"); const altered = metric("ALTERED"); const ignored = metric("IGNORED"); const errors = metric("ERRORS");
   const lineError = String(xml).match(/<LINEERROR>([\s\S]*?)<\/LINEERROR>/i)?.[1]?.replace(/<[^>]+>/g, " ").trim();
-  if (status < 200 || status >= 300 || errors > 0 || lineError) throw new AppError(lineError || `TallyPrime rejected the envelope (${status})`, 502, "TALLY_IMPORT_REJECTED");
-  if (created + altered < expectedCount) throw new AppError(`TallyPrime acknowledged ${created + altered} of ${expectedCount} vouchers`, 502, "TALLY_IMPORT_INCOMPLETE");
+  if (status < 200 || status >= 300 || errors !== 0 || ignored !== 0 || metric("EXCEPTIONS") !== 0 || lineError || !/<CREATED>\s*\d+\s*<\/CREATED>/i.test(xml)) throw new AppError(lineError || `TallyPrime rejected the envelope (${status})`, 502, "TALLY_IMPORT_REJECTED");
+  if (created < 0 || altered < 0 || created + altered !== expectedCount) throw new AppError(`TallyPrime acknowledged ${created + altered} of ${expectedCount} vouchers`, 502, "TALLY_IMPORT_INCOMPLETE");
   return { created, altered, ignored };
 }
 
-export async function pushTallyExport(shopId, query, actor = {}) {
-  const envelope = await buildTallyExport(shopId, { ...query, unsent: true });
-  if (envelope.documents.length === 0) return { posted: 0, created: 0, altered: 0, ignored: 0, message: "No unsent vouchers" };
-  let response;
-  try {
-    response = await fetch(env.TALLY_BASE_URL, { method: "POST", headers: { "content-type": "application/xml; charset=utf-8" }, body: envelope.xml, signal: AbortSignal.timeout(env.TALLY_PUSH_TIMEOUT_MS) });
-  } catch (error) {
-    throw new AppError(`Could not reach TallyPrime at the configured address: ${error.message}`, 502, "TALLY_UNREACHABLE");
-  }
-  const xml = await response.text();
-  const { created, altered, ignored } = parseTallyImportResponse(xml, envelope.count, response.status);
-  const result = await markTallyPosted(shopId, envelope.documents, actor);
-  return { posted: result.recorded, created, altered, ignored, counts: envelope.counts };
+export async function pushTallyExport() {
+  throw new AppError("Use Settings → Integrations to verify the Tally company on this counter and send the reviewed transfer", 409, "TALLY_LOCAL_CONNECTION_REQUIRED");
 }

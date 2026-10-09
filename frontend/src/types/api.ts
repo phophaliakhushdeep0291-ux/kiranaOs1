@@ -499,7 +499,7 @@ export const UdharPaymentInputMode = {
   bank: "bank",
 } as const;
 
-export interface BillPayment {
+export interface BillPayment extends AccountingMarketFields {
   mode: typeof BillPaymentMode[keyof typeof BillPaymentMode];
   amount: number;
   retailPaymentIntentId?: string;
@@ -733,7 +733,7 @@ export interface UdharSummary {
   customers: UdharSummaryCustomer[];
 }
 
-export interface UdharPaymentInput {
+export interface UdharPaymentInput extends AccountingMarketFields {
   amount: number;
   mode: string;
   note?: string;

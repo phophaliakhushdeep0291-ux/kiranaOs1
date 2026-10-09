@@ -309,6 +309,7 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
   // Refund payment row (cash/upi) — negative so cash collected nets down.
   const paymentRows = isCashLike
     ? [makeLocalEntity({
+        ...marketSnapshot,
         id: createLocalId("payment"),
         billId,
         bill_id: billId,
@@ -398,6 +399,7 @@ async function createSaleReturnLocalUnlocked(input: SaleReturnInput): Promise<Bi
     updatedCustomer.balance_derived_from_local_ledger = true;
     const ledgerId = `ledger_${billId}_return`;
     udharLedgerEntry = makeLocalEntity({
+      ...marketSnapshot,
       id: ledgerId,
       customerId: existingCustomer.id,
       customer_id: existingCustomer.id,

@@ -88,7 +88,7 @@ const UaePilotSettings = lazy(cloudPage(() => import("@/features/core/settings/p
 const TaxesSettings = lazy(() => import("@/features/core/settings/pages/TaxesSettingsPage"));
 const SecuritySettings = lazy(() => import("@/features/core/settings/pages/SecuritySettingsPage"));
 const NotificationsSettings = lazy(() => import("@/features/core/settings/pages/NotificationsSettingsPage"));
-const IntegrationsSettings = lazy(() => import("@/features/core/settings/pages/IntegrationsSettingsPage"));
+const IntegrationsSettings = lazy(cloudPage(() => import("@/features/core/settings/pages/IntegrationsSettingsPage")));
 const AdvancedSettings = lazy(() => import("@/features/core/settings/pages/AdvancedSettingsPage"));
 const SyncStatusPage = lazy(() => import("@/features/core/sync/pages/SyncStatusPage"));
 const PlansPage = lazy(() => import("@/features/core/subscription/pages/PlansPage"));

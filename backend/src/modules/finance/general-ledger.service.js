@@ -1,5 +1,6 @@
 import db from "../../db.js";
 import { createHash } from "node:crypto";
+import { accountingMarketSnapshot, assertAccountingMarketClaim, shopAccountingMarket } from "../shops/market-policy.js";
 
 export const GENERAL_LEDGER_VERSION = "general-ledger-v1";
 
@@ -112,9 +113,13 @@ export async function postFinancialLedgerRows(client, rows) {
   if (!rows.length) return [];
   const shopId = rows[0].shopId;
   if (rows.some((row) => row.shopId !== shopId)) throw new Error("A journal batch cannot span shops");
+  // Production transactions capture the immutable shop identity once per batch.
+  // Pure projection test clients can supply their own row snapshot.
+  const market = client.shop ? await shopAccountingMarket(client, shopId) : accountingMarketSnapshot(rows[0]);
+  for (const row of rows) assertAccountingMarketClaim(row, market);
   for (const row of rows) await assertPeriodOpen(shopId, new Date(row.businessDate), client);
   const createdRows = [];
-  for (const row of rows) createdRows.push(await client.financialLedger.create({ data: row }));
+  for (const row of rows) createdRows.push(await client.financialLedger.create({ data: { ...row, ...market } }));
   // Lightweight unit-test transaction doubles intentionally expose only the
   // financial ledger. Real Prisma transaction clients always expose both.
   if (!client.chartOfAccount || !client.journalEntry) return createdRows;
@@ -127,6 +132,7 @@ export async function postFinancialLedgerRows(client, rows) {
     const projection = buildJournalProjection(sourceRows);
     const batchSourceId = journalBatchSourceId(sourceRows);
     await client.journalEntry.create({ data: {
+      ...accountingMarketSnapshot(source),
       shopId, sourceType: source.sourceType, sourceId: batchSourceId, businessDate: source.businessDate,
       description: `${source.sourceType}:${source.sourceId}`,
       evidenceJson: JSON.stringify({
@@ -164,6 +170,8 @@ export async function updateAccount(shopId, accountId, input, client = db) {
 }
 
 export async function createManualJournal(shopId, input, { sourceType = "manual_journal", actorUserId = null, client = db } = {}) {
+  const market = await shopAccountingMarket(client, shopId);
+  assertAccountingMarketClaim(input, market);
   validateBalancedLines(input.lines);
   const businessDate = new Date(input.businessDate);
   await assertPeriodOpen(shopId, businessDate, client);
@@ -174,6 +182,7 @@ export async function createManualJournal(shopId, input, { sourceType = "manual_
   if (accounts.length !== codes.length) throw accountingError("Every journal line must reference an active account in this shop", "JOURNAL_ACCOUNT_INVALID", 400);
   const accountByCode = new Map(accounts.map((account) => [account.code, account]));
   return client.journalEntry.create({ data: {
+    ...market,
     shopId, sourceType, sourceId: input.reference, businessDate, description: input.description,
     evidenceJson: JSON.stringify({ version: 1, actorUserId, manuallyApproved: true }),
     lines: { create: input.lines.map((line, index) => ({ shopId, accountId: accountByCode.get(line.accountCode).id, lineNumber: index + 1, debitPaise: BigInt(line.debitPaise), creditPaise: BigInt(line.creditPaise), memo: line.memo ?? null, evidenceJson: JSON.stringify({ version: 1, actorUserId, accountCode: line.accountCode }) })) },
@@ -188,6 +197,7 @@ export async function reverseJournal(shopId, journalId, input, actorUserId = nul
   const businessDate = input.businessDate ? new Date(input.businessDate) : new Date();
   await assertPeriodOpen(shopId, businessDate, client);
   return client.journalEntry.create({ data: {
+    ...accountingMarketSnapshot(original),
     shopId, sourceType: "journal_reversal", sourceId: original.id, businessDate, reversalOfId: original.id,
     description: `Reversal: ${input.reason}`, evidenceJson: JSON.stringify({ version: 1, actorUserId, reason: input.reason, originalJournalId: original.id }),
     lines: { create: original.lines.map((line, index) => ({ shopId, accountId: line.accountId, lineNumber: index + 1, debitPaise: line.creditPaise, creditPaise: line.debitPaise, memo: input.reason, evidenceJson: JSON.stringify({ version: 1, actorUserId, reversedLineId: line.id, accountCode: line.account.code }) })) },
@@ -235,6 +245,7 @@ export async function projectShopGeneralLedger(shopId, client = db) {
     const batchSourceId = journalBatchSourceId(rowsToProject);
     const projection = buildJournalProjection(rowsToProject);
     await client.journalEntry.create({ data: {
+      ...accountingMarketSnapshot(source),
       shopId, sourceType: journalSourceType, sourceId: batchSourceId, businessDate: source.businessDate,
       description: `${journalSourceType}:${source.sourceId}`,
       evidenceJson: JSON.stringify({ version: 2, projectionVersion: GENERAL_LEDGER_VERSION, originalSourceId: source.sourceId, batchSourceId, supplemental, ledgerRowIds: rowsToProject.map((row) => row.id), ledgerIdempotencyKeys: rowsToProject.map((row) => row.idempotencyKey).sort() }),

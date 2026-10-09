@@ -18,6 +18,12 @@ test("persisted sale/return markets survive reload, retry and legacy requests wi
     const input = { ...billPayload(product), clientBillId: "market-sale", idempotencyKey: "market-sale" };
     const bill = await confirmBill(tenant.shop.id, input, actor);
     assert.deepEqual(accountingMarketSnapshot(bill), snapshot);
+    for (const payment of bill.payments) for (const [key, value] of Object.entries(snapshot)) assert.equal(payment[key], value);
+    for (const model of [db.financialLedger, db.journalEntry]) {
+      const savedRows = await model.findMany({ where: { shopId: tenant.shop.id } });
+      assert.ok(savedRows.length > 0);
+      for (const row of savedRows) for (const [key, value] of Object.entries(snapshot)) assert.equal(row[key], value);
+    }
     const reloaded = await db.bill.findUniqueOrThrow({ where: { id: bill.id } });
     for (const [key, value] of Object.entries(snapshot)) assert.equal(reloaded[key], value);
     assert.equal((await confirmBill(tenant.shop.id, { ...input, ...snapshot }, actor)).id, bill.id);
@@ -47,6 +53,7 @@ test("persisted sale/return markets survive reload, retry and legacy requests wi
     const returned = await createSaleReturn(tenant.shop.id, returnInput, actor);
     for (const [key, value] of Object.entries(snapshot)) assert.equal(returned[key], bill[key]);
     assert.equal(returned.grandTotal, -105);
+    for (const payment of returned.payments) for (const [key, value] of Object.entries(snapshot)) assert.equal(payment[key], value);
     assert.equal((await createSaleReturn(tenant.shop.id, { ...returnInput, ...snapshot }, actor)).id, returned.id);
     await assertNoWrite(() => createSaleReturn(tenant.shop.id, { ...returnInput, taxRegime: "VAT" }, actor));
     const list = await listBills(tenant.shop.id, { view: "list", page: 1, limit: 100, status: "all" });

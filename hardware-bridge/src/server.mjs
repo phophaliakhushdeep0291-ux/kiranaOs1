@@ -1,3 +1,4 @@
+import { TallyTransferJournal } from "./tally-transfer-journal.mjs";
 import http from "node:http";
 import crypto from "node:crypto";
 import { buildDrawerPulse, buildEscPosJob } from "./escpos.mjs";
@@ -10,11 +11,11 @@ import { consumePairingCode } from "./pairing.mjs";
 import { plainHardwareError } from "./plain-errors.mjs";
 import { UpdateChecker } from "./update-check.mjs";
 import { fingerprintPrintPayload, PrintJobExecutor } from "./print-executor.mjs";
-import { normalizeTallyUrl, parseTallyResponse, postTallyEnvelope, tallyFailureMessage } from "./tally-gateway.mjs";
+import { normalizeTallyUrl, parseTallyResponse, postTallyEnvelope, tallyFailureMessage, discoverTallyCompanies, assertTallyDestination } from "./tally-gateway.mjs";
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.KIRANA_BRIDGE_PORT || 17873);
-const VERSION = "1.4.0";
+const VERSION = "1.5.0";
 const CONFIG_PATH = defaultConfigPath();
 let bridgeConfig = await loadBridgeConfig(CONFIG_PATH);
 const TOKEN = String(bridgeConfig.token || "");
@@ -42,6 +43,8 @@ if (TOKEN.length < 32) {
 }
 
 await printJournal.load();
+const tallyJournal = new TallyTransferJournal(`${CONFIG_PATH}.tally-transfers.json`);
+await tallyJournal.load();
 
 function json(res, status, body, origin) {
   if (origin && ALLOWED_ORIGINS.has(origin)) {
@@ -212,6 +215,11 @@ const server = http.createServer(async (req, res) => {
       }));
       return json(res, 200, { ok: true }, origin);
     }
+    if (req.method === "GET" && url.pathname === "/v1/tally/companies") {
+      if (!TALLY_TARGET) return json(res, 503, { message: "Enable Tally at http://127.0.0.1:9000 in Hardware Bridge Setup, then restart the bridge." }, origin);
+      try { return json(res, 200, { companies: await discoverTallyCompanies(TALLY_TARGET) }, origin); }
+      catch (error) { return json(res, Number(error?.status) || 503, { message: String(error.message).slice(0, 300) }, origin); }
+    }
     if (req.method === "POST" && url.pathname === "/v1/tally/post") {
       if (!TALLY_TARGET) return json(res, 503, { message: "This counter is not set up to send to Tally. Add the Tally address in Hardware Bridge Setup." }, origin);
       const body = await readJson(req, MAX_TALLY_BODY_BYTES);
@@ -222,24 +230,30 @@ const server = http.createServer(async (req, res) => {
       if (!xml.trim()) return json(res, 400, { message: "Tally envelope is required" }, origin);
       if (!/^\s*(<\?xml[^>]*\?>)?\s*<ENVELOPE[\s>]/i.test(xml)) return json(res, 400, { message: "Body is not a Tally import envelope" }, origin);
 
+      const voucherCount = (xml.match(/<VOUCHER\s/gi) ?? []).length;
+      const masterCount = (xml.match(/<(?:LEDGER|STOCKITEM|UNIT)\s/gi) ?? []).length;
+      if (voucherCount > 0 && masterCount > 0) return json(res, 400, { message: "Import masters and vouchers separately. Update the app and prepare the transfer again." }, origin);
+      const expectedCount = voucherCount + masterCount;
+      if (!expectedCount) return json(res, 400, { message: "No accounting objects in this transfer" }, origin);
+      if (!body.company?.guid) return json(res, 400, { message: "Check and select the Tally company before sending" }, origin);
+
       // Handled here rather than by the shared catch below, whose messages are
       // written for a printer — telling a shopkeeper to check paper and cables
       // when Tally is simply closed sends them to the wrong machine entirely.
-      let status;
-      let reply;
-      try { ({ status, body: reply } = await postTallyEnvelope({ target: TALLY_TARGET, xml })); }
-      catch (error) {
-        return json(res, Number(error?.status) || 502, { message: String(error?.message || "Sending to Tally failed.").slice(0, 300) }, origin);
+      try {
+        assertTallyDestination(xml, body.company, await discoverTallyCompanies(TALLY_TARGET));
+        const send = async () => {
+          const { status, body: reply } = await postTallyEnvelope({ target: TALLY_TARGET, xml });
+          if (status !== 200) throw Object.assign(new Error(`Tally answered with HTTP ${status}.`), { status: 502 });
+          const result = parseTallyResponse(reply, { expectedCount, allowIgnored: voucherCount === 0 });
+          if (!result.ok) throw Object.assign(new Error(tallyFailureMessage(result, reply)), { status: 422 });
+          return result;
+        };
+        const result = voucherCount ? await tallyJournal.run(body.company.guid, xml, send) : await send();
+        return json(res, 200, { ok: true, ...result }, origin);
+      } catch (error) {
+        return json(res, Number(error?.status) || 502, { ok: false, message: String(error?.message || "Sending to Tally failed.").slice(0, 300) }, origin);
       }
-      if (status !== 200) return json(res, 502, { message: `Tally answered with HTTP ${status}.` }, origin);
-
-      const result = parseTallyResponse(reply);
-      // Reported separately from the HTTP result on purpose: Tally answers 200
-      // even when it imported nothing, so "ok" here means the vouchers are
-      // actually in the books, which is what decides whether the app may record
-      // them as sent.
-      if (!result.ok) return json(res, 422, { ok: false, message: tallyFailureMessage(result, reply), ...result }, origin);
-      return json(res, 200, { ok: true, ...result }, origin);
     }
     if (req.method === "POST" && url.pathname === "/v1/customer-display/show") {
       const body = await readJson(req);

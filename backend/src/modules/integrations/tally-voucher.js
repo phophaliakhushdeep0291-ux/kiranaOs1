@@ -152,6 +152,7 @@ function voucherXml({ type, view = "Accounting Voucher View", date, number, refe
   return (
     `<TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER${remoteId ? ` REMOTEID="${xmlEscape(remoteId)}"` : ""} VCHTYPE="${type}" ACTION="Create" OBJVIEW="${view}">` +
     `<DATE>${date}</DATE><EFFECTIVEDATE>${date}</EFFECTIVEDATE>` +
+    (remoteId ? `<GUID>${xmlEscape(remoteId)}</GUID>` : "") +
     `<VOUCHERTYPENAME>${type}</VOUCHERTYPENAME>` +
     `<VOUCHERNUMBER>${xmlEscape(number)}</VOUCHERNUMBER>` +
     (reference ? `<REFERENCE>${xmlEscape(reference)}</REFERENCE>` : "") +
@@ -662,7 +663,12 @@ export function buildTallyEnvelope({
     // Tally already has Cash; re-creating it is a duplicate-master error.
     .filter((master) => !(master.kind === "ledger" && master.name === LEDGER_CASH));
 
+  const envelope = (report, content) => '<?xml version="1.0" encoding="UTF-8"?><ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA>'
+    + `<REQUESTDESC><REPORTNAME>${report}</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>${xmlEscape(companyName)}</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC>`
+    + `<REQUESTDATA>${content}</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>`;
   return {
+    mastersXml: envelope("All Masters", masters.map(renderMaster).join("")),
+    vouchersXml: envelope("Vouchers", built.map((entry) => entry.voucher).join("")),
     xml:
       '<?xml version="1.0" encoding="UTF-8"?>' +
       "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA>" +

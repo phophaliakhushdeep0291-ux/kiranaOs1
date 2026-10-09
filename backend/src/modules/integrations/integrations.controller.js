@@ -1,3 +1,4 @@
+import { getTallyConnection, connectTally } from "./tally-connection.service.js";
 import * as svc from "./integrations.service.js";
 import { AppError } from "../../middleware/error.js";
 import { downloadFlipkartDocument, flipkartStatus, syncFlipkartOrders } from "./flipkart-seller.service.js";
@@ -25,8 +26,11 @@ export async function tally(req, res, next) { try { const data = await svc.build
 // The push path needs the document list alongside the XML, which an XML body
 // cannot carry, so live sends read JSON here instead of downloading a file.
 export async function tallyEnvelope(req, res, next) { try { const data = await svc.buildTallyExport(req.shopId, req.query); ok(res, data); } catch (e) { next(e); } }
-export async function tallyPosted(req, res, next) { try { const data = await svc.markTallyPosted(req.shopId, req.body.documents, actor(req)); ok(res, data); } catch (e) { next(e); } }
+export async function tallyPosted(req, res, next) { try { const data = await svc.markTallyPosted(req.shopId, req.body.documents, actor(req), req.body); ok(res, data); } catch (e) { next(e); } }
 export async function tallyPush(req, res, next) { try { ok(res, await svc.pushTallyExport(req.shopId, req.query, actor(req))); } catch (e) { next(e); } }
 export async function flipkartConnectorStatus(req, res, next) { try { ok(res, await flipkartStatus(req.shopId)); } catch (e) { next(e); } }
 export async function flipkartDocument(req, res, next) { try { const pdf = await downloadFlipkartDocument(req.shopId, req.params.shipmentId, req.params.kind); res.setHeader("content-type", "application/pdf"); res.setHeader("content-disposition", `attachment; filename="flipkart-${req.params.kind}-${req.params.shipmentId}.pdf"`); res.send(pdf); } catch (e) { next(e); } }
 export async function flipkartOrderSync(req, res, next) { try { ok(res, await syncFlipkartOrders(req.shopId, req.body, actor(req))); } catch (e) { next(e); } }
+
+export async function tallyConnection(req, res, next) { try { ok(res, await getTallyConnection(req.shopId)); } catch (e) { next(e); } }
+export async function tallyConnect(req, res, next) { try { ok(res, await connectTally(req.shopId, req.body, actor(req))); } catch (e) { next(e); } }

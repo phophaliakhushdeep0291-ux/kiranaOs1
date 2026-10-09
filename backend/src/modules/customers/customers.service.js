@@ -1,3 +1,4 @@
+import { shopAccountingMarket, accountingMarketSnapshot, assertAccountingMarketClaim } from "../shops/market-policy.js";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { moneyShadows, round2, toPaise, toPaiseBigInt } from "../../utils/money.js";
@@ -128,6 +129,7 @@ export async function createCustomer(shopId, data, { reuseExistingMobile = false
     if (openingUdharAmount > 0) {
       await tx.udharLedger.create({
         data: {
+          ...await shopAccountingMarket(tx, shopId),
           shopId,
           customerId: customer.id,
           customerName: customer.name,
@@ -335,6 +337,8 @@ export async function getKhata(shopId, customerId) {
  * This does NOT touch a bill — it's a direct khata payment.
  */
 export async function recordUdharPayment(shopId, customerId, input, actor = {}) {
+  const marketSnapshot = await shopAccountingMarket(db, shopId);
+  assertAccountingMarketClaim(input, marketSnapshot);
   const { amount, mode, note } = input;
   const customer = await getCustomer(shopId, customerId);
   const paymentAmount = round2(amount);
@@ -379,6 +383,7 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
 
     const ledger = await tx.udharLedger.create({
       data: {
+        ...await shopAccountingMarket(tx, shopId),
         shopId,
         locationId: location.id,
         customerId,
@@ -505,6 +510,7 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
     const reversedAt = new Date();
     const reversal = await tx.udharLedger.create({
       data: {
+        ...accountingMarketSnapshot(payment),
         shopId,
         locationId: payment.locationId,
         customerId,

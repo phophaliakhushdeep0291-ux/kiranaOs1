@@ -57,3 +57,11 @@ test("release build refuses to create an unsigned retail installer", async () =>
   assert.match(build, /must match the bridge health version/);
   assert.match(build, /signtool verify \/pa \/all/);
 });
+
+test("Tally setup is visible and can be paired without an installed printer", async () => {
+  const setup = await readFile(new URL("../windows/setup-app/Program.cs", import.meta.url), "utf8");
+  assert.match(setup, /Connect TallyPrime on this computer/);
+  assert.match(setup, /printerName is null && !tallyEnabled.Checked/);
+  assert.match(setup, /127\.0\.0\.1:\{\(int\)tallyPort.Value\}/);
+  assert.match(setup, /testButton.Enabled = printerName is not null/);
+});

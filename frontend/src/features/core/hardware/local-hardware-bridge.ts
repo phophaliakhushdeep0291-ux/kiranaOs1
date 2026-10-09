@@ -206,9 +206,9 @@ export interface TallyPostResult {
  * synchronously, and giving up early would leave the caller unable to tell a
  * slow import from a failed one, which is the one thing it must not guess at.
  */
-export async function postTallyViaHardwareBridge(bridgeUrl: string, xml: string) {
+export async function postTallyViaHardwareBridge(bridgeUrl: string, xml: string, company: TallyCompany) {
   if (!xml.trim()) throw new Error("There are no vouchers to send.");
-  return bridgeRequest<TallyPostResult>(bridgeUrl, "/v1/tally/post", { method: "POST", body: JSON.stringify({ xml }) }, 180_000);
+  return bridgeRequest<TallyPostResult>(bridgeUrl, "/v1/tally/post", { method: "POST", body: JSON.stringify({ xml, company }) }, 180_000);
 }
 
 export async function showCustomerDisplayViaHardwareBridge(bridgeUrl: string, input: HardwareCustomerDisplayState) {
@@ -219,4 +219,9 @@ export async function showCustomerDisplayViaHardwareBridge(bridgeUrl: string, in
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export interface TallyCompany { guid: string; name: string; currencyCode: string | null; currency?: string }
+export async function discoverTallyViaHardwareBridge(bridgeUrl: string) {
+  return bridgeRequest<{ companies: TallyCompany[] }>(bridgeUrl, "/v1/tally/companies", { method: "GET" }, 15_000);
 }

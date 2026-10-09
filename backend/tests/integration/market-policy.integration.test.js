@@ -40,7 +40,7 @@ test("market identity is enforced at the HTTP boundary without relabeling live d
     });
 
     await t.test("rejects unsupported signup before creating a tenant", async () => {
-      const mobile = uniqueMobile();
+      const mobile = "+971501234567";
       const input = { shopName: "UAE Preview Only", ownerName: "Test Owner", city: "Dubai", address: "Preview Address", mobile, password: "Password123", countryCode: "AE", currencyCode: "AED" };
       assert.equal(assertFailure(await ctx.post("/api/auth/register", input), 409).code, "MARKET_NOT_LIVE");
       assert.equal(await ctx.db.shop.count({ where: { name: input.shopName } }), 0);

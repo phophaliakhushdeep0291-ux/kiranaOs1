@@ -7,7 +7,7 @@ import { requireFeature } from "../feature-gates/featureGate.middleware.js";
 import * as ctrl from "./integrations.controller.js";
 import * as svc from "./integrations.service.js";
 import restaurantMarketplaceRoutes from "./restaurant-marketplace/routes.js";
-import { createApiKeySchema, createWebhookSchema, updateWebhookSchema, integrationListQuerySchema, tallyExportQuerySchema, tallyPostedBodySchema, flipkartOrderSyncSchema } from "./integrations.schemas.js";
+import { createApiKeySchema, createWebhookSchema, updateWebhookSchema, integrationListQuerySchema, tallyExportQuerySchema, tallyPostedBodySchema, tallyCompanySchema, flipkartOrderSyncSchema } from "./integrations.schemas.js";
 
 const router = Router();
 
@@ -34,6 +34,8 @@ router.delete("/webhooks/:id", requireOwnerPin, ctrl.deleteEndpoint);
 router.post("/webhooks/:id/test", requireFeature("api_webhook_later"), requireOwnerPin, ctrl.testEndpoint);
 router.get("/deliveries", validateQuery(integrationListQuerySchema), ctrl.deliveries);
 router.post("/deliveries/:id/retry", requireFeature("api_webhook_later"), requireOwnerPin, ctrl.retryDelivery);
+router.get("/tally/connection", requireFeature("tally_export"), ctrl.tallyConnection);
+router.post("/tally/connection", requireFeature("tally_export"), validate(tallyCompanySchema), ctrl.tallyConnect);
 router.get("/exports/tally", requireFeature("tally_export"), validateQuery(tallyExportQuerySchema), ctrl.tally);
 router.get("/exports/tally/envelope", requireFeature("tally_export"), validateQuery(tallyExportQuerySchema), ctrl.tallyEnvelope);
 router.post("/exports/tally/push", requireFeature("tally_export"), requireOwnerPin, validateQuery(tallyExportQuerySchema), ctrl.tallyPush);
