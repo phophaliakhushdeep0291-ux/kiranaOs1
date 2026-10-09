@@ -1,3 +1,4 @@
+import { accountingMarketSnapshot, activeAccountingMarketSnapshot, assertAccountingMarketClaim } from "@/lib/accounting-market";
 import { offlineDB, type OfflineWriteTransaction } from "@/lib/offline/db";
 import { getOfflineScope } from "@/lib/offline/context";
 import { billCreationSchema, ownerPinRequiredActionSchema } from "@/lib/validation";
@@ -543,6 +544,7 @@ function buildLedgerEntry(billId: string, customerId: string, amount: number, bi
   const now = new Date().toISOString();
   const ledgerId = `ledger_${billId}_credit`;
   return makeLocalEntity({
+    ...accountingMarketSnapshot(bill),
     id: ledgerId,
     local_id: ledgerId,
     clientLedgerId: ledgerId,
@@ -608,7 +610,9 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   }
   // Estimates (kacha bills) are full sales in everything but their EST- number series: they
   // move stock, record tender, and can carry udhar exactly like a pakka bill.
-  const inputForCreation: BillInput = { ...input, locationId: input.locationId ?? getActiveLocationId() ?? undefined };
+  const marketSnapshot = activeAccountingMarketSnapshot();
+  assertAccountingMarketClaim(input, marketSnapshot);
+  const inputForCreation: BillInput = { ...input, ...marketSnapshot, locationId: input.locationId ?? getActiveLocationId() ?? undefined };
   const validated = parseOrThrow(billCreationSchema, inputForCreation) as BillInput;
   validateBillCreationBusinessRules(validated);
   const billLocationId = validated.locationId ?? getActiveLocationId() ?? "primary";
@@ -638,7 +642,7 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   // The open bill owns its identity, not each click of Save. Check and commit
   // under the same IndexedDB write transaction, including across browser tabs.
   const clientBillId = input.clientBillId?.trim();
-  const checkoutFingerprint = JSON.stringify({ ...validated, ownerPin: undefined, reason: undefined, sensitiveActions: undefined });
+  const checkoutFingerprint = JSON.stringify({ ...validated, countryCode: undefined, currencyCode: undefined, accountingTimeZone: undefined, taxRegime: undefined, ownerPin: undefined, reason: undefined, sensitiveActions: undefined });
   const committed = await offlineDB.transaction(BILL_CREATION_TRANSACTION_TABLES, async (tx) => {
     if (clientBillId) {
       // Through the v7 indexes: this check used to read the device's entire bill
@@ -655,6 +659,7 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
       const matches = direct.map((bill) => survivors.get(bill.merged_into_id as string) ?? bill);
       const existing = matches.find((bill) => isSyncedBillRecord(bill) && !bill.merged_into_id) ?? matches[0];
       if (existing) {
+        assertAccountingMarketClaim(marketSnapshot, accountingMarketSnapshot(existing));
         if (existing.status === "cancelled" || existing.deletedAt || (existing.deleted_at && !existing.merged_into_id)) {
           throw new Error("This receipt was cancelled or removed. Start a new bill instead of reusing it.");
         }
@@ -702,7 +707,7 @@ async function persistLocalBill(
     .filter((payment) => payment.mode !== BillPaymentMode.credit)
     .reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0)));
   const billItems = buildBillItems(billId, billData.items, calculatedAmounts.gstMode, calculatedAmounts.discount);
-  const billPayments = buildPayments(billId, billData.customerId, billData.payments);
+  const billPayments = buildPayments(billId, billData.customerId, billData.payments).map((payment) => ({ ...payment, ...accountingMarketSnapshot(billData) }));
   const saleMovements = buildSaleMovements(billId, billData.items, productsById);
   const updatedProducts = buildStockProjection(billData.items, productsById);
   // Carry the durable clientPaymentId into the sync payload so the server stores + echoes it.
@@ -710,6 +715,7 @@ async function persistLocalBill(
   // a fuzzy amount/time guess (which could collapse two distinct same-amount tenders).
   const tenderSources = billData.payments.filter((payment) => payment.mode !== BillPaymentMode.credit);
   const tenderPayments = billPayments.map((payment, index) => ({
+    ...accountingMarketSnapshot(payment),
     mode: payment.mode,
     amount: payment.amount,
     clientPaymentId: payment.id,
@@ -722,6 +728,7 @@ async function persistLocalBill(
   const dueAmount = roundMoney(Math.max(0, total - paid));
   const localBillNo = localBillNoForType(billData.billType, billId);
   const bill = makeLocalEntity(withBillAliases({
+    ...accountingMarketSnapshot(billData),
     id: billId,
     billNo: localBillNo,
     billNumber: localBillNo,

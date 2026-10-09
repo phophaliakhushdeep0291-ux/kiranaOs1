@@ -1,3 +1,4 @@
+import { accountingMarketSnapshot, assertAccountingMarketClaim, shopAccountingMarket } from "../shops/market-policy.js";
 import db from "../../db.js";
 import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
@@ -80,6 +81,7 @@ const BILL_ITEMS_WITH_OPTIONS = { include: { addons: true } };
 export const BILL_REPLICA_PAYMENT_SELECT = {
   select: {
     id: true, billId: true,
+    countryCode: true, currencyCode: true, accountingTimeZone: true, taxRegime: true,
     clientPaymentId: true, idempotencyKey: true,
     mode: true, amount: true, status: true, createdAt: true,
   },
@@ -131,6 +133,7 @@ const BILL_LIST_ITEM_SELECT = {
  */
 const BILL_LIST_VIEW_SELECT = {
   id: true, billNo: true, billType: true, status: true,
+  countryCode: true, currencyCode: true, accountingTimeZone: true, taxRegime: true,
   customerId: true, customerName: true,
   grandTotal: true, paidAmount: true, buyerPaidAmount: true, creditAmount: true,
   returnOfBillId: true, refundMode: true,
@@ -140,7 +143,7 @@ const BILL_LIST_VIEW_SELECT = {
   businessDate: true, createdAt: true, updatedAt: true,
   // `id` so paymentIdentityKeys() has something durable to key on; without it
   // two equal tenders on one bill fall through to a mode/amount signature.
-  payments: { select: { id: true, mode: true, amount: true } },
+  payments: { select: { id: true, mode: true, amount: true, countryCode: true, currencyCode: true, accountingTimeZone: true, taxRegime: true } },
   _count: { select: { items: true } },
 };
 
@@ -485,11 +488,17 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null, t
     const runTransaction = transactionContext ? (work) => work(transactionContext.tx) : (work) => serializableTransaction(work);
     const transactionResult = await runTransaction(async (tx) => {
     const existingBill = await findExistingBillByIdentity(tx, shopId, billIdentity);
-    if (existingBill) return { bill: existingBill, deliveries: [] };
+    if (existingBill) {
+      assertAccountingMarketClaim(body, accountingMarketSnapshot(existingBill));
+      return { bill: existingBill, deliveries: [] };
+    }
     const fulfilledStock = fulfilment ? await fulfilment.prepare(tx) : null;
     const location = await resolveOperationalLocation(shopId, operationalLocation.id, tx);
     const shop = await tx.shop.findUnique({ where: { id: shopId } });
     if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
+    const marketSnapshot = accountingMarketSnapshot(shop);
+    assertAccountingMarketClaim(body, marketSnapshot);
+    for (const payment of body.payments ?? []) assertAccountingMarketClaim(payment, marketSnapshot);
     const sellerIdentity = locationSellerIdentity(location, shop);
     if (billType === "gst_invoice" && !sellerIdentity.registrationValid) {
       throw new AppError("This location needs a valid GSTIN before issuing a GST invoice", 422, "SELLER_GSTIN_REQUIRED");
@@ -885,6 +894,7 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null, t
         const intent = intentId ? retailIntents.get(intentId) : null;
         return {
         shopId,
+        ...marketSnapshot,
         mode: payment.mode,
         amount: payment.amount,
         clientPaymentId: pickString(payment.clientPaymentId, payment.client_payment_id),
@@ -914,6 +924,7 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null, t
     const bill = await tx.bill.create({
       data: {
         shopId,
+        ...marketSnapshot,
         locationId: location.id,
         billNo,
         billType,
@@ -1039,6 +1050,7 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null, t
       await ensureLegacyUdharOpeningLedger(tx, shopId, customerId);
       const udharLedgerEntry = await tx.udharLedger.create({
         data: {
+          ...await shopAccountingMarket(tx, shopId),
           shopId,
           locationId: location.id,
           customerId,
@@ -1184,6 +1196,7 @@ export async function confirmBill(shopId, body, actor = {}, fulfilment = null, t
     if (isUniqueConstraintError(error) && hasBillIdentity(billIdentity)) {
       const existingBill = await findExistingBillByIdentity(db, shopId, billIdentity);
       if (!existingBill) throw error;
+      assertAccountingMarketClaim(body, accountingMarketSnapshot(existingBill));
       bill = existingBill;
     } else {
       throw error;
@@ -1295,6 +1308,7 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
       if (customer) {
         await tx.udharLedger.create({
           data: {
+            ...await shopAccountingMarket(tx, shopId),
             shopId,
             locationId: location.id,
             customerId: bill.customerId,
@@ -1408,7 +1422,10 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
       : (work) => serializableTransaction(work);
     const transactionResult = await runTransaction(async (tx) => {
       const existing = await findExistingBillByIdentity(tx, shopId, billIdentity);
-      if (existing) return { bill: existing, deliveries: [] };
+      if (existing) {
+        assertAccountingMarketClaim(body, accountingMarketSnapshot(existing));
+        return { bill: existing, deliveries: [] };
+      }
 
       // Optional link to the original sale (bill-linked returns).
       const original = returnOfBillId
@@ -1436,6 +1453,9 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
       );
       const shop = await tx.shop.findUnique({ where: { id: shopId } });
       if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
+      const marketSnapshot = accountingMarketSnapshot(original ?? shop);
+      assertAccountingMarketClaim(body, marketSnapshot);
+      assertAccountingMarketClaim(marketSnapshot, accountingMarketSnapshot(shop));
       const sellerIdentity = original ? billSellerIdentity(original, shop) : locationSellerIdentity(location, shop);
 
       // A return against an estimate must not post GST: the original kacha bill never entered
@@ -1728,6 +1748,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
       const paymentRows = isCashLike
         ? [{
             shopId,
+            ...marketSnapshot,
             mode: normalizedRefundMode,
             amount: -refundAmount,
             idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `refund:${normalizedRefundMode}`),
@@ -1753,6 +1774,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
       const returnBill = await tx.bill.create({
         data: {
           shopId,
+          ...marketSnapshot,
           locationId: location.id,
           billNo,
           billType: "sales_return",
@@ -1882,6 +1904,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
         if (!customer) throw new AppError("Customer not found", 404);
         await tx.udharLedger.create({
           data: {
+            ...await shopAccountingMarket(tx, shopId),
             shopId,
             locationId: location.id,
             customerId: resolvedCustomerId,
@@ -1967,6 +1990,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
     if (isUniqueConstraintError(error) && hasBillIdentity(billIdentity)) {
       const existingBill = await findExistingBillByIdentity(db, shopId, billIdentity);
       if (!existingBill) throw error;
+      assertAccountingMarketClaim(body, accountingMarketSnapshot(existingBill));
       bill = existingBill;
     } else {
       throw error;
@@ -2073,6 +2097,7 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
 
       await tx.udharLedger.create({
         data: {
+          ...await shopAccountingMarket(tx, shopId),
           shopId,
           locationId: location.id,
           customerId: bill.customerId,

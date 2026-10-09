@@ -23,6 +23,7 @@ export const settingsMenu = (t: Translate): SettingsMenuItem[] => [
   { id: "staff", label: t("settings.hub.staffPermissions"), href: "/settings/staff", icon: UsersRound },
   { id: "devices", label: t("settings.hub.deviceManagement"), href: "/settings/devices", icon: MonitorSmartphone },
   { id: "printer", label: t("settings.hub.printerBilling"), href: "/settings/printer", icon: Printer },
+  { id: "uae-pilot", label: t("settings.market.title"), href: "/settings/uae-pilot", icon: Receipt },
   { id: "taxes", label: t("settings.hub.taxesGst"), href: "/settings/taxes", icon: Receipt },
   { id: "sync", label: t("settings.hub.syncBackup"), href: "/settings/sync", icon: Cloud },
   { id: "security", label: t("settings.hub.securityPin"), href: "/settings/security", icon: Shield },

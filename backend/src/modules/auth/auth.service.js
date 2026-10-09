@@ -1,3 +1,5 @@
+import { assertUaeRegistration, normalizeUaeMobile } from "../shops/market-policy.js";
+import { assertLiveMarket, accountingMarketSnapshot, settingsWithMarketPolicy } from "../shops/market-policy.js";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import db from "../../db.js";
@@ -96,11 +98,14 @@ async function findReplayedRegistration({ shopName, mobile, password }) {
   return null;
 }
 
-export async function registerShop({ shopName, ownerName, city, address, mobile, email, password, ownerPin, gstNumber, phone, businessType }, reqMeta = {}) {
+export async function registerShop({ shopName, ownerName, city, address, mobile, email, password, ownerPin, gstNumber, phone, businessType, countryCode, currencyCode, vatRegistered = false, taxRegistrationNumber }, reqMeta = {}) {
+  assertLiveMarket(countryCode, currencyCode);
+  assertUaeRegistration({ countryCode, vatRegistered, taxRegistrationNumber });
+  if (countryCode === "AE" && businessType !== "kirana") throw new AppError("The UAE pilot supports retail only", 422, "UAE_RETAIL_ONLY");
   assertBusinessTypeOffered(businessType);
 
   const replayed = await findReplayedRegistration({ shopName, mobile, password });
-  if (replayed) {
+  if (replayed && accountingMarketSnapshot(replayed.shop).countryCode === (countryCode ?? "IN")) {
     // Same registration, second delivery. Hand back the shop that already exists
     // rather than opening another, and issue a fresh session so the caller is
     // signed in exactly as a first delivery would have left them.
@@ -117,6 +122,8 @@ export async function registerShop({ shopName, ownerName, city, address, mobile,
   const result = await db.$transaction(async (tx) => {
     const shop = await tx.shop.create({
       data: {
+        ...accountingMarketSnapshot({ countryCode, currencyCode }),
+        vatRegistered, taxRegistrationNumber,
         name: shopName,
         ownerName,
         city,
@@ -127,7 +134,7 @@ export async function registerShop({ shopName, ownerName, city, address, mobile,
         // with its owner's — otherwise every new shop prints bills with no contact
         // on them and the setup checklist demands a field signup already collected.
         phone: phone || mobile,
-        settingsJson: JSON.stringify(settingsForBusinessType(businessType)),
+        settingsJson: JSON.stringify(settingsWithMarketPolicy(settingsForBusinessType(businessType), {}, { countryCode, currencyCode })),
       },
     });
     const user = await tx.user.create({
@@ -998,6 +1005,8 @@ function normalizeLoginIdentifier({ mobile, email, identifier }) {
   if (typeof identifier !== "string" || !identifier.trim()) return null;
   const raw = identifier.trim();
   if (raw.includes("@")) return { kind: "email", value: raw.toLowerCase() };
+  const uaeMobile = normalizeUaeMobile(raw);
+  if (uaeMobile) return { kind: "mobile", value: uaeMobile };
   const normalizedMobile = raw.replace(/[\s\-()]/g, "").replace(/^\+91/, "").replace(/^91(?=\d{10}$)/, "");
   if (/^[6-9]\d{9}$/.test(normalizedMobile)) return { kind: "mobile", value: normalizedMobile };
   return null;

@@ -1,4 +1,4 @@
-import { useDataExport } from "@/features/core/reports/DataExportProvider";
+import { TallyConnectionCard } from "@/features/core/settings/TallyConnectionCard";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { useMemo, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,8 +13,6 @@ import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { useToast } from "@/hooks/use-toast";
 import { SettingsShell } from "@/features/core/settings/SettingsShell";
 import { Badge, Card, CardHead, Fld, Kpi, type Tone } from "@/features/core/settings/ui";
-import { loadPrinterConfig } from "@/features/core/settings/printer-config";
-import { postTallyViaHardwareBridge, type TallyPostResult } from "@/features/core/hardware/local-hardware-bridge";
 import type { ReactNode } from "react";
 import { PaymentProviderConnectionsCard } from "@/features/core/settings/PaymentProviderConnectionsCard";
 import { RestaurantMarketplaceConnectionsCard } from "@/features/core/settings/RestaurantMarketplaceConnectionsCard";
@@ -27,7 +25,6 @@ type Overview = { maturityScore: number; activeKeys: number; activeWebhooks: num
 type ApiKeyRow = { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; expiresAt: string | null; revokedAt: string | null; createdAt: string };
 type WebhookRow = { id: string; name: string; url: string; events: string[]; enabled: boolean; lastSuccessAt: string | null; lastFailureAt: string | null; lastError: string | null; createdAt: string; _count: { deliveries: number } };
 type NewSecret = { title: string; value: string; note: string };
-type TallyDocument = { type: string; id: string; voucherNumber: string; remoteId: string };
 type FlipkartStatus = { enabled: boolean; configured: boolean; boundToCurrentShop: boolean; officialDocuments: boolean; orderSyncConfigured: boolean; mappedLocations: number };
 type FlipkartSyncIssue = { shipmentId: string; code: string; locationId?: string | null; missingSkus?: string[]; ambiguousSkus?: string[]; invalidSkus?: string[] };
 type FlipkartSyncResult = { fetched: number; created: number; updated: number; unchanged: number; skipped: number; truncated: boolean; issues: FlipkartSyncIssue[]; omittedIssueCount: number };
@@ -37,17 +34,6 @@ const apiScopes = (t: Translate) => [
   { id: "catalog:read", label: t("settings.integrations.scope.catalog"), detail: t("settings.integrations.scope.catalogHelp") },
   { id: "customers:read", label: t("settings.integrations.scope.customers"), detail: t("settings.integrations.scope.customersHelp") },
   { id: "bills:read", label: t("settings.integrations.scope.bills"), detail: t("settings.integrations.scope.billsHelp") },
-];
-
-// Exporting sales alone leaves the accountant re-keying every purchase and
-// collection, so all five are on by default and narrowing is deliberate.
-const tallyBooks = (t: Translate) => [
-  { id: "sales", label: t("settings.integrations.book.sales"), detail: t("settings.integrations.book.salesHelp") },
-  { id: "purchases", label: t("settings.integrations.book.purchases"), detail: t("settings.integrations.book.purchasesHelp") },
-  { id: "returns", label: t("settings.integrations.book.returns"), detail: t("settings.integrations.book.returnsHelp") },
-  { id: "receipts", label: t("settings.integrations.book.receipts"), detail: t("settings.integrations.book.receiptsHelp") },
-  { id: "expenses", label: t("settings.integrations.book.expenses"), detail: t("settings.integrations.book.expensesHelp") },
-  { id: "production", label: t("settings.integrations.book.production"), detail: t("settings.integrations.book.productionHelp") },
 ];
 
 const providerStatus = (t: Translate): Record<ProviderStatus, { label: string; tone: Tone }> => ({
@@ -79,23 +65,11 @@ function flipkartIssueText(t: Translate, issue: FlipkartSyncIssue) {
   return t("settings.integrations.flipkartIssueOther", { code: issue.code });
 }
 
-function downloadText(filename: string, value: string, type: string) {
-  const url = URL.createObjectURL(new Blob([value], { type }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
 function isKeyExpired(key: ApiKeyRow) {
   return Boolean(key.expiresAt && new Date(key.expiresAt).getTime() <= Date.now());
 }
 
 export default function IntegrationsSettingsPage() {
-  const requestExport = useDataExport();
   const { t } = useAppLanguage();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -111,10 +85,6 @@ export default function IntegrationsSettingsPage() {
   const [approvalError, setApprovalError] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
   const [secret, setSecret] = useState<NewSecret | null>(null);
-  const [from, setFrom] = useState(() => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
-  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
-  const [tallyInventory, setTallyInventory] = useState(false);
-  const [tallyDocs, setTallyDocs] = useState<string[]>(tallyBooks(t).map((document) => document.id));
   const [flipkartFrom, setFlipkartFrom] = useState(() => new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10));
   const [flipkartTo, setFlipkartTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [flipkartResult, setFlipkartResult] = useState<FlipkartSyncResult | null>(null);
@@ -130,42 +100,6 @@ export default function IntegrationsSettingsPage() {
     getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.nextCursor : undefined,
     retry: 1,
   });
-  const tallyM = useMutation({
-    mutationFn: () => apiRequest<string>(`/integrations/exports/tally?from=${from}&to=${to}&inventory=${tallyInventory ? "1" : "0"}&include=${tallyDocs.join(",")}`),
-    onSuccess: (xml) => { downloadText(`artha-tally-${from}-${to}.xml`, xml, "application/xml;charset=utf-8"); toast({ title: t("settings.integrations.tallyDownloaded"), description: t("settings.integrations.tallyDownloadedHelp") }); },
-    onError: (error) => toast({ title: t("settings.integrations.exportFailed"), description: errorMessage(t, error), variant: "destructive" }),
-  });
-
-  /**
-   * Send straight into the TallyPrime running on this counter.
-   *
-   * The order matters and is not interchangeable: ask only for what has not
-   * been sent, let Tally accept it, and only then record it as sent. Recording
-   * first would lose vouchers Tally never received; the way round it is, a
-   * crash in between costs a re-send that Tally recognises by REMOTEID.
-   */
-  const tallyPushM = useMutation({
-    mutationFn: async () => {
-      const printer = await loadPrinterConfig();
-      const envelope = await apiRequest<{ xml: string; count: number; skipped: number; documents: TallyDocument[] }>(
-        `/integrations/exports/tally/envelope?from=${from}&to=${to}&inventory=${tallyInventory ? "1" : "0"}&include=${tallyDocs.join(",")}&unsent=1`,
-      );
-      if (envelope.count === 0) return { sent: 0, skipped: envelope.skipped, result: null as TallyPostResult | null };
-      const result = await postTallyViaHardwareBridge(printer.bridgeUrl, envelope.xml);
-      await apiRequest("/integrations/exports/tally/posted", { method: "POST", body: JSON.stringify({ documents: envelope.documents }) });
-      return { sent: envelope.count, skipped: envelope.skipped, result };
-    },
-    onSuccess: ({ sent, skipped, result }) => {
-      if (sent === 0) {
-        toast({ title: t("settings.integrations.tallyUpToDate"), description: skipped > 0 ? `${skipped} voucher${skipped === 1 ? "" : "s"} in this range had already been sent.` : "Nothing new in this date range." });
-        return;
-      }
-      const already = skipped > 0 ? ` ${skipped} already sent, skipped.` : "";
-      toast({ title: `Sent ${sent} voucher${sent === 1 ? "" : "s"} to Tally`, description: `Tally created ${result?.created ?? 0} and updated ${result?.altered ?? 0}.${already}` });
-    },
-    onError: (error) => toast({ title: t("settings.integrations.tallySendFailed"), description: errorMessage(t, error), variant: "destructive" }),
-  });
-
   const overview = overviewQ.data;
   const developerPlanEnabled = Boolean(overview) && overview?.providers.find((provider) => provider.id === "api")?.status !== "upgrade_required";
   const tallyPlanEnabled = Boolean(overview) && overview?.providers.find((provider) => provider.id === "tally")?.status !== "upgrade_required";
@@ -317,10 +251,7 @@ export default function IntegrationsSettingsPage() {
           </div>
         </Card>
 
-        <Card>
-          <CardHead icon={<Download size={15} />} title={t("settings.integrations.tallyTitle")} sub={t("settings.integrations.tallySub")} action={<Badge tone={tallyPlanEnabled ? "green" : "amber"}>{tallyPlanEnabled ? t("settings.integrations.tallyOperational") : t("settings.integrations.tallyProPlan")}</Badge>} />
-          <div className="space-y-4 px-5 pb-5"><div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-xs leading-5 text-emerald-900"><div className="flex items-start gap-2"><ShieldCheck size={15} className="mt-0.5 shrink-0" /><p>{tallyPlanEnabled ? t("settings.integrations.tallyReady") : t("settings.integrations.tallyLocked")}</p></div></div><div className="grid grid-cols-2 gap-3"><Fld label={t("inventory.transfers.from")}><Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></Fld><Fld label={t("settings.integrations.dateTo")}><Input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></Fld></div><div><p className="mb-1.5 text-[12px] font-semibold text-[#45577a]">{t("settings.integrations.booksToExport")}</p><div className="grid gap-2 sm:grid-cols-2">{tallyBooks(t).map((document) => <label key={document.id} className="flex cursor-pointer items-start gap-2 rounded-lg border border-[#e4ebf6] p-2.5"><Checkbox checked={tallyDocs.includes(document.id)} disabled={!tallyPlanEnabled} onCheckedChange={(checked) => setTallyDocs((current) => checked ? [...new Set([...current, document.id])] : current.filter((item) => item !== document.id))} /><span><span className="block text-xs font-bold text-[var(--brand-ink)]">{document.label}</span><span className="block text-[11px] leading-4 text-[#64748b]">{document.detail}</span></span></label>)}</div></div><label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#e4ebf6] p-3"><Checkbox checked={tallyInventory} onCheckedChange={(checked) => setTallyInventory(checked === true)} disabled={!tallyPlanEnabled || !tallyDocs.includes("sales")} /><span><span className="block text-sm font-bold text-[var(--brand-ink)]">{t("settings.integrations.includeStock")}</span><span className="block text-xs leading-5 text-[#64748b]">{t("settings.integrations.includeStockHelp")}</span></span></label><div className="grid gap-2 sm:grid-cols-2"><Button className="w-full gap-2" disabled={!tallyPlanEnabled || tallyPushM.isPending || tallyM.isPending || !from || !to || from > to || tallyDocs.length === 0} onClick={() => tallyPushM.mutate()}>{tallyPushM.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} {tallyPushM.isPending ? t("settings.integrations.sendingToTally") : t("settings.integrations.sendToTally")}</Button><Button variant="outline" className="w-full gap-2" disabled={!tallyPlanEnabled || tallyM.isPending || tallyPushM.isPending || !from || !to || from > to || tallyDocs.length === 0} onClick={() => requestExport({ reportType: "tally", format: "xml", from, to }, () => tallyM.mutateAsync())}>{tallyM.isPending ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} {tallyPlanEnabled ? t("settings.integrations.downloadXml") : t("settings.integrations.upgradeToExport")}</Button></div><p className="text-[11px] leading-4 text-[#64748b]">{t("settings.integrations.sendVsDownload")}</p><a className="inline-flex items-center gap-1 text-xs font-bold text-[var(--brand)] hover:underline" href="https://help.tallysolutions.com/import-data-in-tallyprime/" target="_blank" rel="noreferrer">{t("settings.integrations.tallyInstructions")} <ExternalLink size={12} /></a></div>
-        </Card>
+        <TallyConnectionCard enabled={tallyPlanEnabled} />
       </div>
 
       <Card>

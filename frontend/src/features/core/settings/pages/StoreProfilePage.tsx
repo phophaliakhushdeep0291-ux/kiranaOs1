@@ -132,11 +132,11 @@ export default function StoreProfilePage() {
       businessTypeKey: isBusinessType(sp.businessTypeKey)
         ? sp.businessTypeKey
         : businessTypeFromLabel(sp.businessType) ?? getStoredBusinessType(),
-      currency: sp.currency ?? "₹ Indian Rupee",
+      currency: "Indian Rupee (INR)",
     });
     setAddr({
       address: shop.address ?? "", city: shop.city ?? "", state: sp.state ?? "",
-      pincode: sp.pincode ?? "", country: sp.country ?? "India", deliveryRadius: sp.deliveryRadius ?? "",
+      pincode: sp.pincode ?? "", country: "India", deliveryRadius: sp.deliveryRadius ?? "",
     });
   }, [hydrated, shop, sp, user?.email]);
 
@@ -372,7 +372,7 @@ export default function StoreProfilePage() {
               <Fld label={t("inventory.transfers.city")}><Input className="h-10" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} /></Fld>
               <Fld label={t("settings.store.state")}><Input className="h-10" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} /></Fld>
               <Fld label={t("settings.store.pincode")}><Input className="h-10" value={addr.pincode} onChange={(e) => setAddr({ ...addr, pincode: e.target.value })} /></Fld>
-              <Fld label={t("settings.store.country")}><Input className="h-10" value={addr.country} onChange={(e) => setAddr({ ...addr, country: e.target.value })} /></Fld>
+              <Fld label={t("settings.store.country")} hint={t("settings.market.locked")}><Input className="h-10" value={addr.country} readOnly /></Fld>
             </div>
             <div className="flex flex-col gap-3 rounded-[10px] border border-[var(--brand-border)] bg-[#f3f8ff] px-3 py-3 sm:flex-row sm:items-center">
               <span className="grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--brand)] shadow-sm"><MapPin size={16} /></span>

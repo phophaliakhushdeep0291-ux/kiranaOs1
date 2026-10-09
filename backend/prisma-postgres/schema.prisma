@@ -31,6 +31,16 @@ datasource db {
 // SHOP — top-level tenant. All data is shopId-scoped.
 // ─────────────────────────────────────────────
 model Shop {
+  tallyCompanyGuid String?
+  tallyCompanyName String?
+
+  vatRegistered Boolean @default(false)
+  taxRegistrationNumber String?
+  // Accounting identity is captured by the server; never inferred from profile labels.
+  countryCode        String @default("IN")
+  currencyCode       String @default("INR")
+  accountingTimeZone String @default("Asia/Kolkata")
+  taxRegime          String @default("GST")
   id           String   @id @default(cuid())
   name         String
   ownerName    String
@@ -511,6 +521,7 @@ model Session {
 // stockBaseQty is always in baseUnit
 // ─────────────────────────────────────────────
 model Product {
+  taxCategory String?
   id                           String    @id @default(cuid())
   shopId                       String
   name                         String
@@ -644,6 +655,7 @@ model Product {
 // Matching is by mobile number, not name
 // ─────────────────────────────────────────────
 model Customer {
+  taxRegistrationNumber String?
   id                    String    @id @default(cuid())
   shopId                String
   name                  String
@@ -680,6 +692,14 @@ model Customer {
 // BILL
 // ─────────────────────────────────────────────
 model Bill {
+  sellerTaxRegistrationNumber String?
+  buyerTaxRegistrationNumber String?
+  taxDocumentType String?
+  // Accounting identity is captured by the server; never inferred from profile labels.
+  countryCode        String @default("IN")
+  currencyCode       String @default("INR")
+  accountingTimeZone String @default("Asia/Kolkata")
+  taxRegime          String @default("GST")
   id                        String    @id @default(cuid())
   shopId                    String
   locationId                String?
@@ -777,6 +797,7 @@ model Bill {
 // BILL ITEM — line items inside a bill
 // ─────────────────────────────────────────────
 model BillItem {
+  taxCategory String?
   id                        String  @id @default(cuid())
   billId                    String
   trackedUnitId             String?
@@ -832,6 +853,10 @@ model BillItem {
 // PAYMENT — one bill can have multiple payment modes
 // ─────────────────────────────────────────────
 model Payment {
+  countryCode        String @default("IN")
+  currencyCode       String @default("INR")
+  accountingTimeZone String @default("Asia/Kolkata")
+  taxRegime          String @default("GST")
   id                    String    @id @default(cuid())
   shopId                String?
   billId                String
@@ -1439,6 +1464,10 @@ model StockLedger {
 // UDHAR LEDGER — every udhar/payment event
 // ─────────────────────────────────────────────
 model UdharLedger {
+  countryCode        String @default("IN")
+  currencyCode       String @default("INR")
+  accountingTimeZone String @default("Asia/Kolkata")
+  taxRegime          String @default("GST")
   id                 String    @id @default(cuid())
   shopId             String
   locationId         String?
@@ -2475,6 +2504,10 @@ model ChangeLog {
 }
 
 model FinancialLedger {
+  countryCode        String @default("IN")
+  currencyCode       String @default("INR")
+  accountingTimeZone String @default("Asia/Kolkata")
+  taxRegime          String @default("GST")
   id             String   @id @default(cuid())
   shopId         String
   customerId     String?
@@ -2527,6 +2560,10 @@ model ChartOfAccount {
 }
 
 model JournalEntry {
+  countryCode        String @default("IN")
+  currencyCode       String @default("INR")
+  accountingTimeZone String @default("Asia/Kolkata")
+  taxRegime          String @default("GST")
   id           String   @id @default(cuid())
   shopId       String
   sourceType   String

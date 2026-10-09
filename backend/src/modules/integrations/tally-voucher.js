@@ -152,6 +152,7 @@ function voucherXml({ type, view = "Accounting Voucher View", date, number, refe
   return (
     `<TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER${remoteId ? ` REMOTEID="${xmlEscape(remoteId)}"` : ""} VCHTYPE="${type}" ACTION="Create" OBJVIEW="${view}">` +
     `<DATE>${date}</DATE><EFFECTIVEDATE>${date}</EFFECTIVEDATE>` +
+    (remoteId ? `<GUID>${xmlEscape(remoteId)}</GUID>` : "") +
     `<VOUCHERTYPENAME>${type}</VOUCHERTYPENAME>` +
     `<VOUCHERNUMBER>${xmlEscape(number)}</VOUCHERNUMBER>` +
     (reference ? `<REFERENCE>${xmlEscape(reference)}</REFERENCE>` : "") +
@@ -247,14 +248,26 @@ function netLineValue(item, gstMode) {
   return round2(gross / (1 + rate / 100));
 }
 
+function stockQuantity(value) {
+  // Quantities use the unit master's three decimal places, not money's two.
+  // Refuse finer quantities instead of changing the stock movement silently.
+  const rounded = Number(value.toFixed(3));
+  if (!Number.isFinite(value) || Math.abs(value - rounded) > 1e-9 || (value !== 0 && rounded === 0)) {
+    throw Object.assign(new Error("A stock quantity needs more precision than the exported unit supports. Use accounts-only export for sales, or reconcile the stock unit before exporting production."), {
+      statusCode: 422, code: "TALLY_QUANTITY_PRECISION",
+    });
+  }
+  return rounded;
+}
+
 function inventoryEntry(item, sign, gstMode) {
   const name = String(item.name || "").trim() || "Unnamed item";
   const { qty, unit } = billedQuantity(item);
   const net = netLineValue(item, gstMode);
   const value = round2(net * sign);
-  const signedQty = round2(qty * sign);
+  const signedQty = stockQuantity(qty * sign);
   const quantityText = unit ? `${signedQty} ${unit}` : String(signedQty);
-  const rate = isZero(qty) ? "" : `<RATE>${Math.abs(round2(net / qty)).toFixed(2)}${unit ? `/${xmlEscape(unit)}` : ""}</RATE>`;
+  const rate = qty === 0 ? "" : `<RATE>${Math.abs(round2(net / qty)).toFixed(2)}${unit ? `/${xmlEscape(unit)}` : ""}</RATE>`;
   const deemed = value < 0 ? "Yes" : "No";
   return `<ALLINVENTORYENTRIES.LIST><STOCKITEMNAME>${xmlEscape(name)}</STOCKITEMNAME><ISDEEMEDPOSITIVE>${deemed}</ISDEEMEDPOSITIVE>${rate}<ACTUALQTY>${xmlEscape(quantityText)}</ACTUALQTY><BILLEDQTY>${xmlEscape(quantityText)}</BILLEDQTY><AMOUNT>${value.toFixed(2)}</AMOUNT><ACCOUNTINGALLOCATIONS.LIST><LEDGERNAME>${LEDGER_SALES}</LEDGERNAME><ISDEEMEDPOSITIVE>${deemed}</ISDEEMEDPOSITIVE><AMOUNT>${value.toFixed(2)}</AMOUNT></ACCOUNTINGALLOCATIONS.LIST></ALLINVENTORYENTRIES.LIST>`;
 }
@@ -565,7 +578,7 @@ function buildPaymentVoucher(expense, { timeZone, shopId }) {
 function stockJournalEntry(row, sign) {
   const name = String(row.productName || row.productId || "Unnamed item").trim();
   const unit = String(row.baseUnit || "piece").trim();
-  const qty = round2((Number(row.actualBaseQty ?? row.quantityBaseQty) || 0) * sign);
+  const qty = stockQuantity((Number(row.actualBaseQty ?? row.quantityBaseQty) || 0) * sign);
   const amount = round2((Number(row.stockValue) || 0) * sign);
   return `<ALLINVENTORYENTRIES.LIST><STOCKITEMNAME>${xmlEscape(name)}</STOCKITEMNAME><ISDEEMEDPOSITIVE>${sign < 0 ? "Yes" : "No"}</ISDEEMEDPOSITIVE><ACTUALQTY>${xmlEscape(`${qty} ${unit}`)}</ACTUALQTY><BILLEDQTY>${xmlEscape(`${qty} ${unit}`)}</BILLEDQTY><AMOUNT>${amount.toFixed(2)}</AMOUNT></ALLINVENTORYENTRIES.LIST>`;
 }
@@ -662,7 +675,12 @@ export function buildTallyEnvelope({
     // Tally already has Cash; re-creating it is a duplicate-master error.
     .filter((master) => !(master.kind === "ledger" && master.name === LEDGER_CASH));
 
+  const envelope = (report, content) => '<?xml version="1.0" encoding="UTF-8"?><ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA>'
+    + `<REQUESTDESC><REPORTNAME>${report}</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>${xmlEscape(companyName)}</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC>`
+    + `<REQUESTDATA>${content}</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>`;
   return {
+    mastersXml: envelope("All Masters", masters.map(renderMaster).join("")),
+    vouchersXml: envelope("Vouchers", built.map((entry) => entry.voucher).join("")),
     xml:
       '<?xml version="1.0" encoding="UTF-8"?>' +
       "<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA>" +

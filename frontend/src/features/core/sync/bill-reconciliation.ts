@@ -235,6 +235,11 @@ function billItemSignature(bill: Record<string, unknown>): string | undefined {
     .join(";");
 }
 
+function billCurrency(bill: Record<string, unknown>): string {
+  // Bills created before market snapshots were introduced are INR.
+  return getStringFrom(bill, ["currencyCode", "currency_code"]) ?? "INR";
+}
+
 function billContentSignature(bill: Record<string, unknown>): string | undefined {
   const total = getBillTotalForSignature(bill);
   const createdBucket = getBillCreatedBucket(bill);
@@ -244,7 +249,7 @@ function billContentSignature(bill: Record<string, unknown>): string | undefined
     getStringFrom(bill, ["customerId", "customer_id", "customerName", "customer_name", "customerMobile", "customer_mobile"]),
   );
   const billType = normalizeBillSignatureText(getStringFrom(bill, ["billType", "bill_type"]));
-  return [createdBucket, billType, customer, total, items].join("|");
+  return [billCurrency(bill), createdBucket, billType, customer, total, items].join("|");
 }
 
 function sameOptionalScope(left: Record<string, unknown>, right: Record<string, unknown>, key: string): boolean {
@@ -299,6 +304,7 @@ export function isLikelySyncedCopyOfPendingBill(
   if (isBillSynced(pendingBill) || !isBillSynced(syncedBill)) return false;
   if (!sameOptionalScope(pendingBill, syncedBill, "tenant_id")) return false;
   if (!sameOptionalScope(pendingBill, syncedBill, "store_id")) return false;
+  if (billCurrency(pendingBill) !== billCurrency(syncedBill)) return false;
 
   const pendingTotal = getNumberFrom(pendingBill, ["grandTotal", "grand_total", "totalAmount", "total_amount", "netAmount", "net_amount"]);
   const syncedTotal = getNumberFrom(syncedBill, ["grandTotal", "grand_total", "totalAmount", "total_amount", "netAmount", "net_amount"]);

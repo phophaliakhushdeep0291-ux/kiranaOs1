@@ -99,6 +99,19 @@ describe("sale return local-first", () => {
     seed();
   });
 
+  it("carries the accounting snapshot onto a return and its outbox", async () => {
+    const result = await createSaleReturnLocalFirst({ items: [{ productId: "product_sugar", name: "Sugar", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 25 }], refundMode: "cash", ownerPin: "4321" });
+    const expected = { countryCode: "IN", currencyCode: "INR", accountingTimeZone: "Asia/Kolkata", taxRegime: "GST" };
+    expect(result).toMatchObject(expected);
+    expect(rows("sync_outbox").find((row) => row.operation_type === "CREATE_SALE_RETURN")?.payload).toMatchObject(expected);
+  });
+
+  it("rejects another currency before stock, tender or ledger changes", async () => {
+    const before = JSON.stringify(dbState.committed);
+    await expect(createSaleReturnLocalFirst({ currencyCode: "AED", items: [{ productId: "product_sugar", name: "Sugar", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 25 }], refundMode: "cash", ownerPin: "4321" })).rejects.toMatchObject({ code: "ACCOUNTING_MARKET_MISMATCH" });
+    expect(JSON.stringify(dbState.committed)).toBe(before);
+  });
+
   it("refunds an untracked dish without projecting a stock return", async () => {
     dbState.instant.products = [{ id: "dish", name: "Dal Fry", stockBaseQty: -12, stockTrackingEnabled: false, defaultPricePerRateUnit: 100 }];
     const returned = await createSaleReturnLocalFirst({

@@ -46,6 +46,10 @@ export const updateCustomerSchema = withGstIdentityValidation(z.object(customerF
 }));
 
 export const udharPaymentSchema = z.object({
+  countryCode: z.string().max(2).optional(),
+  currencyCode: z.string().max(3).optional(),
+  accountingTimeZone: z.string().max(64).optional(),
+  taxRegime: z.string().max(16).optional(),
   locationId: z.string().min(1).optional(),
   amount: moneyAmount({ positive: true }),
   mode: z.enum(["cash", "upi", "bank"]),

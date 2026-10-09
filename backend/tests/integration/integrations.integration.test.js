@@ -1,3 +1,4 @@
+import { connectTally, tallyManifestSignature } from "../../src/modules/integrations/tally-connection.service.js";
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
@@ -95,6 +96,8 @@ if (ctx.skip) {
 
     test("integration credentials, endpoints, retry requests, and Tally confirmations roll back with required audit", async () => {
       const { tenant, auth } = await ownerContext();
+      await connectTally(tenant.shop.id, { guid: "test-audit-company", name: "Audit Books", currencyCode: "INR" });
+      const tallyDocuments = [{ type: "sale", id: "bill-audit-rollback", voucherNumber: "INV-ROLLBACK", remoteId: "artha-sale-audit-rollback" }];
       const key = assertSuccess(await ctx.post("/api/integrations/api-keys", {
         name: "Rollback key",
         scopes: ["catalog:read"],
@@ -186,7 +189,7 @@ if (ctx.skip) {
         assert.equal(archiveRolledBack.enabled, true);
 
         assertFailure(await ctx.post("/api/integrations/exports/tally/posted", {
-          documents: [{ type: "sale", id: "bill-audit-rollback", voucherNumber: "INV-ROLLBACK", remoteId: "artha-sale-audit-rollback" }],
+          documents: tallyDocuments, companyGuid: "test-audit-company", signature: tallyManifestSignature(tenant.shop.id, "test-audit-company", tallyDocuments),
         }, { token: auth.accessToken }), 503);
         assert.equal(await ctx.db.tallyPost.count({ where: { shopId: tenant.shop.id, documentId: "bill-audit-rollback" } }), 0);
       } finally {

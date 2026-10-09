@@ -1,3 +1,5 @@
+import type { CurrencyCode } from "./market";
+
 /**
  * The single money-rounding helper for the whole frontend.
  *
@@ -63,7 +65,7 @@ export function applyRoundOff(rawTotal: unknown, enabled: boolean): { payable: n
 /**
  * Building an Intl.NumberFormat costs orders of magnitude more than using one,
  * and formatMoney runs per money value per render — a cart plus its totals is
- * hundreds of calls. Only two shapes exist, so they are built once here.
+ * hundreds of calls. Cache the supported currency/fraction shapes once here.
  */
 const RUPEE_FORMAT = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -79,8 +81,15 @@ const RUPEE_PAISE_FORMAT = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
-export function formatMoney(value: unknown): string {
+const AED_FORMAT = new Intl.NumberFormat("en-AE", {
+  style: "currency", currency: "AED", currencyDisplay: "code",
+  minimumFractionDigits: 2, maximumFractionDigits: 2,
+});
+
+export function formatMoney(value: unknown, currency: CurrencyCode = "INR"): string {
+  if (currency !== "INR" && currency !== "AED") throw new Error("UNSUPPORTED_CURRENCY");
   const rounded = roundMoney(Number(value));
+  if (currency === "AED") return AED_FORMAT.format(rounded);
   const hasPaise = Math.abs(toPaise(rounded)) % 100 !== 0;
   return (hasPaise ? RUPEE_PAISE_FORMAT : RUPEE_FORMAT).format(rounded);
 }

@@ -6,6 +6,10 @@
 // so the two sets cannot collide — every English key must live in exactly one
 // registered module.
 export const settingsPagesEn = {
+  "settings.market.title": "UAE pilot preview",
+  "settings.market.locked": "Country and currency belong to the shop ledger. Existing balances cannot be converted here.",
+  "settings.market.open": "Explore the UAE pilot",
+
   "settings.taxRecon.title": "Purchase / GSTR-2B comparison",
   "settings.taxRecon.intro": "Compare invoice-level books and statement data prepared by you or your accountant. Files are processed on this app’s server; this comparison is not saved.",
   "settings.taxRecon.format": "Use the JSON template, not a raw GST portal download. Fill in your configured recipient GSTIN, supplier GSTINs, period and actual invoice data. Amounts are integer paise (₹100 = 10000), including positive credit-note amounts. Maximum 2,000 documents per side and 1.8 MB per file.",

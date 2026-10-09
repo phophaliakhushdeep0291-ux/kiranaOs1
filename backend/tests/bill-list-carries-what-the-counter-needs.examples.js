@@ -12,7 +12,7 @@
  * location, giftCardTransactions }` sent all ~70 Bill columns, all 40 BillItem columns,
  * the same 16-column Location row once per bill, and gift-card rows. Three of those are
  * read nowhere in the app and are gone. Everything else stays, including the pricing
- * provenance the detail page shows, and the eight Payment columns that have one.
+ * provenance the detail page shows, and Payment identity/accounting snapshots.
  *
  * Both halves matter:
  *   GONE — the unread stay unread, so the list does not silently go wide again.
@@ -74,11 +74,15 @@ assert.equal(bill.payments.length, 1);
 const [tender] = bill.payments;
 assert.deepEqual(
   Object.keys(tender).sort(),
-  ["amount", "billId", "clientPaymentId", "createdAt", "id", "idempotencyKey", "mode", "status"],
+  ["accountingTimeZone", "amount", "billId", "clientPaymentId", "countryCode", "createdAt", "currencyCode", "id", "idempotencyKey", "mode", "status", "taxRegime"],
   "the replica's payment shape is the audit, written down",
 );
 assert.equal(Number(tender.amount), 30);
 assert.equal(tender.mode, "cash");
+const expectedMarket = { countryCode: "IN", currencyCode: "INR", accountingTimeZone: "Asia/Kolkata", taxRegime: "GST" };
+for (const [field, value] of Object.entries(expectedMarket)) {
+  assert.equal(tender[field], value, `offline payment ${field} must retain its accounting identity`);
+}
 // The identity columns are why a payment pushed offline and echoed back does not
 // show up twice. paymentIdentityKeys() has nothing else to key on.
 assert.ok("id" in tender && "clientPaymentId" in tender && "idempotencyKey" in tender);
@@ -172,8 +176,11 @@ assert.ok("updatedAt" in row, "the display dedupe sorts on updatedAt to pick the
 assert.equal(row.payments.length, 1);
 // The screen's row carries `id` too, so the display dedupe keys on identity
 // rather than falling through to a bill/mode/amount signature.
-assert.deepEqual(Object.keys(row.payments[0]).sort(), ["amount", "id", "mode"]);
+assert.deepEqual(Object.keys(row.payments[0]).sort(), ["accountingTimeZone", "amount", "countryCode", "currencyCode", "id", "mode", "taxRegime"]);
 assert.equal(Number(row.payments[0].amount), 30);
+for (const [field, value] of Object.entries(expectedMarket)) {
+  assert.equal(row.payments[0][field], value, `list payment ${field} must agree with the offline copy`);
+}
 
 /* ------------------- and the default is still the offline copy ------------- */
 

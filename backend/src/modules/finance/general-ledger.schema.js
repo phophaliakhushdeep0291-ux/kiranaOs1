@@ -6,7 +6,12 @@ const line = z.object({ accountCode: z.string().trim().min(1).max(20), debitPais
 
 export const accountCreateSchema = z.object({ code: z.string().trim().regex(/^[A-Z0-9.-]{2,20}$/i), name: z.string().trim().min(2).max(120), category: z.enum(["asset", "liability", "equity", "income", "expense"]), normalSide: z.enum(["debit", "credit"]) });
 export const accountUpdateSchema = z.object({ name: z.string().trim().min(2).max(120).optional(), active: z.boolean().optional() }).refine((value) => Object.keys(value).length > 0, "At least one field is required");
-export const journalCreateSchema = z.object({ reference: z.string().trim().min(3).max(100), businessDate: date, description: z.string().trim().min(3).max(500), lines: z.array(line).min(2).max(100) });
+export const journalCreateSchema = z.object({
+  countryCode: z.string().max(2).optional(),
+  currencyCode: z.string().max(3).optional(),
+  accountingTimeZone: z.string().max(64).optional(),
+  taxRegime: z.string().max(16).optional(),
+  reference: z.string().trim().min(3).max(100), businessDate: date, description: z.string().trim().min(3).max(500), lines: z.array(line).min(2).max(100) });
 export const openingBalanceSchema = journalCreateSchema.extend({ reference: z.string().trim().min(3).max(100), description: z.string().trim().max(500).default("Opening balances") });
 export const reversalSchema = z.object({ reason: z.string().trim().min(3).max(500), businessDate: date.optional() });
 export const periodCreateSchema = z.object({ name: z.string().trim().min(2).max(100), startsAt: date, endsAt: date }).refine((value) => new Date(value.startsAt) <= new Date(value.endsAt), { path: ["endsAt"], message: "endsAt must be on or after startsAt" });

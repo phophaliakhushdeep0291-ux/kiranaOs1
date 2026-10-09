@@ -1,3 +1,4 @@
+import { normalizeUaeMobile } from "../shops/market-policy.js";
 import { z } from "zod";
 import { BUSINESS_TYPES } from "../../verticals/profile.js";
 import { ASSIGNABLE_STAFF_ROLES } from "../../core/permissions/rbac.js";
@@ -37,9 +38,9 @@ const indianMobile = z.preprocess(
 
 const optionalIndianMobile = z.preprocess((value) => {
   if (value === undefined || value === null) return undefined;
-  const normalized = normalizeIndianMobile(value);
+  const normalized = normalizeUaeMobile(value) ?? normalizeIndianMobile(value);
   return normalized === "" ? undefined : normalized;
-}, z.string().regex(/^[6-9]\d{9}$/, "Valid Indian mobile number required").optional());
+}, z.string().regex(/^(?:[6-9]\d{9}|\+9715[024568]\d{7})$/, "Valid mobile number required").optional());
 
 const deviceMetadataSchema = z.object({
   deviceId: z.string().min(3).max(128),
@@ -52,11 +53,15 @@ const deviceMetadataSchema = z.object({
 }).strict();
 
 export const registerSchema = z.object({
+  countryCode: z.string().default("IN"),
+  currencyCode: z.string().default("INR"),
   shopName:  trimmedString(2),
   ownerName: trimmedString(2),
   city:      trimmedString(2),
   address:   trimmedString(5),
-  mobile:    indianMobile,
+  mobile: z.string().trim().min(1),
+  vatRegistered: z.boolean().default(false),
+  taxRegistrationNumber: z.string().trim().regex(/^\d{15}$/).optional(),
   email:     optionalEmail,
   password:  z.string().min(6),
   ownerPin:  z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits").optional(),
@@ -68,7 +73,10 @@ export const registerSchema = z.object({
   // signup offered the trade and then refused it.
   businessType: z.enum(BUSINESS_TYPES).default("kirana"),
   device:    deviceMetadataSchema.optional(),
-});
+}).superRefine((data, ctx) => {
+  const mobile = data.countryCode === "AE" ? normalizeUaeMobile(data.mobile) : indianMobile.safeParse(data.mobile).data;
+  if (!mobile) ctx.addIssue({ code: "custom", path: ["mobile"], message: "Valid mobile number for the selected country required" });
+}).transform((data) => ({ ...data, mobile: data.countryCode === "AE" ? normalizeUaeMobile(data.mobile) : normalizeIndianMobile(data.mobile) }));
 
 export const loginSchema = z.object({
   mobile:     optionalIndianMobile,

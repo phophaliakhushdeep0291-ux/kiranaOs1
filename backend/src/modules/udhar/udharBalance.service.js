@@ -1,3 +1,4 @@
+import { shopAccountingMarket } from "../shops/market-policy.js";
 import { round2, toPaiseBigInt } from "../../utils/money.js";
 
 export function signedUdharLedgerAmount(entry) {
@@ -87,6 +88,7 @@ export async function ensureLegacyUdharOpeningLedger(tx, shopId, customerId) {
 
   await tx.udharLedger.create({
     data: {
+      ...await shopAccountingMarket(tx, shopId),
       shopId,
       customerId,
       customerName: customer.name,
@@ -114,6 +116,7 @@ export async function syncCustomerUdharBalance(tx, shopId, customerId, options =
       const repairAmount = round2(Math.abs(rawBalance));
       await tx.udharLedger.create({
         data: {
+          ...await shopAccountingMarket(tx, shopId),
           shopId,
           customerId,
           customerName: customer.name,
