@@ -37,7 +37,10 @@ before each write.
 - Sales and sales returns, purchases, purchase returns, credit collections, paid
   expenses and completed production runs retain the existing voucher mappings.
 - Accounts-only export is the default. Enable stock lines only for a Tally
-  company configured to carry inventory.
+  company configured to carry inventory. Stock quantities retain three decimal
+  places, including small weight sales, returns and production movements. Finer
+  quantities are refused before transfer rather than rounded into different stock;
+  use accounts-only sales export or reconcile the stock unit first.
 - **Prepare XML files** includes the selected range, including previously sent
   vouchers. Download/import masters first, then vouchers. Downloading does not
   mark them as sent. Manual imports must be reconciled before using direct send
@@ -68,8 +71,8 @@ other counters using a different bridge still matter.
 The implementation is tested against isolated local Tally XML stub responses,
 not a licensed Windows Tally installation. A real TallyPrime version/company must
 still validate company discovery, existing-master import, duplicate import settings,
-GST/inventory mappings and the final account totals. The Windows setup binary and
-signed installer must be built/released on Windows. No production data was migrated
+GST/inventory mappings and the final account totals. The Windows setup compiles,
+but the signed installer must still be built/released. No production data was migrated
 and no real Tally company was written during development.
 
 ## Verification and release status
@@ -86,7 +89,10 @@ Local verification on 9 October 2026 passed:
 - Isolated backend accounting/Tally regressions and 24 API integration tests
   passed, alongside backend production checks and migration safety checks.
 
-The PR includes a Windows bridge-test/setup-build workflow. Compilation is
+The [Windows check on commit 248febca](https://github.com/phophaliakhushdeep0291-ux/kiranaOs1/actions/runs/37911116584)
+passed all 39 bridge tests and compiled the self-contained Windows setup. The
+subsequent stock-quantity correction passed the isolated backend regression suite.
+Compilation is
 separate from a signed release and from testing a real Tally company. The
 repository currently has no signing secrets or frontend-origin release variable;
 configure `KIRANA_CODE_SIGN_PFX_BASE64`, `KIRANA_CODE_SIGN_PASSWORD` and

@@ -311,6 +311,24 @@ assert.ok(withStock.xml.includes("Discount Allowed"), "a bill-level discount lan
 // Inventory sells at 25.00 net of the 5% inside 26.25, not the gross figure.
 assert.ok(withStock.xml.includes("<AMOUNT>25.00</AMOUNT>"), "an inclusive line posts net of its own tax");
 
+// A gram is 0.001 kg, not zero; 5 g is 0.005 kg, not 0.01 kg.
+// Sales and returns must preserve both the stock quantity and its unit rate.
+for (const grams of [1, 3, 5, 125]) {
+  for (const billType of ["gst_invoice", "sales_return"]) {
+    const sign = billType === "sales_return" ? -1 : 1;
+    const tiny = envelope([bill({ billType, gstMode: "none", gst: 0, subtotal: grams, grandTotal: grams,
+      items: [item({ quantityInBaseUnit: grams, lineTotal: grams, gstRate: 0, ratePerRateUnit: 1000 })],
+    })], { inventory: true });
+    assert.ok(tiny.xml.includes(`<ACTUALQTY>${sign * grams / 1000} kg</ACTUALQTY>`));
+    assert.ok(tiny.xml.includes(`<BILLEDQTY>${sign * grams / 1000} kg</BILLEDQTY>`));
+    assert.ok(tiny.xml.includes("<RATE>1000.00/kg</RATE>"));
+    assert.equal(balanceOf(vouchersOf(tiny.xml)[0]), 0);
+  }
+}
+const finerStock = bill({ items: [item({ quantityInBaseUnit: 0.5 })] });
+assert.throws(() => envelope([finerStock], { inventory: true }), { code: "TALLY_QUANTITY_PRECISION", statusCode: 422 });
+assert.equal(envelope([finerStock]).count, 1, "accounts-only export remains available for finer stock units");
+
 // Off by default: an accounts-only Tally company rejects vouchers naming stock
 // items it has never heard of.
 assert.ok(!envelope([bill({ billNo: "N-1", items: [item()] })]).xml.includes("ALLINVENTORYENTRIES"), "inventory entries are opt-in");
@@ -664,6 +682,18 @@ assert.match(factory.xml, /<ACTUALQTY>-100 kg<\/ACTUALQTY>/);
 assert.match(factory.xml, /<ACTUALQTY>95 kg<\/ACTUALQTY>/);
 assert.match(factory.xml, /<AMOUNT>-10000\.00<\/AMOUNT>/);
 assert.match(factory.xml, /<AMOUNT>10000\.00<\/AMOUNT>/);
+
+const fractionalRun = {
+  id: "run_small", runNumber: "PR-SMALL", completedAt: new Date("2026-08-12T06:00:00.000Z"),
+  consumptions: [{ productId: "raw", baseUnit: "kg", actualBaseQty: 0.005, stockValue: 5 }],
+  outputs: [{ productId: "finished", baseUnit: "kg", quantityBaseQty: 0.003, stockValue: 5 }],
+};
+const smallFactory = buildTallyEnvelope({ companyName: "Test Shop", timeZone: TZ, productionRuns: [fractionalRun] });
+assert.match(smallFactory.xml, /<ACTUALQTY>-0\.005 kg<\/ACTUALQTY>/);
+assert.match(smallFactory.xml, /<ACTUALQTY>0\.003 kg<\/ACTUALQTY>/);
+assert.throws(() => buildTallyEnvelope({ companyName: "Test Shop", timeZone: TZ,
+  productionRuns: [{ ...fractionalRun, outputs: [{ ...fractionalRun.outputs[0], quantityBaseQty: 0.0005 }] }],
+}), { code: "TALLY_QUANTITY_PRECISION" });
 
 /* ── Bill selection (guarded at the query, so assert the query) ───────────── */
 
