@@ -35,6 +35,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  dependencies:
+    name: Dependency security audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Backend production dependencies
+        working-directory: backend
+        run: npm audit --omit=dev --audit-level=high
+      - name: Frontend and build dependencies
+        working-directory: frontend
+        run: pnpm audit --audit-level=high
+
   parse:
     name: Conflict markers and JavaScript parse
     runs-on: ubuntu-latest

@@ -19,6 +19,7 @@ import { Card, CardHead, Fld, Badge } from "@/features/core/settings/ui";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { OwnerOrderingCard } from "@/features/core/customer-order/OwnerOrderingCard";
 import { websiteFromPrefs } from "@/features/core/customer-order/restaurant-website";
+import { documentPreview } from "@/features/core/settings/document-preview";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { getBusinessTypeCompatibility, getShopBootstrap, type BusinessTypeCompatibility } from "@/features/core/settings/api";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -279,17 +280,22 @@ export default function StoreProfilePage() {
   }
 
   function openDocument(doc: StoredDoc) {
-    if (!doc.dataUrl) return;
+    const preview = documentPreview(doc);
+    if (!preview) {
+      toast({ title: t("settings.store.readFailed"), variant: "destructive" });
+      return;
+    }
     const win = window.open();
     if (!win) {
       toast({ title: t("settings.store.allowPopups"), description: t("settings.store.allowPopupsHelp"), variant: "destructive" });
       return;
     }
-    win.document.write(
-      doc.type === "application/pdf"
-        ? `<iframe src="${doc.dataUrl}" style="border:0;width:100%;height:100%"></iframe>`
-        : `<img src="${doc.dataUrl}" style="max-width:100%" alt="">`,
-    );
+    win.opener = null;
+    const element = win.document.createElement(preview.tag);
+    element.setAttribute("src", preview.url);
+    element.setAttribute("style", preview.tag === "iframe"
+      ? "border:0;width:100%;height:100vh" : "max-width:100%");
+    win.document.body.replaceChildren(element);
   }
   function uploadLogo(file?: File | null) {
     if (!file) return;

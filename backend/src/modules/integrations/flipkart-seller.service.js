@@ -147,6 +147,7 @@ async function accessToken() {
   let response;
   try {
     response = await fetch(url, {
+      redirect: "error",
       headers: { authorization: `Basic ${credentials}` },
       signal: AbortSignal.timeout(env.FLIPKART_API_TIMEOUT_MS),
     });
@@ -183,6 +184,7 @@ async function flipkartJsonRequest(pathOrUrl, { method = "GET", body, pagination
     let response;
     try {
       response = await fetch(url, {
+        redirect: "error",
         method,
         headers: {
           authorization: `Bearer ${token}`,
@@ -625,6 +627,7 @@ export async function downloadFlipkartDocument(shopId, shipmentId, kind) {
     let response;
     try {
       response = await fetch(providerUrl(path), {
+        redirect: "error",
         method: kind === "label" ? "POST" : "GET",
         headers: { authorization: `Bearer ${token}`, accept: "application/pdf" },
         signal: AbortSignal.timeout(env.FLIPKART_API_TIMEOUT_MS),
