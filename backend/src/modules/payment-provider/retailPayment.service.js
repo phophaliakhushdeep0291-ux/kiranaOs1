@@ -114,7 +114,8 @@ function validateCreatedQrCode(intent, qrCode) {
 function safeRazorpayQrImageUrl(value) {
   try {
     const url = new URL(String(value || ""));
-    return url.protocol === "https:" && url.hostname === "rzp.io" ? url.toString() : null;
+    return url.protocol === "https:" && url.hostname === "rzp.io"
+      && !url.username && !url.password && !url.port ? url.toString() : null;
   } catch {
     return null;
   }
@@ -200,18 +201,38 @@ export async function getRetailPaymentIntentStatus({ shopId, intentId }) {
  * internal address; the size cap and timeout keep a slow or huge response from
  * holding a counter hostage mid-sale.
  */
-async function fetchProviderQrPng(imageUrl) {
+export async function fetchProviderQrPng(imageUrl) {
+  if (!safeRazorpayQrImageUrl(imageUrl)) {
+    throw new AppError("Provider QR image URL is not trusted", 502, "RETAIL_QR_PROVIDER_MISMATCH");
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), QR_IMAGE_FETCH_TIMEOUT_MS);
   try {
     const response = await fetch(imageUrl, { signal: controller.signal, redirect: "error" });
     if (!response.ok) throw new AppError("Provider QR image could not be fetched", 502, "RETAIL_QR_IMAGE_UNAVAILABLE");
     if (Number(response.headers.get("content-length") || 0) > QR_IMAGE_MAX_BYTES) {
+      await response.body?.cancel();
       throw new AppError("Provider QR image is too large to print", 502, "RETAIL_QR_IMAGE_UNAVAILABLE");
     }
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.length > QR_IMAGE_MAX_BYTES) throw new AppError("Provider QR image is too large to print", 502, "RETAIL_QR_IMAGE_UNAVAILABLE");
-    return buffer;
+    if (!response.body) return Buffer.alloc(0);
+    const reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > QR_IMAGE_MAX_BYTES) {
+          await reader.cancel();
+          throw new AppError("Provider QR image is too large to print", 502, "RETAIL_QR_IMAGE_UNAVAILABLE");
+        }
+        chunks.push(Buffer.from(value));
+      }
+      return Buffer.concat(chunks, size);
+    } finally {
+      reader.releaseLock();
+    }
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError("Provider QR image could not be fetched", 502, "RETAIL_QR_IMAGE_UNAVAILABLE");

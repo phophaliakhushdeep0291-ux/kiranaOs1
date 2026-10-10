@@ -60,6 +60,7 @@ if (ctx.skip) {
       globalThis.fetch = async (url, options = {}) => {
         const parsed = new URL(String(url));
         if (parsed.origin !== "https://api.flipkart.net") return realFetch(url, options);
+        assert.equal(options.redirect, "error", "provider requests must never follow redirects");
         if (parsed.pathname === "/oauth-service/oauth/token") {
           tokenRequests += 1;
           return Response.json({ access_token: "flipkart-token", expires_in: 3600 });
@@ -184,6 +185,7 @@ if (ctx.skip) {
       globalThis.fetch = async (url, options = {}) => {
         const parsed = new URL(String(url));
         if (parsed.origin !== "https://api.flipkart.net") return realFetch(url, options);
+        assert.equal(options.redirect, "error", "provider requests must never follow redirects");
         if (parsed.pathname === "/oauth-service/oauth/token") return Response.json({ access_token: "token", expires_in: 3600 });
         if (parsed.pathname === "/sellers/v3/shipments/filter/") {
           const body = JSON.parse(options.body);

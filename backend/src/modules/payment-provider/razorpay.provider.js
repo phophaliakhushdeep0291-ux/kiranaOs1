@@ -156,6 +156,8 @@ async function razorpayRequest(path, options = {}, credentials = null) {
   const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
   const response = await fetch(`${RAZORPAY_API_BASE}${path}`, {
     ...options,
+    redirect: "error",
+    signal: AbortSignal.timeout(20_000),
     headers: {
       "Authorization": `Basic ${auth}`,
       "Content-Type": "application/json",
