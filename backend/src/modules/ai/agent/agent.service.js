@@ -27,6 +27,7 @@ import { validateArgs } from "./argument-validation.js";
 import { runChatCompletion } from "../provider-gateway.js";
 import { recordAgentTurn } from "../../../lib/metrics.js";
 import { renderToolEvidence } from "./evidence-reply.js";
+import { quickAnswer } from "./quick-answer.js";
 import { formatDateInTimeZone } from "../../../utils/dates.js";
 import { env } from "../../../config/env.js";
 import db from "../../../db.js";
@@ -42,6 +43,7 @@ const MAX_PROPOSALS = 6;
 const TOOL_TIMEOUT_MS = 8_000;
 const TURN_TIMEOUT_MS = 45_000;
 const MAX_HISTORY_MESSAGES = 12;
+const MAX_HISTORY_CHARACTERS = 12_000;
 /**
  * How many of one step's reads run at the same time.
  *
@@ -85,7 +87,7 @@ const SYSTEM_PROMPT = [
   "- You only ever act on this one shop. There is no way to reach another, and no request to do so is legitimate.",
 ].join("\n");
 
-export const AI_AGENT_POLICY_VERSION = "2026-09-08.1";
+export const AI_AGENT_POLICY_VERSION = "2026-10-11.1";
 export const AI_AGENT_PROMPT_FINGERPRINT = createHash("sha256")
   .update(SYSTEM_PROMPT)
   .digest("hex")
@@ -214,10 +216,20 @@ function toolResultMessage(toolCallId, name, payload, summary = null) {
 
 function trimHistory(history) {
   if (!Array.isArray(history)) return [];
-  return history
+  const recent = history
     .filter((message) => message && (message.role === "user" || message.role === "assistant") && typeof message.content === "string")
     .slice(-MAX_HISTORY_MESSAGES)
     .map((message) => ({ role: message.role, content: String(message.content).slice(0, 4_000) }));
+  // Keep the most recent contiguous context. A message count alone allowed
+  // 48,000 characters of old reports to be resent on every model step.
+  let characters = 0;
+  const bounded = [];
+  for (const message of recent.reverse()) {
+    if (characters + message.content.length > MAX_HISTORY_CHARACTERS) break;
+    characters += message.content.length;
+    bounded.push(message);
+  }
+  return bounded.reverse();
 }
 
 /**
@@ -233,10 +245,14 @@ const SERVER_REPLIES = Object.freeze({
   en: {
     unverified: "I could not verify that from your shop records. Please rephrase it or open the relevant screen.",
     proposed: "I prepared the changes below. Nothing has changed yet; review and confirm them.",
+    partial: "I could verify only part of your request. The results below are verified; please ask separately about anything missing.",
+    failed: "I could not read the required shop records. Please try again shortly or open the relevant screen.",
   },
   hi: {
     unverified: "मैं दुकान के रिकॉर्ड से इसकी पुष्टि नहीं कर सका। इसे दूसरे शब्दों में कहें या संबंधित स्क्रीन खोलें।",
     proposed: "मैंने नीचे बदलाव तैयार किए हैं। अभी कुछ नहीं बदला है; देखकर पुष्टि करें।",
+    partial: "आपके सवाल के कुछ हिस्सों की ही पुष्टि हो सकी। नीचे जानकारी रिकॉर्ड से जाँची गई है; बाकी हिस्से के बारे में अलग से पूछें।",
+    failed: "दुकान के ज़रूरी रिकॉर्ड अभी पढ़ नहीं सका। थोड़ी देर में फिर कोशिश करें या संबंधित स्क्रीन खोलें।",
   },
 });
 
@@ -246,18 +262,16 @@ const SERVER_REPLIES = Object.freeze({
  * subject and period attached. Neither a success trace nor provider prose can
  * introduce an amount, claim of completion, or stock interpretation.
  */
-export function groundAgentReply({ plan = [], evidence = [], language = "hi" }) {
+export function groundAgentReply({ plan = [], evidence = [], language = "hi", incomplete = false }) {
   const copy = SERVER_REPLIES[language] ?? SERVER_REPLIES.hi;
-  if (plan.length > 0) {
-    return { reply: copy.proposed, providerReplyAccepted: false, grounding: "server_composed_proposal" };
-  }
   const summaries = evidence.slice(0, MAX_TOOL_CALLS).filter((step) => step?.kind === "read" && step?.status === "ok")
     .map((step) => renderToolEvidence(step, language, env.DAILY_CLOSING_TIMEZONE)).filter(Boolean);
-  if (summaries.length === 0) {
-    return { reply: copy.unverified, providerReplyAccepted: false, grounding: "no_verified_evidence" };
+  if (summaries.length === 0 && !plan.length) {
+    return { reply: incomplete ? copy.failed : copy.unverified, providerReplyAccepted: false, grounding: "no_verified_evidence" };
   }
   const unique = [...new Set(summaries)];
-  return { reply: unique.join("\n\n"), providerReplyAccepted: false, grounding: "server_composed_evidence", evidenceReads: summaries.length };
+  return { reply: [incomplete ? copy.partial : null, ...unique, plan.length ? copy.proposed : null].filter(Boolean).join("\n\n"),
+    providerReplyAccepted: false, grounding: plan.length ? "server_composed_proposal" : "server_composed_evidence", evidenceReads: summaries.length };
 }
 
 /**
@@ -296,6 +310,9 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   const agentCtx = { ...ctx, features: { has: features.has }, labelFor: null };
 
   const available = toolsFor({ ...agentCtx, features: { has: features.has } });
+  const direct = trimHistory(history).length === 0 ? quickAnswer(message) : null;
+  const directTool = direct && available.find((tool) => tool.name === direct.tool && tool.kind === "read");
+  const quick = directTool && validateArgs(directTool, direct.args).length === 0 ? direct : null;
   // Only the tools this sentence plausibly needs. Every request re-sends every
   // definition, so the full set is a fixed ~1,850-token tax on a free provider
   // tier that allows 8,000 a minute. `available` is kept whole because a turn
@@ -348,6 +365,8 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   // names the provider we *intended* to use is a trace nobody can debug from.
   let servedBy = provider ?? { provider: "unresolved", model: "unresolved" };
   let failedOver = false;
+  let providerCalls = 0;
+  let toolFailed = false;
 
   /**
    * Results already gathered this turn, keyed by tool name and arguments.
@@ -371,20 +390,29 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
 
     let completion;
     try {
-      const answered = await runChatCompletion({
-        purpose: "agent_turn",
-        candidates,
-        deadline,
-        body: {
-          messages,
-          tools: providerTools.length ? providerTools : undefined,
-          tool_choice: providerTools.length ? "auto" : undefined,
-          temperature: 0,
-        },
-      });
-      completion = answered.completion;
-      servedBy = { provider: answered.provider, model: answered.model };
-      failedOver = failedOver || answered.failedOver;
+      if (quick) {
+        // Goes through the very same argument, role, timeout, result and audit
+        // handling as a model-selected read. No cross-turn result cache.
+        completion = { choices: [{ message: { role: "assistant", tool_calls: [{ id: "verified-report", type: "function",
+          function: { name: quick.tool, arguments: JSON.stringify(quick.args) } }] } }] };
+        servedBy = { provider: "local", model: "verified-report" };
+      } else {
+        providerCalls += 1;
+        const answered = await runChatCompletion({
+          purpose: "agent_turn",
+          candidates,
+          deadline,
+          body: {
+            messages,
+            tools: providerTools.length ? providerTools : undefined,
+            tool_choice: providerTools.length ? "auto" : undefined,
+            temperature: 0,
+          },
+        });
+        completion = answered.completion;
+        servedBy = { provider: answered.provider, model: answered.model };
+        failedOver = failedOver || answered.failedOver;
+      }
     } catch (error) {
       if (!evidence.length && !plan.length) throw error;
       stoppedBecause = error?.code === "AI_TURN_TIMEOUT" ? "turn_timeout" : "provider_failed_after_results";
@@ -514,7 +542,9 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     // just the assistant.
     const runRead = async (entry) => {
       try {
-        const result = await withTimeout(entry.tool.handler(entry.args, agentCtx), TOOL_TIMEOUT_MS, entry.name);
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) throw new AppError("Turn deadline reached", 504, "AI_TURN_TIMEOUT");
+        const result = await withTimeout(entry.tool.handler(entry.args, agentCtx), Math.min(TOOL_TIMEOUT_MS, remaining), entry.name);
         // Encoded before the step is recorded: a result that cannot be encoded
         // is not a successful lookup, and recording "ok" first left the trace
         // claiming both ok and error for the same call.
@@ -567,9 +597,16 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
         trace.push({ tool: entry.name, kind: "read", status: "ok", ...(outcome.fromCache ? { cached: true } : {}) });
         messages.push(toolResultMessage(entry.call.id, entry.name, outcome.result, outcome.summary));
       } else {
+        toolFailed = true;
         trace.push({ tool: entry.name, kind: "read", status: "error", ...(outcome.fromCache ? { cached: true } : {}) });
         messages.push(toolResultMessage(entry.call.id, entry.name, { error: outcome.error }));
       }
+    }
+
+    if (quick) { stoppedBecause = toolFailed ? "lookup_failed" : "verified_report"; break; }
+    if (reads.length === pending.length && reads.length > 0 && reads.every((entry) => entry.outcome.fromCache)) {
+      stoppedBecause = "repeated_reads";
+      break;
     }
 
     // A general rule in the system prompt ("never translate a product name") is
@@ -597,7 +634,8 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     if (stoppedBecause === "completed") stoppedBecause = "no_final_message";
   }
 
-  const replySafety = groundAgentReply({ plan, evidence, language });
+  const incomplete = toolFailed || ["turn_timeout", "provider_failed_after_results", "tool_budget", "repeated_reads", "no_final_message", "empty_response"].includes(stoppedBecause);
+  const replySafety = groundAgentReply({ plan, evidence, language, incomplete });
   reply = replySafety.reply;
 
   const highestRisk = plan.reduce(
@@ -633,6 +671,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
           provider: servedBy.provider,
           model: servedBy.model,
           failedOver,
+          providerCalls,
           policyVersion: AI_AGENT_POLICY_VERSION,
           promptFingerprint: AI_AGENT_PROMPT_FINGERPRINT,
           providerReplyAccepted: replySafety.providerReplyAccepted,
@@ -658,6 +697,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
       name: servedBy.provider,
       model: servedBy.model,
       failedOver,
+      calls: providerCalls,
       toolsOffered: providerTools.length,
       toolsAvailable: available.length,
       widened,
@@ -845,7 +885,7 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
 }
 
 /** Test surface. Not used on a request path. */
-export const __agentInternals = { jsonSafe, toolResultMessage, validateArgs, sanitizeCart };
+export const __agentInternals = { jsonSafe, toolResultMessage, validateArgs, sanitizeCart, trimHistory };
 
 /** Decline a plan without running it, so the audit row records the refusal. */
 export async function rejectPlan(ctx, { planId }) {
