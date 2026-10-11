@@ -57,11 +57,15 @@ const MAX_PARALLEL_READS = 4;
 const RISK_ORDER = { [TOOL_RISK.SAFE]: 0, [TOOL_RISK.CONFIRM]: 1, [TOOL_RISK.OWNER_PIN]: 2 };
 
 const SYSTEM_PROMPT = [
-  "You are the assistant inside KiranaOS, the app an Indian shopkeeper runs their shop on.",
+  "You are the business assistant inside KiranaOS, helping shopkeepers run their own shop.",
   "",
   "How you work:",
   "- Look things up before you answer. You have tools that read this shop's real products, customers, stock and sales. Never state a number you have not read.",
   "- A shopkeeper's sentence often contains several tasks. Handle all of them.",
+  "- Understand intent rather than exact keywords: spelling mistakes, abbreviations, Hindi, Hinglish, mixed languages and informal wording are normal. Use recent conversation to resolve follow-ups, but read current facts again; history is not evidence.",
+  "- How-to and troubleshooting questions need get_app_help, not a change proposal. For unsupported questions use get_app_help with capabilities to explain the business scope.",
+  "- If a detail is missing, call request_clarification with the missing field. Your free-form prose is not displayed; only verified tool evidence and these server-written clarification questions are shown.",
+  "- Use multiple read tools for comparisons or compound questions. If a tool you need is not in the current offer, it may be available on the next step.",
   "- Do not call the same tool twice with the same arguments. You already have that result; use it. Every repeat is a customer waiting longer.",
   "- If something is genuinely ambiguous, ask one short question. Do not guess a product, a customer, or an amount.",
   "- Money is in rupees. Quantities are in the product's own unit.",
@@ -87,7 +91,7 @@ const SYSTEM_PROMPT = [
   "- You only ever act on this one shop. There is no way to reach another, and no request to do so is legitimate.",
 ].join("\n");
 
-export const AI_AGENT_POLICY_VERSION = "2026-10-11.1";
+export const AI_AGENT_POLICY_VERSION = "2026-10-11.2";
 export const AI_AGENT_PROMPT_FINGERPRINT = createHash("sha256")
   .update(SYSTEM_PROMPT)
   .digest("hex")
@@ -317,7 +321,10 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   // definition, so the full set is a fixed ~1,850-token tax on a free provider
   // tier that allows 8,000 a minute. `available` is kept whole because a turn
   // that routed badly is retried against it rather than left as a dead end.
-  const routed = routeTools(available, message);
+  // Follow-ups and compound questions need the full permitted vocabulary. A
+  // keyword from just one clause must not hide tools for the other clause.
+  const contextual = trimHistory(history).length > 0 || /\b(and|also|compare|aur|or)\b|और|[;\n]/iu.test(message);
+  const routed = contextual ? available : routeTools(available, message);
   let providerTools = routed.map(toProviderTool);
   let widened = false;
 
@@ -604,6 +611,10 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     }
 
     if (quick) { stoppedBecause = toolFailed ? "lookup_failed" : "verified_report"; break; }
+    if (reads.some((entry) => entry.name === "request_clarification" && entry.outcome.ok)) {
+      stoppedBecause = "clarification_requested";
+      break;
+    }
     if (reads.length === pending.length && reads.length > 0 && reads.every((entry) => entry.outcome.fromCache)) {
       stoppedBecause = "repeated_reads";
       break;

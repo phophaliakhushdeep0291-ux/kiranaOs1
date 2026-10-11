@@ -1,4 +1,5 @@
 import { formatDateInTimeZone } from "../../../utils/dates.js";
+import { renderBusinessHelp, renderClarification } from "./business-help.js";
 
 const MAX_ROWS = 5;
 const text = (en, hi, language) => language === "en" ? en : hi;
@@ -109,6 +110,8 @@ const WORKFLOW_TITLES = {
 /** A human-readable snapshot composed exclusively from a successful tool result. */
 export function renderToolEvidence({ tool, result }, language = "hi", timeZone = "Asia/Kolkata") {
   if (!result || typeof result !== "object" || result.error || result.ok === false || result.success === false) return null;
+  if (tool === "get_app_help") return renderBusinessHelp(result, language);
+  if (tool === "request_clarification") return renderClarification(result, language);
   let title;
   let lines = [];
   const customer = (row) => `${label(row.name)}; ${text("outstanding credit", "बकाया उधार", language)}: ${evidenceMoney(row.udharAmountPaise ?? row.udharBalance ?? row.udharAmount, row.udharAmountPaise != null) ?? unavailable(language)}${row.udharBalanceNeedsRepair ? `; ${text("balance needs review", "बैलेंस की जाँच ज़रूरी", language)}` : ""}`;

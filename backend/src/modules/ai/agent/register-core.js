@@ -12,13 +12,14 @@
 import { registerTools } from "./tool-registry.js";
 import { CORE_READ_TOOLS } from "./tools/core-read.js";
 import { CORE_WRITE_TOOLS } from "./tools/core-write.js";
+import { CONVERSATION_TOOLS } from "./tools/conversation.js";
 
 let registered = false;
 
 export function registerCoreTools() {
   if (registered) return 0;
   registered = true;
-  return registerTools("core", [...CORE_READ_TOOLS, ...CORE_WRITE_TOOLS]);
+  return registerTools("core", [...CORE_READ_TOOLS, ...CORE_WRITE_TOOLS, ...CONVERSATION_TOOLS]);
 }
 
 registerCoreTools();

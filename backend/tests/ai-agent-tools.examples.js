@@ -15,6 +15,7 @@ import { registerTools, toolsFor, routeTools, getTool, registrySnapshot, ownerOf
 import { __agentInternals } from "../src/modules/ai/agent/agent.service.js";
 import { agentChatSchema } from "../src/modules/ai/ai.schema.js";
 import { CORE_READ_TOOLS } from "../src/modules/ai/agent/tools/core-read.js";
+import { CONVERSATION_TOOLS } from "../src/modules/ai/agent/tools/conversation.js";
 import { CORE_WRITE_TOOLS } from "../src/modules/ai/agent/tools/core-write.js";
 import { RESTAURANT_TOOLS } from "../src/verticals/restaurant/ai/tools.js";
 import "../src/modules/ai/agent/register-core.js";
@@ -84,7 +85,7 @@ ok("tool names are globally unique");
 
 /* ------------------------------------------------------------- core tools */
 
-const coreTools = [...CORE_READ_TOOLS, ...CORE_WRITE_TOOLS];
+const coreTools = [...CORE_READ_TOOLS, ...CORE_WRITE_TOOLS, ...CONVERSATION_TOOLS];
 assert.ok(coreTools.length >= 12, "the core tool set cannot silently shrink");
 
 for (const tool of coreTools) {
