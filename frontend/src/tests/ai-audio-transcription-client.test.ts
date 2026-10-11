@@ -114,4 +114,37 @@ describe("AI audio transcription client", () => {
     expect(onTranscript).toHaveBeenCalledWith({ transcript: "Ramesh ko do kilo chini", model: "test", provider: "groq" });
     expect(onError).not.toHaveBeenCalled();
   });
+  it("does not deliver a late transcript after cancellation", async () => {
+    let complete!: (value: unknown) => void;
+    const response = new Promise(resolve => { complete = resolve; });
+    vi.mocked(apiRequest).mockReturnValue(response);
+    const stopped = vi.fn();
+    class Recorder {
+      static isTypeSupported() { return true; }
+      state = "inactive"; mimeType = "audio/webm";
+      ondataavailable?: (event: { data: Blob }) => void;
+      onstop?: () => void;
+      start() { this.state = "recording"; }
+      stop() {
+        this.state = "inactive";
+        this.ondataavailable?.({ data: new Blob(["test"]) });
+        this.onstop?.();
+      }
+    }
+    vi.stubGlobal("window", { isSecureContext: true, location: { hostname: "localhost" }, setTimeout, clearTimeout });
+    vi.stubGlobal("navigator", { onLine: true, mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop: stopped }] }) } });
+    vi.stubGlobal("MediaRecorder", Recorder);
+    const onTranscript = vi.fn(); const onError = vi.fn(); const onEnd = vi.fn();
+    const session = await startBackendTranscription({ onStart: vi.fn(), onTranscribing: vi.fn(), onTranscript, onError, onEnd });
+    session.stop();
+    await vi.waitFor(() => expect(apiRequest).toHaveBeenCalled());
+    session.cancel();
+    complete({ transcript: "confirm", model: "test", provider: "fixture" });
+    await response; await new Promise(resolve => setTimeout(resolve, 0));
+    expect(onTranscript).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    expect(onEnd).toHaveBeenCalledOnce();
+    expect(stopped).toHaveBeenCalled();
+  });
+
 });

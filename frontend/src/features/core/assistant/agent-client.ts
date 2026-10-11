@@ -1,3 +1,4 @@
+import type { ProductInput } from "@/types/api";
 import { apiRequest, ApiClientError } from "@/lib/api/http";
 
 /**
@@ -64,6 +65,7 @@ export interface AgentClientAction {
   ref: string;
   action: "add_bill_lines" | string;
   payload: {
+    product?: ProductInput;
     lines?: Array<{ productId: string; name: string; quantity: number; unit: string; rate: number; sellingUnitId?: string; conversionToBase?: number }>;
     problems?: Array<{ query: string; reason: string; candidates?: string[] }>;
   };

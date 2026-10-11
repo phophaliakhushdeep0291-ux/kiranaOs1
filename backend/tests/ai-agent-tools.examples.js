@@ -206,7 +206,7 @@ assert.throws(() => defineTool({
 }), /target must be one of/);
 ok("a tool cannot claim a destination it does not have");
 
-// The bill is the one write that does not land in the database: the cart is
+// Bill additions do not land in the server database: the cart is
 // state on the till so a shop can keep billing through a power cut. It still
 // goes through confirmation like every other write.
 const addToBill = byName.add_items_to_bill;
@@ -219,9 +219,13 @@ assert.equal(
   "Add 2 kg Sugar, 1 Maggi to the bill",
   "the confirmation names the real items and quantities",
 );
-// Every other write still lands server-side; only the bill is different.
+// New products use the same local-first product service as the form. The other
+// established writes remain server-side.
+assert.equal(byName.create_product.target, "client");
+assert.equal(byName.create_product.risk, TOOL_RISK.OWNER_PIN);
+assert.deepEqual(byName.create_product.roles, ["owner", "admin"]);
 for (const tool of CORE_WRITE_TOOLS) {
-  if (tool.name === "add_items_to_bill") continue;
+  if (["add_items_to_bill", "create_product"].includes(tool.name)) continue;
   assert.equal(tool.target, "server", `${tool.name} must still write through a service`);
 }
 ok("adding to a bill resolves on the server and lands on the till");

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, Check, Loader2, Mic, Send, ShoppingCart, Sparkles, Square, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, Check, Loader2, Mic, Send, ShoppingCart, Sparkles, Square, Volume2, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAppLanguage } from "@/features/core/settings/i18n";
-import { stageBillLines } from "@/features/core/billing/assistant-staging";
+import { executeClientActions } from "./execute-client-actions";
+import type { StagedBillLine } from "@/features/core/billing/assistant-staging";
+import { planDecision } from "./task-commands";
 import {
   sendAgentMessage,
   confirmAgentPlan,
@@ -10,6 +12,7 @@ import {
   type AgentChatMessage,
   agentErrorCode,
   type AgentTurn,
+  type AgentCartLine,
 } from "./agent-client";
 import {
   startBackendTranscription,
@@ -43,12 +46,25 @@ type PlanState =
   | { status: "pin"; wrong: boolean }
   | { status: "done"; ok: boolean; message?: string };
 
-export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApplyBillLines }: { open: boolean; onClose: () => void; initialMessage?: string; cart?: AgentCartLine[]; onApplyBillLines?: (lines: StagedBillLine[]) => number }) {
   const { t, language } = useAppLanguage();
   const [, navigate] = useLocation();
   const [stagedCount, setStagedCount] = useState(0);
   const [messages, setMessages] = useState<Bubble[]>([]);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initialMessage);
+  const asking = useRef(false);
+  const mounted = useRef(true);
+  const initialSent = useRef(false);
+  const request = useRef<AbortController | null>(null);
+  const startingMic = useRef(false);
+  const [readAloud, setReadAloud] = useState(false);
+  const speak = useCallback((text: string) => {
+    if (!readAloud || typeof speechSynthesis === "undefined") return;
+    speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = language === "hi" ? "hi-IN" : "en-IN";
+    speechSynthesis.speak(utterance);
+  }, [readAloud, language]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<AgentTurn | null>(null);
@@ -69,61 +85,29 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, pending, planState]);
 
-  const ask = useCallback(async (text: string) => {
-    const question = text.trim();
-    if (!question || busy || planRequestBusy.current) return;
-
-    setError(null);
-    setDraft("");
-    setPending(null);
-    setPlanState({ status: "idle" });
-    setBusy(true);
-
-    // History excludes the turn being asked, and carries only text — the plan
-    // stays server-side where it cannot be edited.
-    const history = messages.map(({ role, content }) => ({ role, content }));
-    setMessages((current) => [...current, { role: "user", content: question }]);
-
-    try {
-      if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        setError(t("assistant.offline"));
-        return;
-      }
-      const turn = await sendAgentMessage(question, history, { language });
-      setMessages((current) => [...current, { role: "assistant", content: turn.reply, turn }]);
-      if (turn.requiresConfirmation && turn.planId) setPending(turn);
-    } catch (caught) {
-      const code = agentErrorCode(caught);
-      setError(
-        code === "AI_TURN_TIMEOUT" ? t("assistant.timeout")
-          : code === "AI_KEY_MISSING" ? t("assistant.unavailable")
-          : code === "AI_RATE_LIMITED" ? t("assistant.busy")
-            : t("assistant.failed"),
-      );
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, messages, t, language]);
-
   const applyPlan = useCallback(async (ownerPin?: string) => {
     if (!pending?.planId || planRequestBusy.current) return;
     planRequestBusy.current = true;
     setPlanState({ status: "working" });
     try {
       const result = await confirmAgentPlan(pending.planId, ownerPin);
+      setPending(null);
       // Lines the server resolved are not on the bill yet — the till owns the
       // cart. Stage them and offer the trip rather than claiming it is done.
-      const billActions = (result.clientActions ?? []).filter(action => action.action === "add_bill_lines");
-      const staged = await stageBillLines(billActions.flatMap(action => action.payload?.lines ?? []));
-      const unresolved = billActions.flatMap(action => (action.payload?.problems ?? []).map(problem => problem.candidates?.length ? `${problem.query} (${problem.candidates.join(", ")})` : problem.query));
+      const { staged, applied, incompleteBill, products, problems: unresolved } = await executeClientActions(result, ownerPin, onApplyBillLines);
+      const outcome = result.requiresReview ? t("assistant.outcomeUnknown")
+        : !result.allSucceeded ? t("assistant.partialFailure")
+          : incompleteBill ? t("assistant.till.reviewItems")
+          : unresolved.length ? `${t("assistant.itemsUnresolved")} ${unresolved.join(", ")}`
+            : products.length ? t("assistant.productSaved", { names: products.join(", ") })
+              : applied ? t("assistant.till.applied") : staged ? t("assistant.billStaged") : t("assistant.confirmed");
+      setMessages(current => [...current, { role: "assistant", content: outcome }]);
+      speak(outcome);
       setStagedCount(staged);
       setPlanState({
         status: "done",
-        ok: result.allSucceeded && !result.requiresReview && unresolved.length === 0,
-        message: result.requiresReview
-          ? t("assistant.outcomeUnknown")
-          : unresolved.length ? `${t("assistant.itemsUnresolved")} ${unresolved.join(", ")}`
-            : result.allSucceeded ? undefined : t("assistant.partialFailure"),
+        ok: result.allSucceeded && !result.requiresReview && !incompleteBill && unresolved.length === 0,
+        message: outcome,
       });
       setPending(null);
       setPin("");
@@ -140,11 +124,13 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
         return;
       }
       if (code === "AI_PLAN_ALREADY_RESOLVED") setPending(null);
-      setPlanState({ status: "done", ok: false, message: code === "OWNER_PIN_LOCKED" ? t("assistant.pinLocked") : t("assistant.outcomeUnknown") });
+      const outcome = t(code === "OWNER_PIN_LOCKED" ? "assistant.pinLocked" : "assistant.outcomeUnknown");
+      setPlanState({ status: "done", ok: false, message: outcome });
+      setMessages(current => [...current, { role: "assistant", content: outcome }]);
     } finally {
       planRequestBusy.current = false;
     }
-  }, [pending, t]);
+  }, [pending, t, speak, onApplyBillLines]);
 
   const decline = useCallback(async () => {
     if (!pending?.planId || planRequestBusy.current) return;
@@ -159,6 +145,8 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
       }
       setPending(null);
       setPlanState({ status: "done", ok: true, message: t("assistant.rejected") });
+      setMessages(current => [...current, { role: "assistant", content: t("assistant.rejected") }]);
+      speak(t("assistant.rejected"));
     } catch (caught) {
       const resolved = agentErrorCode(caught) === "AI_PLAN_ALREADY_RESOLVED";
       if (resolved) setPending(null);
@@ -166,7 +154,67 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
     } finally {
       planRequestBusy.current = false;
     }
-  }, [pending, t]);
+  }, [pending, t, speak]);
+
+  const ask = useCallback(async (text: string) => {
+    const question = text.trim();
+    if (!question || asking.current || planRequestBusy.current) return;
+    if (planState.status === "pin") { setError(t("assistant.pinPrivate")); return; }
+    const decision = pending ? planDecision(question) : null;
+    if (decision) {
+      setDraft("");
+      if (decision === "confirm") await applyPlan(); else await decline();
+      return;
+    }
+    asking.current = true;
+
+    setError(null);
+    setDraft("");
+    setPlanState({ status: "idle" });
+    setBusy(true);
+
+    // History excludes the turn being asked, and carries only text — the plan
+    // stays server-side where it cannot be edited.
+    const history = messages.map(({ role, content, turn }) => ({ role, content: turn?.plan.length ? [content, ...turn.plan.map(item => item.summary)].join("\n") : content }));
+    setMessages((current) => [...current, { role: "user", content: question }]);
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        setError(t("assistant.offline"));
+        return;
+      }
+      if (pending?.planId) {
+        // A correction supersedes the displayed proposal; never leave an old
+        // action eligible for confirmation behind a new conversation turn.
+        await rejectAgentPlan(pending.planId);
+        setPending(null);
+      }
+      request.current = new AbortController();
+      const turn = await sendAgentMessage(question, history, { language, cart, signal: request.current.signal });
+      if (!mounted.current) return;
+      setMessages((current) => [...current, { role: "assistant", content: turn.reply, turn }]);
+      if (turn.requiresConfirmation && turn.planId) setPending(turn);
+      speak([turn.reply, ...turn.plan.map(item => item.summary), ...(turn.requiresConfirmation ? [t("assistant.voiceConfirmHint")] : [])].join(". "));
+    } catch (caught) {
+      const code = agentErrorCode(caught);
+      setError(
+        code === "AI_TURN_TIMEOUT" ? t("assistant.timeout")
+          : code === "AI_KEY_MISSING" ? t("assistant.unavailable")
+          : code === "AI_RATE_LIMITED" ? t("assistant.busy")
+            : t("assistant.failed"),
+      );
+    } finally {
+      asking.current = false;
+      setBusy(false);
+    }
+  }, [messages, pending, planState.status, applyPlan, decline, speak, t, language, cart]);
+
+  useEffect(() => {
+    if (initialMessage && !initialSent.current) {
+      const timer = window.setTimeout(() => { initialSent.current = true; void ask(initialMessage); }, 0);
+      return () => window.clearTimeout(timer);
+    }
+  }, [initialMessage, ask]);
 
   const labelAnswer = useCallback(async (index: number, actionLogId: string, outcome: AiFeedbackOutcome) => {
     setMessages((current) => current.map((message, messageIndex) => (
@@ -194,6 +242,9 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
       micSession.current.stop();
       return;
     }
+    if (startingMic.current || asking.current || planRequestBusy.current || planState.status === "pin") return;
+    startingMic.current = true;
+    if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
     setError(null);
     try {
       micSession.current = await startBackendTranscription({
@@ -201,7 +252,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
         onTranscribing: () => setMic("transcribing"),
         onTranscript: (result) => {
           const spoken = result.transcript?.trim();
-          if (spoken) void ask(spoken);
+          if (spoken && mounted.current) void ask(spoken);
         },
         onError: (message) => setError(message),
         onEnd: () => {
@@ -209,16 +260,25 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
           setMic("idle");
         },
       });
+      if (!mounted.current) { micSession.current.cancel(); micSession.current = null; }
     } catch (caught) {
       micSession.current = null;
       setMic("idle");
       setError(backendTranscriptionErrorMessage(caught) || t("assistant.micDenied"));
-    }
-  }, [ask, t]);
+    } finally { startingMic.current = false; }
+  }, [ask, t, planState.status]);
 
   // Closing the panel mid-recording has to release the microphone, or a shared
   // shop tablet sits there with the recording indicator lit.
-  useEffect(() => () => micSession.current?.cancel(), []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      request.current?.abort();
+      micSession.current?.cancel();
+      if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
+    };
+  }, []);
 
   if (!open) return null;
 
@@ -226,7 +286,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
     t("assistant.example.sales"),
     t("assistant.example.lowStock"),
     t("assistant.example.udhar"),
-    t("assistant.example.price"),
+    t("assistant.example.createProduct"),
   ];
 
   const lastTrace = [...messages].reverse().find((message) => message.turn?.trace?.length)?.turn?.trace ?? [];
@@ -246,13 +306,16 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
             <button
               type="button"
               onClick={() => { setMessages([]); setPending(null); setPlanState({ status: "idle" }); setError(null); }}
-              disabled={busy || planState.status === "working"}
+              disabled={busy || !!pending || mic !== "idle" || planState.status === "working"}
               className="min-h-11 rounded-lg px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-100 disabled:opacity-50"
             >
               {t("assistant.clear")}
             </button>
           ) : null}
-          <button type="button" onClick={onClose} aria-label={t("assistant.close")} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
+          <button type="button" onClick={() => { setReadAloud(value => !value); if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel(); }} aria-label={t("assistant.readAloud")} aria-pressed={readAloud} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-slate-100">
+            <Volume2 size={18} />
+          </button>
+          <button type="button" onClick={onClose} disabled={busy || mic !== "idle" || planState.status === "working"} aria-label={t("assistant.close")} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
             <X size={18} />
           </button>
         </header>
@@ -331,6 +394,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
             <section className="mt-4 rounded-2xl border-2 border-amber-300 bg-amber-50 p-3.5">
               <h3 className="text-sm font-black text-amber-900">{t("assistant.planTitle")}</h3>
               <p className="mt-0.5 text-xs font-bold text-amber-700">{t("assistant.planNote")}</p>
+              <p className="mt-1 text-xs font-semibold text-amber-800">{t("assistant.voiceConfirmHint")}</p>
               <ul className="mt-3 grid gap-2">
                 {pending.plan.map((item) => (
                   <li key={item.ref} className="flex items-start gap-2 rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-slate-800">
@@ -346,6 +410,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
                 <div className="mt-3 rounded-xl bg-white p-3">
                   <h4 className="text-sm font-black text-slate-900">{t("assistant.ownerPinTitle")}</h4>
                   <p className="mt-1 text-xs font-semibold text-slate-600">{t("assistant.ownerPinBody")}</p>
+                  <p className="mt-1 text-xs text-slate-600">{t("assistant.pinPrivate")}</p>
                   <input
                     type="password"
                     aria-label={t("assistant.ownerPinTitle")}
@@ -356,6 +421,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
                     placeholder={t("assistant.ownerPinPlaceholder")}
                     className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2 text-center text-lg font-black tracking-[0.4em]"
                   />
+                  <button type="button" onClick={decline} className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 text-sm font-bold text-slate-700">{t("assistant.reject")}</button>
                   {planState.wrong ? (
                     <p className="mt-1.5 text-xs font-bold text-rose-600">{t("assistant.ownerPinWrong")}</p>
                   ) : null}
@@ -373,7 +439,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
                   <button
                     type="button"
                     onClick={decline}
-                    disabled={planState.status === "working"}
+                    disabled={busy || mic !== "idle" || planState.status === "working"}
                     className="flex-1 rounded-xl border border-slate-300 bg-white py-2.5 text-sm font-black text-slate-700 disabled:opacity-50"
                   >
                     {t("assistant.reject")}
@@ -384,7 +450,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
                     // this plan needs one, and answers OWNER_PIN_REQUIRED if so —
                     // the client never gets to make that call.
                     onClick={() => applyPlan()}
-                    disabled={planState.status === "working"}
+                    disabled={busy || mic !== "idle" || planState.status === "working"}
                     className="flex-1 rounded-xl bg-[var(--brand)] py-2.5 text-sm font-black text-white disabled:opacity-50"
                   >
                     {planState.status === "working" ? t("assistant.confirming") : t("assistant.confirm")}
@@ -441,7 +507,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
           <button
             type="button"
             onClick={toggleMic}
-            disabled={busy || mic === "transcribing"}
+            disabled={busy || mic === "transcribing" || planState.status === "working" || planState.status === "pin"}
             aria-label={mic === "listening" ? t("assistant.listening") : t("assistant.speak")}
             aria-pressed={mic === "listening"}
             className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border transition disabled:opacity-40 ${
@@ -457,12 +523,12 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             placeholder={mic === "idle" ? t("assistant.inputPlaceholder") : mic === "listening" ? t("assistant.listening") : t("assistant.transcribing")}
-            disabled={mic !== "idle"}
+            disabled={mic !== "idle" || planState.status === "pin"}
             className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-[var(--brand)] disabled:bg-slate-50"
           />
           <button
             type="submit"
-            disabled={busy || planState.status === "working" || !draft.trim()}
+            disabled={busy || planState.status === "working" || planState.status === "pin" || !draft.trim()}
             aria-label={t("assistant.send")}
             className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[var(--brand)] text-white disabled:opacity-40"
           >

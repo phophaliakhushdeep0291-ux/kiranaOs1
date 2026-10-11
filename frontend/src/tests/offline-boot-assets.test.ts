@@ -3,7 +3,7 @@ import { assertOfflineBootAssets } from "../../scripts/offline-boot-assets.mjs";
 
 function build() {
   const manifest = Object.fromEntries([
-    "index.html", "src/components/layout/index.ts",
+    "index.html", "src/components/layout/Layout.tsx",
     "src/features/core/settings/translations/english-deferred.ts",
     "src/features/core/settings/translations/hindi-critical.ts",
     "src/features/core/settings/translations/hindi-deferred.ts",
@@ -25,7 +25,7 @@ describe("emitted offline boot assets", () => {
 
   it("fails when a required dynamic import disappears from the emitted manifest", () => {
     const { manifest, assets } = build();
-    delete manifest["src/components/layout/index.ts"];
+    delete manifest["src/components/layout/Layout.tsx"];
     expect(() => assertOfflineBootAssets(manifest, assets)).toThrow("missing from build manifest");
   });
 });

@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { openAssistantCommand } from "@/features/core/assistant/task-commands";
 import { executeVoiceAction } from "./voice-actions";
 import { parseLocalVoiceIntent } from "./voice-command-parser";
 import { askAiIntent } from "./voice-ai-client";
@@ -329,6 +330,17 @@ export function VoiceAssistant() {
     setFeedbackTarget(null);
     setFeedback(null);
     const local = parseLocalVoiceIntent(spoken, location);
+    // Navigation and local counters stay instant. Business questions and
+    // mutations need the conversation's history, clarification and approval.
+    if (navigator.onLine !== false && !["navigate", "search", "sync_count"].includes(local.action)
+      && openAssistantCommand(spoken)) {
+      recognitionRef.current?.abort?.();
+      backendRecordingRef.current?.cancel();
+      setListening(false);
+      setOpen(false);
+      setCommand("");
+      return;
+    }
     const preferLocalContext = location.startsWith("/products") && local.action === "product_draft";
     const aiIntent = preferLocalContext ? null : await askAiIntent(spoken, location);
     const intent = aiIntent && aiIntent.action !== "noop" ? aiIntent : local;

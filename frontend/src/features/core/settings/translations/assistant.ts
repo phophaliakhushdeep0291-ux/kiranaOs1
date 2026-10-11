@@ -5,6 +5,13 @@
 // what someone reads before agreeing to a change to their stock or their prices.
 // They stay plain and concrete for that reason.
 export const assistantEn = {
+  "assistant.example.createProduct": "Add a new product to my catalogue",
+  "assistant.productSaved": "Saved {names} on this device and queued for sync. Check Sync status for server acceptance.",
+  "assistant.billStaged": "Items prepared. Open the bill to review them before payment.",
+  "assistant.voiceConfirmHint": "Say “confirm” to approve this plan, or “cancel”. You can also correct a detail.",
+  "assistant.pinPrivate": "Enter the owner PIN only in the PIN field. Do not say it aloud or send it in chat.",
+  "assistant.readAloud": "Read replies aloud",
+  "assistant.continueTask": "Continue in assistant",
   "assistant.title": "Assistant",
   "assistant.subtitle": "Ask about your shop, or tell it what to change",
   "assistant.open": "Open assistant",
@@ -54,7 +61,7 @@ export const assistantEn = {
   "assistant.sourcesToggle": "Show what it read",
   "assistant.sourcesHide": "Hide",
 
-  "assistant.offline": "The assistant needs a connection. Voice commands still work offline.",
+  "assistant.offline": "AI understanding needs a connection. You can still use the product and billing forms offline.",
   "assistant.unavailable": "The assistant is not set up on this server.",
   "assistant.busy": "The assistant is busy. Try again in a moment.",
   "assistant.failed": "That did not work. Try rephrasing it.",

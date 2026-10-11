@@ -3,7 +3,7 @@
 // that has its route chunks but lacks its layout, translations or shared CSS.
 const BOOT_ENTRIES = [
   "index.html",
-  "src/components/layout/index.ts",
+  "src/components/layout/Layout.tsx",
   "src/features/core/settings/translations/english-deferred.ts",
   "src/features/core/settings/translations/hindi-critical.ts",
   "src/features/core/settings/translations/hindi-deferred.ts",

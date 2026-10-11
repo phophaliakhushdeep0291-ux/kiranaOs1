@@ -15,6 +15,7 @@
  * Handlers call the same services the routes call, so the stock ledger, audit
  * rows and sync events are written exactly as a manual edit would write them.
  */
+import { CREATE_PRODUCT_TOOL } from "./product-create.js";
 import { defineTool, TOOL_RISK } from "../tool-contract.js";
 import { createCustomer, recordUdharPayment } from "../../../customers/customers.service.js";
 import { updateProduct, getProduct, listProducts, legacySellingUnit } from "../../../products/products.service.js";
@@ -107,6 +108,7 @@ function carryUnit(unit) {
 }
 
 export const CORE_WRITE_TOOLS = [
+  CREATE_PRODUCT_TOOL,
   defineTool({
     name: "set_pack_size",
     keywords: [

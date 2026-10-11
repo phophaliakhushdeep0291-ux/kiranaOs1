@@ -111,9 +111,9 @@ export async function startBackendTranscription(
     callbacks.onTranscribing();
     try {
       const result = await requestAiAudioTranscription(audio);
-      callbacks.onTranscript(result);
+      if (!cancelled) callbacks.onTranscript(result);
     } catch (error) {
-      callbacks.onError(backendTranscriptionErrorMessage(error));
+      if (!cancelled) callbacks.onError(backendTranscriptionErrorMessage(error));
     } finally {
       endOnce();
     }

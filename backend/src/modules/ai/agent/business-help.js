@@ -56,6 +56,12 @@ export const BUSINESS_HELP = Object.freeze({
 });
 
 export const CLARIFICATIONS = Object.freeze({
+  product_name: { en: "What is the new product's exact name?", hi: "नए सामान का पूरा नाम क्या है?" },
+  product_unit: { en: "Is this product sold per piece, kg, gram, litre or ml? Use Products for packs or variants.", hi: "सामान पीस, किलो, ग्राम, लीटर या मिलीलीटर में बिकता है? पैक या अलग वेरिएंट के लिए Products खोलें।" },
+  selling_price: { en: "What is the selling price per selling unit, in your shop's currency?", hi: "दुकान की मुद्रा में एक बिक्री यूनिट का रेट कितना है?" },
+  cost_price: { en: "What is the cost per selling unit? Say zero only if its recorded cost really is zero.", hi: "एक बिक्री यूनिट की लागत कितनी है? दर्ज लागत सच में शून्य हो तभी शून्य बताएं।" },
+  opening_stock: { en: "How much opening stock is there, in the same selling unit? Say zero if there is none.", hi: "उसी बिक्री यूनिट में शुरुआती स्टॉक कितना है? स्टॉक नहीं है तो शून्य बताएं।" },
+  tax_rate: { en: "What tax percentage should this product use? Say zero if no tax applies; I will not guess the rate.", hi: "इस सामान पर कितने प्रतिशत टैक्स लगाना है? टैक्स न लगे तो शून्य बताएं; मैं दर का अनुमान नहीं लगाऊँगा।" },
   product: { en: "Which product and pack do you mean? Please give its name or barcode.", hi: "कौन सा सामान और पैक चाहिए? उसका नाम या बारकोड बताएं।" },
   customer: { en: "Which customer do you mean? Please give their name or phone number.", hi: "कौन सा ग्राहक है? उसका नाम या फोन नंबर बताएं।" },
   date_range: { en: "Which period should I check: today, this month, or specific start and end dates?", hi: "किस अवधि का हिसाब देखूँ: आज, इस महीने का, या शुरू और खत्म की तारीखें?" },
