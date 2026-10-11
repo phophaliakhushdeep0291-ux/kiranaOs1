@@ -5,13 +5,13 @@ import { useAppLanguage } from "@/features/core/settings/i18n";
 import { executeClientActions } from "./execute-client-actions";
 import type { StagedBillLine } from "@/features/core/billing/assistant-staging";
 import { planDecision } from "./task-commands";
+import { useAssistantConversation, useConversationField } from "./use-assistant-conversation";
 import {
   sendAgentMessage,
   confirmAgentPlan,
   rejectAgentPlan,
-  type AgentChatMessage,
+  supersedeAgentPlan,
   agentErrorCode,
-  type AgentTurn,
   type AgentCartLine,
 } from "./agent-client";
 import {
@@ -37,21 +37,16 @@ import { submitAiFeedback, type AiFeedbackOutcome } from "@/lib/ai/ai-feedback-c
  * can see it read the sales summary rather than guessed.
  */
 
-type FeedbackState = AiFeedbackOutcome | "submitting" | "failed";
-type Bubble = AgentChatMessage & { turn?: AgentTurn; feedback?: FeedbackState };
-
-type PlanState =
-  | { status: "idle" }
-  | { status: "working" }
-  | { status: "pin"; wrong: boolean }
-  | { status: "done"; ok: boolean; message?: string };
-
 export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApplyBillLines }: { open: boolean; onClose: () => void; initialMessage?: string; cart?: AgentCartLine[]; onApplyBillLines?: (lines: StagedBillLine[]) => number }) {
   const { t, language } = useAppLanguage();
   const [, navigate] = useLocation();
-  const [stagedCount, setStagedCount] = useState(0);
-  const [messages, setMessages] = useState<Bubble[]>([]);
-  const [draft, setDraft] = useState(initialMessage);
+  // Keep bill proposals separate from global proposals: returning to a till
+  // must never silently retarget a global action to whichever bill is now open.
+  const conversation = useAssistantConversation(onApplyBillLines ? null : "shop");
+  const { isCurrent } = conversation;
+  const [stagedCount, setStagedCount] = useConversationField(conversation, "stagedCount");
+  const [messages, setMessages] = useConversationField(conversation, "messages");
+  const [draft, setDraft] = useConversationField(conversation, "draft");
   const asking = useRef(false);
   const mounted = useRef(true);
   const initialSent = useRef(false);
@@ -59,16 +54,16 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
   const startingMic = useRef(false);
   const [readAloud, setReadAloud] = useState(false);
   const speak = useCallback((text: string) => {
-    if (!readAloud || typeof speechSynthesis === "undefined") return;
+    if (!mounted.current || !isCurrent() || !readAloud || typeof speechSynthesis === "undefined") return;
     speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = language === "hi" ? "hi-IN" : "en-IN";
     speechSynthesis.speak(utterance);
-  }, [readAloud, language]);
+  }, [readAloud, language, isCurrent]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<AgentTurn | null>(null);
-  const [planState, setPlanState] = useState<PlanState>({ status: "idle" });
+  const [pending, setPending] = useConversationField(conversation, "pending");
+  const [planState, setPlanState] = useConversationField(conversation, "planState");
   const [pin, setPin] = useState("");
   const planRequestBusy = useRef(false);
   const [showTrace, setShowTrace] = useState(false);
@@ -86,15 +81,17 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
   }, [messages, pending, planState]);
 
   const applyPlan = useCallback(async (ownerPin?: string) => {
-    if (!pending?.planId || planRequestBusy.current) return;
+    if (!pending?.planId || asking.current || planRequestBusy.current || planState.status === "working" || !isCurrent()) return;
     planRequestBusy.current = true;
     setPlanState({ status: "working" });
     try {
       const result = await confirmAgentPlan(pending.planId, ownerPin);
       setPending(null);
+      if (!mounted.current || !isCurrent()) throw new Error(t("assistant.outcomeUnknown"));
       // Lines the server resolved are not on the bill yet — the till owns the
       // cart. Stage them and offer the trip rather than claiming it is done.
-      const { staged, applied, incompleteBill, products, problems: unresolved } = await executeClientActions(result, ownerPin, onApplyBillLines);
+      const { staged, applied, incompleteBill, products, problems: unresolved } = await executeClientActions(result, ownerPin, onApplyBillLines, isCurrent);
+      if (!isCurrent()) throw new Error(t("assistant.outcomeUnknown"));
       const outcome = result.requiresReview ? t("assistant.outcomeUnknown")
         : !result.allSucceeded ? t("assistant.partialFailure")
           : incompleteBill ? t("assistant.till.reviewItems")
@@ -112,6 +109,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
       setPending(null);
       setPin("");
     } catch (caught) {
+      if (!isCurrent()) return;
       const code = agentErrorCode(caught);
       if (code === "OWNER_PIN_REQUIRED") {
         setPlanState({ status: "pin", wrong: false });
@@ -130,14 +128,15 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
     } finally {
       planRequestBusy.current = false;
     }
-  }, [pending, t, speak, onApplyBillLines]);
+  }, [pending, planState.status, t, speak, onApplyBillLines, isCurrent, setPending, setPlanState, setMessages, setStagedCount]);
 
   const decline = useCallback(async () => {
-    if (!pending?.planId || planRequestBusy.current) return;
+    if (!pending?.planId || asking.current || planRequestBusy.current || planState.status === "working" || !isCurrent()) return;
     planRequestBusy.current = true;
     setPlanState({ status: "working" });
     try {
       const result = await rejectAgentPlan(pending.planId);
+      if (!isCurrent()) return;
       if (result.status !== "rejected") {
         setPlanState({ status: "done", ok: false, message: t("assistant.outcomeUnknown") });
         setPending(null);
@@ -148,17 +147,18 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
       setMessages(current => [...current, { role: "assistant", content: t("assistant.rejected") }]);
       speak(t("assistant.rejected"));
     } catch (caught) {
+      if (!isCurrent()) return;
       const resolved = agentErrorCode(caught) === "AI_PLAN_ALREADY_RESOLVED";
       if (resolved) setPending(null);
       setPlanState({ status: "done", ok: false, message: t(resolved ? "assistant.outcomeUnknown" : "assistant.cancelFailed") });
     } finally {
       planRequestBusy.current = false;
     }
-  }, [pending, t, speak]);
+  }, [pending, planState.status, t, speak, isCurrent, setPending, setPlanState, setMessages]);
 
   const ask = useCallback(async (text: string) => {
     const question = text.trim();
-    if (!question || asking.current || planRequestBusy.current) return;
+    if (!question || asking.current || planRequestBusy.current || planState.status === "working" || !isCurrent()) return;
     if (planState.status === "pin") { setError(t("assistant.pinPrivate")); return; }
     const decision = pending ? planDecision(question) : null;
     if (decision) {
@@ -177,6 +177,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
     // stays server-side where it cannot be edited.
     const history = messages.map(({ role, content, turn }) => ({ role, content: turn?.plan.length ? [content, ...turn.plan.map(item => item.summary)].join("\n") : content }));
     setMessages((current) => [...current, { role: "user", content: question }]);
+    let cancellingPrevious = !!pending?.planId;
 
     try {
       if (typeof navigator !== "undefined" && navigator.onLine === false) {
@@ -186,17 +187,32 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
       if (pending?.planId) {
         // A correction supersedes the displayed proposal; never leave an old
         // action eligible for confirmation behind a new conversation turn.
-        await rejectAgentPlan(pending.planId);
+        await supersedeAgentPlan(pending.planId);
         setPending(null);
+        cancellingPrevious = false;
       }
+      if (!mounted.current || !isCurrent()) return;
       request.current = new AbortController();
       const turn = await sendAgentMessage(question, history, { language, cart, signal: request.current.signal });
-      if (!mounted.current) return;
+      if (!mounted.current || !isCurrent()) return;
       setMessages((current) => [...current, { role: "assistant", content: turn.reply, turn }]);
       if (turn.requiresConfirmation && turn.planId) setPending(turn);
       speak([turn.reply, ...turn.plan.map(item => item.summary), ...(turn.requiresConfirmation ? [t("assistant.voiceConfirmHint")] : [])].join(". "));
     } catch (caught) {
+      if (!isCurrent()) return;
       const code = agentErrorCode(caught);
+      if (code === "AI_PLAN_ALREADY_RESOLVED") {
+        setPending(null);
+        const outcome = t("assistant.outcomeUnknown");
+        setPlanState({ status: "done", ok: false, message: outcome });
+        setMessages(current => [...current, { role: "assistant", content: outcome }]);
+        return;
+      }
+      if (cancellingPrevious) {
+        setDraft(question);
+        setError(t("assistant.cancelFailed"));
+        return;
+      }
       setError(
         code === "AI_TURN_TIMEOUT" ? t("assistant.timeout")
           : code === "AI_KEY_MISSING" ? t("assistant.unavailable")
@@ -207,7 +223,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
       asking.current = false;
       setBusy(false);
     }
-  }, [messages, pending, planState.status, applyPlan, decline, speak, t, language, cart]);
+  }, [messages, pending, planState.status, applyPlan, decline, speak, t, language, cart, isCurrent, setDraft, setPlanState, setMessages, setPending]);
 
   useEffect(() => {
     if (initialMessage && !initialSent.current) {
@@ -216,21 +232,21 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
     }
   }, [initialMessage, ask]);
 
-  const labelAnswer = useCallback(async (index: number, actionLogId: string, outcome: AiFeedbackOutcome) => {
-    setMessages((current) => current.map((message, messageIndex) => (
-      messageIndex === index ? { ...message, feedback: "submitting" } : message
+  const labelAnswer = useCallback(async (actionLogId: string, outcome: AiFeedbackOutcome) => {
+    setMessages((current) => current.map((message) => (
+      message.turn?.turnId === actionLogId ? { ...message, feedback: "submitting" } : message
     )));
     try {
       await submitAiFeedback(actionLogId, outcome);
-      setMessages((current) => current.map((message, messageIndex) => (
-        messageIndex === index ? { ...message, feedback: outcome } : message
+      setMessages((current) => current.map((message) => (
+        message.turn?.turnId === actionLogId ? { ...message, feedback: outcome } : message
       )));
     } catch {
-      setMessages((current) => current.map((message, messageIndex) => (
-        messageIndex === index ? { ...message, feedback: "failed" } : message
+      setMessages((current) => current.map((message) => (
+        message.turn?.turnId === actionLogId ? { ...message, feedback: "failed" } : message
       )));
     }
-  }, []);
+  }, [setMessages]);
 
   // Voice in, because the person asking "what is running out" usually has stock
   // in one hand. The transcript is sent straight away rather than parked in the
@@ -272,13 +288,15 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
   // shop tablet sits there with the recording indicator lit.
   useEffect(() => {
     mounted.current = true;
+    setPin("");
+    setError(null);
     return () => {
       mounted.current = false;
       request.current?.abort();
       micSession.current?.cancel();
       if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
     };
-  }, []);
+  }, [conversation.store]);
 
   if (!open) return null;
 
@@ -305,7 +323,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
           {messages.length > 0 ? (
             <button
               type="button"
-              onClick={() => { setMessages([]); setPending(null); setPlanState({ status: "idle" }); setError(null); }}
+              onClick={() => { setMessages([]); setDraft(""); setPending(null); setPlanState({ status: "idle" }); setError(null); }}
               disabled={busy || !!pending || mic !== "idle" || planState.status === "working"}
               className="min-h-11 rounded-lg px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-100 disabled:opacity-50"
             >
@@ -362,7 +380,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
                               key={outcome}
                               type="button"
                               disabled={message.feedback === "submitting"}
-                              onClick={() => void labelAnswer(index, message.turn!.turnId, outcome)}
+                              onClick={() => void labelAnswer(message.turn!.turnId, outcome)}
                               className="min-h-11 rounded-lg border border-slate-300 bg-white px-2 font-bold text-slate-600 hover:border-[var(--brand)] disabled:opacity-50"
                             >
                               {t(`assistant.feedback.${outcome}`)}

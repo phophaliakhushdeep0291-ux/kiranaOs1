@@ -107,7 +107,7 @@ export async function sendAgentMessage(
     method: "POST",
     body: JSON.stringify({
       message,
-      history: history.slice(-12),
+      history: history.slice(-12).map(({ role, content }) => ({ role, content: content.slice(0, 4000) })),
       ...(init?.language ? { language: init.language } : {}),
       // Sent only from the till, and only as context — "make it three kilo" has
       // no referent without it. The agent never writes back through this.
@@ -144,4 +144,12 @@ export async function rejectAgentPlan(planId: string): Promise<{ planId: string;
     method: "POST",
     body: JSON.stringify({ planId }),
   });
+}
+
+/** A correction cannot advance until the superseded plan is cancelled. */
+export async function supersedeAgentPlan(planId: string): Promise<void> {
+  const result = await rejectAgentPlan(planId);
+  if (result.status !== "rejected") {
+    throw new ApiClientError("The previous plan could not be cancelled", 409, { code: "AI_PLAN_ALREADY_RESOLVED" });
+  }
 }

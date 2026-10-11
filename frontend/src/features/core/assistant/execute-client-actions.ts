@@ -2,13 +2,14 @@ import { createProductLocalFirst } from "@/features/core/products/local-actions"
 import { stageBillLines, type StagedBillLine } from "@/features/core/billing/assistant-staging";
 import type { AgentExecutionResult } from "./agent-client";
 
-export async function executeClientActions(result: AgentExecutionResult, ownerPin?: string, applyBillLines?: (lines: StagedBillLine[]) => number) {
+export async function executeClientActions(result: AgentExecutionResult, ownerPin?: string, applyBillLines?: (lines: StagedBillLine[]) => number, isCurrent: () => boolean = () => true) {
   let staged = 0;
   let applied = 0;
   let incompleteBill = false;
   const products: string[] = [];
   const problems: string[] = [];
   for (const action of result.clientActions ?? []) {
+    if (!isCurrent()) throw new Error("Assistant session changed before applying the action");
     if (action.action === "add_bill_lines") {
       const lines = action.payload.lines ?? [];
       if (applyBillLines) {

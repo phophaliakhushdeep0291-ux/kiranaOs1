@@ -60,6 +60,18 @@ describe("assistant product execution", () => {
     await expect(executeClientActions(result)).rejects.toThrow(/PIN/);
     expect(memory.rows.products).toBeUndefined();
   });
+  it("rejects delivery after a login or role change before any local write", async () => {
+    await expect(executeClientActions(result, "1234", undefined, () => false)).rejects.toThrow(/session changed/);
+    expect(memory.rows).toEqual({});
+  });
+  it("rechecks the session between client actions", async () => {
+    const isCurrent = vi.fn().mockReturnValueOnce(true).mockReturnValue(false);
+    const apply = vi.fn(() => 1);
+    const bill = { ref: "2", action: "add_bill_lines", payload: { lines: [{ productId: "rice", name: "Rice", quantity: 1, unit: "kg", rate: 64.5 }] } };
+    await expect(executeClientActions({ ...result, clientActions: [...result.clientActions!, bill] }, "1234", apply, isCurrent)).rejects.toThrow(/session changed/);
+    expect(memory.rows.products).toHaveLength(1);
+    expect(apply).not.toHaveBeenCalled();
+  });
   it("replays a lost local acknowledgement without another product or outbox write", async () => {
     await executeClientActions(result, "1234"); await executeClientActions(result, "1234");
     expect(memory.rows.products).toHaveLength(1);
