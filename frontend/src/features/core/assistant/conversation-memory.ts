@@ -3,6 +3,7 @@ import { authSessionInstance, loadAuthSession, type AuthSession } from "@/lib/st
 import type { AiFeedbackOutcome } from "@/lib/ai/ai-feedback-client";
 import type { AgentChatMessage, AgentTurn } from "./agent-client";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
+import { getStoredBusinessType } from "@/features/core/settings/business-type-store";
 
 export type AssistantBubble = AgentChatMessage & {
   turn?: AgentTurn;
@@ -34,7 +35,7 @@ const conversations = createCounterDraft<AssistantConversation>(() => ({
 
 export function assistantConversationScope(context: string, session: AuthSession = loadAuthSession()): string | null {
   const instance = authSessionInstance(session);
-  return instance && session.user?.role ? JSON.stringify([instance, session.user.role, getActiveLocationId(), context]) : null;
+  return instance && session.user?.role ? JSON.stringify([instance, session.user.role, getActiveLocationId(), getStoredBusinessType(), context]) : null;
 }
 
 export function getAssistantConversation(scope: string | null) {

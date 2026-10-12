@@ -1,6 +1,7 @@
 import { useCallback, useContext, useMemo, useSyncExternalStore, type SetStateAction } from "react";
 import { AuthContext } from "@/features/core/auth/auth-context";
 import { getActiveLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
+import { useBusinessTypeKey } from "@/features/core/settings/business-type-store";
 import { assistantConversationScope, getAssistantConversation, updateAssistantConversation, type AssistantConversation } from "./conversation-memory";
 
 function subscribeLocation(listener: () => void) {
@@ -12,6 +13,7 @@ function subscribeLocation(listener: () => void) {
 export function useAssistantConversation(context: string | null) {
   // Re-render on a local or cross-tab auth change, even while the panel is open.
   useContext(AuthContext);
+  useBusinessTypeKey();
   useSyncExternalStore(subscribeLocation, getActiveLocationId, () => null);
   const scope = assistantConversationScope(context ?? "billing");
   // A billing panel has no stable bill ID here. Keep it local to this mount so
@@ -19,7 +21,7 @@ export function useAssistantConversation(context: string | null) {
   const store = useMemo(() => getAssistantConversation(context ? scope : null), [scope, context]);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const isCurrent = useCallback(() => scope === assistantConversationScope(context ?? "billing"), [scope, context]);
-  return { store, value: snapshot.value, isCurrent };
+  return { scope, store, value: snapshot.value, isCurrent };
 }
 
 export function useConversationField<K extends keyof AssistantConversation>(

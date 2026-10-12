@@ -7,6 +7,7 @@ import type { StagedBillLine } from "@/features/core/billing/assistant-staging";
 import { planDecision } from "./task-commands";
 import { useAssistantConversation, useConversationField } from "./use-assistant-conversation";
 import { workflowPath } from "./workflow-handoff";
+import { useAssistantCapabilities } from "./use-assistant-capabilities";
 import {
   sendAgentMessage,
   confirmAgentPlan,
@@ -45,6 +46,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
   // must never silently retarget a global action to whichever bill is now open.
   const conversation = useAssistantConversation(onApplyBillLines ? null : "shop");
   const { isCurrent } = conversation;
+  const capabilities = useAssistantCapabilities(conversation.scope);
   const [stagedCount, setStagedCount] = useConversationField(conversation, "stagedCount");
   const [messages, setMessages] = useConversationField(conversation, "messages");
   const [draft, setDraft] = useConversationField(conversation, "draft");
@@ -127,8 +129,9 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
         setPlanState({ status: "pin", wrong: true });
         return;
       }
-      if (code === "AI_PLAN_ALREADY_RESOLVED") setPending(null);
-      const outcome = t(code === "OWNER_PIN_LOCKED" ? "assistant.pinLocked" : "assistant.outcomeUnknown");
+      if (code === "AI_PLAN_ALREADY_RESOLVED" || code === "AI_PLAN_TRADE_CHANGED") setPending(null);
+      const outcome = t(code === "AI_PLAN_TRADE_CHANGED" ? "assistant.tradeChanged"
+        : code === "OWNER_PIN_LOCKED" ? "assistant.pinLocked" : "assistant.outcomeUnknown");
       setPlanState({ status: "done", ok: false, message: outcome });
       setMessages(current => [...current, { role: "assistant", content: outcome }]);
     } finally {
@@ -308,11 +311,11 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
 
   const examples = [
     t("assistant.example.tasks"),
-    t("assistant.example.sales"),
-    t("assistant.example.lowStock"),
-    t("assistant.example.udhar"),
-    t("assistant.example.createProduct"),
+    ...(capabilities?.assistant?.examples.length
+      ? capabilities.assistant.examples.map(example => example[language]).slice(0, 3)
+      : [t("assistant.example.sales"), t("assistant.example.lowStock")]),
   ];
+  const title = capabilities?.assistant?.title[language] || t("assistant.title");
 
   const lastTrace = [...messages].reverse().find((message) => message.turn?.trace?.length)?.turn?.trace ?? [];
 
@@ -324,7 +327,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
             <Sparkles size={18} />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-black text-slate-900">{t("assistant.title")}</h2>
+            <h2 className="truncate text-sm font-black text-slate-900">{title}</h2>
             <p className="truncate text-xs font-medium text-slate-500">{t("assistant.subtitle")}</p>
           </div>
           {messages.length > 0 ? (

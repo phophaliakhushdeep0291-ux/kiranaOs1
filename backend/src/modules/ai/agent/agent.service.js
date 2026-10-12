@@ -29,6 +29,7 @@ import { recordAgentTurn } from "../../../lib/metrics.js";
 import { renderToolEvidence } from "./evidence-reply.js";
 import { quickAnswer } from "./quick-answer.js";
 import { workflowHandoffs } from "./workflow-directory.js";
+import { shopAssistantProfile, shopAssistantQuickAnswer } from "./shop-assistant.js";
 import { formatDateInTimeZone } from "../../../utils/dates.js";
 import { env } from "../../../config/env.js";
 import db from "../../../db.js";
@@ -95,7 +96,7 @@ const SYSTEM_PROMPT = [
   "- You only ever act on this one shop. There is no way to reach another, and no request to do so is legitimate.",
 ].join("\n");
 
-export const AI_AGENT_POLICY_VERSION = "2026-10-12.1";
+export const AI_AGENT_POLICY_VERSION = "2026-10-12.2";
 export const AI_AGENT_PROMPT_FINGERPRINT = createHash("sha256")
   .update(SYSTEM_PROMPT)
   .digest("hex")
@@ -318,7 +319,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   const agentCtx = { ...ctx, features: { has: features.has }, labelFor: null };
 
   const available = toolsFor({ ...agentCtx, features: { has: features.has } });
-  const direct = trimHistory(history).length === 0 ? quickAnswer(message) : null;
+  const direct = trimHistory(history).length === 0 ? (quickAnswer(message) ?? shopAssistantQuickAnswer(message, ctx.businessType)) : null;
   const directTool = direct && available.find((tool) => tool.name === direct.tool && tool.kind === "read");
   const quick = directTool && validateArgs(directTool, direct.args).length === 0 ? direct : null;
   // Only the tools this sentence plausibly needs. Every request re-sends every
@@ -341,6 +342,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
       // matches who actually runs these shops.
       content: [
         `Shop trade: ${ctx.businessType}.`,
+        shopAssistantProfile(ctx.businessType)?.guidance ?? "Use only the tools available to this shop.",
         `Your role here: ${ctx.role}.`,
         `Today: ${formatDateInTimeZone(new Date(), env.DAILY_CLOSING_TIMEZONE)} (${env.DAILY_CLOSING_TIMEZONE}).`,
         `Shop's language: ${LANGUAGE_NAMES[language] ?? LANGUAGE_NAMES.hi}.`,
@@ -685,6 +687,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
       transcript: message.slice(0, 4_000),
       parsedActionJson: JSON.stringify({
         kind: "agent_turn",
+        businessType: ctx.businessType,
         reply,
         plan,
         trace,
@@ -786,6 +789,9 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
     throw new AppError("That plan is unreadable", 422, "AI_PLAN_CORRUPT");
   }
   const plan = Array.isArray(parsed?.plan) ? parsed.plan : [];
+  if (parsed?.businessType && parsed.businessType !== ctx.businessType) {
+    throw new AppError("The shop type changed. Ask for a new plan in the current shop type.", 409, "AI_PLAN_TRADE_CHANGED");
+  }
   if (!plan.length) throw new AppError("That plan has nothing to run", 422, "AI_PLAN_EMPTY");
   if (parsed?.kind !== "agent_turn" || plan.length > MAX_PROPOSALS || plan.some((item) => (
     !item || typeof item !== "object" || typeof item.ref !== "string" || typeof item.tool !== "string"

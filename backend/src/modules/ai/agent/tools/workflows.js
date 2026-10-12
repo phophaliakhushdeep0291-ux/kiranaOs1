@@ -6,7 +6,12 @@ export const WORKFLOW_TOOLS = [
   defineTool({
     name: "get_available_tasks", always: true, kind: "read", risk: TOOL_RISK.SAFE,
     description: "Check which change actions this shop and current role can actually execute. Use for capability questions; never claim to do every task. Other work needs a get_workflow handoff to the right screen. This is information, not execution.",
-    handler: async (_args, ctx) => ({ actions: toolsFor(ctx).filter(tool => tool.kind === "write").map(tool => tool.name) }),
+    handler: async (_args, ctx) => {
+      const available = toolsFor(ctx);
+      return { businessType: ctx.businessType,
+        actions: available.filter(tool => tool.kind === "write").map(tool => tool.name),
+        reads: available.filter(tool => tool.kind === "read").map(tool => tool.name) };
+    },
   }),
   defineTool({
     name: "get_workflow", always: true, kind: "read", risk: TOOL_RISK.SAFE,

@@ -22,7 +22,7 @@ Every change requires the user to approve a displayed plan. Existing permissions
 
 Supplier, expense and product deliveries store an action receipt in the same transaction as the entity/outbox writes. Replayed or concurrent delivery of the same confirmed action cannot duplicate the local record. A local save is shown as pending sync, not server acceptance. The assistant still needs its server/model connection to interpret broad requests; offline-first saving is not an offline language model.
 
-Conversation memory is isolated by login, shop, user, role, counter branch and UI context. Branch switching cannot carry an old expense proposal into the new branch. Main-panel memory survives closing/reopening within the same tab, while logout clears it and inactivity expires it. Private PIN input is not retained.
+Conversation memory is isolated by login, shop, user, role, counter branch, shop type and UI context. Branch switching cannot carry an old expense proposal into the new branch. Main-panel memory survives closing/reopening within the same tab, while logout clears it and inactivity expires it. Private PIN input is not retained.
 
 ## Work that still needs a screen
 
@@ -117,3 +117,5 @@ Dynamic bill/customer/product/finding details use their parent list so the user 
 - A browser fixture exercised the real Assistant UI, IndexedDB and existing local save functions with a scripted API and synthetic shop. It asked for expense payment status, confirmed an expense of 125.75, confirmed a supplier using “haan kar do”, and stored one CREATE_EXPENSE and one CREATE_SUPPLIER operation. The expense retained fixture-branch-one and both records remained pending_sync. A refund request explicitly stayed unfinished and its button navigated to /returns/new without creating a refund.
 - The browser fixture does not establish live model understanding or microphone accuracy. Run acceptance tests with the configured provider and intended devices, including Hindi/Hinglish, noisy speech, corrections, uncertain dates, duplicate names and weak connectivity. Arbitrary wording/accent/language accuracy is not guaranteed.
 - More direct writers require their own domain validation and recovery tests before they can be claimed as automated. This change does not merge or deploy the branch.
+
+Per-shop assistant context, examples and role/feature filtering are documented in [Assistant abilities by shop type](AI-SHOP-TYPE-CAPABILITIES-2026-10-12.md). Specialist reads do not add specialist write automation.

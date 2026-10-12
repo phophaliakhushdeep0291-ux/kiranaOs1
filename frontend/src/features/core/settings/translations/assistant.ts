@@ -6,6 +6,7 @@
 // They stay plain and concrete for that reason.
 export const assistantEn = {
   "assistant.example.tasks": "What can you do?",
+  "assistant.tradeChanged": "The shop type changed. Nothing from this plan was executed. Ask for a new plan for the current shop type.",
   "assistant.openWorkflow": "Open {name}",
   "assistant.example.createProduct": "Add a new product to my catalogue",
   "assistant.productSaved": "Saved {names} on this device and queued for sync. Check Sync status for server acceptance.",
@@ -28,7 +29,7 @@ export const assistantEn = {
   "assistant.micDenied": "Microphone access was refused. Type instead.",
 
   "assistant.emptyTitle": "What would you like to know?",
-  "assistant.emptyBody": "It can read your stock, sales, customers and udhar, and prepare changes for you to confirm.",
+  "assistant.emptyBody": "Your assistant uses this shop type, enabled features and your role. Ask a question or describe a task; changes need your confirmation.",
   "assistant.example.sales": "How much did I sell this week?",
   "assistant.example.lowStock": "What is running out?",
   "assistant.example.udhar": "Who owes me the most?",

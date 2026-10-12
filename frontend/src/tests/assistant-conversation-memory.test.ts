@@ -3,6 +3,7 @@ import { clearCounterDrafts } from "@/lib/counter-draft";
 import { saveAuthSession, clearAuthSession, type AuthSession } from "@/lib/storage/auth-storage";
 import { assistantConversationScope, getAssistantConversation, updateAssistantConversation, ASSISTANT_MEMORY_MAX_AGE_MS } from "@/features/core/assistant/conversation-memory";
 import type { AgentTurn } from "@/features/core/assistant/agent-client";
+import { saveBusinessType } from "@/features/core/settings/business-type-store";
 
 function storage() {
   const rows = new Map<string, string>();
@@ -26,6 +27,7 @@ beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-12T06:00:00Z"));
   vi.stubGlobal("window", { localStorage: storage(), sessionStorage: storage() });
   clearCounterDrafts(); saveAuthSession(session);
+  saveBusinessType("kirana");
 });
 afterEach(() => { clearCounterDrafts(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
@@ -83,6 +85,14 @@ describe("assistant conversation continuity", () => {
     expect(currentStore().getSnapshot().value.pending).toBeNull();
     window.localStorage.setItem("kirana:active-location:shop-one", "branch-one");
     expect(currentStore()).toBe(first);
+  });
+
+  it("does not carry a proposal into a different shop type", () => {
+    const original = remember(); const scope = assistantConversationScope("shop");
+    saveBusinessType("restaurant");
+    expect(assistantConversationScope("shop")).not.toBe(scope);
+    expect(currentStore().getSnapshot().value.pending).toBeNull();
+    expect(currentStore()).not.toBe(original);
   });
 
   it("expires inactive conversations and proposals before reopening", () => {

@@ -55,6 +55,17 @@ export interface AgentTurn {
   handoffs?: Array<{ id: string; title: string }>;
 }
 
+export interface AgentCapabilities {
+  businessType: string;
+  role: string;
+  tools: Array<{ name: string; kind: "read" | "write"; risk: AgentRisk; feature: string | null }>;
+  assistant: { title: { en: string; hi: string }; examples: Array<{ en: string; hi: string }> } | null;
+}
+
+export function getAgentCapabilities(signal?: AbortSignal): Promise<AgentCapabilities> {
+  return apiRequest<AgentCapabilities>("/ai/agent/capabilities", { signal, timeoutMs: 10_000 });
+}
+
 /**
  * Something the till has to do itself, because it is where that state lives.
  *

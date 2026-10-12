@@ -56,6 +56,18 @@ export const BUSINESS_HELP = Object.freeze({
 });
 
 export const CLARIFICATIONS = Object.freeze({
+  variant: { en: "Which product, size and colour or shade do you mean?", hi: "कौन सा सामान, साइज़ और रंग या शेड चाहिए?" },
+  rental: { en: "Which rental booking do you mean? Give its reference and whether you want pickup, return or deposit details.", hi: "कौन सी किराया बुकिंग है? उसका संदर्भ बताएं और पिकअप, वापसी या जमा रकम में क्या देखना है?" },
+  vehicle: { en: "Which part and vehicle make, model and year do you mean?", hi: "कौन सा पार्ट और वाहन का ब्रांड, मॉडल और साल है?" },
+  serial_unit: { en: "Which product model and recorded serial number or IMEI do you mean?", hi: "कौन सा प्रोडक्ट मॉडल और दर्ज सीरियल नंबर या IMEI है?" },
+  prescription_record: { en: "Which prescription record or reference do you want to check? Use the prescription screen for dispensing.", hi: "कौन सा पर्चा रिकॉर्ड या संदर्भ देखना है? दवा देने के लिए पर्चे की स्क्रीन खोलें।" },
+  school_list: { en: "Which school, class and academic year is the book list for?", hi: "किताब सूची किस स्कूल, कक्षा और शैक्षणिक साल की है?" },
+  order_reference: { en: "Which quotation or order reference do you mean, and what status or balance should I check?", hi: "कौन सा कोटेशन या ऑर्डर संदर्भ है और कौन सी स्थिति या बकाया देखना है?" },
+  tester: { en: "Which product, shade and tester record do you mean?", hi: "कौन सा प्रोडक्ट, शेड और टेस्टर रिकॉर्ड है?" },
+  table: { en: "Which restaurant table number or name do you mean?", hi: "रेस्टोरेंट की कौन सी टेबल का नंबर या नाम है?" },
+  kitchen_ticket: { en: "Which kitchen ticket or table do you want to check?", hi: "कौन सा किचन टिकट या टेबल देखना है?" },
+  dish: { en: "Which menu dish and variant or add-on do you mean?", hi: "मेन्यू की कौन सी डिश और वेरिएंट या अतिरिक्त आइटम चाहिए?" },
+  production_run: { en: "Which production run, bill of materials or batch reference do you want to check?", hi: "कौन सा उत्पादन, सामग्री सूची या बैच संदर्भ देखना है?" },
   supplier_name: { en: "What is the supplier's name? You may also provide a phone number and address.", hi: "सप्लायर का नाम क्या है? फोन नंबर और पता भी बता सकते हैं।" },
   expense_title: { en: "What was this expense for?", hi: "यह खर्च किस काम के लिए था?" },
   expense_amount: { en: "What is the expense amount in your shop's currency?", hi: "दुकान की मुद्रा में खर्च की रकम कितनी है?" },

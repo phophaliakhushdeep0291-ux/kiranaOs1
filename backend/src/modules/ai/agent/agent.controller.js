@@ -11,6 +11,7 @@ import { AppError } from "../../../shared/errors/index.js";
 import { businessTypeFromSettings, parseShopSettings } from "../../shops/businessProfiles.js";
 import { runAgentTurn, executeApprovedPlan, rejectPlan, availableAgentTools } from "./agent.service.js";
 import "./register-core.js";
+import { shopAssistantPresentation } from "./shop-assistant.js";
 
 async function contextFor(req) {
   const shop = await db.shop.findUnique({ where: { id: req.shopId }, select: { id: true, settingsJson: true } });
@@ -95,7 +96,10 @@ export async function reject(req, res, next) {
 export async function capabilities(req, res, next) {
   try {
     const ctx = await contextFor(req);
-    res.json({ success: true, data: { businessType: ctx.businessType, role: ctx.role, tools: (await availableAgentTools(ctx)).map(({ name, kind, risk, feature, roles }) => ({ name, kind, risk, feature, roles })) } });
+    const available = await availableAgentTools(ctx);
+    res.json({ success: true, data: { businessType: ctx.businessType, role: ctx.role,
+      tools: available.map(({ name, kind, risk, feature, roles }) => ({ name, kind, risk, feature, roles })),
+      assistant: shopAssistantPresentation(ctx, available) } });
   } catch (error) {
     next(error);
   }

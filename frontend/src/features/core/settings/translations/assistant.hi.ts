@@ -7,6 +7,7 @@ import type { assistantEn } from "./assistant";
 
 export const assistantHi: Record<keyof typeof assistantEn, string> = {
   "assistant.example.tasks": "आप क्या कर सकते हैं?",
+  "assistant.tradeChanged": "दुकान का प्रकार बदल गया है। इस योजना का कोई काम नहीं हुआ। मौजूदा दुकान के प्रकार के लिए नई योजना माँगें।",
   "assistant.openWorkflow": "{name} खोलें",
   "assistant.timeout": "सहायक को जवाब देने में ज़्यादा समय लगा। फिर से कोशिश करें।",
   "assistant.itemsUnresolved": "इन आइटम को जोड़ने से पहले प्रोडक्ट का नाम, मात्रा या पैक साइज़ जांचें:",
@@ -32,7 +33,7 @@ export const assistantHi: Record<keyof typeof assistantEn, string> = {
   "assistant.micDenied": "माइक की अनुमति नहीं मिली। टाइप करके बताएँ।",
 
   "assistant.emptyTitle": "क्या जानना चाहते हैं?",
-  "assistant.emptyBody": "यह आपका स्टॉक, बिक्री, ग्राहक और उधार पढ़ सकता है, और बदलाव तैयार करके आपसे पुष्टि माँगता है।",
+  "assistant.emptyBody": "आपका सहायक दुकान के प्रकार, चालू सुविधाओं और आपकी भूमिका के अनुसार काम करता है। सवाल पूछें या काम बताएँ; बदलाव के लिए आपकी पुष्टि जरूरी है।",
   "assistant.example.sales": "इस हफ़्ते कितनी बिक्री हुई?",
   "assistant.example.lowStock": "क्या ख़त्म होने वाला है?",
   "assistant.example.udhar": "सबसे ज़्यादा उधार किसका है?",

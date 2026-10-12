@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { roleHasPermission, isReadOnlyRole } from "../../../core/permissions/rbac.js";
 import { BUSINESS_PROFILES } from "../../shops/businessProfiles.js";
+import { renderShopReadCapabilities } from "./shop-assistant.js";
 
 export const WORKFLOWS = Object.freeze(createRequire(import.meta.url)("./workflows.json"));
 export function workflowAvailable(workflow, ctx) {
@@ -48,6 +49,6 @@ export function renderTaskCapabilities(result, language = "hi") {
   const limits = hi
     ? "रेट या स्टॉक बदलने के लिए मालिक का PIN चाहिए। बिल पूरा करना, रिफंड, खरीद प्राप्ति, टैक्स, कर्मचारी, इंटीग्रेशन और विशेष व्यवसाय के बदलाव अभी संबंधित स्क्रीन पर करने होते हैं। स्क्रीन खोलना काम पूरा करना नहीं है।"
     : "Price and stock changes need the owner PIN. Checkout, refunds, purchase receiving, taxes, staff, integrations and trade-specific changes still need their own screens. Opening a screen does not complete its task.";
-  return [names.length ? intro + "\n" + names.map(name => `• ${name}`).join("\n")
+  return [...renderShopReadCapabilities(result, language), names.length ? intro + "\n" + names.map(name => `• ${name}`).join("\n")
     : hi ? "आपकी भूमिका में कोई बदलाव करने की अनुमति नहीं है।" : "No change actions are available to your role.", limits].join("\n\n");
 }

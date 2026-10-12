@@ -4,8 +4,16 @@ vi.mock("@/lib/api/http", async () => {
   return { ...original, apiRequest: vi.fn() };
 });
 import { apiRequest } from "@/lib/api/http";
-import { sendAgentMessage, supersedeAgentPlan } from "@/features/core/assistant/agent-client";
+import { sendAgentMessage, supersedeAgentPlan, getAgentCapabilities } from "@/features/core/assistant/agent-client";
 beforeEach(() => { vi.mocked(apiRequest).mockReset(); });
+
+it("loads capabilities from the signed-in shop without sending a client-selected trade or tenant", async () => {
+  const signal = new AbortController().signal;
+  vi.mocked(apiRequest).mockResolvedValue({ businessType: "restaurant", assistant: { title: { en: "Restaurant assistant", hi: "रेस्टोरेंट सहायक" }, examples: [] } });
+  const result = await getAgentCapabilities(signal);
+  expect(result.businessType).toBe("restaurant");
+  expect(apiRequest).toHaveBeenCalledWith("/ai/agent/capabilities", { signal, timeoutMs: 10_000 });
+});
 
 it("acknowledges cancellation before accepting a replacement task", async () => {
   vi.mocked(apiRequest).mockResolvedValue({ planId: "old-plan", status: "rejected" });
