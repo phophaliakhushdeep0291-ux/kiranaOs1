@@ -9,6 +9,9 @@ export function quickAnswer(message) {
     .replace(/[’']/g, "").replace(/[?!.।]+$/u, "").trim().replace(/\s+/g, " ");
   const simple = text.replace(/^(?:please |show me |show |tell me |what is |what are |whats )/, "")
     .replace(/ please$/, "");
+  if (/^(?:what can you do|available tasks|your capabilities|तुम क्या कर सकते हो|आप क्या कर सकते हैं|kya kar sakte ho)$/u.test(simple)) {
+    return { tool: "get_available_tasks", args: {} };
+  }
   const periods = new Map([
     ["today", "today"], ["todays", "today"], ["yesterday", "yesterday"], ["yesterdays", "yesterday"],
     ["this month", "month"], ["this months", "month"], ["last 7 days", "week"],

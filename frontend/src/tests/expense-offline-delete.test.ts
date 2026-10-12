@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Expense } from "@/types/api";
 
 const state = vi.hoisted(() => ({ rows: [] as Array<Expense & Record<string, unknown>>, events: [] as unknown[] }));
-vi.mock("@/lib/offline/db", () => ({ offlineDB: {
+vi.mock("@/lib/offline/db", () => ({ assertCurrentOfflineScope: vi.fn(), offlineDB: {
   getAll: vi.fn(async () => state.rows),
   transaction: vi.fn(async (_tables: string[], work: (tx: unknown) => Promise<void>) => work({
     put: async (_table: string, row: Expense & Record<string, unknown>) => { state.rows = [...state.rows.filter((old) => old.id !== row.id), row]; },

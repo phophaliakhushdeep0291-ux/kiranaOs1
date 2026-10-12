@@ -74,6 +74,17 @@ describe("assistant conversation continuity", () => {
     expect(assistantConversationScope("shop", {})).toBeNull();
   });
 
+  it("keeps a pending expense tied to the counter branch where it was proposed", () => {
+    vi.stubGlobal("localStorage", window.localStorage);
+    window.localStorage.setItem("kirana:active-location:shop-one", "branch-one");
+    const first = remember(); const firstScope = assistantConversationScope("shop");
+    window.localStorage.setItem("kirana:active-location:shop-one", "branch-two");
+    expect(assistantConversationScope("shop")).not.toBe(firstScope);
+    expect(currentStore().getSnapshot().value.pending).toBeNull();
+    window.localStorage.setItem("kirana:active-location:shop-one", "branch-one");
+    expect(currentStore()).toBe(first);
+  });
+
   it("expires inactive conversations and proposals before reopening", () => {
     remember(); vi.advanceTimersByTime(ASSISTANT_MEMORY_MAX_AGE_MS);
     expect(currentStore().getSnapshot().value).toMatchObject({ messages: [], pending: null, draft: "" });

@@ -6,6 +6,7 @@ import { executeClientActions } from "./execute-client-actions";
 import type { StagedBillLine } from "@/features/core/billing/assistant-staging";
 import { planDecision } from "./task-commands";
 import { useAssistantConversation, useConversationField } from "./use-assistant-conversation";
+import { workflowPath } from "./workflow-handoff";
 import {
   sendAgentMessage,
   confirmAgentPlan,
@@ -90,14 +91,19 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
       if (!mounted.current || !isCurrent()) throw new Error(t("assistant.outcomeUnknown"));
       // Lines the server resolved are not on the bill yet — the till owns the
       // cart. Stage them and offer the trip rather than claiming it is done.
-      const { staged, applied, incompleteBill, products, problems: unresolved } = await executeClientActions(result, ownerPin, onApplyBillLines, isCurrent);
+      const { staged, applied, incompleteBill, products, suppliers, expenses, problems: unresolved } = await executeClientActions(result, ownerPin, onApplyBillLines, isCurrent);
       if (!isCurrent()) throw new Error(t("assistant.outcomeUnknown"));
+      const savedNames = [...products, ...suppliers, ...expenses];
+      const successes = [
+        ...(savedNames.length ? [t("assistant.productSaved", { names: savedNames.join(", ") })] : []),
+        ...(applied ? [t("assistant.till.applied")] : []),
+        ...(staged ? [t("assistant.billStaged")] : []),
+      ];
       const outcome = result.requiresReview ? t("assistant.outcomeUnknown")
         : !result.allSucceeded ? t("assistant.partialFailure")
           : incompleteBill ? t("assistant.till.reviewItems")
           : unresolved.length ? `${t("assistant.itemsUnresolved")} ${unresolved.join(", ")}`
-            : products.length ? t("assistant.productSaved", { names: products.join(", ") })
-              : applied ? t("assistant.till.applied") : staged ? t("assistant.billStaged") : t("assistant.confirmed");
+            : successes.length ? successes.join("\n") : t("assistant.confirmed");
       setMessages(current => [...current, { role: "assistant", content: outcome }]);
       speak(outcome);
       setStagedCount(staged);
@@ -301,6 +307,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
   if (!open) return null;
 
   const examples = [
+    t("assistant.example.tasks"),
     t("assistant.example.sales"),
     t("assistant.example.lowStock"),
     t("assistant.example.udhar"),
@@ -367,6 +374,18 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
                   : "mr-auto max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-slate-100 px-3.5 py-2.5 text-sm font-medium text-slate-800"}
               >
                 <div className="whitespace-pre-wrap">{message.content}</div>
+                {message.turn?.handoffs?.slice(0, 3).map(handoff => workflowPath(handoff.id) ? (
+                  <button key={handoff.id} type="button"
+                    disabled={busy || !!pending || mic !== "idle" || planState.status === "working"}
+                    onClick={() => {
+                      const path = workflowPath(handoff.id);
+                      if (!path || !isCurrent()) return;
+                      onClose(); navigate(path);
+                    }}
+                    className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm font-bold text-slate-800 disabled:opacity-50">
+                    {t("assistant.openWorkflow", { name: handoff.title })}
+                  </button>
+                ) : null)}
                 {message.role === "assistant" && message.turn?.turnId ? (
                   <div className="mt-2 border-t border-slate-200/80 pt-2 text-[11px]">
                     {message.feedback && !["submitting", "failed"].includes(message.feedback) ? (

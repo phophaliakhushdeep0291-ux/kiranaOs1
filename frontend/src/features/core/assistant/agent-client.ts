@@ -1,4 +1,4 @@
-import type { ProductInput } from "@/types/api";
+import type { ProductInput, ExpenseInput, Supplier } from "@/types/api";
 import { apiRequest, ApiClientError } from "@/lib/api/http";
 
 /**
@@ -52,6 +52,7 @@ export interface AgentTurn {
   trace: AgentTraceStep[];
   stoppedBecause: string;
   provider: { name: string; model: string; toolsOffered: number };
+  handoffs?: Array<{ id: string; title: string }>;
 }
 
 /**
@@ -66,6 +67,8 @@ export interface AgentClientAction {
   action: "add_bill_lines" | string;
   payload: {
     product?: ProductInput;
+    expense?: ExpenseInput;
+    supplier?: Partial<Supplier>;
     lines?: Array<{ productId: string; name: string; quantity: number; unit: string; rate: number; sellingUnitId?: string; conversionToBase?: number }>;
     problems?: Array<{ query: string; reason: string; candidates?: string[] }>;
   };

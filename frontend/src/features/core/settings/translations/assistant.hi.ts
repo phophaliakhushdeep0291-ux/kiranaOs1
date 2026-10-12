@@ -6,6 +6,8 @@
 import type { assistantEn } from "./assistant";
 
 export const assistantHi: Record<keyof typeof assistantEn, string> = {
+  "assistant.example.tasks": "आप क्या कर सकते हैं?",
+  "assistant.openWorkflow": "{name} खोलें",
   "assistant.timeout": "सहायक को जवाब देने में ज़्यादा समय लगा। फिर से कोशिश करें।",
   "assistant.itemsUnresolved": "इन आइटम को जोड़ने से पहले प्रोडक्ट का नाम, मात्रा या पैक साइज़ जांचें:",
   "assistant.pinLocked": "PIN की जाँच कुछ समय के लिए बंद है। दोबारा कोशिश करने से पहले रुकें।",

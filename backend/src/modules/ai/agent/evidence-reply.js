@@ -1,5 +1,6 @@
 import { formatDateInTimeZone } from "../../../utils/dates.js";
 import { renderBusinessHelp, renderClarification } from "./business-help.js";
+import { renderTaskCapabilities, renderWorkflowHelp } from "./workflow-directory.js";
 
 const MAX_ROWS = 5;
 const text = (en, hi, language) => language === "en" ? en : hi;
@@ -112,6 +113,13 @@ export function renderToolEvidence({ tool, result }, language = "hi", timeZone =
   if (!result || typeof result !== "object" || result.error || result.ok === false || result.success === false) return null;
   if (tool === "get_app_help") return renderBusinessHelp(result, language);
   if (tool === "request_clarification") return renderClarification(result, language);
+  if (tool === "get_workflow") return renderWorkflowHelp(result, language);
+  if (tool === "get_available_tasks") return renderTaskCapabilities(result, language);
+  if (tool === "find_supplier") {
+    const suppliers = Array.isArray(result.suppliers) ? result.suppliers : [];
+    if (!suppliers.length) return text("No matching suppliers returned.", "कोई मिलता सप्लायर नहीं मिला।", language);
+    return [text("Suppliers", "सप्लायर", language), ...rows(suppliers, row => `${label(row.name)}${row.mobile ? `; ${label(row.mobile)}` : ""}`, language, result.matchCount)].join("\n");
+  }
   let title;
   let lines = [];
   const customer = (row) => `${label(row.name)}; ${text("outstanding credit", "बकाया उधार", language)}: ${evidenceMoney(row.udharAmountPaise ?? row.udharBalance ?? row.udharAmount, row.udharAmountPaise != null) ?? unavailable(language)}${row.udharBalanceNeedsRepair ? `; ${text("balance needs review", "बैलेंस की जाँच ज़रूरी", language)}` : ""}`;

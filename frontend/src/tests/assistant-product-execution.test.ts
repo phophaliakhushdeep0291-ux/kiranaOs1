@@ -26,6 +26,8 @@ import { withTargetedReads } from "./support/targeted-offline-reads";
 import { createProductLocalFirst } from "@/features/core/products/local-actions";
 import { executeClientActions } from "@/features/core/assistant/execute-client-actions";
 import { planDecision } from "@/features/core/assistant/task-commands";
+import { createExpenseLocalFirst } from "@/features/core/expenses/local-actions";
+import { createSupplierLocalFirst } from "@/features/core/suppliers/local-actions";
 withTargetedReads(offlineDB);
 const product: ProductInput = { name: "Rice", displayUnit: "kg", rateUnit: "kg", baseUnit: "gram", defaultPricePerRateUnit: 64.5, costPerRateUnit: 50, stockBaseQty: 2500, gstRate: 5 };
 const result: AgentExecutionResult = { planId: "plan-1", allSucceeded: true, executionStatus: "executed", requiresReview: false, results: [], clientActions: [{ ref: "1", action: "create_product", payload: { product } }] };
@@ -100,4 +102,65 @@ describe("explicit spoken decisions", () => {
   it.each(["yes", "Confirm!", "go ahead", "haan kar do", "हाँ कर दो।"])("accepts %s", text => expect(planDecision(text)).toBe("confirm"));
   it.each(["cancel", "no", "mat karo", "नहीं"])("cancels %s", text => expect(planDecision(text)).toBe("cancel"));
   it.each(["yes but change price to 50", "don't confirm", "can you confirm the price?", "confirm and delete everything", "1234", "हाँ लेकिन रेट ५०"])("does not approve an ambiguous or compound answer: %s", text => expect(planDecision(text)).toBeNull());
+});
+
+describe("assistant expense and supplier delivery", () => {
+  const supplier = { name: "North Foods", mobile: "9876543210", address: "Market road" };
+  const expense = { title: "Electricity October", amount: 125.75, category: "utilities", paymentMode: "cash", status: "paid", recurringInterval: "none", spentAt: "2026-10-11T18:30:00.000Z" };
+  const supplierResult: AgentExecutionResult = { ...result, clientActions: [{ ref: "supplier-1", action: "create_supplier", payload: { supplier } }] };
+  const expenseResult: AgentExecutionResult = { ...result, clientActions: [{ ref: "expense-1", action: "create_expense", payload: { expense } }] };
+
+  it("saves both reviewed records and queues their existing sync operations", async () => {
+    const applied = await executeClientActions({ ...result, clientActions: [...supplierResult.clientActions!, ...expenseResult.clientActions!] });
+    expect(applied.suppliers).toEqual(["North Foods"]); expect(applied.expenses).toEqual(["Electricity October"]);
+    expect(memory.rows.suppliers[0]).toMatchObject({ ...supplier, sync_status: "pending_sync" });
+    expect(memory.rows.expenses[0]).toMatchObject({ ...expense, sync_status: "pending_sync" });
+    expect(memory.rows.sync_outbox.filter(row => row.operation_type === "CREATE_SUPPLIER")).toHaveLength(1);
+    expect(memory.rows.sync_outbox.filter(row => row.operation_type === "CREATE_EXPENSE")).toHaveLength(1);
+    expect(memory.rows.local_audit_logs).toHaveLength(1);
+  });
+  it.each([supplierResult, expenseResult])("replays a confirmed delivery only once", async delivery => {
+    await Promise.all([executeClientActions(delivery), executeClientActions(delivery)]);
+    await executeClientActions(delivery);
+    const supplierDelivery = delivery === supplierResult;
+    expect(memory.rows[supplierDelivery ? "suppliers" : "expenses"]).toHaveLength(1);
+    expect(memory.rows.sync_outbox.filter(row => row.operation_type === (supplierDelivery ? "CREATE_SUPPLIER" : "CREATE_EXPENSE"))).toHaveLength(1);
+    expect(memory.settings.size).toBe(1);
+  });
+  it.each(["suppliers", "local_audit_logs", "sync_outbox", "settings"])("rolls supplier creation back when %s fails", async table => {
+    memory.fail = table; await expect(executeClientActions(supplierResult)).rejects.toThrow("Injected write failure");
+    expect(memory.rows).toEqual({}); expect(memory.settings.size).toBe(0);
+    memory.fail = ""; await executeClientActions(supplierResult); expect(memory.rows.suppliers).toHaveLength(1);
+  });
+  it.each(["expenses", "sync_outbox", "settings"])("rolls expense creation back when %s fails", async table => {
+    memory.fail = table; await expect(executeClientActions(expenseResult)).rejects.toThrow("Injected write failure");
+    expect(memory.rows).toEqual({}); expect(memory.settings.size).toBe(0);
+    memory.fail = ""; await executeClientActions(expenseResult); expect(memory.rows.expenses).toHaveLength(1);
+  });
+  it.each([{ name: " NORTH  FOODS " }, { name: "Other", mobile: "9876543210" }])("refuses an existing supplier by name or phone", async existing => {
+    memory.rows.suppliers = [{ id: "old", ...existing }];
+    await expect(executeClientActions(supplierResult)).rejects.toThrow(/already exists/);
+    expect(memory.rows.suppliers).toHaveLength(1); expect(memory.rows.sync_outbox).toBeUndefined();
+  });
+  it("ignores deleted suppliers when checking duplicates", async () => {
+    memory.rows.suppliers = [{ id: "old", ...supplier, deleted_at: "2026-10-01" }];
+    await executeClientActions(supplierResult); expect(memory.rows.suppliers).toHaveLength(2);
+  });
+  it.each([{ amount: -2 }, { amount: 1.001 }, { amount: NaN }, { spentAt: "tomorrow" }, { locationId: "other-branch" }, { status: "complete" }])("rejects malformed expense delivery before saving: %j", async bad => {
+    await expect(executeClientActions({ ...result, clientActions: [{ ref: "bad", action: "create_expense", payload: { expense: { ...expense, ...bad } } }] })).rejects.toThrow();
+    expect(memory.rows).toEqual({});
+  });
+  it("rejects unsupported phone formats without silently changing them", async () => {
+    await expect(executeClientActions({ ...result, clientActions: [{ ref: "bad", action: "create_supplier", payload: { supplier: { ...supplier, mobile: "+971123456789" } } }] })).rejects.toThrow();
+    expect(memory.rows).toEqual({});
+  });
+  it("keeps normal form saves independent of assistant receipts", async () => {
+    await createSupplierLocalFirst(supplier); await createExpenseLocalFirst(expense);
+    expect(memory.settings.size).toBe(0);
+    expect(memory.rows.suppliers).toHaveLength(1); expect(memory.rows.expenses).toHaveLength(1);
+  });
+  it("refuses a late delivery after the branch or user changes", async () => {
+    await expect(executeClientActions(expenseResult, undefined, undefined, () => false)).rejects.toThrow(/session changed/);
+    expect(memory.rows).toEqual({});
+  });
 });

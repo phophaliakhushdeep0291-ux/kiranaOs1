@@ -56,6 +56,13 @@ export const BUSINESS_HELP = Object.freeze({
 });
 
 export const CLARIFICATIONS = Object.freeze({
+  supplier_name: { en: "What is the supplier's name? You may also provide a phone number and address.", hi: "सप्लायर का नाम क्या है? फोन नंबर और पता भी बता सकते हैं।" },
+  expense_title: { en: "What was this expense for?", hi: "यह खर्च किस काम के लिए था?" },
+  expense_amount: { en: "What is the expense amount in your shop's currency?", hi: "दुकान की मुद्रा में खर्च की रकम कितनी है?" },
+  expense_category: { en: "Which category should this expense use, such as rent, salary or general?", hi: "खर्च की श्रेणी क्या है, जैसे किराया, वेतन या सामान्य?" },
+  expense_payment: { en: "How was this expense paid, or how will it be paid: cash, UPI, bank, card or other?", hi: "खर्च का भुगतान कैसे हुआ या होगा: नकद, UPI, बैंक, कार्ड या अन्य?" },
+  expense_status: { en: "Has this expense actually been paid, or is it still pending?", hi: "क्या खर्च का भुगतान हो चुका है या अभी बाकी है?" },
+  expense_date: { en: "On which date did this expense occur? You can say today or give a date.", hi: "खर्च किस तारीख को हुआ? आज कह सकते हैं या तारीख बताएं।" },
   product_name: { en: "What is the new product's exact name?", hi: "नए सामान का पूरा नाम क्या है?" },
   product_unit: { en: "Is this product sold per piece, kg, gram, litre or ml? Use Products for packs or variants.", hi: "सामान पीस, किलो, ग्राम, लीटर या मिलीलीटर में बिकता है? पैक या अलग वेरिएंट के लिए Products खोलें।" },
   selling_price: { en: "What is the selling price per selling unit, in your shop's currency?", hi: "दुकान की मुद्रा में एक बिक्री यूनिट का रेट कितना है?" },

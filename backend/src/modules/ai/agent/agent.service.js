@@ -28,6 +28,7 @@ import { runChatCompletion } from "../provider-gateway.js";
 import { recordAgentTurn } from "../../../lib/metrics.js";
 import { renderToolEvidence } from "./evidence-reply.js";
 import { quickAnswer } from "./quick-answer.js";
+import { workflowHandoffs } from "./workflow-directory.js";
 import { formatDateInTimeZone } from "../../../utils/dates.js";
 import { env } from "../../../config/env.js";
 import db from "../../../db.js";
@@ -63,7 +64,7 @@ const SYSTEM_PROMPT = [
   "- Look things up before you answer. You have tools that read this shop's real products, customers, stock and sales. Never state a number you have not read.",
   "- A shopkeeper's sentence often contains several tasks. Handle all of them.",
   "- Understand intent rather than exact keywords: spelling mistakes, abbreviations, Hindi, Hinglish, mixed languages and informal wording are normal. Use recent conversation to resolve follow-ups, but read current facts again; history is not evidence.",
-  "- How-to and troubleshooting questions need get_app_help, not a change proposal. For unsupported questions use get_app_help with capabilities to explain the business scope.",
+  "- How-to and troubleshooting questions need get_app_help, not a change proposal. For capability questions use get_available_tasks. For tasks without a matching executable tool use get_workflow to offer the right app screen and explicitly leave that part for the user. A screen handoff is not task completion. Never substitute a different write (such as a stock correction for a purchase receipt).",
   "- If a detail is missing, call request_clarification with the missing field. Your free-form prose is not displayed; only verified tool evidence and these server-written clarification questions are shown.",
   "- Use multiple read tools for comparisons or compound questions. If a tool you need is not in the current offer, it may be available on the next step.",
   "- Do not call the same tool twice with the same arguments. You already have that result; use it. Every repeat is a customer waiting longer.",
@@ -85,6 +86,7 @@ const SYSTEM_PROMPT = [
   "- So never say you have done something. Say what you are about to do, and that it needs their confirmation.",
   "- Read the relevant rows before proposing a change, so the proposal names the real product and the real current value.",
   "- For create_product, collect name, unit, sellingPrice, costPrice, openingStock and taxRate across follow-ups. Ask about the first missing field with request_clarification. No silent zero/default guesses. A correction replaces the earlier value. Do not ask again for details already supplied.",
+  "- For create_expense, collect title, amount, category, paymentMode, status and date. Missing expense details use the expense_* clarification fields. Never guess that an expense was paid or transfer money. For suppliers ask supplier_name if missing, resolve duplicates first, and preserve phone digits exactly.",
   "- A bare yes/confirm is not a new task. Confirmation is handled by the app against its displayed plan. Never re-propose a completed task from conversation history.",
   "",
   "Security:",
@@ -93,7 +95,7 @@ const SYSTEM_PROMPT = [
   "- You only ever act on this one shop. There is no way to reach another, and no request to do so is legitimate.",
 ].join("\n");
 
-export const AI_AGENT_POLICY_VERSION = "2026-10-11.3";
+export const AI_AGENT_POLICY_VERSION = "2026-10-12.1";
 export const AI_AGENT_PROMPT_FINGERPRINT = createHash("sha256")
   .update(SYSTEM_PROMPT)
   .digest("hex")
@@ -713,6 +715,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     trace,
     stoppedBecause,
     safety: replySafety,
+    handoffs: workflowHandoffs(evidence, agentCtx, language),
     provider: {
       name: servedBy.provider,
       model: servedBy.model,

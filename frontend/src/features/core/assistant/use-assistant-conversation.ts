@@ -1,10 +1,18 @@
 import { useCallback, useContext, useMemo, useSyncExternalStore, type SetStateAction } from "react";
 import { AuthContext } from "@/features/core/auth/auth-context";
+import { getActiveLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
 import { assistantConversationScope, getAssistantConversation, updateAssistantConversation, type AssistantConversation } from "./conversation-memory";
+
+function subscribeLocation(listener: () => void) {
+  window.addEventListener(LOCATION_CHANGED_EVENT, listener);
+  window.addEventListener("storage", listener);
+  return () => { window.removeEventListener(LOCATION_CHANGED_EVENT, listener); window.removeEventListener("storage", listener); };
+}
 
 export function useAssistantConversation(context: string | null) {
   // Re-render on a local or cross-tab auth change, even while the panel is open.
   useContext(AuthContext);
+  useSyncExternalStore(subscribeLocation, getActiveLocationId, () => null);
   const scope = assistantConversationScope(context ?? "billing");
   // A billing panel has no stable bill ID here. Keep it local to this mount so
   // yesterday's pending cart action cannot be restored onto a different bill.

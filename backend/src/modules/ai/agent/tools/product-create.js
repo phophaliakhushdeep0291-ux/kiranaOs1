@@ -21,6 +21,7 @@ export function newProductInput(args) {
 export const CREATE_PRODUCT_TOOL = defineTool({
   name: "create_product", kind: "write", target: "client", risk: TOOL_RISK.OWNER_PIN,
   roles: ["owner", "admin"], feature: "basic_products",
+  excludedBusinessTypes: ["pharmacy"],
   keywords: ["product", "item", "list", "listing", "catalog", "add", "create", "new", "register", "naya", "saman", "jodo", "सामान", "जोड़", "नया", "प्रोडक्ट"],
   description: "Create a new simple product in the catalogue, saved by the till after confirmation and owner PIN. Search first for duplicates. Obtain every required field from the user, including an explicit zero for no stock, no cost or zero tax; never guess a price, unit, quantity or tax. Ask request_clarification for missing values. Only piece, kg, gram, litre or ml units: complex packs, variants and medicines use the Products form. Listing/viewing existing products is search_products, not creation.",
   parameters: { type: "object", additionalProperties: false, properties: {

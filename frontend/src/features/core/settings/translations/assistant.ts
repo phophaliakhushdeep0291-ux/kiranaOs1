@@ -5,6 +5,8 @@
 // what someone reads before agreeing to a change to their stock or their prices.
 // They stay plain and concrete for that reason.
 export const assistantEn = {
+  "assistant.example.tasks": "What can you do?",
+  "assistant.openWorkflow": "Open {name}",
   "assistant.example.createProduct": "Add a new product to my catalogue",
   "assistant.productSaved": "Saved {names} on this device and queued for sync. Check Sync status for server acceptance.",
   "assistant.billStaged": "Items prepared. Open the bill to review them before payment.",
