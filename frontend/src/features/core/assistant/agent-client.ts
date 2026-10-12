@@ -32,7 +32,7 @@ export interface AgentProposal {
   ref: string;
   tool: string;
   risk: AgentRisk;
-  /** The sentence the shopkeeper confirms. Already localised by the backend's data. */
+  /** Canonical server-written summary; machine translation never changes the approval. */
   summary: string;
 }
 
@@ -53,6 +53,7 @@ export interface AgentTurn {
   stoppedBecause: string;
   provider: { name: string; model: string; toolsOffered: number };
   handoffs?: Array<{ id: string; title: string }>;
+  localization?: { requested: string; language: string; status: "native" | "translated" | "fallback"; originalReply?: string };
 }
 
 export interface AgentCapabilities {
@@ -115,7 +116,7 @@ export interface AgentCartLine {
 export async function sendAgentMessage(
   message: string,
   history: AgentChatMessage[],
-  init?: { signal?: AbortSignal; language?: "hi" | "en"; cart?: AgentCartLine[] },
+  init?: { signal?: AbortSignal; language?: string; cart?: AgentCartLine[] },
 ): Promise<AgentTurn> {
   return apiRequest<AgentTurn>("/ai/agent/chat", {
     method: "POST",

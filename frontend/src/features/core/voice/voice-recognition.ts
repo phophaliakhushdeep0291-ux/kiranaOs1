@@ -24,7 +24,10 @@ export const DUPLICATE_FINAL_TRANSCRIPT_DEBOUNCE_MS = 1500;
  * The shop already told us which language it works in; the mic should use it.
  */
 export function speechRecognitionLocale(language: string): string {
-  return language === "hi" ? "hi-IN" : "en-IN";
+  if (language === "hi") return "hi-IN";
+  if (language === "en") return "en-IN";
+  try { return language && language !== "auto" ? new Intl.Locale(language).toString() : "en-IN"; }
+  catch { return "en-IN"; }
 }
 
 export function getSpeechRecognitionConstructor() {

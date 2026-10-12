@@ -60,6 +60,7 @@ function assertBackendRecordingAvailable() {
 export async function startBackendTranscription(
   callbacks: BackendTranscriptionCallbacks,
   maxDurationMs = BACKEND_RECORDING_MAX_MS,
+  language?: string,
 ): Promise<BackendTranscriptionSession> {
   assertBackendRecordingAvailable();
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -110,7 +111,7 @@ export async function startBackendTranscription(
 
     callbacks.onTranscribing();
     try {
-      const result = await requestAiAudioTranscription(audio);
+      const result = await requestAiAudioTranscription(audio, { language });
       if (!cancelled) callbacks.onTranscript(result);
     } catch (error) {
       if (!cancelled) callbacks.onError(backendTranscriptionErrorMessage(error));

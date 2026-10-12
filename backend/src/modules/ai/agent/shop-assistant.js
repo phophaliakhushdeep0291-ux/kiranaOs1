@@ -1,3 +1,4 @@
+import { replyText } from "./reply-localization.js";
 import { BUSINESS_PROFILES } from "../../shops/businessProfiles.js";
 
 /** Trusted, trade-owned copy. Nothing in shop settings or a model response is a prompt. */
@@ -26,8 +27,7 @@ export function shopAssistantQuickAnswer(message, businessType) {
 export function renderShopReadCapabilities(result, language) {
   const profile = shopAssistantProfile(result?.businessType);
   if (!profile) return [];
-  const key = language === "en" ? "en" : "hi";
   const allowed = new Set(Array.isArray(result?.reads) ? result.reads : []);
-  const labels = profile.reads.filter(item => allowed.has(item.tool)).map(item => item.label[key]);
-  return [profile.title[key], ...(labels.length ? [(key === "en" ? "I can check these records:" : "मैं ये रिकॉर्ड देख सकता हूँ:") + "\n" + labels.map(label => `• ${label}`).join("\n")] : [])];
+  const labels = profile.reads.filter(item => allowed.has(item.tool)).map(item => replyText(item.label.en, item.label.hi, language));
+  return [replyText(profile.title.en, profile.title.hi, language), ...(labels.length ? [replyText("I can check these records:", "मैं ये रिकॉर्ड देख सकता हूँ:", language) + "\n" + labels.map(label => `• ${label}`).join("\n")] : [])];
 }

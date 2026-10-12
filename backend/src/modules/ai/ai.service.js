@@ -1,4 +1,5 @@
 import fs from "fs";
+import { normalizeAssistantLanguage } from "./agent/reply-localization.js";
 import { createHash } from "node:crypto";
 import db from "../../db.js";
 import { recordAiCommand } from "../../lib/metrics.js";
@@ -34,10 +35,8 @@ const TRANSCRIPTION_TIMEOUT_MS = 30_000;
  * coming, and the manual path is faster than continuing to wait.
  */
 const COMMAND_TIMEOUT_MS = 20_000;
-const TRANSCRIPTION_PROMPT = [
-  "Indian kirana retail voice command in Hindi, Hinglish, or English.",
-  "Preserve product names, quantities, units, customer names, mobile numbers, bill numbers, UPI, cash, and udhar accurately.",
-].join(" ");
+// No language-biased prompt: automatic transcription must preserve the spoken language.
+
 
 const SYSTEM_PROMPT = [
   "You are the voice command parser for KiranaOS, an Indian shop-management app.",
@@ -65,7 +64,7 @@ export const AI_COMMAND_PROMPT_FINGERPRINT = createHash("sha256")
   .digest("hex")
   .slice(0, 16);
 
-export async function transcribeAudio(file, { providerOverride } = {}) {
+export async function transcribeAudio(file, { providerOverride, language = "auto" } = {}) {
   if (!file?.path) {
     const error = new Error("Audio file is required");
     error.code = "AUDIO_FILE_REQUIRED";
@@ -91,7 +90,7 @@ export async function transcribeAudio(file, { providerOverride } = {}) {
     purpose: "transcription",
     deadline: Date.now() + TRANSCRIPTION_TIMEOUT_MS,
     candidates: providerOverride ? [providerOverride] : null,
-    prompt: TRANSCRIPTION_PROMPT,
+    language: normalizeAssistantLanguage(language)?.split("-")[0],
     // A factory, not a stream: the gateway may retry or fail over, and each
     // attempt has to upload the audio from the beginning.
     openAudio: () => fs.createReadStream(file.path),

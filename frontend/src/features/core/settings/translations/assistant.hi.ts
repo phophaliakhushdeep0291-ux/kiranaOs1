@@ -6,6 +6,13 @@
 import type { assistantEn } from "./assistant";
 
 export const assistantHi: Record<keyof typeof assistantEn, string> = {
+  "assistant.languageLabel": "सहायक की भाषा",
+  "assistant.languageAuto": "अपने आप — मेरी भाषा में जवाब",
+  "assistant.languageHelp": "अपनी भाषा या मिली-जुली भाषा में लिखें या बोलें। मेन्यू और पुष्टि के बटन ऐप की भाषा में हैं; काम का विवरण अपने मूल शब्दों में है। आवाज़ की सुविधा प्रदाता और डिवाइस पर निर्भर है।",
+  "assistant.languageFallback": "अनुवाद उपलब्ध नहीं है। यह जवाब अंग्रेज़ी में दिखाया गया है।",
+  "assistant.originalReply": "मशीन अनुवाद · मूल अंग्रेज़ी देखें",
+  "assistant.voiceUnavailable": "इस डिवाइस पर इस भाषा में बोलकर सुनाने की आवाज़ उपलब्ध नहीं है। जवाब यहाँ पढ़ सकते हैं।",
+  "assistant.transcribingAny": "आपकी आवाज़ लिखी जा रही है…",
   "assistant.example.tasks": "आप क्या कर सकते हैं?",
   "assistant.tradeChanged": "दुकान का प्रकार बदल गया है। इस योजना का कोई काम नहीं हुआ। मौजूदा दुकान के प्रकार के लिए नई योजना माँगें।",
   "assistant.openWorkflow": "{name} खोलें",

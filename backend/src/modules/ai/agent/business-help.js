@@ -1,5 +1,7 @@
 // Reviewed app guidance. The model selects a topic; it cannot supply instructions
 // or turn help text into a claim about this shop's records or enabled features.
+import { replyText } from "./reply-localization.js";
+
 export const BUSINESS_HELP = Object.freeze({
   billing: {
     en: "Open Billing (/billing), add the products and quantities, review the totals, then choose the payment method and confirm. A chat proposal does not finish a sale; review its confirmation first.",
@@ -50,8 +52,8 @@ export const BUSINESS_HELP = Object.freeze({
     hi: "समान अवधियों की बिक्री, सबसे अधिक बिके सामान और स्टॉक की कमी की तुलना से शुरू करें। प्रचार तय करने से पहले देखें कि लोकप्रिय सामान उपलब्ध था या नहीं। छूट से पहले मार्जिन और लागत देखें; ज्यादा बिक्री हमेशा ज्यादा लाभ नहीं है। ये जाँच के कदम हैं, आपकी दुकान का निष्कर्ष या परिणाम की गारंटी नहीं। रिकॉर्ड देखने के लिए अवधि और सामान बताएं।",
   },
   capabilities: {
-    en: "Ask in natural English, Hindi or Hinglish about products, stock, sales, customer credit or using the app. You can ask several questions together and follow up with more detail. I can read only your shop's permitted records; changes require confirmation. If data or a connection is missing, I need that information rather than guessing.",
-    hi: "सामान, स्टॉक, बिक्री, ग्राहक के बकाया या ऐप चलाने के बारे में सामान्य अंग्रेज़ी, हिंदी या Hinglish में पूछें। एक साथ कई सवाल और फिर उनके बारे में आगे पूछ सकते हैं। मैं आपकी दुकान के अनुमत रिकॉर्ड ही पढ़ सकता हूँ; बदलाव के लिए पुष्टि चाहिए। जानकारी या कनेक्शन न हो तो अनुमान लगाने के बजाय उसकी जरूरत बताऊँगा।",
+    en: "Ask naturally in your preferred language, including mixed language, about products, stock, sales, customer credit or using the app. You can ask several questions together and follow up with more detail. I can read only your shop's permitted records; changes require confirmation. If data or a connection is missing, I need that information rather than guessing.",
+    hi: "सामान, स्टॉक, बिक्री, ग्राहक के बकाया या ऐप चलाने के बारे में अपनी पसंद की भाषा या मिली-जुली भाषा में पूछें। एक साथ कई सवाल और फिर उनके बारे में आगे पूछ सकते हैं। मैं आपकी दुकान के अनुमत रिकॉर्ड ही पढ़ सकता हूँ; बदलाव के लिए पुष्टि चाहिए। जानकारी या कनेक्शन न हो तो अनुमान लगाने के बजाय उसकी जरूरत बताऊँगा।",
   },
 });
 
@@ -92,12 +94,11 @@ export const CLARIFICATIONS = Object.freeze({
 });
 
 export function renderBusinessHelp(result, language = "hi") {
-  const copy = language === "en" ? "en" : "hi";
   return [...new Set(Array.isArray(result?.topics) ? result.topics : [])].slice(0, 3)
-    .map((topic) => Object.hasOwn(BUSINESS_HELP, topic) ? BUSINESS_HELP[topic][copy] : null).filter(Boolean).join("\n\n") || null;
+    .map((topic) => Object.hasOwn(BUSINESS_HELP, topic) ? replyText(BUSINESS_HELP[topic].en, BUSINESS_HELP[topic].hi, language) : null).filter(Boolean).join("\n\n") || null;
 }
 
 export function renderClarification(result, language = "hi") {
   return typeof result?.field === "string" && Object.hasOwn(CLARIFICATIONS, result.field)
-    ? CLARIFICATIONS[result.field][language === "en" ? "en" : "hi"] : null;
+    ? replyText(CLARIFICATIONS[result.field].en, CLARIFICATIONS[result.field].hi, language) : null;
 }

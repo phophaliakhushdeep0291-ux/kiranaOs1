@@ -31,7 +31,7 @@ describe("AI audio transcription client", () => {
     });
     const audio = new Blob(["audio-bytes"], { type: "audio/webm;codecs=opus" });
 
-    const result = await requestAiAudioTranscription(audio);
+    const result = await requestAiAudioTranscription(audio, { language: "ar-AE" });
 
     expect(result.transcript).toBe("do kilo chini");
     expect(apiRequest).toHaveBeenCalledTimes(1);
@@ -41,6 +41,7 @@ describe("AI audio transcription client", () => {
     expect(options?.headers).toBeUndefined();
     expect(options?.body).toBeInstanceOf(FormData);
     expect((options?.body as FormData).get("audio")).toBeInstanceOf(Blob);
+    expect((options?.body as FormData).get("language")).toBe("ar-AE");
   });
 
   it("chooses the first recorder format supported by the browser", () => {

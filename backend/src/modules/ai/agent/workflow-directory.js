@@ -1,3 +1,4 @@
+import { replyText } from "./reply-localization.js";
 import { createRequire } from "node:module";
 import { roleHasPermission, isReadOnlyRole } from "../../../core/permissions/rbac.js";
 import { BUSINESS_PROFILES } from "../../shops/businessProfiles.js";
@@ -17,19 +18,17 @@ export function workflowHandoffs(evidence, ctx, language = "hi") {
   const ids = evidence.filter(entry => entry.tool === "get_workflow" && entry.status === "ok")
     .flatMap(entry => entry.result?.workflows ?? []);
   return WORKFLOWS.filter(row => ids.includes(row.id) && workflowAvailable(row, ctx)).slice(0, 3)
-    .map(row => ({ id: row.id, title: row.title[language === "en" ? "en" : "hi"] }));
+    .map(row => ({ id: row.id, title: replyText(row.title.en, row.title.hi, language) }));
 }
 export function renderWorkflowHelp(result, language = "hi") {
-  const lang = language === "en" ? "en" : "hi";
   const ids = Array.isArray(result?.workflows) ? result.workflows : [];
-  const names = WORKFLOWS.filter(row => ids.includes(row.id)).slice(0, 3).map(row => row.title[lang]);
-  if (!names.length) return lang === "en"
-    ? "That workflow is unavailable for your shop, role or plan. No action was performed."
-    : "यह काम आपकी दुकान, भूमिका या प्लान में उपलब्ध नहीं है। कोई कार्रवाई नहीं हुई।";
-  return lang === "en"
-    ? `Continue in ${names.join(", ")}. This part requires the app's form and your review; the assistant has not completed it. Use the button below to open the screen.`
-    : `${names.join(", ")} में आगे बढ़ें। इस हिस्से के लिए ऐप का फॉर्म भरना और आपकी समीक्षा जरूरी है; सहायक ने इसे पूरा नहीं किया है। नीचे के बटन से स्क्रीन खोलें।`;
+  const names = WORKFLOWS.filter(row => ids.includes(row.id)).slice(0, 3).map(row => replyText(row.title.en, row.title.hi, language));
+  if (!names.length) return replyText("That workflow is unavailable for your shop, role or plan. No action was performed.",
+    "यह काम आपकी दुकान, भूमिका या प्लान में उपलब्ध नहीं है। कोई कार्रवाई नहीं हुई।", language);
+  return replyText("Continue in {screens}. This part requires the app's form and your review; the assistant has not completed it. Use the button below to open the screen.",
+    "{screens} में आगे बढ़ें। इस हिस्से के लिए ऐप का फॉर्म भरना और आपकी समीक्षा जरूरी है; सहायक ने इसे पूरा नहीं किया है। नीचे के बटन से स्क्रीन खोलें।", language, { screens: names.join(", ") });
 }
+
 export const ACTION_LABELS = Object.freeze({
   create_product: ["Create a simple product", "साधारण सामान जोड़ना"],
   set_pack_size: ["Add or price a pack size", "पैक जोड़ना या उसका रेट बदलना"],
@@ -42,13 +41,11 @@ export const ACTION_LABELS = Object.freeze({
   create_expense: ["Record a one-off expense", "एक बार का खर्च दर्ज करना"],
 });
 export function renderTaskCapabilities(result, language = "hi") {
-  const hi = language !== "en";
   const names = (Array.isArray(result?.actions) ? result.actions : [])
-    .filter(name => Object.hasOwn(ACTION_LABELS, name)).map(name => ACTION_LABELS[name][hi ? 1 : 0]);
-  const intro = hi ? "पुष्टि के बाद उपलब्ध काम:" : "Available tasks after your confirmation:";
-  const limits = hi
-    ? "रेट या स्टॉक बदलने के लिए मालिक का PIN चाहिए। बिल पूरा करना, रिफंड, खरीद प्राप्ति, टैक्स, कर्मचारी, इंटीग्रेशन और विशेष व्यवसाय के बदलाव अभी संबंधित स्क्रीन पर करने होते हैं। स्क्रीन खोलना काम पूरा करना नहीं है।"
-    : "Price and stock changes need the owner PIN. Checkout, refunds, purchase receiving, taxes, staff, integrations and trade-specific changes still need their own screens. Opening a screen does not complete its task.";
+    .filter(name => Object.hasOwn(ACTION_LABELS, name)).map(name => replyText(...ACTION_LABELS[name], language));
+  const intro = replyText("Available tasks after your confirmation:", "पुष्टि के बाद उपलब्ध काम:", language);
+  const limits = replyText("Price and stock changes need the owner PIN. Checkout, refunds, purchase receiving, taxes, staff, integrations and trade-specific changes still need their own screens. Opening a screen does not complete its task.",
+    "रेट या स्टॉक बदलने के लिए मालिक का PIN चाहिए। बिल पूरा करना, रिफंड, खरीद प्राप्ति, टैक्स, कर्मचारी, इंटीग्रेशन और विशेष व्यवसाय के बदलाव अभी संबंधित स्क्रीन पर करने होते हैं। स्क्रीन खोलना काम पूरा करना नहीं है।", language);
   return [...renderShopReadCapabilities(result, language), names.length ? intro + "\n" + names.map(name => `• ${name}`).join("\n")
-    : hi ? "आपकी भूमिका में कोई बदलाव करने की अनुमति नहीं है।" : "No change actions are available to your role.", limits].join("\n\n");
+    : replyText("No change actions are available to your role.", "आपकी भूमिका में कोई बदलाव करने की अनुमति नहीं है।", language), limits].join("\n\n");
 }

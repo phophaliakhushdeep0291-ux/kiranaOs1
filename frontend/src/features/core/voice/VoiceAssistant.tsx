@@ -20,6 +20,8 @@ import { askAiIntent } from "./voice-ai-client";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { createOneShotRecognition, getSpeechRecognitionConstructor, shouldAcceptFinalTranscript, speechRecognitionLocale, voiceTranscriptKey } from "./voice-recognition";
 import type { SpeechRecognitionLike, VoiceToastPayload } from "./voice-types";
+import { AssistantLanguageSelect } from "@/features/core/assistant/AssistantLanguageSelect";
+import { useAssistantLanguage } from "@/features/core/assistant/use-assistant-language";
 import { startBackendTranscription, type BackendTranscriptionSession } from "./backend-transcription";
 import { submitAiFeedback, type AiFeedbackOutcome } from "@/lib/ai/ai-feedback-client";
 
@@ -69,9 +71,10 @@ function saveAssistantPosition(position: AssistantPosition): void {
 }
 
 export function VoiceAssistant() {
+  const [assistantLanguage, setAssistantLanguage] = useAssistantLanguage();
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
-  const { language, t } = useAppLanguage();
+  const { t } = useAppLanguage();
   const [open, setOpen] = useState(false);
   const [command, setCommand] = useState("");
   const [listening, setListening] = useState(false);
@@ -232,7 +235,7 @@ export function VoiceAssistant() {
         },
         onTranscribing: () => {
           setListening(false);
-          setStatus("Transcribing Hindi/Hinglish audio...");
+          setStatus(t("assistant.transcribingAny"));
         },
         onTranscript: ({ transcript, provider }) => {
           const now = Date.now();
@@ -252,7 +255,7 @@ export function VoiceAssistant() {
           backendRecordingRef.current = null;
           setListening(false);
         },
-      });
+      }, undefined, assistantLanguage);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Voice recording could not start.";
       backendRecordingRef.current = null;
@@ -267,7 +270,7 @@ export function VoiceAssistant() {
       stopMic();
       return;
     }
-    if (!Recognition || preferBackendRecordingRef.current) {
+    if (assistantLanguage === "auto" || !Recognition || preferBackendRecordingRef.current) {
       void startBackendMic();
       return;
     }
@@ -300,7 +303,7 @@ export function VoiceAssistant() {
         setListening(false);
         recognitionRef.current = null;
       },
-    }, speechRecognitionLocale(language));
+    }, speechRecognitionLocale(assistantLanguage));
 
     recognitionRef.current = recognition;
     try {
@@ -396,7 +399,9 @@ export function VoiceAssistant() {
             <Button type="button" size="icon" variant="ghost" aria-label={t("actions.close")} title={t("actions.close")} className="h-8 w-8" onClick={() => setOpen(false)}><X className="h-4 w-4" /></Button>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">Control app pages and prepare product, customer, inventory, billing, payment, and search drafts. Nothing financial or sensitive is saved without review.</p>
+          <div className="mt-2"><AssistantLanguageSelect value={assistantLanguage} onChange={setAssistantLanguage} disabled={listening || !!backendRecordingRef.current} /></div>
           <Textarea
+            dir="auto"
             value={command}
             onChange={(event) => setCommand(event.target.value)}
             className="mt-3 min-h-20 resize-none"

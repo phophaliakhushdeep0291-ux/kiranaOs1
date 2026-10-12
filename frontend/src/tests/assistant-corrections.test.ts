@@ -37,3 +37,9 @@ it("keeps proposal-rich follow-up history within the API's size limit", async ()
   expect(body.history.every((message: { content: string }) => message.content.length <= 4000)).toBe(true);
   expect(body.history.at(-1).content.startsWith("39:")).toBe(true);
 });
+
+it.each(["auto", "ar-AE", "ta", "fr", "zh-Hant"])("sends the independent %s response preference", async language => {
+  vi.mocked(apiRequest).mockResolvedValue({});
+  await sendAgentMessage("test", [], { language });
+  expect(JSON.parse(vi.mocked(apiRequest).mock.calls[0][1]!.body as string).language).toBe(language);
+});

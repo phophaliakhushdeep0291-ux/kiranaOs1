@@ -5,6 +5,13 @@
 // what someone reads before agreeing to a change to their stock or their prices.
 // They stay plain and concrete for that reason.
 export const assistantEn = {
+  "assistant.languageLabel": "Assistant language",
+  "assistant.languageAuto": "Automatic — follow my language",
+  "assistant.languageHelp": "Type or speak in your language, including mixed language. Menus and confirmation controls use the app language; action summaries keep their original wording. Voice support varies by provider and device.",
+  "assistant.languageFallback": "Translation is unavailable. This reply is shown in English.",
+  "assistant.originalReply": "Machine translation · view original English",
+  "assistant.voiceUnavailable": "A matching read-aloud voice is unavailable on this device. You can read the reply here.",
+  "assistant.transcribingAny": "Transcribing your audio…",
   "assistant.example.tasks": "What can you do?",
   "assistant.tradeChanged": "The shop type changed. Nothing from this plan was executed. Ask for a new plan for the current shop type.",
   "assistant.openWorkflow": "Open {name}",

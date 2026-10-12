@@ -2,8 +2,10 @@ import { formatDateInTimeZone } from "../../../utils/dates.js";
 import { renderBusinessHelp, renderClarification } from "./business-help.js";
 import { renderTaskCapabilities, renderWorkflowHelp } from "./workflow-directory.js";
 
+import { replyText } from "./reply-localization.js";
+
 const MAX_ROWS = 5;
-const text = (en, hi, language) => language === "en" ? en : hi;
+const text = replyText;
 const unavailable = (language) => text("unavailable", "उपलब्ध नहीं", language);
 const label = (value) => JSON.stringify(String(value ?? "").replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, " ").slice(0, 120));
 const scalar = (value) => {
@@ -43,7 +45,7 @@ function fields(row, specs, language) {
 
 function rows(values, render, language, total = values.length) {
   const shown = values.slice(0, MAX_ROWS).map(render).filter(Boolean);
-  if (total > shown.length) shown.push(text(`Showing ${shown.length} of ${total} records.`, `${total} में से ${shown.length} रिकॉर्ड दिखाए गए हैं।`, language));
+  if (total > shown.length) shown.push(text("Showing {shown} of {total} records.", "{total} में से {shown} रिकॉर्ड दिखाए गए हैं।", language, { shown: shown.length, total }));
   return shown;
 }
 

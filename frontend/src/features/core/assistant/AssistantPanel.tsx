@@ -4,6 +4,10 @@ import { useLocation } from "wouter";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { executeClientActions } from "./execute-client-actions";
 import type { StagedBillLine } from "@/features/core/billing/assistant-staging";
+import { AssistantLanguageSelect } from "./AssistantLanguageSelect";
+import { AssistantMessageText } from "./AssistantMessageText";
+import { useAssistantLanguage } from "./use-assistant-language";
+import { matchingSpeechVoice } from "./assistant-language";
 import { planDecision } from "./task-commands";
 import { useAssistantConversation, useConversationField } from "./use-assistant-conversation";
 import { workflowPath } from "./workflow-handoff";
@@ -41,6 +45,7 @@ import { submitAiFeedback, type AiFeedbackOutcome } from "@/lib/ai/ai-feedback-c
 
 export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApplyBillLines }: { open: boolean; onClose: () => void; initialMessage?: string; cart?: AgentCartLine[]; onApplyBillLines?: (lines: StagedBillLine[]) => number }) {
   const { t, language } = useAppLanguage();
+  const [assistantLanguage, setAssistantLanguage] = useAssistantLanguage();
   const [, navigate] = useLocation();
   // Keep bill proposals separate from global proposals: returning to a till
   // must never silently retarget a global action to whichever bill is now open.
@@ -56,15 +61,18 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
   const request = useRef<AbortController | null>(null);
   const startingMic = useRef(false);
   const [readAloud, setReadAloud] = useState(false);
-  const speak = useCallback((text: string) => {
+  const [error, setError] = useState<string | null>(null);
+  const speak = useCallback((text: string, replyLanguage: string = language) => {
     if (!mounted.current || !isCurrent() || !readAloud || typeof speechSynthesis === "undefined") return;
     speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = language === "hi" ? "hi-IN" : "en-IN";
+    const voice = matchingSpeechVoice(speechSynthesis.getVoices(), replyLanguage);
+    if (!voice) { setError(t("assistant.voiceUnavailable")); return; }
+    utterance.voice = voice;
+    utterance.lang = voice.lang;
     speechSynthesis.speak(utterance);
-  }, [readAloud, language, isCurrent]);
+  }, [readAloud, language, isCurrent, t]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useConversationField(conversation, "pending");
   const [planState, setPlanState] = useConversationField(conversation, "planState");
   const [pin, setPin] = useState("");
@@ -169,7 +177,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
     const question = text.trim();
     if (!question || asking.current || planRequestBusy.current || planState.status === "working" || !isCurrent()) return;
     if (planState.status === "pin") { setError(t("assistant.pinPrivate")); return; }
-    const decision = pending ? planDecision(question) : null;
+    const decision = pending ? planDecision(question, pending.localization?.language ?? language) : null;
     if (decision) {
       setDraft("");
       if (decision === "confirm") await applyPlan(); else await decline();
@@ -202,11 +210,11 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
       }
       if (!mounted.current || !isCurrent()) return;
       request.current = new AbortController();
-      const turn = await sendAgentMessage(question, history, { language, cart, signal: request.current.signal });
+      const turn = await sendAgentMessage(question, history, { language: assistantLanguage, cart, signal: request.current.signal });
       if (!mounted.current || !isCurrent()) return;
       setMessages((current) => [...current, { role: "assistant", content: turn.reply, turn }]);
       if (turn.requiresConfirmation && turn.planId) setPending(turn);
-      speak([turn.reply, ...turn.plan.map(item => item.summary), ...(turn.requiresConfirmation ? [t("assistant.voiceConfirmHint")] : [])].join(". "));
+      speak(turn.reply, turn.localization?.language ?? language);
     } catch (caught) {
       if (!isCurrent()) return;
       const code = agentErrorCode(caught);
@@ -232,7 +240,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
       asking.current = false;
       setBusy(false);
     }
-  }, [messages, pending, planState.status, applyPlan, decline, speak, t, language, cart, isCurrent, setDraft, setPlanState, setMessages, setPending]);
+  }, [messages, pending, planState.status, applyPlan, decline, speak, t, language, assistantLanguage, cart, isCurrent, setDraft, setPlanState, setMessages, setPending]);
 
   useEffect(() => {
     if (initialMessage && !initialSent.current) {
@@ -284,14 +292,14 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
           micSession.current = null;
           setMic("idle");
         },
-      });
+      }, undefined, assistantLanguage);
       if (!mounted.current) { micSession.current.cancel(); micSession.current = null; }
     } catch (caught) {
       micSession.current = null;
       setMic("idle");
       setError(backendTranscriptionErrorMessage(caught) || t("assistant.micDenied"));
     } finally { startingMic.current = false; }
-  }, [ask, t, planState.status]);
+  }, [ask, t, planState.status, assistantLanguage]);
 
   // Closing the panel mid-recording has to release the microphone, or a shared
   // shop tablet sits there with the recording indicator lit.
@@ -347,6 +355,11 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
             <X size={18} />
           </button>
         </header>
+        <div className="border-b border-slate-200 px-4 py-2">
+          <AssistantLanguageSelect value={assistantLanguage} onChange={setAssistantLanguage}
+            disabled={busy || !!pending || mic !== "idle" || planState.status === "working"} />
+          <p className="mt-1 text-[11px] text-slate-500">{t("assistant.languageHelp")}</p>
+        </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
           {messages.length === 0 ? (
@@ -376,7 +389,12 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
                   ? "ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--brand)] px-3.5 py-2.5 text-sm font-semibold text-white"
                   : "mr-auto max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-slate-100 px-3.5 py-2.5 text-sm font-medium text-slate-800"}
               >
-                <div className="whitespace-pre-wrap">{message.content}</div>
+                <div dir="auto" lang={message.turn?.localization?.language} className="whitespace-pre-wrap [overflow-wrap:anywhere]"><AssistantMessageText text={message.content} /></div>
+                {message.turn?.localization?.status === "fallback" ? <p className="mt-2 text-xs text-amber-800">{t("assistant.languageFallback")}</p> : null}
+                {message.turn?.localization?.originalReply ? <details className="mt-2 text-xs">
+                  <summary className="cursor-pointer font-semibold">{t("assistant.originalReply")}</summary>
+                  <div dir="ltr" lang="en" className="mt-1 whitespace-pre-wrap">{message.turn.localization.originalReply}</div>
+                </details> : null}
                 {message.turn?.handoffs?.slice(0, 3).map(handoff => workflowPath(handoff.id) ? (
                   <button key={handoff.id} type="button"
                     disabled={busy || !!pending || mic !== "idle" || planState.status === "working"}
@@ -441,7 +459,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
                     <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md bg-amber-100 text-[11px] font-black text-amber-800">
                       {item.ref}
                     </span>
-                    <span className="min-w-0 flex-1">{item.summary}</span>
+                    <span dir="auto" className="min-w-0 flex-1">{item.summary}</span>
                   </li>
                 ))}
               </ul>
@@ -560,6 +578,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
           </button>
           <input
             ref={inputRef}
+            dir="auto"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             placeholder={mic === "idle" ? t("assistant.inputPlaceholder") : mic === "listening" ? t("assistant.listening") : t("assistant.transcribing")}

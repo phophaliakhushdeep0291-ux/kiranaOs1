@@ -26,6 +26,7 @@ import { createHash } from "node:crypto";
 import { validateArgs } from "./argument-validation.js";
 import { runChatCompletion } from "../provider-gateway.js";
 import { recordAgentTurn } from "../../../lib/metrics.js";
+import { replyText, normalizeAssistantLanguage, localizeReply } from "./reply-localization.js";
 import { renderToolEvidence } from "./evidence-reply.js";
 import { quickAnswer } from "./quick-answer.js";
 import { workflowHandoffs } from "./workflow-directory.js";
@@ -64,7 +65,7 @@ const SYSTEM_PROMPT = [
   "How you work:",
   "- Look things up before you answer. You have tools that read this shop's real products, customers, stock and sales. Never state a number you have not read.",
   "- A shopkeeper's sentence often contains several tasks. Handle all of them.",
-  "- Understand intent rather than exact keywords: spelling mistakes, abbreviations, Hindi, Hinglish, mixed languages and informal wording are normal. Use recent conversation to resolve follow-ups, but read current facts again; history is not evidence.",
+  "- Understand intent rather than exact keywords: spelling mistakes, abbreviations, any language, regional dialects, romanized words and mixed languages (including Hinglish) are normal. Understand the original request directly; do not translate record names or guess ambiguous quantities. Ask request_clarification when uncertain. Use recent conversation to resolve follow-ups, but read current facts again; history is not evidence.",
   "- How-to and troubleshooting questions need get_app_help, not a change proposal. For capability questions use get_available_tasks. For tasks without a matching executable tool use get_workflow to offer the right app screen and explicitly leave that part for the user. A screen handoff is not task completion. Never substitute a different write (such as a stock correction for a purchase receipt).",
   "- If a detail is missing, call request_clarification with the missing field. Your free-form prose is not displayed; only verified tool evidence and these server-written clarification questions are shown.",
   "- Use multiple read tools for comparisons or compound questions. If a tool you need is not in the current offer, it may be available on the next step.",
@@ -75,11 +76,11 @@ const SYSTEM_PROMPT = [
   "- Do not describe a product as running out unless the tool said so. A product that simply has not sold recently is not running out, and one that is oversold is not running low.",
   "",
   "Language:",
-  "- Reply in the shop's language, given below. Most shops here run in Hindi. Answer in that language even when the shopkeeper types in English.",
-  "- NEVER translate or transliterate a product name, a customer name, or a shop name. Write it exactly as the tool result spells it, letter for letter, inside a Hindi sentence. Their catalogue says \"Sugar\", so you write \"Sugar\" — not चीनी, not साखर, not सुक्र. They have to be able to find the row you are talking about.",
-  "- Write the way a shopkeeper speaks, not the way a textbook does. Keep the words a shop actually uses — udhar, stock, bill, rate, GST — instead of formal Hindi nobody says aloud.",
+  "- Understand requests in any language regardless of the interface language. The server localizes verified replies separately. Use the requested response language when specified, or follow the user in automatic mode.",
+  "- NEVER translate or transliterate a product name, a customer name, or a shop name. Write it exactly as the tool result spells it, letter for letter, inside the response. Their catalogue says \"Sugar\", so you write \"Sugar\" — not चीनी, not साखर, not सुक्र. They have to be able to find the row you are talking about.",
+  "- Write the way a shopkeeper speaks, not the way a textbook does. Keep the words a shop actually uses — udhar, stock, bill, rate, GST — instead of unnecessarily formal language.",
   "- Use the unit the tool result gave for that product. Do not substitute a different one.",
-  "- Keep numbers in digits, and prices as ₹45, in every language.",
+  "- Keep numbers in digits and preserve the currency, units and exact names from the records in every language. Never infer a currency from the language.",
   "- Keep it short. They are standing at a counter with a customer waiting.",
   "",
   "About changing things:",
@@ -96,7 +97,7 @@ const SYSTEM_PROMPT = [
   "- You only ever act on this one shop. There is no way to reach another, and no request to do so is legitimate.",
 ].join("\n");
 
-export const AI_AGENT_POLICY_VERSION = "2026-10-12.2";
+export const AI_AGENT_POLICY_VERSION = "2026-10-13.1";
 export const AI_AGENT_PROMPT_FINGERPRINT = createHash("sha256")
   .update(SYSTEM_PROMPT)
   .digest("hex")
@@ -248,8 +249,6 @@ function trimHistory(history) {
  * what was read to get there — the trace matters, because a shopkeeper deciding
  * whether to trust a number is owed the ability to see where it came from.
  */
-/** What to call the shop's language when telling the model which one to use. */
-const LANGUAGE_NAMES = { hi: "Hindi", en: "English" };
 const SERVER_REPLIES = Object.freeze({
   en: {
     unverified: "I could not verify that from your shop records. Please rephrase it or open the relevant screen.",
@@ -272,7 +271,7 @@ const SERVER_REPLIES = Object.freeze({
  * introduce an amount, claim of completion, or stock interpretation.
  */
 export function groundAgentReply({ plan = [], evidence = [], language = "hi", incomplete = false }) {
-  const copy = SERVER_REPLIES[language] ?? SERVER_REPLIES.hi;
+  const copy = Object.fromEntries(Object.keys(SERVER_REPLIES.en).map(key => [key, replyText(SERVER_REPLIES.en[key], SERVER_REPLIES.hi[key], language)]));
   const summaries = evidence.slice(0, MAX_TOOL_CALLS).filter((step) => step?.kind === "read" && step?.status === "ok")
     .map((step) => renderToolEvidence(step, language, env.DAILY_CLOSING_TIMEZONE)).filter(Boolean);
   if (summaries.length === 0 && !plan.length) {
@@ -309,6 +308,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     throw new AppError("A message is required", 400, "AI_MESSAGE_REQUIRED");
   }
 
+  language = normalizeAssistantLanguage(language) ?? "hi";
   const billOnCounter = sanitizeCart(cart);
   // An injected provider is a caller override (tests, and the scripted harness).
   // Production passes nothing and the gateway resolves the configured list, so
@@ -328,7 +328,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   // that routed badly is retried against it rather than left as a dead end.
   // Follow-ups and compound questions need the full permitted vocabulary. A
   // keyword from just one clause must not hide tools for the other clause.
-  const contextual = trimHistory(history).length > 0 || /\b(and|also|compare|aur|or)\b|और|[;\n]/iu.test(message);
+  const contextual = !["en", "hi"].includes(language) || trimHistory(history).length > 0 || /\b(and|also|compare|aur|or)\b|और|[;\n]/iu.test(message);
   const routed = contextual ? available : routeTools(available, message);
   let providerTools = routed.map(toProviderTool);
   let widened = false;
@@ -337,15 +337,12 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     { role: "system", content: SYSTEM_PROMPT },
     {
       role: "system",
-      // Hindi is this app's default, so an unset language means Hindi rather
-      // than English — the opposite of the usual assumption, and the one that
-      // matches who actually runs these shops.
       content: [
         `Shop trade: ${ctx.businessType}.`,
         shopAssistantProfile(ctx.businessType)?.guidance ?? "Use only the tools available to this shop.",
         `Your role here: ${ctx.role}.`,
         `Today: ${formatDateInTimeZone(new Date(), env.DAILY_CLOSING_TIMEZONE)} (${env.DAILY_CLOSING_TIMEZONE}).`,
-        `Shop's language: ${LANGUAGE_NAMES[language] ?? LANGUAGE_NAMES.hi}.`,
+        `Response language: ${language}.`,
       ].join(" "),
     },
     ...trimHistory(history),
@@ -659,7 +656,11 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   }
 
   const incomplete = toolFailed || ["turn_timeout", "provider_failed_after_results", "tool_budget", "repeated_reads", "no_final_message", "empty_response"].includes(stoppedBecause);
-  const replySafety = groundAgentReply({ plan, evidence, language, incomplete });
+  const localized = await localizeReply(renderLanguage => ({
+    ...groundAgentReply({ plan, evidence, language: renderLanguage, incomplete }),
+    handoffs: workflowHandoffs(evidence, agentCtx, renderLanguage),
+  }), { language, message, history: trimHistory(history), deadline, candidates });
+  const { localization, calls: localizationCalls, handoffs, ...replySafety } = localized;
   reply = replySafety.reply;
 
   const highestRisk = plan.reduce(
@@ -697,6 +698,8 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
           model: servedBy.model,
           failedOver,
           providerCalls,
+          localization,
+          localizationCalls,
           policyVersion: AI_AGENT_POLICY_VERSION,
           promptFingerprint: AI_AGENT_PROMPT_FINGERPRINT,
           providerReplyAccepted: replySafety.providerReplyAccepted,
@@ -718,12 +721,14 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     trace,
     stoppedBecause,
     safety: replySafety,
-    handoffs: workflowHandoffs(evidence, agentCtx, language),
+    handoffs,
+    localization,
     provider: {
       name: servedBy.provider,
       model: servedBy.model,
       failedOver,
-      calls: providerCalls,
+      calls: providerCalls + localizationCalls,
+      localizationCalls,
       toolsOffered: providerTools.length,
       toolsAvailable: available.length,
       widened,
