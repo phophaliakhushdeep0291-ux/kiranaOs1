@@ -58,6 +58,12 @@ export const BUSINESS_HELP = Object.freeze({
 });
 
 export const CLARIFICATIONS = Object.freeze({
+  supplier_payment_details: { en: "Has this supplier payment already been made? If yes, what amount, method and actual payment date should I record? I can record it, but cannot send money.", hi: "क्या सप्लायर को भुगतान हो चुका है? अगर हाँ, तो कितनी रकम, किस तरीके से और किस तारीख को दी गई? मैं भुगतान दर्ज कर सकता हूँ, पैसे भेज नहीं सकता।" },
+  supplier_purchase_row: { en: "Which supplier, invoice and product row does this payment belong to? If the invoice has several rows, how much should go against each?", hi: "यह भुगतान किस सप्लायर, इनवॉइस और सामान की पंक्ति के लिए है? इनवॉइस में कई पंक्तियाँ हों तो हर पंक्ति में कितनी रकम दर्ज करनी है?" },
+  transfer_destination: { en: "Which destination branch should receive stock from this counter?", hi: "इस काउंटर से स्टॉक किस शाखा को भेजना है?" },
+  transfer_lines: { en: "Which products and quantities, with their base units, are being dispatched?", hi: "कौन से सामान और उनकी मूल यूनिट में कितनी मात्रा भेजनी है?" },
+  transfer_receipt: { en: "Which shipment arrived, and how much of each product actually reached this branch? Please include the units.", hi: "कौन सा शिपमेंट आया और इस शाखा में हर सामान की कितनी मात्रा वास्तव में पहुँची? यूनिट भी बताएं।" },
+  transfer_return: { en: "Are the undelivered goods physically back at the source branch? Which shipment should I cancel, and why?", hi: "क्या बिना पहुँचा माल वास्तव में स्रोत शाखा में वापस आ गया है? कौन सा शिपमेंट रद्द करना है और क्यों?" },
   variant: { en: "Which product, size and colour or shade do you mean?", hi: "कौन सा सामान, साइज़ और रंग या शेड चाहिए?" },
   rental: { en: "Which rental booking do you mean? Give its reference and whether you want pickup, return or deposit details.", hi: "कौन सी किराया बुकिंग है? उसका संदर्भ बताएं और पिकअप, वापसी या जमा रकम में क्या देखना है?" },
   vehicle: { en: "Which part and vehicle make, model and year do you mean?", hi: "कौन सा पार्ट और वाहन का ब्रांड, मॉडल और साल है?" },

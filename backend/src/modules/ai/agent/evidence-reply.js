@@ -134,6 +134,25 @@ export function renderToolEvidence({ tool, result }, language = "hi", timeZone =
       "{product}: ऑर्डर {ordered}, प्राप्त {received} {unit}; रेट {rate}/{rateUnit}", language,
       { product: label(row.productName), ordered: scalar(row.orderedBaseQty), received: scalar(row.receivedBaseQty), unit: row.baseUnit, rate: money(row.expectedRate), rateUnit: row.rateUnit }), language)].join("\n");
   }
+  if (tool === "list_supplier_dues") {
+    const purchases = result.purchases ?? [];
+    return [text("Supplier dues at {branch} (amounts in shop currency)", "{branch} में सप्लायर बकाया (दुकान की मुद्रा में रकम)", language, { branch: label(result.locationName) }),
+      ...(purchases.length ? rows(purchases, row => text("{supplier}; invoice {invoice}; product {product}; total {amount}; paid {paid}; due {due}",
+        "{supplier}; इनवॉइस {invoice}; सामान {product}; कुल {amount}; भुगतान {paid}; बकाया {due}", language,
+        { supplier: label(row.supplierName), invoice: label(row.invoiceNumber || "—"), product: label(row.productName), amount: scalar(row.amount), paid: scalar(row.paid), due: scalar(row.due) }), language, result.count)
+        : [text("No unpaid purchase rows returned.", "कोई बकाया खरीद पंक्ति नहीं मिली।", language)])].join("\n");
+  }
+  if (tool === "list_store_locations") return [text("Active branches", "सक्रिय शाखाएँ", language), ...rows(result.locations ?? [], row => `${label(row.name)}; ${label(row.code)}`, language, result.count)].join("\n");
+  if (tool === "get_transfer_stock") return [text("Available stock at {branch}", "{branch} में उपलब्ध स्टॉक", language, { branch: label(result.locationName) }),
+    ...rows(result.products ?? [], row => `${label(row.name)}: ${scalar(row.stockBaseQty)} ${label(row.baseUnit)}`, language)].join("\n");
+  if (tool === "list_stock_transfers" || tool === "get_stock_transfer") {
+    const transferLine = row => text("{reference}: {from} → {to}; status {status}", "{reference}: {from} → {to}; स्थिति {status}", language,
+      { reference: label(row.referenceNo), from: label(row.fromName), to: label(row.toName), status: label(row.status) });
+    if (tool === "list_stock_transfers") return [text("Recent transfers at this counter (up to 25 from the latest 100 accessible transfers)", "इस काउंटर के हाल के ट्रांसफर (पिछले 100 सुलभ ट्रांसफर में से अधिकतम 25)", language), ...rows(result.transfers ?? [], transferLine, language)].join("\n");
+    return [transferLine(result), ...rows(result.items ?? [], row => text("{product}: sent {sent}; received {received}; remaining {remaining} {unit}",
+      "{product}: भेजा {sent}; प्राप्त {received}; बाकी {remaining} {unit}", language,
+      { product: label(row.productName), sent: scalar(row.sent), received: scalar(row.received), remaining: scalar(row.remaining), unit: label(row.baseUnit) }), language)].join("\n");
+  }
   if (tool === "find_supplier") {
     const suppliers = Array.isArray(result.suppliers) ? result.suppliers : [];
     if (!suppliers.length) return text("No matching suppliers returned.", "कोई मिलता सप्लायर नहीं मिला।", language);

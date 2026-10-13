@@ -30,6 +30,10 @@ export function renderWorkflowHelp(result, language = "hi") {
 }
 
 export const ACTION_LABELS = Object.freeze({
+  record_supplier_payment: ["Record money already paid to a supplier", "सप्लायर को किया हुआ भुगतान दर्ज करना"],
+  dispatch_stock_transfer: ["Dispatch simple stock to another branch", "साधारण स्टॉक दूसरी शाखा को भेजना"],
+  receive_stock_transfer: ["Receive actual stock from a shipment", "शिपमेंट से वास्तव में आया स्टॉक प्राप्त करना"],
+  cancel_stock_transfer: ["Cancel and return undelivered stock to source", "बिना पहुँचा स्टॉक रद्द करके स्रोत शाखा में वापस करना"],
   create_purchase_order: ["Create a draft purchase order", "खरीद ऑर्डर का ड्राफ्ट बनाना"],
   mark_purchase_order_sent: ["Mark a purchase order as sent (no supplier message)", "खरीद ऑर्डर भेजा हुआ दर्ज करना (संदेश नहीं भेजता)"],
   cancel_purchase_order: ["Cancel the unreceived purchase remainder", "खरीद ऑर्डर का अप्राप्त हिस्सा रद्द करना"],

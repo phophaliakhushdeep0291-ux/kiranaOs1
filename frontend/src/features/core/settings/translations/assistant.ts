@@ -70,7 +70,7 @@ export const assistantEn = {
   "assistant.till.nothingToAdd": "Nothing to add from that.",
 
   "assistant.ownerPinTitle": "Owner PIN needed",
-  "assistant.ownerPinBody": "This changes prices or stock, so it needs the owner's 4-digit PIN.",
+  "assistant.ownerPinBody": "This protected action needs the owner's 4-digit PIN before it can run.",
   "assistant.ownerPinPlaceholder": "4-digit PIN",
   "assistant.ownerPinSubmit": "Confirm with PIN",
   "assistant.ownerPinWrong": "That PIN was not accepted",

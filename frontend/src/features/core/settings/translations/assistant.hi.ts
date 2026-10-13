@@ -74,7 +74,7 @@ export const assistantHi: Record<keyof typeof assistantEn, string> = {
   "assistant.till.nothingToAdd": "इसमें जोड़ने लायक कुछ नहीं मिला।",
 
   "assistant.ownerPinTitle": "मालिक का PIN चाहिए",
-  "assistant.ownerPinBody": "इसमें रेट या स्टॉक बदल रहा है, इसलिए मालिक का 4 अंकों का PIN ज़रूरी है।",
+  "assistant.ownerPinBody": "इस सुरक्षित कार्रवाई को करने के लिए मालिक का 4 अंकों का PIN ज़रूरी है।",
   "assistant.ownerPinPlaceholder": "4 अंकों का PIN",
   "assistant.ownerPinSubmit": "PIN से पुष्टि करें",
   "assistant.ownerPinWrong": "यह PIN स्वीकार नहीं हुआ",

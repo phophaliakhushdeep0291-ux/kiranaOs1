@@ -1,3 +1,4 @@
+import { recordSupplierPayment } from "../suppliers/supplierPayments.service.js";
 import { accountingMarketSnapshot, assertAccountingMarketClaim, shopAccountingMarket } from "../shops/market-policy.js";
 import { z } from "zod";
 import db from "../../db.js";
@@ -3434,77 +3435,10 @@ async function applyRecordSupplierPayment(shopId, event, user, context) {
   const payload = supplierPaymentPayloadSchema.parse(getEventPayload(event));
   const purchase = await findPurchaseHistoryTarget(shopId, payload, context);
   if (!purchase) throw new AppError("Purchase bill not found for supplier payment", 404);
-  const amount = round2(payload.amount);
-  const currentDue = round2(Number(purchase.purchaseDueAmount ?? 0));
-  if (amount > currentDue) {
-    throw new AppError(`Supplier payment exceeds purchase due (${currentDue})`, 409, "PAYMENT_EXCEEDS_DUE");
-  }
-  const eventId = getClientEventId(event);
-  const idempotencyKey = `supplier-payment:${eventId}`;
-  const mode = payload.mode === "card" ? "bank" : payload.mode;
-  const businessDate = payload.paidAt ? new Date(payload.paidAt) : new Date();
-
-  return db.$transaction(async (tx) => {
-    const existing = await tx.financialLedger.findFirst({ where: { shopId, idempotencyKey } });
-    if (existing) {
-      return { type: event.type, paymentId: existing.sourceId, ledgerEntryId: existing.id, purchaseHistoryId: existing.purchaseBillId, idempotentReplay: true };
-    }
-    const [ledger] = await postFinancialLedgerRows(tx, [{
-        shopId,
-        supplierId: purchase.supplierId,
-        purchaseBillId: purchase.id,
-        sourceType: "supplier_payment",
-        sourceId: payload.paymentId,
-        entryType: "supplier_payment",
-        direction: "debit",
-        amountPaise: toPaiseBigInt(amount),
-        paymentMode: mode,
-        businessDate,
-        idempotencyKey,
-        evidenceJson: JSON.stringify({
-          version: 1,
-          capturedAt: new Date().toISOString(),
-          sourceType: "supplier_payment",
-          sourceId: payload.paymentId,
-          purchaseBillId: purchase.id,
-          supplierId: purchase.supplierId,
-          entryType: "supplier_payment",
-          amountPaise: String(toPaiseBigInt(amount)),
-          paymentMode: mode,
-        }),
-    }]);
-    const paid = round2(Number(purchase.purchasePaidAmount ?? 0) + amount);
-    const due = round2(Math.max(0, Number(purchase.billAmount ?? 0) - paid));
-    const updated = await tx.purchaseHistory.update({
-      where: { id: purchase.id },
-      data: {
-        purchasePaidAmount: paid,
-        purchaseDueAmount: due,
-        ...moneyShadows({ purchasePaidAmount: paid, purchaseDueAmount: due }),
-        purchasePaymentStatus: due <= 0 ? "paid" : "partial",
-      },
-    });
-    const audit = await createAuditLog({
-      shopId,
-      userId: user?.userId ?? user?.id ?? null,
-      deviceId: user?.deviceId ?? null,
-      action: "SUPPLIER_PAYMENT_RECORDED",
-      entityType: "FinancialLedger",
-      entityId: ledger.id,
-      before: { paid: purchase.purchasePaidAmount, due: currentDue },
-      after: { paid, due },
-      metadata: { paymentId: payload.paymentId, purchaseHistoryId: purchase.id, amount, mode, reference: payload.reference ?? null },
-      client: tx,
-    });
-    if (!audit) {
-      throw new AppError(
-        "Supplier payment was not saved because its audit record could not be stored",
-        503,
-        "SUPPLIER_PAYMENT_AUDIT_WRITE_FAILED",
-      );
-    }
-    return { type: event.type, paymentId: payload.paymentId, ledgerEntryId: ledger.id, purchaseHistoryId: purchase.id, amountPaid: amount, purchaseHistory: toSyncJsonSafe(updated) };
-  });
+  const result = await recordSupplierPayment(shopId, {
+    ...payload, purchaseHistoryId: purchase.id, idempotencyKey: `supplier-payment:${getClientEventId(event)}`,
+  }, user);
+  return { type: event.type, ...toSyncJsonSafe(result) };
 }
 
 async function applyReverseSupplierPayment(shopId, event, user) {
