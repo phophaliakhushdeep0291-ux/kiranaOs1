@@ -1,92 +1,47 @@
-import db from "../../db.js";
+import db, { databaseEngine } from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
+import { GENERAL_LEDGER_VERSION, SYSTEM_ACCOUNTS, buildJournalProjection } from "./ledger-projection.js";
+import { buildLedgerIntegrity } from "./ledger-integrity.js";
+import { publicPaise } from "./ledger-money.js";
+export { GENERAL_LEDGER_VERSION, SYSTEM_ACCOUNTS, buildJournalProjection, projectLedgerRow } from "./ledger-projection.js";
 import { createHash } from "node:crypto";
 import { accountingMarketSnapshot, assertAccountingMarketClaim, shopAccountingMarket } from "../shops/market-policy.js";
-
-export const GENERAL_LEDGER_VERSION = "general-ledger-v1";
-
-export const SYSTEM_ACCOUNTS = [
-  ["1000", "Cash in hand", "asset", "debit", "cash"],
-  ["1010", "UPI clearing", "asset", "debit", "upi"],
-  ["1020", "Bank", "asset", "debit", "bank"],
-  ["1030", "Other payment clearing", "asset", "debit", "other_clearing"],
-  ["1100", "Customer receivables", "asset", "debit", "receivables"],
-  ["1110", "Rental receivables", "asset", "debit", "rental_receivables"],
-  ["2400", "Rental advances", "liability", "credit", "rental_advances"],
-  ["2410", "Refundable rental deposits", "liability", "credit", "rental_deposits"],
-  ["2420", "Furniture order advances", "liability", "credit", "furniture_advances"],
-  ["4100", "Rental income", "income", "credit", "rental_income"],
-  ["1200", "Inventory at recorded purchase cost", "asset", "debit", "inventory"],
-  ["1300", "Supplier advances and credits", "asset", "debit", "supplier_credits"],
-  ["2000", "Supplier payables", "liability", "credit", "payables"],
-  ["2100", "Gift card liability", "liability", "credit", "gift_cards"],
-  ["2200", "GST output payable", "liability", "credit", "gst_output"],
-  ["2210", "Input GST recoverable", "asset", "debit", "gst_input"],
-  ["2300", "Accrued expense payables", "liability", "credit", "expense_payables"],
-  ["2900", "Recycle-bin suspense", "liability", "credit", "recycle_bin_suspense"],
-  ["3000", "Owner capital", "equity", "credit", "owner_capital"],
-  ["3100", "Owner drawings", "equity", "debit", "owner_drawings"],
-  ["4000", "Net sales", "income", "credit", "sales"],
-  ["5000", "Cost of goods sold", "expense", "debit", "cost_of_goods_sold"],
-  ["6000", "Operating expenses", "expense", "debit", "operating_expenses"],
-  ["6100", "Waivers and rounding", "expense", "debit", "waivers"],
-].map(([code, name, category, normalSide, systemKey]) => ({ code, name, category, normalSide, systemKey }));
-
-const ENTRY_MAPPING = {
-  rental_cash: ["1000", "debit"], rental_upi: ["1010", "debit"], rental_bank: ["1020", "debit"], rental_other: ["1030", "debit"],
-  rental_advance: ["2400", "credit"], rental_deposit: ["2410", "credit"], rental_receivable: ["1110", "debit"], rental_income: ["4100", "credit"],
-  furniture_cash: ["1000", "debit"], furniture_upi: ["1010", "debit"], furniture_bank: ["1020", "debit"], furniture_other: ["1030", "debit"],
-  furniture_advance: ["2420", "credit"],
-  sale: ["4000", "credit"], cash_in: ["1000", "debit"], upi_in: ["1010", "debit"], bank_in: ["1020", "debit"],
-  udhar_debit: ["1100", "debit"], udhar_credit: ["1100", "credit"], udhar_return_credit: ["1100", "credit"],
-  gift_card_issued: ["2100", "credit"], gift_card_redeemed: ["2100", "debit"], waiver_expense: ["6100", "debit"],
-  recycle_bin_offset: ["2900", "credit"], gst_output: ["2200", "credit"], gst_sales_reclassification: ["4000", "debit"],
-  cost_of_goods_sold: ["5000", "debit"], inventory_sale: ["1200", "credit"],
-  inventory_purchase: ["1200", "debit"], inventory_purchase_return: ["1200", "credit"], supplier_payable: ["2000", "credit"],
-  supplier_payable_reduction: ["2000", "debit"], supplier_credit_receivable: ["1300", "debit"], cash_out: ["1000", "credit"],
-  upi_out: ["1010", "credit"], bank_out: ["1020", "credit"], other_out: ["1030", "credit"], cash_refund_in: ["1000", "debit"],
-  upi_refund_in: ["1010", "debit"], bank_refund_in: ["1020", "debit"], operating_expense: ["6000", "debit"], expense_payable: ["2300", "credit"],
-};
-
-const opposite = (side) => side === "debit" ? "credit" : "debit";
-const tenderCode = (mode) => String(mode).toLowerCase() === "upi" ? "1010" : ["bank", "card"].includes(String(mode).toLowerCase()) ? "1020" : "1000";
 
 function accountingError(message, code, status = 409) {
   return Object.assign(new Error(message), { code, status });
 }
 
+// Every posting and period change takes the same database lock. The no-op
+// UPDATE also invalidates an older PostgreSQL serializable snapshot, unlike
+// an advisory/read lock; the outer transaction retries and sees a new close.
+const lockedShops = new WeakMap();
+async function lockAccountingShop(shopId, client) {
+  if (databaseEngine === "postgres" && typeof client.$executeRaw === "function") {
+    const shops = lockedShops.get(client) ?? new Set();
+    if (shops.has(shopId)) return;
+    await client.$executeRaw`UPDATE "Shop" SET "updatedAt" = "updatedAt" WHERE "id" = ${shopId}`;
+    shops.add(shopId);
+    lockedShops.set(client, shops);
+  }
+}
+
 async function assertPeriodOpen(shopId, businessDate, client) {
   if (!client.accountingPeriod) return;
+  await lockAccountingShop(shopId, client);
   const locked = await client.accountingPeriod.findFirst({ where: { shopId, status: "closed", startsAt: { lte: businessDate }, endsAt: { gte: businessDate } } });
   if (locked) throw accountingError(`Accounting period ${locked.name} is closed`, "ACCOUNTING_PERIOD_CLOSED");
 }
 
 function validateBalancedLines(lines) {
+  if (!Array.isArray(lines) || lines.length < 2 || lines.some((line) => {
+    const values = [line.debitPaise ?? 0, line.creditPaise ?? 0];
+    return values.some((value) => typeof value !== "bigint" && !Number.isSafeInteger(value))
+      || values.some((value) => value < 0) || (values[0] > 0) === (values[1] > 0);
+  })) throw accountingError("Each journal line needs one non-negative integer debit or credit", "JOURNAL_LINE_INVALID", 400);
   const debitPaise = lines.reduce((sum, line) => sum + BigInt(line.debitPaise ?? 0), 0n);
   const creditPaise = lines.reduce((sum, line) => sum + BigInt(line.creditPaise ?? 0), 0n);
   if (debitPaise <= 0n || debitPaise !== creditPaise) throw accountingError("Journal debits and credits must be equal and non-zero", "GENERAL_LEDGER_UNBALANCED_JOURNAL", 400);
   return { debitPaise, creditPaise };
-}
-
-export function projectLedgerRow(row) {
-  const signed = BigInt(row.amountPaise ?? 0);
-  if (signed === 0n) return [];
-  const amountPaise = signed < 0n ? -signed : signed;
-  if (row.entryType === "supplier_payment") {
-    const lines = [["2000", "debit"], [tenderCode(row.paymentMode), "credit"]];
-    return lines.map(([accountCode, side]) => ({ accountCode, side: signed < 0n ? opposite(side) : side, amountPaise, financialLedgerId: row.id }));
-  }
-  const mapping = ENTRY_MAPPING[row.entryType];
-  if (!mapping) throw Object.assign(new Error(`Unmapped financial-ledger entry type: ${row.entryType}`), { code: "GENERAL_LEDGER_UNMAPPED_ENTRY" });
-  const [accountCode, side] = mapping;
-  return [{ accountCode, side: signed < 0n ? opposite(side) : side, amountPaise, financialLedgerId: row.id }];
-}
-
-export function buildJournalProjection(rows) {
-  const projected = rows.flatMap(projectLedgerRow);
-  const debitPaise = projected.filter((line) => line.side === "debit").reduce((sum, line) => sum + line.amountPaise, 0n);
-  const creditPaise = projected.filter((line) => line.side === "credit").reduce((sum, line) => sum + line.amountPaise, 0n);
-  if (debitPaise !== creditPaise) throw Object.assign(new Error(`Journal is not balanced: debit ${debitPaise}, credit ${creditPaise}`), { code: "GENERAL_LEDGER_UNBALANCED_JOURNAL" });
-  return { lines: projected, debitPaise, creditPaise };
 }
 
 export function journalBatchSourceId(rows) {
@@ -103,13 +58,14 @@ export async function ensureSystemAccounts(shopId, client = db) {
     await client.chartOfAccount.upsert({
       where: { shopId_code: { shopId, code: account.code } },
       create: { shopId, ...account },
-      update: { name: account.name, category: account.category, normalSide: account.normalSide, systemKey: account.systemKey },
+      update: { name: account.name, category: account.category, normalSide: account.normalSide, systemKey: account.systemKey, active: true },
     });
   }
   return client.chartOfAccount.findMany({ where: { shopId }, orderBy: { code: "asc" } });
 }
 
 export async function postFinancialLedgerRows(client, rows) {
+  if (typeof client.$transaction === "function") return serializableTransaction((tx) => postFinancialLedgerRows(tx, rows), { client, timeout: 30000 });
   if (!rows.length) return [];
   const shopId = rows[0].shopId;
   if (rows.some((row) => row.shopId !== shopId)) throw new Error("A journal batch cannot span shops");
@@ -123,7 +79,7 @@ export async function postFinancialLedgerRows(client, rows) {
   // Lightweight unit-test transaction doubles intentionally expose only the
   // financial ledger. Real Prisma transaction clients always expose both.
   if (!client.chartOfAccount || !client.journalEntry) return createdRows;
-  const groups = Map.groupBy(createdRows, (row) => `${row.sourceType}\u0000${row.sourceId}`);
+  const groups = Map.groupBy(createdRows, (row) => `${row.sourceType}\u0000${row.sourceId}\u0000${new Date(row.businessDate).toISOString()}`);
   let accounts = await client.chartOfAccount.findMany({ where: { shopId, active: true } });
   if (SYSTEM_ACCOUNTS.some((required) => !accounts.some((account) => account.code === required.code))) accounts = await ensureSystemAccounts(shopId, client);
   const accountByCode = new Map(accounts.map((account) => [account.code, account]));
@@ -170,6 +126,7 @@ export async function updateAccount(shopId, accountId, input, client = db) {
 }
 
 export async function createManualJournal(shopId, input, { sourceType = "manual_journal", actorUserId = null, client = db } = {}) {
+  if (typeof client.$transaction === "function") return serializableTransaction((tx) => createManualJournal(shopId, input, { sourceType, actorUserId, client: tx }), { client, timeout: 30000 });
   const market = await shopAccountingMarket(client, shopId);
   assertAccountingMarketClaim(input, market);
   validateBalancedLines(input.lines);
@@ -185,11 +142,12 @@ export async function createManualJournal(shopId, input, { sourceType = "manual_
     ...market,
     shopId, sourceType, sourceId: input.reference, businessDate, description: input.description,
     evidenceJson: JSON.stringify({ version: 1, actorUserId, manuallyApproved: true }),
-    lines: { create: input.lines.map((line, index) => ({ shopId, accountId: accountByCode.get(line.accountCode).id, lineNumber: index + 1, debitPaise: BigInt(line.debitPaise), creditPaise: BigInt(line.creditPaise), memo: line.memo ?? null, evidenceJson: JSON.stringify({ version: 1, actorUserId, accountCode: line.accountCode }) })) },
+    lines: { create: input.lines.map((line, index) => ({ shopId, accountId: accountByCode.get(line.accountCode).id, lineNumber: index + 1, debitPaise: BigInt(line.debitPaise ?? 0), creditPaise: BigInt(line.creditPaise ?? 0), memo: line.memo ?? null, evidenceJson: JSON.stringify({ version: 1, actorUserId, accountCode: line.accountCode }) })) },
   }, include: { lines: { include: { account: true } } } });
 }
 
 export async function reverseJournal(shopId, journalId, input, actorUserId = null, client = db) {
+  if (typeof client.$transaction === "function") return serializableTransaction((tx) => reverseJournal(shopId, journalId, input, actorUserId, tx), { client, timeout: 30000 });
   const original = await client.journalEntry.findFirst({ where: { id: journalId, shopId, status: "posted" }, include: { lines: { include: { account: true } }, reversals: true } });
   if (!original) throw accountingError("Posted journal not found", "JOURNAL_NOT_FOUND", 404);
   if (!["manual_journal", "opening_balance", "document_approval"].includes(original.sourceType)) throw accountingError("System-generated journals must be corrected through their originating business transaction", "SYSTEM_JOURNAL_REVERSAL_FORBIDDEN", 400);
@@ -205,6 +163,8 @@ export async function reverseJournal(shopId, journalId, input, actorUserId = nul
 }
 
 export async function createAccountingPeriod(shopId, input, client = db) {
+  if (typeof client.$transaction === "function") return serializableTransaction((tx) => createAccountingPeriod(shopId, input, tx), { client, timeout: 30000 });
+  await lockAccountingShop(shopId, client);
   const startsAt = new Date(input.startsAt); const endsAt = new Date(input.endsAt);
   const overlap = await client.accountingPeriod.findFirst({ where: { shopId, startsAt: { lte: endsAt }, endsAt: { gte: startsAt } } });
   if (overlap) throw accountingError(`Period overlaps ${overlap.name}`, "ACCOUNTING_PERIOD_OVERLAP");
@@ -216,30 +176,40 @@ export async function listAccountingPeriods(shopId, client = db) {
 }
 
 export async function closeAccountingPeriod(shopId, periodId, input, actorUserId, client = db) {
+  if (typeof client.$transaction === "function") return serializableTransaction((tx) => closeAccountingPeriod(shopId, periodId, input, actorUserId, tx), { client, timeout: 30000 });
+  await lockAccountingShop(shopId, client);
   const period = await client.accountingPeriod.findFirst({ where: { id: periodId, shopId } });
   if (!period) throw accountingError("Accounting period not found", "ACCOUNTING_PERIOD_NOT_FOUND", 404);
   if (period.status === "closed") return period;
   const trial = await getTrialBalance(shopId, { from: period.startsAt.toISOString(), to: period.endsAt.toISOString() }, client);
-  if (trial.status !== "balanced") throw accountingError("The period cannot close until its trial balance is balanced", "ACCOUNTING_PERIOD_UNBALANCED");
+  if (trial.integrity.status === "attention_required") throw accountingError("Resolve missing or inconsistent journal evidence before closing this period", "ACCOUNTING_PERIOD_INTEGRITY_FAILED");
+  if (trial.differencePaise !== 0) throw accountingError("The period cannot close until its trial balance is balanced", "ACCOUNTING_PERIOD_UNBALANCED");
   return client.accountingPeriod.update({ where: { id: period.id }, data: { status: "closed", closedAt: new Date(), closedByUserId: actorUserId, closeReason: input.reason } });
 }
 
 export async function projectShopGeneralLedger(shopId, client = db) {
+  if (typeof client.$transaction === "function") return serializableTransaction((tx) => projectShopGeneralLedger(shopId, tx), { client, timeout: 30000 });
+  await lockAccountingShop(shopId, client);
   const accounts = await ensureSystemAccounts(shopId, client);
   const accountByCode = new Map(accounts.map((account) => [account.code, account]));
   const rows = await client.financialLedger.findMany({ where: { shopId }, orderBy: [{ businessDate: "asc" }, { createdAt: "asc" }, { id: "asc" }] });
-  const existingJournals = await client.journalEntry.findMany({ where: { shopId }, select: { evidenceJson: true } });
+  const existingJournals = await client.journalEntry.findMany({ where: { shopId, status: "posted" }, include: { lines: { include: { account: true } } } });
+  const integrity = buildLedgerIntegrity(shopId, rows, existingJournals);
+  if (integrity.mismatchedRows || integrity.invalidJournals || integrity.unmappedRows) {
+    throw accountingError("Existing journal evidence needs review before projecting more entries", "GENERAL_LEDGER_INTEGRITY_FAILED");
+  }
   const projectedLedgerIds = new Set();
   for (const journal of existingJournals) {
     try { for (const id of JSON.parse(journal.evidenceJson).ledgerRowIds ?? []) projectedLedgerIds.add(id); } catch { /* permanent verification reports malformed evidence */ }
   }
-  const groups = Map.groupBy(rows, (row) => `${row.sourceType}\u0000${row.sourceId}`);
+  const groups = Map.groupBy(rows, (row) => `${row.sourceType}\u0000${row.sourceId}\u0000${new Date(row.businessDate).toISOString()}`);
   let created = 0;
   let existing = 0;
   for (const sourceRows of groups.values()) {
-    const source = sourceRows[0];
     const rowsToProject = sourceRows.filter((row) => !projectedLedgerIds.has(row.id));
     if (!rowsToProject.length) { existing += 1; continue; }
+    const source = rowsToProject[0];
+    await assertPeriodOpen(shopId, new Date(source.businessDate), client);
     const supplemental = rowsToProject.length !== sourceRows.length;
     const journalSourceType = supplemental ? `${source.sourceType}_projection_supplement` : source.sourceType;
     const batchSourceId = journalBatchSourceId(rowsToProject);
@@ -262,44 +232,62 @@ export async function projectShopGeneralLedger(shopId, client = db) {
 }
 
 export async function getTrialBalance(shopId, { from, to } = {}, client = db) {
-  const businessDate = {};
-  if (from) businessDate.gte = new Date(from);
-  if (to) businessDate.lte = new Date(to);
-  const accounts = await client.chartOfAccount.findMany({
-    where: { shopId, active: true }, orderBy: { code: "asc" },
-    include: { lines: { where: { journalEntry: { status: "posted", ...(Object.keys(businessDate).length ? { businessDate } : {}) } } } },
+  // A single snapshot prevents a sale committed between reads from looking like
+  // a missing journal. Reuse an existing mutation transaction during close.
+  if (typeof client.$transaction === "function") return serializableTransaction((tx) => getTrialBalance(shopId, { from, to }, tx), { client, timeout: 30000 });
+  const businessDate = { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) };
+  const journals = await client.journalEntry.findMany({
+    where: { shopId, status: "posted", businessDate },
+    include: { lines: { include: { account: true } } },
   });
+  const sources = await client.financialLedger.findMany({ where: { shopId, businessDate } });
+  const integrity = buildLedgerIntegrity(shopId, sources, journals);
+  // Include inactive accounts with history; disabling a name must never erase
+  // its money from the books. Never disclose a foreign account's identity.
+  const accounts = await client.chartOfAccount.findMany({ where: { shopId }, orderBy: { code: "asc" } });
+  const totals = new Map(accounts.map((account) => [account.id, { debit: 0n, credit: 0n }]));
+  for (const journal of journals) for (const line of journal.lines) {
+    if (line.shopId !== shopId || line.account.shopId !== shopId) continue;
+    const amount = totals.get(line.accountId);
+    amount.debit += BigInt(line.debitPaise); amount.credit += BigInt(line.creditPaise);
+  }
   const rows = accounts.map((account) => {
-    const debitPaise = account.lines.reduce((sum, line) => sum + BigInt(line.debitPaise), 0n);
-    const creditPaise = account.lines.reduce((sum, line) => sum + BigInt(line.creditPaise), 0n);
-    return { code: account.code, name: account.name, category: account.category, normalSide: account.normalSide, debitPaise, creditPaise, balancePaise: debitPaise - creditPaise };
+    const { debit, credit } = totals.get(account.id);
+    return { code: account.code, name: account.name, category: account.category, normalSide: account.normalSide, debitPaise: debit, creditPaise: credit, balancePaise: debit - credit };
   });
-  const totalDebitPaise = rows.reduce((sum, row) => sum + row.debitPaise, 0n);
-  const totalCreditPaise = rows.reduce((sum, row) => sum + row.creditPaise, 0n);
-  const publicRows = rows.map((row) => ({ ...row, debitPaise: Number(row.debitPaise), creditPaise: Number(row.creditPaise), balancePaise: Number(row.balancePaise) }));
-  return { version: GENERAL_LEDGER_VERSION, status: totalDebitPaise === totalCreditPaise ? "balanced" : "attention_required", totalDebitPaise: Number(totalDebitPaise), totalCreditPaise: Number(totalCreditPaise), differencePaise: Number(totalDebitPaise - totalCreditPaise), accounts: publicRows };
+  const debit = rows.reduce((sum, row) => sum + row.debitPaise, 0n);
+  const credit = rows.reduce((sum, row) => sum + row.creditPaise, 0n);
+  const status = integrity.status === "attention_required" || debit !== credit ? "attention_required"
+    : integrity.status === "no_data" ? "no_data" : "balanced";
+  return { version: GENERAL_LEDGER_VERSION, status, integrity, totalDebitPaise: publicPaise(debit), totalCreditPaise: publicPaise(credit), differencePaise: publicPaise(debit - credit),
+    accounts: rows.map((row) => ({ ...row, debitPaise: publicPaise(row.debitPaise), creditPaise: publicPaise(row.creditPaise), balancePaise: publicPaise(row.balancePaise) })) };
 }
+
+const sumAmounts = (rows) => rows.reduce((sum, row) => sum + BigInt(row.amountPaise), 0n);
+const statementRows = (trial, category, creditNormal) => trial.accounts.filter((row) => row.category === category).map((row) => ({
+  ...row, amountPaise: publicPaise(creditNormal ? -BigInt(row.balancePaise) : BigInt(row.balancePaise)),
+}));
 
 export async function getProfitAndLoss(shopId, query = {}, client = db) {
   const trial = await getTrialBalance(shopId, query, client);
-  const income = trial.accounts.filter((row) => row.category === "income").map((row) => ({ ...row, amountPaise: row.creditPaise - row.debitPaise }));
-  const expenses = trial.accounts.filter((row) => row.category === "expense").map((row) => ({ ...row, amountPaise: row.debitPaise - row.creditPaise }));
-  const totalIncomePaise = income.reduce((sum, row) => sum + row.amountPaise, 0);
-  const totalExpensePaise = expenses.reduce((sum, row) => sum + row.amountPaise, 0);
-  return { version: GENERAL_LEDGER_VERSION, from: query.from ?? null, to: query.to ?? null, totalIncomePaise, totalExpensePaise, netProfitPaise: totalIncomePaise - totalExpensePaise, income, expenses, basis: "posted_general_ledger" };
+  const income = statementRows(trial, "income", true);
+  const expenses = statementRows(trial, "expense", false);
+  const totalIncome = sumAmounts(income); const totalExpense = sumAmounts(expenses);
+  return { version: GENERAL_LEDGER_VERSION, status: trial.status, integrity: trial.integrity, from: query.from ?? null, to: query.to ?? null,
+    totalIncomePaise: publicPaise(totalIncome), totalExpensePaise: publicPaise(totalExpense), netProfitPaise: publicPaise(totalIncome - totalExpense), income, expenses, basis: "posted_general_ledger" };
 }
 
 export async function getBalanceSheet(shopId, { asOf } = {}, client = db) {
   const trial = await getTrialBalance(shopId, { ...(asOf ? { to: asOf } : {}) }, client);
-  const assets = trial.accounts.filter((row) => row.category === "asset").map((row) => ({ ...row, amountPaise: row.debitPaise - row.creditPaise }));
-  const liabilities = trial.accounts.filter((row) => row.category === "liability").map((row) => ({ ...row, amountPaise: row.creditPaise - row.debitPaise }));
-  const equityAccounts = trial.accounts.filter((row) => row.category === "equity").map((row) => ({ ...row, amountPaise: row.creditPaise - row.debitPaise }));
-  const currentEarningsPaise = trial.accounts.filter((row) => row.category === "income").reduce((sum, row) => sum + row.creditPaise - row.debitPaise, 0)
-    - trial.accounts.filter((row) => row.category === "expense").reduce((sum, row) => sum + row.debitPaise - row.creditPaise, 0);
-  const totalAssetsPaise = assets.reduce((sum, row) => sum + row.amountPaise, 0);
-  const totalLiabilitiesPaise = liabilities.reduce((sum, row) => sum + row.amountPaise, 0);
-  const totalEquityPaise = equityAccounts.reduce((sum, row) => sum + row.amountPaise, 0) + currentEarningsPaise;
-  return { version: GENERAL_LEDGER_VERSION, asOf: asOf ?? null, status: totalAssetsPaise === totalLiabilitiesPaise + totalEquityPaise ? "balanced" : "attention_required", totalAssetsPaise, totalLiabilitiesPaise, totalEquityPaise, differencePaise: totalAssetsPaise - totalLiabilitiesPaise - totalEquityPaise, assets, liabilities, equity: [...equityAccounts, { code: "CURRENT_EARNINGS", name: "Current earnings", category: "equity", normalSide: "credit", debitPaise: 0, creditPaise: 0, balancePaise: -currentEarningsPaise, amountPaise: currentEarningsPaise }] };
+  const assets = statementRows(trial, "asset", false);
+  const liabilities = statementRows(trial, "liability", true);
+  const equityAccounts = statementRows(trial, "equity", true);
+  const earnings = sumAmounts(statementRows(trial, "income", true)) - sumAmounts(statementRows(trial, "expense", false));
+  const totalAssets = sumAmounts(assets); const totalLiabilities = sumAmounts(liabilities); const totalEquity = sumAmounts(equityAccounts) + earnings;
+  return { version: GENERAL_LEDGER_VERSION, asOf: asOf ?? null, status: trial.status, integrity: trial.integrity,
+    totalAssetsPaise: publicPaise(totalAssets), totalLiabilitiesPaise: publicPaise(totalLiabilities), totalEquityPaise: publicPaise(totalEquity),
+    differencePaise: publicPaise(totalAssets - totalLiabilities - totalEquity), assets, liabilities,
+    equity: [...equityAccounts, { code: "CURRENT_EARNINGS", name: "Current earnings", category: "equity", normalSide: "credit", debitPaise: 0, creditPaise: 0, balancePaise: publicPaise(-earnings), amountPaise: publicPaise(earnings) }] };
 }
 
 export async function getJournal(shopId, journalId, client = db) {

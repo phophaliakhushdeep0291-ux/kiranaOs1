@@ -4,6 +4,7 @@
 // A findings id from another shop resolves to a 404, never to data.
 import crypto from "node:crypto";
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import {
   ENTITY_TYPES,
@@ -274,9 +275,10 @@ async function loadSourceSummary(shopId, entityType, entityId) {
 
 // ── status transitions ────────────────────────────────────────
 
-export async function transitionFindingStatus(shopId, actor, findingId, { status, comment = null, evidenceId = null, approvalLevel = null, resolutionType = null }) {
+export async function transitionFindingStatus(shopId, actor, findingId, { status, comment = null, evidenceId = null, approvalLevel = null, resolutionType = null }, client = db) {
+  if (typeof client.$transaction === "function") return serializableTransaction((tx) => transitionFindingStatus(shopId, actor, findingId, { status, comment, evidenceId, approvalLevel, resolutionType }, tx), { client });
   assertCanSetStatus(actor.role, status);
-  const finding = await db.auditFinding.findFirst({ where: { id: findingId, shopId } });
+  const finding = await client.auditFinding.findFirst({ where: { id: findingId, shopId } });
   if (!finding) throw new AppError("Finding not found", 404, "AUDIT_FINDING_NOT_FOUND");
 
   const allowed = FINDING_STATUS_TRANSITIONS[finding.status] ?? [];
@@ -289,7 +291,7 @@ export async function transitionFindingStatus(shopId, actor, findingId, { status
   }
 
   if (evidenceId) {
-    const evidence = await db.auditEvidence.findFirst({ where: { id: evidenceId, shopId, findingId } });
+    const evidence = await client.auditEvidence.findFirst({ where: { id: evidenceId, shopId, findingId } });
     if (!evidence) throw new AppError("Evidence not found for this finding", 404, "AUDIT_EVIDENCE_NOT_FOUND");
   }
 
@@ -301,66 +303,64 @@ export async function transitionFindingStatus(shopId, actor, findingId, { status
     FINDING_STATUS.CLOSED,
   ].includes(status);
 
-  const [updated] = await db.$transaction([
-    db.auditFinding.update({
-      where: { id: finding.id },
-      data: {
-        status,
-        ...(isResolution
-          ? { resolvedAt: new Date(), resolutionType: resolutionType ?? status }
-          : { resolvedAt: null, resolutionType: null }),
-      },
-    }),
-    // Append-only trail: one row per transition, never updated or removed.
-    db.auditFindingStatusHistory.create({
-      data: {
-        shopId,
-        findingId: finding.id,
-        previousStatus: finding.status,
-        newStatus: status,
-        changedByUserId: actor.userId,
-        changedByRole: actor.role,
-        comment,
-        evidenceId,
-        approvalLevel,
-      },
-    }),
-  ]);
+  const updated = await client.auditFinding.update({
+    where: { id: finding.id },
+    data: {
+      status,
+      ...(isResolution
+        ? { resolvedAt: new Date(), resolutionType: resolutionType ?? status }
+        : { resolvedAt: null, resolutionType: null }),
+    },
+  });
+  // Append-only trail: one row per transition, never updated or removed.
+  await client.auditFindingStatusHistory.create({
+    data: {
+      shopId,
+      findingId: finding.id,
+      previousStatus: finding.status,
+      newStatus: status,
+      changedByUserId: actor.userId,
+      changedByRole: actor.role,
+      comment,
+      evidenceId,
+      approvalLevel,
+    },
+  });
 
   return serializeFinding(updated);
 }
 
-export async function assignReviewer(shopId, actor, findingId, { reviewerUserId, comment = null }) {
+export async function assignReviewer(shopId, actor, findingId, { reviewerUserId, comment = null }, client = db) {
+  if (typeof client.$transaction === "function") return serializableTransaction((tx) => assignReviewer(shopId, actor, findingId, { reviewerUserId, comment }, tx), { client });
   assertCapability(actor.role, CAPABILITIES.ASSIGN_REVIEWER);
-  const finding = await db.auditFinding.findFirst({ where: { id: findingId, shopId } });
+  const finding = await client.auditFinding.findFirst({ where: { id: findingId, shopId } });
   if (!finding) throw new AppError("Finding not found", 404, "AUDIT_FINDING_NOT_FOUND");
 
-  const reviewer = await db.user.findFirst({ where: { id: reviewerUserId, shopId, disabledAt: null }, select: { id: true, role: true, name: true } });
+  const reviewer = await client.user.findFirst({ where: { id: reviewerUserId, shopId, disabledAt: null }, select: { id: true, role: true, name: true } });
   if (!reviewer) throw new AppError("Reviewer not found in this shop", 404, "AUDIT_REVIEWER_NOT_FOUND");
 
-  const [updated] = await db.$transaction([
-    db.auditFinding.update({ where: { id: finding.id }, data: { assignedReviewerId: reviewer.id } }),
-    db.auditFindingStatusHistory.create({
-      data: {
-        shopId,
-        findingId: finding.id,
-        previousStatus: finding.status,
-        newStatus: finding.status,
-        changedByUserId: actor.userId,
-        changedByRole: actor.role,
-        comment: comment ?? `Assigned to ${reviewer.name} (${reviewer.role}).`,
-      },
-    }),
-  ]);
+  const updated = await client.auditFinding.update({ where: { id: finding.id }, data: { assignedReviewerId: reviewer.id } });
+  await client.auditFindingStatusHistory.create({
+    data: {
+      shopId,
+      findingId: finding.id,
+      previousStatus: finding.status,
+      newStatus: finding.status,
+      changedByUserId: actor.userId,
+      changedByRole: actor.role,
+      comment: comment ?? `Assigned to ${reviewer.name} (${reviewer.role}).`,
+    },
+  });
   return serializeFinding(updated);
 }
 
-export async function addReview(shopId, actor, findingId, { decision, notes = null, newStatus = null }) {
+export async function addReview(shopId, actor, findingId, { decision, notes = null, newStatus = null }, client = db) {
+  if (typeof client.$transaction === "function") return serializableTransaction((tx) => addReview(shopId, actor, findingId, { decision, notes, newStatus }, tx), { client });
   assertCapability(actor.role, CAPABILITIES.REVIEW_FINDING);
-  const finding = await db.auditFinding.findFirst({ where: { id: findingId, shopId } });
+  const finding = await client.auditFinding.findFirst({ where: { id: findingId, shopId } });
   if (!finding) throw new AppError("Finding not found", 404, "AUDIT_FINDING_NOT_FOUND");
 
-  const review = await db.auditReview.create({
+  const review = await client.auditReview.create({
     data: {
       shopId,
       findingId: finding.id,
@@ -377,28 +377,29 @@ export async function addReview(shopId, actor, findingId, { decision, notes = nu
       status: newStatus,
       comment: notes ? `Review (${decision}): ${notes}` : `Review decision: ${decision}`,
       resolutionType: decision,
-    });
+    }, client);
   } else if (finding.status === FINDING_STATUS.OPEN || finding.status === FINDING_STATUS.EVIDENCE_REQUESTED) {
     updatedFinding = await transitionFindingStatus(shopId, actor, findingId, {
       status: FINDING_STATUS.UNDER_REVIEW,
       comment: `Review recorded: ${decision}`,
-    });
+    }, client);
   }
 
   return {
     review: { reviewId: review.id, decision: review.decision, notes: review.notes, createdAt: review.createdAt },
-    finding: serializeFinding(updatedFinding),
+    finding: updatedFinding === finding ? serializeFinding(finding) : updatedFinding,
   };
 }
 
 // ── evidence ──────────────────────────────────────────────────
 
-export async function requestEvidence(shopId, actor, findingId, { evidenceType, description, dueAt = null }) {
+export async function requestEvidence(shopId, actor, findingId, { evidenceType, description, dueAt = null }, client = db) {
+  if (typeof client.$transaction === "function") return serializableTransaction((tx) => requestEvidence(shopId, actor, findingId, { evidenceType, description, dueAt }, tx), { client });
   assertCapability(actor.role, CAPABILITIES.REQUEST_EVIDENCE);
-  const finding = await db.auditFinding.findFirst({ where: { id: findingId, shopId } });
+  const finding = await client.auditFinding.findFirst({ where: { id: findingId, shopId } });
   if (!finding) throw new AppError("Finding not found", 404, "AUDIT_FINDING_NOT_FOUND");
 
-  const requirement = await db.auditEvidenceRequirement.create({
+  const requirement = await client.auditEvidenceRequirement.create({
     data: {
       shopId,
       findingId: finding.id,
@@ -413,7 +414,7 @@ export async function requestEvidence(shopId, actor, findingId, { evidenceType, 
     await transitionFindingStatus(shopId, actor, findingId, {
       status: FINDING_STATUS.EVIDENCE_REQUESTED,
       comment: `Requested ${evidenceType}.`,
-    });
+    }, client);
   }
 
   return {
@@ -430,15 +431,16 @@ export async function requestEvidence(shopId, actor, findingId, { evidenceType, 
  * as PROVIDED and a human must verify it. Reused checksums are surfaced in
  * extractedMetadata so "same receipt used twice" is detectable.
  */
-export async function submitEvidence(shopId, actor, findingId, payload) {
+export async function submitEvidence(shopId, actor, findingId, payload, client = db) {
+  if (typeof client.$transaction === "function") return serializableTransaction((tx) => submitEvidence(shopId, actor, findingId, payload, tx), { client });
   assertCapability(actor.role, CAPABILITIES.SUBMIT_EVIDENCE);
   const visibility = findingVisibilityFilter(actor);
-  const finding = await db.auditFinding.findFirst({ where: { id: findingId, shopId, ...visibility } });
+  const finding = await client.auditFinding.findFirst({ where: { id: findingId, shopId, ...visibility } });
   if (!finding) throw new AppError("Finding not found", 404, "AUDIT_FINDING_NOT_FOUND");
 
   let requirement = null;
   if (payload.requirementId) {
-    requirement = await db.auditEvidenceRequirement.findFirst({
+    requirement = await client.auditEvidenceRequirement.findFirst({
       where: { id: payload.requirementId, shopId, findingId: finding.id },
     });
     if (!requirement) throw new AppError("Evidence requirement not found for this finding", 404, "AUDIT_REQUIREMENT_NOT_FOUND");
@@ -454,13 +456,13 @@ export async function submitEvidence(shopId, actor, findingId, payload) {
     ? String(payload.checksumSha256).toLowerCase()
     : crypto.createHash("sha256").update(referenceValue).digest("hex");
 
-  const priorUses = await db.auditEvidence.findMany({
+  const priorUses = await client.auditEvidence.findMany({
     where: { shopId, checksumSha256: checksum, findingId: { not: finding.id } },
     select: { id: true, findingId: true, evidenceType: true, createdAt: true },
     take: 10,
   });
 
-  const evidence = await db.auditEvidence.create({
+  const evidence = await client.auditEvidence.create({
     data: {
       shopId,
       findingId: finding.id,
@@ -486,13 +488,13 @@ export async function submitEvidence(shopId, actor, findingId, payload) {
   });
 
   if (requirement) {
-    await db.auditEvidenceRequirement.update({
+    await client.auditEvidenceRequirement.update({
       where: { id: requirement.id },
       data: { status: EVIDENCE_STATUS.PROVIDED },
     });
   }
 
-  await db.auditFindingStatusHistory.create({
+  await client.auditFindingStatusHistory.create({
     data: {
       shopId,
       findingId: finding.id,
@@ -508,12 +510,13 @@ export async function submitEvidence(shopId, actor, findingId, payload) {
   return { ...serializeEvidence(evidence), reuseWarningCount: priorUses.length };
 }
 
-export async function verifyEvidence(shopId, actor, evidenceId, { verificationStatus, reviewerNotes = null }) {
+export async function verifyEvidence(shopId, actor, evidenceId, { verificationStatus, reviewerNotes = null }, client = db) {
+  if (typeof client.$transaction === "function") return serializableTransaction((tx) => verifyEvidence(shopId, actor, evidenceId, { verificationStatus, reviewerNotes }, tx), { client });
   assertCapability(actor.role, CAPABILITIES.VERIFY_EVIDENCE);
-  const evidence = await db.auditEvidence.findFirst({ where: { id: evidenceId, shopId } });
+  const evidence = await client.auditEvidence.findFirst({ where: { id: evidenceId, shopId } });
   if (!evidence) throw new AppError("Evidence not found", 404, "AUDIT_EVIDENCE_NOT_FOUND");
 
-  const updated = await db.auditEvidence.update({
+  const updated = await client.auditEvidence.update({
     where: { id: evidence.id },
     data: {
       verificationStatus,
@@ -524,13 +527,13 @@ export async function verifyEvidence(shopId, actor, evidenceId, { verificationSt
   });
 
   if (evidence.requirementId) {
-    await db.auditEvidenceRequirement.update({
+    await client.auditEvidenceRequirement.update({
       where: { id: evidence.requirementId },
       data: { status: verificationStatus },
     });
   }
 
-  await db.auditFindingStatusHistory.create({
+  await client.auditFindingStatusHistory.create({
     data: {
       shopId,
       findingId: evidence.findingId,

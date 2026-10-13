@@ -215,7 +215,7 @@ function normalizeDuration(durationMs) {
 function serializeOptional(value) {
   if (value === undefined || value === null) return null;
   try {
-    return JSON.stringify(value);
+    return JSON.stringify(value, (_key, item) => typeof item === "bigint" ? item.toString() : item);
   } catch {
     return JSON.stringify({ serializationError: true });
   }

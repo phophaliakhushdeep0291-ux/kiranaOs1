@@ -902,6 +902,32 @@ if (ctx.skip) {
       }), 0);
     });
 
+    test("damaged returns expense the recorded cost without restoring inventory value, including replay", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50, costPerRateUnit: 30 });
+      const sale = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 2, ratePerRateUnit: 50, payments: [{ mode: "cash", amount: 100 }],
+      }), { token: ownerAuth.accessToken }), 201);
+      const payload = { refundMode: "cash", returnOfBillId: sale.id, reason: "One damaged and one resellable",
+        clientBillId: "mixed-damaged-return", idempotencyKey: "mixed-damaged-return",
+        items: [true, false].map((damaged) => ({ originalBillItemId: sale.items[0].id, productId: product.id, name: product.name,
+          quantity: 1, enteredUnit: "piece", ratePerRateUnit: 50, gstRate: 0, damaged })),
+      };
+      const request = { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin };
+      const returned = assertSuccess(await ctx.post("/api/bills/returns", payload, request), 201);
+      assert.equal(assertSuccess(await ctx.post("/api/bills/returns", payload, request), 201).id, returned.id);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 9);
+      const loss = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, billId: returned.id, entryType: "inventory_loss" } });
+      assert.equal(loss.length, 1);
+      assert.equal(loss[0].amountPaise, 3000n);
+      const trial = assertSuccess(await ctx.get("/api/accounting/trial-balance", { token: ownerAuth.accessToken }));
+      assert.equal(trial.status, "balanced");
+      assert.equal(trial.integrity.issueCount, 0);
+      assert.equal(trial.accounts.find((row) => row.code === "1200").balancePaise, -3000, "sale and return leave only the damaged unit's inventory cost consumed");
+      const pnl = assertSuccess(await ctx.get("/api/accounting/profit-and-loss", { token: ownerAuth.accessToken }));
+      assert.equal(pnl.netProfitPaise, -3000);
+    });
+
     test("sale return rolls back refund, stock, and accounting when its required audit cannot be stored", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50 });

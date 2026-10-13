@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { assertFailure, assertSuccess, createIntegrationContext, resetDatabase } from "./setup.js";
 import { createCustomer, createProduct, createStaff, createTenant, login, unique, uniqueMobile } from "./factories.js";
+import { addReview, requestEvidence, submitEvidence, verifyEvidence } from "../../src/modules/assurance/assurance.service.js";
 import { moneyShadows } from "../../src/utils/money.js";
 import { ENTITY_TYPES, FINDING_STATUS } from "../../src/modules/assurance/assurance.constants.js";
 import { flushAuditQueue, setTransactionTriggeredEnabled } from "../../src/modules/assurance/assurance.hooks.js";
@@ -257,6 +258,44 @@ function runSuite() {
     );
     assert.equal(resolved.status, FINDING_STATUS.CONFIRMED_ISSUE);
     assert.ok(resolved.resolvedAt);
+  });
+
+  test("review, evidence and status history are atomic on rejected transitions and history failures", async () => {
+    await resetDatabase(ctx.db);
+    const { shop, owner, ownerMobile, ownerPassword } = await createTenant(ctx.db);
+    const token = (await login(ctx, ownerMobile, ownerPassword)).accessToken;
+    const product = await createProduct(ctx.db, shop.id);
+    const bill = await makeBill(shop.id, { grandTotal: 100, paidAmount: 100, items: [billItem(product)] });
+    const findingId = (await evaluateViaApi(token, ENTITY_TYPES.BILL, bill.id)).finding.findingId;
+    const actor = { userId: owner.id, role: "owner" };
+    const countReviews = () => ctx.db.auditReview.count({ where: { findingId } });
+    const failed = await ctx.post(`/api/audit/findings/${findingId}/review`, { decision: "NEEDS_MORE_EVIDENCE", newStatus: "OPEN" }, { token });
+    assert.equal(assertFailure(failed, 422).code, "AUDIT_INVALID_STATUS_TRANSITION");
+    assert.equal(await countReviews(), 0, "failed status change must not leave a successful-looking review");
+
+    // Fault injection works on both supported databases, without disabling any
+    // constraint or relying on SQLite-only trigger syntax.
+    const historyFailure = { $transaction: (work, options) => ctx.db.$transaction((tx) => work(new Proxy(tx, {
+      get(target, key) {
+        if (key === "auditFindingStatusHistory") return { create: async () => { throw new Error("history unavailable"); } };
+        return Reflect.get(target, key);
+      },
+    })), options) };
+    await assert.rejects(() => addReview(shop.id, actor, findingId, { decision: "NEEDS_MORE_EVIDENCE" }, historyFailure), /history unavailable/);
+    assert.equal(await countReviews(), 0);
+    assert.equal((await ctx.db.auditFinding.findUniqueOrThrow({ where: { id: findingId } })).status, "OPEN");
+    const requirementsBefore = await ctx.db.auditEvidenceRequirement.count({ where: { findingId } });
+    await assert.rejects(() => requestEvidence(shop.id, actor, findingId, { evidenceType: "PAYMENT_RECEIPT", description: "Receipt proof" }, historyFailure), /history unavailable/);
+    assert.equal(await ctx.db.auditEvidenceRequirement.count({ where: { findingId } }), requirementsBefore);
+    await assert.rejects(() => submitEvidence(shop.id, actor, findingId, { evidenceType: "PAYMENT_RECEIPT", referenceValue: "Receipt 47" }, historyFailure), /history unavailable/);
+    assert.equal(await ctx.db.auditEvidence.count({ where: { findingId } }), 0);
+    const evidence = await submitEvidence(shop.id, actor, findingId, { evidenceType: "PAYMENT_RECEIPT", referenceValue: "Receipt 47" });
+    await assert.rejects(() => verifyEvidence(shop.id, actor, evidence.evidenceId, { verificationStatus: "VERIFIED" }, historyFailure), /history unavailable/);
+    assert.equal((await ctx.db.auditEvidence.findUniqueOrThrow({ where: { id: evidence.evidenceId } })).verificationStatus, "PROVIDED");
+    const success = assertSuccess(await ctx.post(`/api/audit/findings/${findingId}/review`, { decision: "NEEDS_MORE_EVIDENCE" }, { token }), 201);
+    assert.equal(success.finding.findingId, findingId, "review response preserves the finding identity");
+    assert.equal(success.finding.status, "UNDER_REVIEW");
+    assert.equal(await countReviews(), 1);
   });
 
   test("evidence lifecycle is preserved end to end, and reuse is surfaced", async () => {

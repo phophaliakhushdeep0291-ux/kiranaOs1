@@ -1,3 +1,4 @@
+import type { LedgerIntegrity } from "../api";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, BookOpenCheck, Landmark, Loader2, Lock, RefreshCw, Scale, Unlock } from "lucide-react";
@@ -146,6 +147,21 @@ function StatementSection({ title, rows, totalLabel, totalPaise }: { title: stri
   );
 }
 
+function IntegrityNote({ integrity }: { integrity?: LedgerIntegrity }) {
+  const { t } = useAppLanguage();
+  if (!integrity || integrity.status === "no_data") return null;
+  const needsReview = integrity.status === "attention_required";
+  return <div role={needsReview ? "alert" : "status"} className={`m-4 rounded-xl border p-4 text-sm ${needsReview ? "border-amber-300 bg-amber-50 text-amber-950" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+    <p className="font-bold">{t(needsReview ? "accounting.integrity.review" : "accounting.integrity.checked")}</p>
+    {needsReview && <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+      <div><dt>{t("accounting.integrity.unposted")}</dt><dd className="font-black">{integrity.unpostedRows}</dd></div>
+      <div><dt>{t("accounting.integrity.mismatch")}</dt><dd className="font-black">{integrity.mismatchedRows + integrity.unmappedRows}</dd></div>
+      <div><dt>{t("accounting.integrity.invalid")}</dt><dd className="font-black">{integrity.invalidJournals}</dd></div>
+    </dl>}
+    <p className="mt-2 text-xs leading-5">{t(needsReview ? "accounting.integrity.action" : "accounting.integrity.scope")}</p>
+  </div>;
+}
+
 export default function AccountingPage() {
   const { t } = useAppLanguage();
   const [tab, setTab] = useState<LedgerTab>("trialBalance");
@@ -222,10 +238,11 @@ export default function AccountingPage() {
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
             <div className="min-w-0">
               <h2 className="text-sm font-black text-slate-900">{t("accounting.tab.trialBalance")}</h2>
-              {trialQ.data && <p className="mt-0.5 text-xs text-slate-500">{trialQ.data.status === "balanced" ? t("accounting.status.balancedHint") : t("accounting.status.attentionHint")}</p>}
+              {trialQ.data && <p className="mt-0.5 text-xs text-slate-500">{trialQ.data.status === "no_data" ? t("accounting.empty.body") : trialQ.data.status === "balanced" ? t("accounting.status.balancedHint") : t("accounting.status.attentionHint")}</p>}
             </div>
-            {trialQ.data && <StatusPill balanced={trialQ.data.status === "balanced"} label={trialQ.data.status === "balanced" ? t("accounting.status.balanced") : t("accounting.status.attention")} />}
+            {trialQ.data && <StatusPill balanced={trialQ.data.status === "balanced"} label={trialQ.data.status === "no_data" ? t("accounting.status.noData") : trialQ.data.status === "balanced" ? t("accounting.status.balanced") : t("accounting.status.attention")} />}
           </header>
+          <IntegrityNote integrity={trialQ.data?.integrity} />
           <PanelState
             loading={trialQ.isLoading} error={trialError} empty={!trialQ.data?.accounts.length}
             emptyTitle={trialQ.isLoading ? t("accounting.loading") : t("accounting.empty.title")} emptyBody={t("accounting.empty.body")}
@@ -271,6 +288,7 @@ export default function AccountingPage() {
             </div>
           </div>
           <section className={`${card} overflow-hidden`}>
+            <IntegrityNote integrity={pnlQ.data?.integrity} />
             <PanelState
               loading={pnlQ.isLoading} error={pnlError} empty={!pnlQ.data?.income.length && !pnlQ.data?.expenses.length}
               emptyTitle={pnlQ.isLoading ? t("accounting.loading") : t("accounting.empty.title")} emptyBody={t("accounting.empty.body")}
@@ -293,8 +311,9 @@ export default function AccountingPage() {
           <section className={`${card} overflow-hidden`}>
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
               <h2 className="text-sm font-black text-slate-900">{t("accounting.tab.balanceSheet")}</h2>
-              {sheetQ.data && <StatusPill balanced={sheetQ.data.status === "balanced"} label={sheetQ.data.status === "balanced" ? t("accounting.status.balanced") : t("accounting.status.attention")} />}
+              {sheetQ.data && <StatusPill balanced={sheetQ.data.status === "balanced"} label={sheetQ.data.status === "no_data" ? t("accounting.status.noData") : sheetQ.data.status === "balanced" ? t("accounting.status.balanced") : t("accounting.status.attention")} />}
             </header>
+            <IntegrityNote integrity={sheetQ.data?.integrity} />
             <PanelState
               loading={sheetQ.isLoading} error={sheetError} empty={!sheetQ.data?.assets.length && !sheetQ.data?.liabilities.length && !sheetQ.data?.equity.length}
               emptyTitle={sheetQ.isLoading ? t("accounting.loading") : t("accounting.empty.title")} emptyBody={t("accounting.empty.body")}

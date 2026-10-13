@@ -1,4 +1,5 @@
-import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
+import { publicPaise } from "./ledger-money.js";
 import { AppError } from "../../middleware/error.js";
 import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
 import {
@@ -18,7 +19,7 @@ import {
 } from "./general-ledger.service.js";
 
 const safe = (value) => JSON.parse(JSON.stringify(value, (_key, item) => (
-  typeof item === "bigint" ? Number(item) : item
+  typeof item === "bigint" ? publicPaise(item) : item
 )));
 const actorId = (req) => req.user?.userId ?? req.user?.id ?? null;
 
@@ -46,7 +47,7 @@ async function writeRequiredLedgerAudit(req, action, entityType, entityId, after
 }
 
 async function runAuditedLedgerMutation(req, operation, auditEntry) {
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const data = safe(await operation(tx));
     const entry = auditEntry(data);
     await writeRequiredLedgerAudit(
@@ -67,10 +68,10 @@ export async function accounts(req, res, next) {
     const data = await runAuditedLedgerMutation(
       req,
       (tx) => ensureSystemAccounts(req.shopId, tx),
-      () => ({
+      (result) => ({
         action: "LEDGER_SYSTEM_ACCOUNTS_ENSURED",
         entityType: "ChartOfAccount",
-        after: { systemAccountCount: 19 },
+        after: { systemAccountCount: result.filter((account) => account.systemKey).length },
       }),
     );
     res.json({ success: true, data });

@@ -345,6 +345,7 @@ export async function postSaleReturnLedger(tx, {
   bill,
   refundMode,
   refundAmount,
+  damagedReturnCost = 0,
   customerId = null,
   businessDate,
 }) {
@@ -377,6 +378,17 @@ export async function postSaleReturnLedger(tx, {
   if (returnCost !== 0) {
     rows.push(ledgerRow({ shopId, billId: bill.id, customerId, sourceType: "sale_return", sourceId: bill.id, entryType: "cost_of_goods_sold", direction: "debit", amount: returnCost, businessDate: date, idempotencyKey: `${keyBase}:cost_of_goods_sold` }));
     rows.push(ledgerRow({ shopId, billId: bill.id, customerId, sourceType: "sale_return", sourceId: bill.id, entryType: "inventory_sale", direction: "credit", amount: returnCost, businessDate: date, idempotencyKey: `${keyBase}:inventory_sale` }));
+  }
+
+  const damagedCostPaise = toPaiseBigInt(damagedReturnCost);
+  if (damagedCostPaise < 0n || damagedCostPaise > absolutePaise(returnCost)) {
+    throw Object.assign(new Error("Damaged return cost exceeds the recorded return cost"), { code: "SALE_RETURN_DAMAGE_COST_INVALID" });
+  }
+  if (damagedCostPaise > 0n) {
+    // The return reverses COGS first. Written-off goods cannot remain in the
+    // inventory asset: retain their loss as an expense at the recorded cost.
+    rows.push(ledgerRow({ shopId, billId: bill.id, customerId, sourceType: "sale_return", sourceId: bill.id, entryType: "inventory_loss", direction: "debit", amount: damagedReturnCost, businessDate: date, idempotencyKey: `${keyBase}:inventory_loss` }));
+    rows.push(ledgerRow({ shopId, billId: bill.id, customerId, sourceType: "sale_return", sourceId: bill.id, entryType: "inventory_write_off", direction: "credit", amount: damagedReturnCost, businessDate: date, idempotencyKey: `${keyBase}:inventory_write_off` }));
   }
 
   const gstAmount = Number(bill.gst ?? 0);

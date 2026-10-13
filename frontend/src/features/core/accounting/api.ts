@@ -1,3 +1,4 @@
+import { activeAccountingMarketSnapshot } from "@/lib/accounting-market";
 import { apiRequest, buildQuery } from "@/lib/api/http";
 
 /**
@@ -10,8 +11,8 @@ import { apiRequest, buildQuery } from "@/lib/api/http";
  * `general-ledger.service.js` and the numbers must not be re-derived here, or the
  * screen and the ledger start disagreeing about the same shop.
  *
- * Money crosses the wire as integer paise (the server widens its BigInt columns
- * to Number on the way out), so nothing in this file rounds or reformats — that
+ * Money crosses the wire as integer paise (the server rejects values outside
+ * the exact Number integer range), so nothing in this file rounds or reformats — that
  * is the view layer's job, once, at the point of display.
  */
 
@@ -33,9 +34,21 @@ export interface StatementRow extends LedgerAccountRow {
   amountPaise: number;
 }
 
+export interface LedgerIntegrity {
+  status: "verified" | "attention_required" | "no_data";
+  ledgerRows: number;
+  journalCount: number;
+  unpostedRows: number;
+  mismatchedRows: number;
+  unmappedRows: number;
+  invalidJournals: number;
+  issueCount: number;
+}
+
 export interface TrialBalance {
   version: string;
-  status: "balanced" | "attention_required";
+  status: "balanced" | "attention_required" | "no_data";
+  integrity?: LedgerIntegrity;
   totalDebitPaise: number;
   totalCreditPaise: number;
   differencePaise: number;
@@ -43,6 +56,8 @@ export interface TrialBalance {
 }
 
 export interface ProfitAndLoss {
+  status?: "balanced" | "attention_required" | "no_data";
+  integrity?: LedgerIntegrity;
   version: string;
   from: string | null;
   to: string | null;
@@ -58,7 +73,8 @@ export interface ProfitAndLoss {
 export interface BalanceSheet {
   version: string;
   asOf: string | null;
-  status: "balanced" | "attention_required";
+  status: "balanced" | "attention_required" | "no_data";
+  integrity?: LedgerIntegrity;
   totalAssetsPaise: number;
   totalLiabilitiesPaise: number;
   totalEquityPaise: number;
@@ -104,8 +120,12 @@ export type LedgerRange = {
  * will accept. `end` takes the last millisecond so a range reads inclusively —
  * a period that ends "on the 30th" must contain the 30th.
  */
-export function ledgerBoundary(date: string, end = false) {
-  return new Date(`${date}T${end ? "23:59:59.999" : "00:00:00.000"}`).toISOString();
+export function ledgerBoundary(date: string, end = false, market = activeAccountingMarketSnapshot()) {
+  if (!date) return undefined;
+  // These are the two supported immutable accounting markets; neither uses
+  // daylight saving. The owner's browser may be in a different country.
+  const offset = market.accountingTimeZone === "Asia/Dubai" ? "+04:00" : "+05:30";
+  return new Date(`${date}T${end ? "23:59:59.999" : "00:00:00.000"}${offset}`).toISOString();
 }
 
 export function getTrialBalance(range: LedgerRange) {
