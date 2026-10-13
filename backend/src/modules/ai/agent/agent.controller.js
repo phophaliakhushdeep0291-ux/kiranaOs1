@@ -9,8 +9,9 @@
 import db from "../../../db.js";
 import { AppError } from "../../../shared/errors/index.js";
 import { businessTypeFromSettings, parseShopSettings } from "../../shops/businessProfiles.js";
-import { runAgentTurn, executeApprovedPlan, rejectPlan, availableAgentTools } from "./agent.service.js";
+import { runAgentTurn, executeApprovedPlan, rejectPlan, availableAgentTools, getPlanExecution } from "./agent.service.js";
 import "./register-core.js";
+import { requestLocationId } from "../../stores/location-context.service.js";
 import { shopAssistantPresentation } from "./shop-assistant.js";
 
 async function contextFor(req) {
@@ -18,9 +19,10 @@ async function contextFor(req) {
   if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
   return {
     shopId: req.shopId,
+    locationId: requestLocationId(req),
     userId: req.user?.userId ?? null,
     role: req.user?.role ?? "staff",
-    deviceId: req.deviceId ?? req.user?.deviceId ?? null,
+    deviceId: req.device?.deviceId ?? req.user?.deviceId ?? null,
     businessType: businessTypeFromSettings(parseShopSettings(shop.settingsJson)),
   };
 }
@@ -103,4 +105,9 @@ export async function capabilities(req, res, next) {
   } catch (error) {
     next(error);
   }
+}
+
+export async function executionStatus(req, res, next) {
+  try { res.json({ success: true, data: await getPlanExecution(await contextFor(req), { planId: req.body.planId }) }); }
+  catch (error) { next(error); }
 }

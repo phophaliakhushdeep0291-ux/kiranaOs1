@@ -6,6 +6,14 @@
 import type { assistantEn } from "./assistant";
 
 export const assistantHi: Record<keyof typeof assistantEn, string> = {
+  "assistant.planExpired": "इस प्लान की समय सीमा खत्म हो गई। दोबारा पूछकर वर्तमान जानकारी जाँचें।",
+  "assistant.stepCompleted": "पूरा हुआ",
+  "assistant.stepPrepared": "इस डिवाइस के लिए तैयार",
+  "assistant.stepFailed": "असफल",
+  "assistant.stepSkipped": "शुरू नहीं हुआ",
+  "assistant.resultRecovered": "सर्वर का सहेजा हुआ परिणाम मिल गया। कोई कार्रवाई दोबारा नहीं हुई।",
+  "assistant.checkLocalDelivery": "कुछ कार्रवाइयाँ इस डिवाइस के लिए तैयार थीं। दोबारा बनाने से पहले संबंधित रिकॉर्ड, बिल और Sync स्थिति जाँचें; सर्वर का परिणाम स्थानीय सहेजे जाने का प्रमाण नहीं है।",
+  "assistant.scopeChanged": "उपयोगकर्ता या काउंटर शाखा बदल गई। वर्तमान काउंटर पर नया प्लान जाँचें।",
   "assistant.languageLabel": "सहायक की भाषा",
   "assistant.languageAuto": "अपने आप — मेरी भाषा में जवाब",
   "assistant.languageHelp": "अपनी भाषा या मिली-जुली भाषा में लिखें या बोलें। मेन्यू और पुष्टि के बटन ऐप की भाषा में हैं; काम का विवरण अपने मूल शब्दों में है। आवाज़ की सुविधा प्रदाता और डिवाइस पर निर्भर है।",

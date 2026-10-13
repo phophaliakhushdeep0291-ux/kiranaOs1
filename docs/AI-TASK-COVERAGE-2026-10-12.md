@@ -1,5 +1,7 @@
 # Assistant task coverage — 12 October 2026
 
+Update: see [13 October execution coverage](AI-AUTOPILOT-2026-10-13.md) for four additional purchasing actions and recovery safeguards. The nine-action inventory below records the earlier baseline.
+
 The assistant is not an autonomous operator for every KiranaOS task. It has nine guarded change tools, grounded read tools, reviewed clarification questions, and a directory covering the shop's current screens. A workflow button is a manual handoff, not execution or form completion. Platform administration is deliberately outside the shop assistant.
 
 ## Changes the assistant can propose and execute

@@ -30,6 +30,10 @@ export function renderWorkflowHelp(result, language = "hi") {
 }
 
 export const ACTION_LABELS = Object.freeze({
+  create_purchase_order: ["Create a draft purchase order", "खरीद ऑर्डर का ड्राफ्ट बनाना"],
+  mark_purchase_order_sent: ["Mark a purchase order as sent (no supplier message)", "खरीद ऑर्डर भेजा हुआ दर्ज करना (संदेश नहीं भेजता)"],
+  cancel_purchase_order: ["Cancel the unreceived purchase remainder", "खरीद ऑर्डर का अप्राप्त हिस्सा रद्द करना"],
+  receive_purchase_order: ["Receive goods against a sent purchase order", "भेजे हुए खरीद ऑर्डर का माल प्राप्त करना"],
   create_product: ["Create a simple product", "साधारण सामान जोड़ना"],
   set_pack_size: ["Add or price a pack size", "पैक जोड़ना या उसका रेट बदलना"],
   add_items_to_bill: ["Add items to a bill for review", "बिल में सामान जोड़कर जाँचना"],
@@ -44,8 +48,8 @@ export function renderTaskCapabilities(result, language = "hi") {
   const names = (Array.isArray(result?.actions) ? result.actions : [])
     .filter(name => Object.hasOwn(ACTION_LABELS, name)).map(name => replyText(...ACTION_LABELS[name], language));
   const intro = replyText("Available tasks after your confirmation:", "पुष्टि के बाद उपलब्ध काम:", language);
-  const limits = replyText("Price and stock changes need the owner PIN. Checkout, refunds, purchase receiving, taxes, staff, integrations and trade-specific changes still need their own screens. Opening a screen does not complete its task.",
-    "रेट या स्टॉक बदलने के लिए मालिक का PIN चाहिए। बिल पूरा करना, रिफंड, खरीद प्राप्ति, टैक्स, कर्मचारी, इंटीग्रेशन और विशेष व्यवसाय के बदलाव अभी संबंधित स्क्रीन पर करने होते हैं। स्क्रीन खोलना काम पूरा करना नहीं है।", language);
+  const limits = replyText("Price and stock changes need the owner PIN. Checkout, refunds, direct purchases without an order, taxes, staff, integrations and trade-specific changes still need their own screens. Opening a screen does not complete its task.",
+    "रेट या स्टॉक बदलने के लिए मालिक का PIN चाहिए। बिल पूरा करना, रिफंड, बिना ऑर्डर की सीधी खरीद, टैक्स, कर्मचारी, इंटीग्रेशन और विशेष व्यवसाय के बदलाव अभी संबंधित स्क्रीन पर करने होते हैं। स्क्रीन खोलना काम पूरा करना नहीं है।", language);
   return [...renderShopReadCapabilities(result, language), names.length ? intro + "\n" + names.map(name => `• ${name}`).join("\n")
     : replyText("No change actions are available to your role.", "आपकी भूमिका में कोई बदलाव करने की अनुमति नहीं है।", language), limits].join("\n\n");
 }

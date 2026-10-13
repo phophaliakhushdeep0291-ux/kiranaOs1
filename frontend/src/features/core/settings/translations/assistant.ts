@@ -5,6 +5,14 @@
 // what someone reads before agreeing to a change to their stock or their prices.
 // They stay plain and concrete for that reason.
 export const assistantEn = {
+  "assistant.planExpired": "This plan expired. Ask again and review the current details.",
+  "assistant.stepCompleted": "Completed",
+  "assistant.stepPrepared": "Prepared for this device",
+  "assistant.stepFailed": "Failed",
+  "assistant.stepSkipped": "Not started",
+  "assistant.resultRecovered": "Retrieved the saved server result. No action was repeated.",
+  "assistant.checkLocalDelivery": "Some actions were prepared for this device. Check the affected records, bill and Sync status before creating them again; a server result does not prove local delivery.",
+  "assistant.scopeChanged": "The user or counter branch changed. Review a new plan in the current counter.",
   "assistant.languageLabel": "Assistant language",
   "assistant.languageAuto": "Automatic — follow my language",
   "assistant.languageHelp": "Type or speak in your language, including mixed language. Menus and confirmation controls use the app language; action summaries keep their original wording. Voice support varies by provider and device.",

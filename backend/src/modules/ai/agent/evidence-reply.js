@@ -117,6 +117,23 @@ export function renderToolEvidence({ tool, result }, language = "hi", timeZone =
   if (tool === "request_clarification") return renderClarification(result, language);
   if (tool === "get_workflow") return renderWorkflowHelp(result, language);
   if (tool === "get_available_tasks") return renderTaskCapabilities(result, language);
+  if (["list_purchase_orders", "get_purchase_order", "get_reorder_suggestions"].includes(tool)) {
+    const money = value => String(Number(value).toFixed(2));
+    const heading = text("Purchasing at this counter branch (amounts in shop currency)", "इस काउंटर शाखा की खरीद (दुकान की मुद्रा में रकम)", language);
+    if (tool === "get_reorder_suggestions") {
+      return [heading, text("Suggestions only; no order has been placed.", "केवल सुझाव हैं; कोई ऑर्डर नहीं दिया गया है।", language),
+        ...rows(result.suggestions ?? [], row => text("{product}: stock {stock} {unit}; suggested order {quantity} {unit}; expected rate {rate}/{rateUnit}",
+          "{product}: स्टॉक {stock} {unit}; सुझाया ऑर्डर {quantity} {unit}; अनुमानित रेट {rate}/{rateUnit}", language,
+          { product: label(row.productName), stock: scalar(row.stockBaseQty), unit: row.baseUnit, quantity: scalar(row.recommendedOrderBaseQty), rate: money(row.expectedRate), rateUnit: row.rateUnit }), language, result.total)].join("\n");
+    }
+    const orderLine = row => text("{order}; supplier {supplier}; branch {branch}; status {status}; expected total {total}",
+      "{order}; सप्लायर {supplier}; शाखा {branch}; स्थिति {status}; अनुमानित कुल {total}", language,
+      { order: label(row.orderNumber), supplier: label(row.supplierName), branch: label(row.locationName), status: row.status, total: money(row.expectedTotal) });
+    if (tool === "list_purchase_orders") return [heading, text("Up to {limit} recent orders.", "हाल के अधिकतम {limit} ऑर्डर।", language, { limit: result.limit }), ...rows(result.orders ?? [], orderLine, language)].join("\n");
+    return [heading, orderLine(result), ...rows(result.items ?? [], row => text("{product}: ordered {ordered}, received {received} {unit}; rate {rate}/{rateUnit}",
+      "{product}: ऑर्डर {ordered}, प्राप्त {received} {unit}; रेट {rate}/{rateUnit}", language,
+      { product: label(row.productName), ordered: scalar(row.orderedBaseQty), received: scalar(row.receivedBaseQty), unit: row.baseUnit, rate: money(row.expectedRate), rateUnit: row.rateUnit }), language)].join("\n");
+  }
   if (tool === "find_supplier") {
     const suppliers = Array.isArray(result.suppliers) ? result.suppliers : [];
     if (!suppliers.length) return text("No matching suppliers returned.", "कोई मिलता सप्लायर नहीं मिला।", language);

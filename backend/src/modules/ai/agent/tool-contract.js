@@ -116,6 +116,7 @@ export function defineTool(definition) {
     feature = null,
     excludedBusinessTypes = [],
     summarize = null,
+    prepare = null,
     handler,
   } = definition ?? {};
 
@@ -139,6 +140,9 @@ export function defineTool(definition) {
   if (kind === "write" && typeof summarize !== "function") {
     throw new Error(`Tool ${name}: a write tool must supply summarize() — the shopkeeper confirms a sentence, not JSON`);
   }
+  if (prepare !== null && (kind !== "write" || typeof prepare !== "function")) {
+    throw new Error(`Tool ${name}: prepare must be a read-only write-proposal builder`);
+  }
 
   assertRiskMatchesKind(name, kind, risk);
   assertNoTenantParameters(name, parameters);
@@ -149,7 +153,7 @@ export function defineTool(definition) {
   }
 
   return Object.freeze({
-    name, kind, risk, target, description, parameters, roles, feature, summarize, handler,
+    name, kind, risk, target, description, parameters, roles, feature, summarize, prepare, handler,
     excludedBusinessTypes: Object.freeze([...excludedBusinessTypes]),
     keywords: Object.freeze(keywords.map((word) => String(word).toLowerCase())),
     always,

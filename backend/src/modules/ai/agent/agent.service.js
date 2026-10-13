@@ -89,6 +89,7 @@ const SYSTEM_PROMPT = [
   "- Read the relevant rows before proposing a change, so the proposal names the real product and the real current value.",
   "- For create_product, collect name, unit, sellingPrice, costPrice, openingStock and taxRate across follow-ups. Ask about the first missing field with request_clarification. No silent zero/default guesses. A correction replaces the earlier value. Do not ask again for details already supplied.",
   "- For create_expense, collect title, amount, category, paymentMode, status and date. Missing expense details use the expense_* clarification fields. Never guess that an expense was paid or transfer money. For suppliers ask supplier_name if missing, resolve duplicates first, and preserve phone digits exactly.",
+  "- Multi-step tasks run in order and stop after a failure. Never assume a proposed write already happened or guess an ID it might create. New records and dependent steps require a fresh turn after confirmation and, for local records, sync.",
   "- A bare yes/confirm is not a new task. Confirmation is handled by the app against its displayed plan. Never re-propose a completed task from conversation history.",
   "",
   "Security:",
@@ -377,6 +378,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   let failedOver = false;
   let providerCalls = 0;
   let toolFailed = false;
+  let proposalFailed = false;
 
   /**
    * Results already gathered this turn, keyed by tool name and arguments.
@@ -504,6 +506,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
 
       const argErrors = validateArgs(tool, args);
       if (argErrors.length) {
+        if (tool.kind === "write") proposalFailed = true;
         pending.push({ call, message: toolResultMessage(call.id, name, { error: `Invalid arguments: ${argErrors.join("; ")}` }) });
         continue;
       }
@@ -526,12 +529,26 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
           pending.push({ call, message: toolResultMessage(call.id, name, { error: "Too many pending changes in one turn. Ask the shopkeeper to confirm these first." }) });
           continue;
         }
+        let prepared;
+        if (tool.prepare) {
+          try {
+            const remaining = deadline - Date.now();
+            if (remaining <= 0) throw new AppError("Turn deadline reached", 504, "AI_TURN_TIMEOUT");
+            prepared = await withTimeout(tool.prepare(args, agentCtx), Math.min(TOOL_TIMEOUT_MS, remaining), name);
+            if (!prepared?.summary || typeof prepared.approval !== "string") throw new Error("Action preview unavailable");
+          } catch (error) {
+            proposalFailed = true;
+            pending.push({ call, trace: { tool: name, kind: "write", status: "error" }, message: toolResultMessage(call.id, name, { error: error.message, note: "Nothing proposed. Ask for missing details or use the workflow screen." }) });
+            continue;
+          }
+        }
         const proposal = {
           ref: `${plan.length + 1}`,
           tool: name,
           args,
           risk: tool.risk,
-          summary: safeSummary(tool, args, agentCtx),
+          summary: prepared?.summary ?? safeSummary(tool, args, agentCtx),
+          ...(prepared ? { approval: prepared.approval } : {}),
         };
         plan.push(proposal);
         // Traced in the ordering pass below, not here. The plan's numbering has
@@ -655,7 +672,16 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     if (stoppedBecause === "completed") stoppedBecause = "no_final_message";
   }
 
-  const incomplete = toolFailed || ["turn_timeout", "provider_failed_after_results", "tool_budget", "repeated_reads", "no_final_message", "empty_response"].includes(stoppedBecause);
+  // A partially understood change request must not become a partially approved
+  // plan. Keep verified reads, but ask again before any mutation is offered.
+  const mixedTargets = new Set(plan.map(item => getTool(item.tool)?.target)).size > 1;
+  if (mixedTargets) {
+    plan.length = 0;
+    evidence.push({ tool: "request_clarification", kind: "read", status: "ok", result: { field: "task_sequence" } });
+    stoppedBecause = "clarification_requested";
+  }
+  if (proposalFailed) { plan.length = 0; stoppedBecause = "proposal_invalid"; }
+  const incomplete = proposalFailed || toolFailed || ["turn_timeout", "provider_failed_after_results", "tool_budget", "repeated_reads", "no_final_message", "empty_response"].includes(stoppedBecause);
   const localized = await localizeReply(renderLanguage => ({
     ...groundAgentReply({ plan, evidence, language: renderLanguage, incomplete }),
     handoffs: workflowHandoffs(evidence, agentCtx, renderLanguage),
@@ -689,6 +715,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
       parsedActionJson: JSON.stringify({
         kind: "agent_turn",
         businessType: ctx.businessType,
+        executionScope: executionScope(ctx),
         reply,
         plan,
         trace,
@@ -774,6 +801,32 @@ function rememberLabels(labels, names, result) {
   walk(result, 0);
 }
 
+// A proposal belongs to the person and counter that reviewed it. The server
+// checks this too: browser conversation scoping alone is not an authorization.
+function executionScope(ctx) {
+  return { userId: ctx.userId ?? null, deviceId: ctx.deviceId ?? null, locationId: ctx.locationId ?? null, role: ctx.role };
+}
+function assertExecutionScope(parsed, ctx) {
+  if (parsed?.executionScope && stableArgs(parsed.executionScope) !== stableArgs(executionScope(ctx))) {
+    throw new AppError("The user or counter changed. Ask for a new plan.", 409, "AI_PLAN_SCOPE_CHANGED");
+  }
+}
+
+/** Read the recorded result; this NEVER re-enters a write handler. */
+export async function getPlanExecution(ctx, { planId }) {
+  const record = await db.aiActionLog.findFirst({ where: { id: planId, shopId: ctx.shopId } });
+  if (!record) throw new AppError("That plan was not found", 404, "AI_PLAN_NOT_FOUND");
+  const parsed = JSON.parse(record.parsedActionJson);
+  assertExecutionScope(parsed, ctx);
+  if (parsed?.kind !== "agent_turn") throw new AppError("Not an assistant plan", 422, "AI_PLAN_CORRUPT");
+  // Delivery is not repeated here: cart merges are not replayable. Local writes
+  // also need their device's receipt, not a server claim that they are saved.
+  return { planId, status: record.status, results: (parsed.results ?? []).map(({ ref, ok, summary, error, skipped, outcomeUnknown, target, output }) => ({
+    ref, ok, summary, error, skipped, outcomeUnknown, target,
+    ...(typeof output?.receipt === "string" ? { output: { receipt: output.receipt } } : {}),
+  })) };
+}
+
 /**
  * Execute a plan the shopkeeper has confirmed.
  *
@@ -786,6 +839,7 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
   const record = await db.aiActionLog.findFirst({ where: { id: planId, shopId: ctx.shopId } });
   if (!record) throw new AppError("That plan was not found", 404, "AI_PLAN_NOT_FOUND");
   if (record.status !== "parsed") throw new AppError("That plan has already been dealt with", 409, "AI_PLAN_ALREADY_RESOLVED");
+  if (Date.now() - new Date(record.createdAt).getTime() > 30 * 60_000) throw new AppError("This plan expired. Review a fresh plan.", 409, "AI_PLAN_EXPIRED");
 
   let parsed;
   try {
@@ -793,6 +847,7 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
   } catch {
     throw new AppError("That plan is unreadable", 422, "AI_PLAN_CORRUPT");
   }
+  assertExecutionScope(parsed, ctx);
   const plan = Array.isArray(parsed?.plan) ? parsed.plan : [];
   if (parsed?.businessType && parsed.businessType !== ctx.businessType) {
     throw new AppError("The shop type changed. Ask for a new plan in the current shop type.", 409, "AI_PLAN_TRADE_CHANGED");
@@ -835,13 +890,14 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
   }
 
   const results = [];
-  let uncertainWrite = false;
+  let stopped = false;
   for (const { item, tool } of prepared) {
-    if (uncertainWrite) {
-      results.push({ ref: item.ref, ok: false, skipped: true, summary: item.summary, error: "Not started because an earlier action has an uncertain outcome" });
+    if (stopped) {
+      results.push({ ref: item.ref, ok: false, skipped: true, summary: item.summary, error: "Not started because an earlier action failed or needs review" });
       continue;
     }
     if (!tool || tool.kind !== "write") {
+      stopped = true;
       results.push({ ref: item.ref, ok: false, error: "That action is no longer available" });
       continue;
     }
@@ -849,17 +905,20 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
     // business type can also change between proposing and confirming, and a
     // restaurant-only action must not remain executable in a kirana shop.
     if (!currentlyAvailable.has(tool)) {
+      stopped = true;
       results.push({ ref: item.ref, ok: false, summary: item.summary, error: "That action is no longer available on this account" });
       continue;
     }
     const argErrors = validateArgs(tool, item.args ?? {});
     if (argErrors.length) {
+      stopped = true;
       results.push({ ref: item.ref, ok: false, summary: item.summary, error: `Stored action is invalid: ${argErrors.join("; ")}` });
       continue;
     }
     try {
       assertToolAllowed(tool, execCtx);
-      const rawOutput = await withTimeout(tool.handler(item.args, execCtx), TOOL_TIMEOUT_MS, tool.name);
+      if (tool.prepare && !item.approval) throw new AppError("Review a fresh action preview first", 409, "AI_PLAN_PREVIEW_REQUIRED");
+      const rawOutput = await withTimeout(tool.handler(item.args, { ...execCtx, approval: item.approval, actionKey: `assistant:${record.id}:${item.ref}` }), TOOL_TIMEOUT_MS, tool.name);
       // The HTTP response and the audit row must survive Prisma BigInt/Decimal
       // values. Serialise only after the handler has resolved: if exotic output
       // still cannot be encoded, the write itself succeeded and is never
@@ -870,6 +929,7 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
         output = rawOutput === undefined ? null : JSON.parse(JSON.stringify(rawOutput, jsonSafe));
       } catch {
         if (tool.target === "client") {
+          stopped = true;
           results.push({ ref: item.ref, ok: false, summary: item.summary, error: "The bill lines could not be delivered. Add them manually from the catalogue." });
           continue;
         }
@@ -878,7 +938,7 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
       results.push({ ref: item.ref, ok: true, summary: item.summary, target: tool.target, output, ...(warning ? { warning } : {}) });
     } catch (error) {
       const outcomeUnknown = error?.outcomeUnknown === true || error?.code === "AI_TOOL_TIMEOUT";
-      uncertainWrite = outcomeUnknown;
+      stopped = true;
       results.push({
         ref: item.ref,
         ok: false,
@@ -925,6 +985,7 @@ export const __agentInternals = { jsonSafe, toolResultMessage, validateArgs, san
 export async function rejectPlan(ctx, { planId }) {
   const record = await db.aiActionLog.findFirst({ where: { id: planId, shopId: ctx.shopId } });
   if (!record) throw new AppError("That plan was not found", 404, "AI_PLAN_NOT_FOUND");
+  assertExecutionScope(JSON.parse(record.parsedActionJson), ctx);
   const rejected = await db.aiActionLog.updateMany({
     where: { id: record.id, shopId: ctx.shopId, status: "parsed" },
     data: { status: "rejected" },

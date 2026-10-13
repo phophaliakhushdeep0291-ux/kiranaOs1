@@ -91,7 +91,7 @@ export interface AgentExecutionResult {
   allSucceeded: boolean;
   executionStatus: "executed" | "failed" | "uncertain";
   requiresReview: boolean;
-  results: Array<{ ref: string; ok: boolean; summary?: string; error?: string; outcomeUnknown?: boolean; warning?: string }>;
+  results: Array<{ ref: string; ok: boolean; summary?: string; error?: string; outcomeUnknown?: boolean; warning?: string; skipped?: boolean; target?: "client" | "server"; output?: { receipt?: string } }>;
   clientActions?: AgentClientAction[];
 }
 
@@ -167,4 +167,15 @@ export async function supersedeAgentPlan(planId: string): Promise<void> {
   if (result.status !== "rejected") {
     throw new ApiClientError("The previous plan could not be cancelled", 409, { code: "AI_PLAN_ALREADY_RESOLVED" });
   }
+}
+
+export interface AgentExecutionStatus {
+  planId: string;
+  status: "parsed" | "executing" | "executed" | "failed" | "uncertain" | "rejected";
+  results: AgentExecutionResult["results"];
+}
+
+/** Read-only recovery: asking again cannot repeat a financial or stock write. */
+export function getAgentPlanStatus(planId: string): Promise<AgentExecutionStatus> {
+  return apiRequest<AgentExecutionStatus>("/ai/agent/status", { method: "POST", body: JSON.stringify({ planId }), timeoutMs: 10_000 });
 }

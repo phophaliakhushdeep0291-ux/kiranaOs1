@@ -35,6 +35,7 @@ router.get("/agent/capabilities", agent.capabilities);
 router.post("/agent/chat", validate(agentChatSchema), agent.chat);
 router.post("/agent/confirm", validate(agentPlanSchema), agent.confirm);
 router.post("/agent/confirm-owner", validate(agentPlanSchema), requireOwnerPin, agent.confirm);
+router.post("/agent/status", validate(agentPlanSchema), agent.executionStatus);
 router.post("/agent/reject", validate(agentPlanSchema), agent.reject);
 
 export default router;

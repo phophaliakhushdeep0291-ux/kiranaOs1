@@ -1,3 +1,4 @@
+import { executionFeedback } from "./execution-feedback";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, Check, Loader2, Mic, Send, ShoppingCart, Sparkles, Square, Volume2, X } from "lucide-react";
 import { useLocation } from "wouter";
@@ -15,6 +16,7 @@ import { useAssistantCapabilities } from "./use-assistant-capabilities";
 import {
   sendAgentMessage,
   confirmAgentPlan,
+  getAgentPlanStatus,
   rejectAgentPlan,
   supersedeAgentPlan,
   agentErrorCode,
@@ -91,6 +93,11 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, pending, planState]);
 
+  const resultDetails = useCallback((result: Parameters<typeof executionFeedback>[0]) => executionFeedback(result, {
+    completed: t("assistant.stepCompleted"), prepared: t("assistant.stepPrepared"), failed: t("assistant.stepFailed"),
+    skipped: t("assistant.stepSkipped"), uncertain: t("assistant.outcomeUnknown"),
+  }), [t]);
+
   const applyPlan = useCallback(async (ownerPin?: string) => {
     if (!pending?.planId || asking.current || planRequestBusy.current || planState.status === "working" || !isCurrent()) return;
     planRequestBusy.current = true;
@@ -109,13 +116,14 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
         ...(applied ? [t("assistant.till.applied")] : []),
         ...(staged ? [t("assistant.billStaged")] : []),
       ];
-      const outcome = result.requiresReview ? t("assistant.outcomeUnknown")
+      const headline = result.requiresReview ? t("assistant.outcomeUnknown")
         : !result.allSucceeded ? t("assistant.partialFailure")
           : incompleteBill ? t("assistant.till.reviewItems")
           : unresolved.length ? `${t("assistant.itemsUnresolved")} ${unresolved.join(", ")}`
             : successes.length ? successes.join("\n") : t("assistant.confirmed");
+      const outcome = [headline, resultDetails(result)].filter(Boolean).join("\n\n");
       setMessages(current => [...current, { role: "assistant", content: outcome }]);
-      speak(outcome);
+      speak(headline);
       setStagedCount(staged);
       setPlanState({
         status: "done",
@@ -137,15 +145,31 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
         setPlanState({ status: "pin", wrong: true });
         return;
       }
-      if (code === "AI_PLAN_ALREADY_RESOLVED" || code === "AI_PLAN_TRADE_CHANGED") setPending(null);
-      const outcome = t(code === "AI_PLAN_TRADE_CHANGED" ? "assistant.tradeChanged"
+      if (!["AI_PLAN_TRADE_CHANGED", "AI_PLAN_SCOPE_CHANGED", "AI_PLAN_EXPIRED", "OWNER_PIN_LOCKED"].includes(code ?? "")) {
+        try {
+          const recorded = await getAgentPlanStatus(pending.planId);
+          if (!isCurrent()) return;
+          if (["executed", "failed", "uncertain"].includes(recorded.status)) {
+            setPending(null);
+            const hasClientDelivery = recorded.results.some(row => row.ok && row.target === "client");
+            const outcome = [t("assistant.resultRecovered"), resultDetails(recorded), ...(hasClientDelivery ? [t("assistant.checkLocalDelivery")] : [])].join("\n\n");
+            setPlanState({ status: "done", ok: recorded.status === "executed" && !hasClientDelivery, message: outcome });
+            setMessages(current => [...current, { role: "assistant", content: outcome }]);
+            return;
+          }
+        } catch { /* Preserve uncertainty. Status lookup never retries a write. */ }
+      }
+      if (["AI_PLAN_ALREADY_RESOLVED", "AI_PLAN_TRADE_CHANGED", "AI_PLAN_SCOPE_CHANGED", "AI_PLAN_EXPIRED"].includes(code ?? "")) setPending(null);
+      const outcome = t(code === "AI_PLAN_EXPIRED" ? "assistant.planExpired"
+        : code === "AI_PLAN_SCOPE_CHANGED" ? "assistant.scopeChanged"
+        : code === "AI_PLAN_TRADE_CHANGED" ? "assistant.tradeChanged"
         : code === "OWNER_PIN_LOCKED" ? "assistant.pinLocked" : "assistant.outcomeUnknown");
       setPlanState({ status: "done", ok: false, message: outcome });
       setMessages(current => [...current, { role: "assistant", content: outcome }]);
     } finally {
       planRequestBusy.current = false;
     }
-  }, [pending, planState.status, t, speak, onApplyBillLines, isCurrent, setPending, setPlanState, setMessages, setStagedCount]);
+  }, [pending, planState.status, t, speak, resultDetails, onApplyBillLines, isCurrent, setPending, setPlanState, setMessages, setStagedCount]);
 
   const decline = useCallback(async () => {
     if (!pending?.planId || asking.current || planRequestBusy.current || planState.status === "working" || !isCurrent()) return;

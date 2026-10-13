@@ -1,3 +1,4 @@
+import { PURCHASING_TOOLS } from "./tools/purchasing.js";
 /**
  * Registers the tools every shop gets, whatever it sells.
  *
@@ -21,7 +22,7 @@ let registered = false;
 export function registerCoreTools() {
   if (registered) return 0;
   registered = true;
-  return registerTools("core", [...CORE_READ_TOOLS, ...CORE_WRITE_TOOLS, ...CONVERSATION_TOOLS, ...OPERATING_TASK_TOOLS, ...WORKFLOW_TOOLS]);
+  return registerTools("core", [...CORE_READ_TOOLS, ...PURCHASING_TOOLS, ...CORE_WRITE_TOOLS, ...CONVERSATION_TOOLS, ...OPERATING_TASK_TOOLS, ...WORKFLOW_TOOLS]);
 }
 
 registerCoreTools();

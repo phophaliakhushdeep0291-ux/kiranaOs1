@@ -1,3 +1,4 @@
+import { newOrderPreview, assertApproval, lockOrderApproval } from "./purchaseOrderApproval.js";
 import crypto from "crypto";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
@@ -200,71 +201,26 @@ export async function getReorderSuggestions(shopId, requestedLocationId = null) 
   return rows.filter(Boolean);
 }
 
-export async function createPurchaseOrder(shopId, data, actor = {}) {
+export async function createPurchaseOrder(shopId, data, actor = {}, approval = null) {
   const auditActor = normalizeActor(actor);
   const result = await db.$transaction(async (tx) => {
-    const location = await resolveOperationalLocation(shopId, data.locationId, tx);
-    const supplier = data.supplierId
-      ? await tx.supplier.findFirst({ where: { id: data.supplierId, shopId, deletedAt: null } })
-      : null;
-    if (data.supplierId && !supplier) throw new AppError("Supplier not found", 404, "SUPPLIER_NOT_FOUND");
-    const productIds = data.items.map((item) => item.productId);
-    const products = await tx.product.findMany({ where: { shopId, id: { in: productIds }, deletedAt: null } });
-    if (products.length !== productIds.length) throw new AppError("A purchase-order product was not found", 404, "PRODUCT_NOT_FOUND");
-    /**
-     * A per-packaging product cannot be ordered here, and the shop has to learn
-     * that while it is still writing the order.
-     *
-     * A purchase-order line carries `orderedBaseQty` and nothing else — there is
-     * no field saying how many 1 kg packets and how many 5 kg bags were ordered,
-     * so receiving one cannot attribute the goods to a pack and the movement is
-     * refused. Nothing used to stop such a product being ordered, so the refusal
-     * landed at the RECEIVING DESK: the order had been raised, sent to the
-     * supplier, and the goods were physically standing there unbookable.
-     *
-     * Stock In takes a pack (`sellingUnitId`) and works for these products today,
-     * so the message points at the path that does the job rather than only saying
-     * no. See movePackagingStock in location-context.service.js.
-     */
-    const perPack = products.filter((product) => product.packagingMode === "per_pack");
-    if (perPack.length) {
-      throw new AppError(
-        `${perPack.length === 1 ? `"${perPack[0].name}" is` : `${perPack.length} of these products are`} counted per pack size, which a purchase order cannot express. Receive ${perPack.length === 1 ? "it" : "them"} through Stock In, where the pack size is chosen.`,
-        422,
-        "PURCHASE_ORDER_PER_PACK_UNSUPPORTED",
-      );
-    }
-    const byId = new Map(products.map((product) => [product.id, product]));
-    const factors = await rateUnitFactorsFor(tx, shopId, products);
-    const items = data.items.map((item) => {
-      const product = byId.get(item.productId);
-      const factor = factors.get(product.id);
-      const expectedAmount = multiplyMoney(item.expectedRate, item.orderedBaseQty / factor);
-      return {
-        productId: product.id,
-        productName: product.name,
-        baseUnit: product.baseUnit,
-        rateUnit: product.rateUnit,
-        orderedBaseQty: round2(item.orderedBaseQty),
-        expectedRate: round2(item.expectedRate),
-        expectedAmount,
-        ...moneyShadows({ expectedRate: item.expectedRate, expectedAmount }),
-      };
-    });
-    const expectedTotal = round2(items.reduce((sum, item) => sum + item.expectedAmount, 0));
+    const preview = await newOrderPreview(tx, shopId, data);
+    assertApproval(preview, approval);
+    const { items: previewItems, expectedTotal } = preview;
+    const items = previewItems.map(item => ({ ...item, ...moneyShadows({ expectedRate: item.expectedRate, expectedAmount: item.expectedAmount }) }));
     const order = await tx.purchaseOrder.create({
       data: {
         shopId,
-        locationId: location.id,
-        supplierId: supplier?.id ?? null,
-        supplierName: supplier?.name ?? data.supplierName,
+        locationId: preview.locationId,
+        supplierId: preview.supplierId,
+        supplierName: preview.supplierName,
         orderNumber: reference("PO"),
         expectedOn: parseDate(data.expectedOn),
         expectedTotal,
         ...moneyShadows({ expectedTotal }),
         vendorReference: data.vendorReference || null,
         paymentTerms: data.paymentTerms || null,
-        deliveryAddress: data.deliveryAddress || location.address || null,
+        deliveryAddress: preview.deliveryAddress,
         termsAndConditions: data.termsAndConditions || null,
         note: data.note || null,
         createdByUserId: auditActor.userId,
@@ -301,9 +257,10 @@ export async function createPurchaseOrder(shopId, data, actor = {}) {
   return result.response;
 }
 
-export async function sendPurchaseOrder(shopId, id, actor = {}) {
+export async function sendPurchaseOrder(shopId, id, actor = {}, approval = null) {
   const auditActor = normalizeActor(actor);
   return db.$transaction(async (tx) => {
+    await lockOrderApproval(tx, shopId, id, "send", {}, approval);
     const order = await getPurchaseOrder(shopId, id, tx);
     if (order.status === "sent") return order;
     if (order.status !== "draft") throw new AppError("Only a draft purchase order can be sent", 409, "PURCHASE_ORDER_NOT_DRAFT");
@@ -351,7 +308,7 @@ function paymentAllocation(total, paid, lines) {
   });
 }
 
-export async function receivePurchaseOrder(shopId, id, data, actor = {}) {
+export async function receivePurchaseOrder(shopId, id, data, actor = {}, approval = null) {
   const auditActor = normalizeActor(actor);
   const userId = auditActor.userId;
   if (data.idempotencyKey) {
@@ -360,6 +317,7 @@ export async function receivePurchaseOrder(shopId, id, data, actor = {}) {
   }
   try {
     const transactionResult = await db.$transaction(async (tx) => {
+      await lockOrderApproval(tx, shopId, id, "receive", data, approval, userId);
       const order = await tx.purchaseOrder.findFirst({
         where: { id, shopId },
         include: { location: true, items: { include: { product: true } } },
@@ -687,9 +645,10 @@ export async function reconcilePurchaseReceipt(shopId, purchaseOrderId, receiptI
   return getPurchaseOrder(shopId, purchaseOrderId);
 }
 
-export async function cancelPurchaseOrder(shopId, id, reason, actor = {}) {
+export async function cancelPurchaseOrder(shopId, id, reason, actor = {}, approval = null) {
   const auditActor = normalizeActor(actor);
   return db.$transaction(async (tx) => {
+    await lockOrderApproval(tx, shopId, id, "cancel", {}, approval);
     const order = await getPurchaseOrder(shopId, id, tx);
     if (["received", "cancelled"].includes(order.status)) throw new AppError("A completed or cancelled purchase order cannot be cancelled", 409, "PURCHASE_ORDER_NOT_CANCELLABLE");
     const cancelledAt = new Date();
