@@ -12,27 +12,41 @@
  * - Against a fresh local server it registers a throwaway shop; against a real
  *   environment pass LOADTEST_MOBILE/LOADTEST_PASSWORD for an existing login.
  * - Read-only DURING the run: nothing is written while autocannon is firing.
- * - It DOES seed a day of sales beforehand, but ONLY into a throwaway shop it
+ * - It DOES seed products, customers and a day of sales, ONLY into a throwaway shop it
  *   registered itself. Passing LOADTEST_MOBILE/LOADTEST_PASSWORD means a real
- *   account, and seeding is then disabled outright. LOADTEST_SEED_BILLS=0 skips
- *   seeding on a throwaway shop too.
+ *   account, and seeding is then disabled outright. LOADTEST_SEED_PRODUCTS,
+ *   LOADTEST_SEED_CUSTOMERS and LOADTEST_SEED_BILLS independently size the seed.
  * - Why seed at all: a report over an empty shop touches none of the per-row work
  *   that makes it expensive. Benchmarking it against zero bills reports a
  *   throughput no real shop will ever see.
  */
 import autocannon from "autocannon";
+import fs from "node:fs";
+import path from "node:path";
+import { wholeNumber, summarize, exceedsBudget } from "./metrics.js";
+
+// Invalidate an older successful report before any network/setup can fail.
+if (process.env.LOADTEST_REPORT_PATH) {
+  fs.mkdirSync(path.dirname(path.resolve(process.env.LOADTEST_REPORT_PATH)), { recursive: true });
+  fs.writeFileSync(process.env.LOADTEST_REPORT_PATH, JSON.stringify({ status: "incomplete", startedAt: new Date().toISOString() }) + "\n");
+}
 
 const SMOKE = process.argv.includes("--smoke");
 // 127.0.0.1 (not localhost): Node's fetch may resolve localhost to ::1 while
 // the server listens on IPv4 — a classic Windows/Node flake.
 const BASE_URL = process.env.LOADTEST_BASE_URL || "http://127.0.0.1:3000";
-const DURATION = Number(process.env.LOADTEST_DURATION || (SMOKE ? 5 : 10));
-const CONNECTIONS = Number(process.env.LOADTEST_CONNECTIONS || (SMOKE ? 10 : 25));
-const P95_BUDGET_MS = Number(process.env.LOADTEST_P95_MS || 800);
+const DURATION = wholeNumber(process.env.LOADTEST_DURATION || (SMOKE ? 5 : 10), "LOADTEST_DURATION", { min: 1, max: 300 });
+const CONNECTIONS = wholeNumber(process.env.LOADTEST_CONNECTIONS || (SMOKE ? 10 : 25), "LOADTEST_CONNECTIONS", { min: 1, max: 100 });
+const LATENCY_BUDGET_MS = Number(process.env.LOADTEST_P97_5_MS || process.env.LOADTEST_P95_MS || 800);
 const ERROR_BUDGET = Number(process.env.LOADTEST_ERROR_RATE || 0.01);
 const DEVICE_ID = process.env.LOADTEST_DEVICE_ID || "loadtest-device-1";
 // A day's worth of sales for one counter. Seeded only into a throwaway shop.
-const SEED_BILLS = Number(process.env.LOADTEST_SEED_BILLS ?? (SMOKE ? 60 : 400));
+const SEED_BILLS = wholeNumber(process.env.LOADTEST_SEED_BILLS ?? (SMOKE ? 60 : 400), "LOADTEST_SEED_BILLS");
+const SEED_PRODUCTS = wholeNumber(process.env.LOADTEST_SEED_PRODUCTS ?? (SMOKE ? 100 : 1000), "LOADTEST_SEED_PRODUCTS");
+const SEED_CUSTOMERS = wholeNumber(process.env.LOADTEST_SEED_CUSTOMERS ?? (SMOKE ? 20 : 200), "LOADTEST_SEED_CUSTOMERS");
+if (!Number.isFinite(LATENCY_BUDGET_MS) || LATENCY_BUDGET_MS <= 0 || !Number.isFinite(ERROR_BUDGET) || ERROR_BUDGET < 0 || ERROR_BUDGET > 1) throw new Error("Invalid load-test budgets");
+const SEED_PIN = "2468";
+
 
 async function json(path, options = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -69,6 +83,7 @@ async function getToken() {
       address: "Load test lane 42",
       mobile: freshMobile,
       password: "loadtest-pass-123",
+      ownerPin: SEED_PIN,
     }),
   });
   let token = pickToken(register.body);
@@ -120,6 +135,26 @@ async function seedBills(authHeaders, count) {
   return { created, error };
 }
 
+async function seedCatalogue(authHeaders) {
+  // Called only after this process registered a new synthetic shop. Use real
+  // API writes so stock, search indexes and feed rows match ordinary products.
+  for (const [kind, count] of [["products", SEED_PRODUCTS], ["customers", SEED_CUSTOMERS]]) {
+    for (let i = 0; i < count; i++) {
+      const body = kind === "products" ? {
+        name: `Load product ${String(i).padStart(6, "0")}`, category: `Category ${i % 20}`,
+        sku: `LOAD-${i}`, barcode: `900${String(i).padStart(10, "0")}`,
+        defaultPricePerRateUnit: 20, costPerRateUnit: 10, stockBaseQty: 100,
+      } : { name: `Load customer ${String(i).padStart(6, "0")}`, mobile: `8${String(i).padStart(9, "0")}` };
+      const result = await json(`/api/${kind}`, { method: "POST", headers: { ...authHeaders, "x-owner-pin": SEED_PIN }, body: JSON.stringify(body) });
+      if (result.status !== 201) throw new Error(`${kind} seed ${i} failed (${result.status}): ${JSON.stringify(result.body).slice(0, 200)}`);
+    }
+    const probe = await json(`/api/${kind}`, { headers: authHeaders });
+    const rows = probe.body?.data;
+    if (probe.status !== 200 || !Array.isArray(rows) || rows.length !== count) throw new Error(`${kind} catalogue probe did not contain all ${count} seeded rows`);
+    console.log(`Verified ${count} ${kind} through the listing API.`);
+  }
+}
+
 function run(name, opts) {
   return new Promise((resolve, reject) => {
     autocannon({ duration: DURATION, connections: CONNECTIONS, ...opts }, (err, result) => {
@@ -127,20 +162,6 @@ function run(name, opts) {
       resolve({ name, result });
     });
   });
-}
-
-function summarize({ name, result }) {
-  const total = result.requests.total || 1;
-  const errors = result.errors + result.timeouts + (result.non2xx || 0);
-  return {
-    scenario: name,
-    "req/s": Math.round(result.requests.average),
-    "p50 ms": result.latency.p50,
-    "p95 ms": result.latency.p97_5 ?? result.latency.p95 ?? result.latency.p99,
-    "p99 ms": result.latency.p99,
-    "non-2xx": result.non2xx || 0,
-    "err %": Math.round((errors / total) * 10000) / 100,
-  };
 }
 
 async function main() {
@@ -159,13 +180,16 @@ async function main() {
 
   if (!throwaway) {
     console.log("Existing account supplied — seeding skipped. Report scenarios measure whatever data that shop already has.");
-  } else if (SEED_BILLS > 0) {
+  } else {
+    await seedCatalogue(authHeaders);
+  }
+  if (throwaway && SEED_BILLS > 0) {
     process.stdout.write(`Seeding ${SEED_BILLS} bills into the throwaway shop... `);
     const { created, error } = await seedBills(authHeaders, SEED_BILLS);
     console.log(`${created} created.`);
     if (error) console.warn(`  warning: ${error}`);
-    if (created === 0) {
-      console.error("Seeding produced no bills. The report scenarios would measure an empty shop, which is meaningless — aborting.");
+    if (created !== SEED_BILLS) {
+      console.error("Bill seeding was incomplete; refusing to certify a smaller workload than requested.");
       process.exit(2);
     }
   }
@@ -179,14 +203,15 @@ async function main() {
     process.exit(2);
   }
   console.log(`Daily closing sees ${closingBills} bills for today.`);
-  if (throwaway && SEED_BILLS > 0 && !(closingBills > 0)) {
-    console.error("Daily closing reports zero bills despite seeding — the scenario below would measure an empty report. Aborting.");
+  if (throwaway && closingBills !== SEED_BILLS) {
+    console.error("Daily closing does not see the exact seeded bill count — aborting.");
     process.exit(2);
   }
 
   const scenarios = [
     { name: "health (no auth)", opts: { url: `${BASE_URL}/api/health` } },
     { name: "products list", opts: { url: `${BASE_URL}/api/products`, headers: authHeaders } },
+    { name: "product search", opts: { url: `${BASE_URL}/api/products?search=Load%20product%20000`, headers: authHeaders } },
     { name: "customers list", opts: { url: `${BASE_URL}/api/customers`, headers: authHeaders } },
     { name: "bills list", opts: { url: `${BASE_URL}/api/bills`, headers: authHeaders } },
     // source=live on purpose: the default path serves a locked snapshot when one
@@ -218,14 +243,26 @@ async function main() {
     rows.push(summarize(outcome));
   }
 
-  console.table(rows);
-
-  const failures = rows.filter((row) => row["p95 ms"] > P95_BUDGET_MS || row["err %"] > ERROR_BUDGET * 100);
+  console.table(rows.map(row => ({ scenario: row.scenario, "req/s": Math.round(row.requestsPerSecond), "p50 ms": row.p50Ms, "p97.5 ms": row.p97_5Ms, "p99 ms": row.p99Ms, "err %": Math.round(row.errorRate * 10000) / 100 })));
+  const budgets = { latencyMs: LATENCY_BUDGET_MS, errorRate: ERROR_BUDGET };
+  const failures = rows.filter((row) => exceedsBudget(row, budgets));
+  if (process.env.LOADTEST_REPORT_PATH) {
+    const filename = path.resolve(process.env.LOADTEST_REPORT_PATH);
+    fs.mkdirSync(path.dirname(filename), { recursive: true });
+    fs.writeFileSync(filename, JSON.stringify({
+      status: failures.length ? "failed" : "passed", generatedAt: new Date().toISOString(),
+      revision: process.env.LOADTEST_REVISION ?? null, databaseEngine: process.env.LOADTEST_DATABASE_ENGINE ?? "unspecified",
+      workingTreeDirty: process.env.LOADTEST_WORKTREE_DIRTY === undefined ? null : process.env.LOADTEST_WORKTREE_DIRTY === "true",
+      durationSeconds: DURATION, connections: CONNECTIONS, latencyPercentile: 97.5, budgets,
+      seeded: throwaway ? { products: SEED_PRODUCTS, customers: SEED_CUSTOMERS, bills: SEED_BILLS } : null,
+      closingBills, rows, limitations: ["Local read workload; not a production capacity or concurrent-write guarantee.", "Physical hardware and external providers are not exercised."],
+    }, null, 2) + "\n");
+  }
   if (failures.length > 0) {
-    console.error(`FAIL: ${failures.map((f) => f.scenario).join(", ")} exceeded budgets (p95 ≤ ${P95_BUDGET_MS}ms, errors ≤ ${ERROR_BUDGET * 100}%).`);
+    console.error(`FAIL: ${failures.map((f) => f.scenario).join(", ")} exceeded budgets (p97.5 ≤ ${LATENCY_BUDGET_MS}ms, errors ≤ ${ERROR_BUDGET * 100}%).`);
     process.exit(1);
   }
-  console.log(`PASS: all scenarios within budgets (p95 ≤ ${P95_BUDGET_MS}ms, errors ≤ ${ERROR_BUDGET * 100}%).`);
+  console.log(`PASS: all scenarios within budgets (p97.5 ≤ ${LATENCY_BUDGET_MS}ms, errors ≤ ${ERROR_BUDGET * 100}%).`);
 }
 
 main().catch((err) => {

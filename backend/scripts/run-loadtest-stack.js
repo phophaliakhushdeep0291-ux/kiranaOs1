@@ -19,6 +19,13 @@ import path from "node:path";
 import process from "node:process";
 import { buildTestEnv } from "./test-db-utils.js";
 
+// Setup failures must also invalidate a report from an earlier successful run.
+if (process.env.LOADTEST_REPORT_PATH) {
+  const report = path.resolve(process.env.LOADTEST_REPORT_PATH);
+  fs.mkdirSync(path.dirname(report), { recursive: true });
+  fs.writeFileSync(report, JSON.stringify({ status: "incomplete", startedAt: new Date().toISOString() }) + "\n");
+}
+
 const argv = process.argv.slice(2);
 const usePostgres = argv.includes("--postgres");
 const loadtestArgs = argv.filter((arg) => arg !== "--postgres");
@@ -61,7 +68,7 @@ async function main() {
   let databaseUrl;
 
   if (usePostgres) {
-    if (!dockerAvailable()) {
+    if (!process.env.POSTGRES_TEST_DATABASE_URL && !dockerAvailable()) {
       console.error([
         "Docker is not available, so the disposable PostgreSQL cannot be started.",
         "",
@@ -98,6 +105,9 @@ async function main() {
     FORCE_DB_TESTS: "true",
     PRISMA_CLIENT_VARIANT: "integration",
     PORT: String(PORT),
+    LOADTEST_DATABASE_ENGINE: usePostgres ? "postgresql" : "sqlite",
+    LOADTEST_REVISION: spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout?.trim() || "unknown",
+    LOADTEST_WORKTREE_DIRTY: String(Boolean(spawnSync("git", ["status", "--porcelain"], { encoding: "utf8" }).stdout?.trim())),
     // Otherwise the run measures the rate limiter rather than the API.
     API_RATE_LIMIT_MAX: process.env.API_RATE_LIMIT_MAX || "1000000",
     AUTH_RATE_LIMIT_MAX: process.env.AUTH_RATE_LIMIT_MAX || "100000",
