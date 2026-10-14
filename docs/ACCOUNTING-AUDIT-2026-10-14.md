@@ -35,6 +35,8 @@ Local release gates passed: full isolated backend `npm test`, backend `prod:chec
 
 Browser verification uses the real Accounting page with synthetic API responses. Missing postings were visible on all three financial report tabs; verified and empty states were checked separately. This is UI proof, not a production-data audit. The temporary fixture is not shipped.
 
+Follow-up: the new standalone-damage cases and all 61 sync HTTP tests passed locally. PostgreSQL release run `38541811724` passed its migration, regression, integration, concurrency, reconciliation and isolated restore stages, but failed the overall gate because the Linux offline bundle exceeded the unchanged 1,290 kB limit. Accounting screen translations now load with its already-online-only route; the four navigation/Reports labels stay in both offline dictionaries. The local full frontend gate passes with 3,571 tests (one existing skip), complete offline boot coverage and a 1,287.7 kB largest-shop payload. Updated exact-head CI is still required before merge.
+
 ## Boundaries and follow-up acceptance
 
 - Integrity checks reconcile FinancialLedger to JournalEntry/JournalLine. They do not prove that every real transaction has been entered into source business tables or the financial ledger. Opening balances, source-document completeness and outstanding offline sync conflicts require separate reconciliation before relying on a close.
