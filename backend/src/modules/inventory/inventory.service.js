@@ -13,7 +13,9 @@ import {
 } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { consumeInventoryLotsForMovement, reconcileInventoryLotsForCorrection, recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
-import { postPurchaseHistoryLedger } from "../finance/financial-ledger.service.js";
+import { postPurchaseHistoryLedger, postStockDamageLedger } from "../finance/financial-ledger.service.js";
+import { assertPeriodOpen } from "../finance/general-ledger.service.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { stockLedgerProvenance } from "./stock-ledger-provenance.js";
 
 async function writeRequiredInventoryAudit(entry, client) {
@@ -531,6 +533,12 @@ export async function recordDamage(shopId, data, identity = {}, client = db) {
         }
       }
 
+      const businessDate = new Date(identity.businessDate ?? Date.now());
+      if (!Number.isFinite(businessDate.getTime())) throw new AppError("Invalid stock damage date", 422, "INVALID_DATE");
+      // Also protects zero-cost losses: a closed period must not be bypassed
+      // merely because the item's recorded accounting value is zero.
+      await assertPeriodOpen(shopId, businessDate, tx);
+
       const product = await tx.product.findFirst({
         where: { id: productId, shopId, deletedAt: null },
       });
@@ -594,8 +602,11 @@ export async function recordDamage(shopId, data, identity = {}, client = db) {
           sourceDeviceId,
           sourceType: "damage_adjustment",
           sourceId: productId,
+          createdAt: businessDate,
         },
       });
+
+      await postStockDamageLedger(tx, { shopId, movement: stockLedger, businessDate });
 
       await writeRequiredInventoryAudit({
         shopId,
@@ -639,7 +650,7 @@ export async function recordDamage(shopId, data, identity = {}, client = db) {
       };
   };
   try {
-    return client === db ? await db.$transaction(execute) : await execute(client);
+    return client === db ? await serializableTransaction(execute, { client, timeout: 30000 }) : await execute(client);
   } catch (error) {
     // A caller-owned transaction must roll back before retrying a failed write.
     if (client === db && isUniqueConstraintError(error) && idempotencyKey) {

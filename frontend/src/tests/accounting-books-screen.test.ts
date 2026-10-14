@@ -91,6 +91,14 @@ describe("books screen", () => {
       expect(paths[4]).toContain("/accounting/periods");
     });
 
+    it("uses the shop accounting day even when the browser is elsewhere, and accepts a cleared date", async () => {
+      const { ledgerBoundary } = await import("@/features/core/accounting/api");
+      expect(ledgerBoundary("2026-04-01")).toBe("2026-03-31T18:30:00.000Z");
+      expect(ledgerBoundary("2026-04-01", true)).toBe("2026-04-01T18:29:59.999Z");
+      expect(ledgerBoundary("2026-04-01", false, { countryCode: "AE", currencyCode: "AED", accountingTimeZone: "Asia/Dubai", taxRegime: "VAT" })).toBe("2026-03-31T20:00:00.000Z");
+      expect(ledgerBoundary("")).toBeUndefined();
+    });
+
     it("sends the range the server's schema accepts", async () => {
       const api = await import("@/features/core/accounting/api");
       await api.getTrialBalance({ from: api.ledgerBoundary("2026-04-01"), to: api.ledgerBoundary("2026-09-12", true) });

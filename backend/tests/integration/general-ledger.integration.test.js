@@ -1,5 +1,8 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
+import { databaseEngine } from "../../src/db.js";
+import { serializableTransaction } from "../../src/lib/transactions.js";
+import { closeAccountingPeriod, createAccountingPeriod, createManualJournal, ensureSystemAccounts } from "../../src/modules/finance/general-ledger.service.js";
 import { assertFailure, assertSuccess, createIntegrationContext, resetDatabase } from "./setup.js";
 import { createTenant, login } from "./factories.js";
 
@@ -115,6 +118,64 @@ if (ctx.skip) {
       );
       assert.equal(assertFailure(failedProjection, 503).code, "GENERAL_LEDGER_AUDIT_WRITE_FAILED");
       assert.equal(await ctx.db.journalEntry.count({ where: { shopId: tenant.shop.id, sourceType: "audit_projection_proof" } }), 0);
+    });
+
+    test("reports missing and misposted evidence and refuses period close or duplicate repair", async () => {
+      const { tenant, auth } = await ownerContext();
+      const request = { token: auth.accessToken, ownerPin: tenant.ownerPin };
+      const accounts = assertSuccess(await ctx.get("/api/accounting/chart-of-accounts", request));
+      const audit = await ctx.db.auditLog.findFirstOrThrow({ where: { shopId: tenant.shop.id, action: "LEDGER_SYSTEM_ACCOUNTS_ENSURED" } });
+      assert.equal(JSON.parse(audit.afterJson).systemAccountCount, accounts.filter((a) => a.systemKey).length);
+      const period = assertSuccess(await ctx.post("/api/accounting/periods", { name: "May 2032", startsAt: "2032-05-01T00:00:00Z", endsAt: "2032-05-31T23:59:59Z" }, request), 201);
+      const rows = [];
+      for (const entryType of ["sale", "cash_in"]) rows.push(await ctx.db.financialLedger.create({ data: {
+        shopId: tenant.shop.id, sourceType: "bill", sourceId: "unposted-bill", entryType, direction: entryType === "sale" ? "credit" : "debit",
+        amountPaise: 1000n, businessDate: new Date("2032-05-10T00:00:00Z"), idempotencyKey: entryType,
+      } }));
+      const trial = assertSuccess(await ctx.get("/api/accounting/trial-balance", request));
+      assert.equal(trial.status, "attention_required");
+      assert.equal(trial.integrity.unpostedRows, 2);
+      assert.equal(assertFailure(await ctx.post(`/api/accounting/periods/${period.id}/close`, { reason: "Incomplete" }, request), 409).code, "ACCOUNTING_PERIOD_INTEGRITY_FAILED");
+      assertSuccess(await ctx.post("/api/accounting/general-ledger/project", {}, request));
+      const journal = await ctx.db.journalEntry.findFirstOrThrow({ where: { shopId: tenant.shop.id }, include: { lines: true } });
+      const cashLine = journal.lines.find((line) => line.debitPaise > 0n);
+      // Equal totals can still post money to the wrong account. Do not allow
+      // another projection to hide or double this source's existing journal.
+      await ctx.db.journalLine.update({ where: { id: cashLine.id }, data: { accountId: accounts.find((a) => a.code === "1020").id } });
+      const mismatch = assertSuccess(await ctx.get("/api/accounting/balance-sheet", request));
+      assert.equal(mismatch.differencePaise, 0);
+      assert.equal(mismatch.status, "attention_required");
+      assert.equal(mismatch.integrity.mismatchedRows, 1);
+      assert.equal(assertFailure(await ctx.post("/api/accounting/general-ledger/project", {}, request), 409).code, "GENERAL_LEDGER_INTEGRITY_FAILED");
+      assert.equal(await ctx.db.journalEntry.count({ where: { shopId: tenant.shop.id } }), 1);
+    });
+
+    test("PostgreSQL retries a stale posting snapshot after period close", { skip: databaseEngine !== "postgres" }, async () => {
+      const { tenant } = await ownerContext();
+      const shopId = tenant.shop.id;
+      await ensureSystemAccounts(shopId);
+      const period = await createAccountingPeriod(shopId, { name: "Concurrency proof", startsAt: "2034-01-01T00:00:00Z", endsAt: "2034-01-31T23:59:59Z" });
+      let ready; let resume;
+      const snapshotRead = new Promise((resolve) => { ready = resolve; });
+      const closeCommitted = new Promise((resolve) => { resume = resolve; });
+      let attempts = 0;
+      const posting = serializableTransaction(async (tx) => {
+        attempts += 1;
+        await tx.shop.findUniqueOrThrow({ where: { id: shopId } });
+        ready();
+        await closeCommitted;
+        return createManualJournal(shopId, { reference: "LATE-SNAPSHOT", businessDate: "2034-01-15T00:00:00Z", description: "Stale posting proof", lines: [
+          { accountCode: "1000", debitPaise: 100, creditPaise: 0 }, { accountCode: "3000", debitPaise: 0, creditPaise: 100 },
+        ] }, { client: tx });
+      }, { client: ctx.db, timeout: 15000 }).then(() => null, (error) => error);
+      await snapshotRead;
+      try {
+        await closeAccountingPeriod(shopId, period.id, { reason: "Concurrent close" }, tenant.owner.id);
+      } finally { resume(); }
+      const error = await posting;
+      assert.equal(error?.code, "ACCOUNTING_PERIOD_CLOSED");
+      assert.ok(attempts >= 2, "a no-op shop UPDATE must invalidate the stale serializable snapshot");
+      assert.equal(await ctx.db.journalEntry.count({ where: { shopId } }), 0);
     });
 
     test("stores each successful financial mutation and its audit exactly once", async () => {

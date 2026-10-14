@@ -1949,6 +1949,7 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
         bill: returnBill,
         refundMode: normalizedRefundMode,
         refundAmount,
+        damagedReturnCost: restockPlan.filter((row) => row.damaged).reduce((sum, row) => addMoney(sum, row.lineCost), 0),
         customerId: resolvedCustomerId,
       });
 

@@ -54,21 +54,28 @@ describe("English critical/deferred split", () => {
   });
 
   it("admits a table to the cloud tier only if no offline screen reads its keys", () => {
-    // This is the whole safety argument for not precaching that tier, and it is
-    // the one thing a human gets wrong: the test is not "does this feature need
-    // the cloud" but "can any offline screen read one of these keys". accounting
-    // and assistant both look cloud-only and are NOT — Layout.tsx reads
-    // accounting.* for the nav, BillingAssistantStrip reads assistant.* on the
-    // billing screen — so each would render a raw key on an offline till.
-    const source = (path: string) => readFileSync(path, "utf8");
-    const reach = ["src/components/layout/Layout.tsx", "src/components/layout/MobileAppChrome.tsx", "src/app/routes.tsx"];
-    for (const table of Object.keys(EN_CLOUD_MODULES)) {
+    // Check actual keys, not module names: accounting's four offline entry
+    // labels are kept separately from its online-only screen dictionary.
+    const reach = ["src/components/layout/Layout.tsx", "src/components/layout/MobileAppChrome.tsx", "src/app/routes.tsx", "src/features/core/reports/pages/ReportsPage.tsx"];
+    for (const table of Object.values(EN_CLOUD_MODULES)) {
       for (const path of reach) {
-        // routes.tsx may only name the prefix inside a cloudPage() lazy import.
-        const offending = new RegExp(`["'\`]${table}\\.[A-Za-z0-9_.]+["'\`]`);
-        expect(offending.test(source(path)), `${path} reads ${table}.* copy`).toBe(false);
+        const source = readFileSync(path, "utf8");
+        for (const key of Object.keys(table)) {
+          expect(source.includes(`"${key}"`) || source.includes(`'${key}'`), `${path} reads cloud key ${key}`).toBe(false);
+        }
       }
     }
+
+  });
+
+  it("keeps accounting entry labels offline and loads screen translations before its page", () => {
+    const keys = ["accounting.title", "accounting.entry.body", "accounting.entry.action", "accounting.entry.menuHelper"];
+    for (const key of keys) {
+      expect(key in englishDeferredTranslations).toBe(true);
+      expect(key in englishCloudTranslations).toBe(false);
+    }
+    expect("accounting.integrity.action" in englishCloudTranslations).toBe(true);
+    expect(readFileSync("src/app/routes.tsx", "utf8")).toContain('const AccountingPage = lazy(cloudPage(() => import("@/features/core/accounting/pages/AccountingPage")))');
   });
 
   it("recombines into the same dictionary the app used to hold in one object", () => {

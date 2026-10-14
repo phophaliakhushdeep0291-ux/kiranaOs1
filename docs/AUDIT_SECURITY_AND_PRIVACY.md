@@ -170,3 +170,7 @@ provider *name* and availability only.
 5. **Dev-only base-URL override.** The frontend honours a `localStorage` API base
    URL in development only; production builds require `VITE_API_BASE_URL`. This is
    pre-existing behaviour, unchanged by this module.
+
+## Review-history atomicity (14 October 2026)
+
+Required finding status history is transactional with reviews, assignments, evidence requests, submissions and verification. Failure rolls back the entire action. An invalid status change cannot leave a review behind. Optional operational logging remains best effort; this does not weaken the required financial mutation audits or finding history. See `ACCOUNTING-AUDIT-2026-10-14.md` for verification and accounting coverage limits.

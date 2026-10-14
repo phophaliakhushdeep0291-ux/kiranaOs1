@@ -8,10 +8,9 @@
 // make the page harder to read, not easier.
 export const accountingEn = {
   // ── Page ──
-  "accounting.title": "Accounting",
-  "accounting.subtitle": "The posted general ledger — what the books say, not what the counter estimated.",
+  "accounting.subtitle": "Posted journals, balances and financial statements.",
   "accounting.ownerOnly": "Only the owner can open the shop's books.",
-  "accounting.loadFailed": "The books could not be loaded. Connect to the server and try again — no offline estimate is shown here, because an estimate is not a ledger.",
+  "accounting.loadFailed": "Books unavailable. Connect to the server and retry.",
   "accounting.loading": "Reading the ledger…",
   "accounting.retry": "Try again",
 
@@ -28,10 +27,18 @@ export const accountingEn = {
   "accounting.range.asOf": "As on",
 
   // ── Status ──
+  "accounting.status.noData": "No postings",
+  "accounting.integrity.review": "Review these books before relying on totals.",
+  "accounting.integrity.checked": "Source entries reconcile with journals.",
+  "accounting.integrity.unposted": "Unposted source entries",
+  "accounting.integrity.mismatch": "Source discrepancies",
+  "accounting.integrity.invalid": "Journals needing review",
+  "accounting.integrity.action": "Totals include posted entries only. Resolve posting discrepancies with your accountant before closing.",
+  "accounting.integrity.scope": "Checks cover ledger entries. Separately verify opening balances, stock valuation, taxes and bank reconciliation.",
   "accounting.status.balanced": "Balanced",
   "accounting.status.attention": "Needs attention",
   "accounting.status.balancedHint": "Debits equal credits across every posted account.",
-  "accounting.status.attentionHint": "Debits and credits do not agree. The difference is shown below.",
+  "accounting.status.attentionHint": "Review the posting checks and any debit/credit difference below.",
 
   // ── Columns ──
   "accounting.col.code": "Code",
@@ -62,8 +69,8 @@ export const accountingEn = {
   "accounting.pnl.totalExpenses": "Total expenses",
   "accounting.pnl.netProfit": "Net profit",
   "accounting.pnl.netLoss": "Net loss",
-  "accounting.pnl.basisTitle": "This is the ledger's profit and loss",
-  "accounting.pnl.basisBody": "It is built from posted journal lines. The profit shown on Reports is an operational estimate read straight off bills, so the two figures can differ — this one is what the books say.",
+  "accounting.pnl.basisTitle": "Profit and loss from posted journals",
+  "accounting.pnl.basisBody": "Posted entries determine these totals. Reports uses bill estimates, so figures can differ.",
 
   // ── Balance sheet ──
   "accounting.bs.assets": "Assets",
@@ -75,7 +82,7 @@ export const accountingEn = {
 
   // ── Chart of accounts ──
   "accounting.coa.loadTitle": "Open the chart of accounts",
-  "accounting.coa.loadBody": "Opening this also creates any missing system account and records that in the audit log, so it is not loaded until you ask for it.",
+  "accounting.coa.loadBody": "Opening creates missing system accounts and records the action in the audit log.",
   "accounting.coa.loadAction": "Open chart of accounts",
   "accounting.coa.systemBadge": "System",
   "accounting.coa.inactiveBadge": "Inactive",
@@ -89,17 +96,14 @@ export const accountingEn = {
   "accounting.period.closed": "Closed",
   "accounting.period.closedOn": "Closed on",
   "accounting.period.reason": "Reason",
-  "accounting.period.empty": "No accounting periods have been created. Until one is closed, any business date stays open for posting.",
+  "accounting.period.empty": "No periods yet. Dates stay open until their period is closed.",
 
   // ── Empty ──
   "accounting.empty.title": "Nothing posted in this range",
   "accounting.empty.body": "No journal lines carry a business date inside these dates.",
 
   // ── Entry point on the Reports screen ──
-  "accounting.entry.body": "Trial balance, profit and loss, balance sheet and the chart of accounts, straight from the posted ledger.",
-  "accounting.entry.action": "Open",
   // One clipped line in the phone's More sheet — keep it short; see entry.body for the card.
-  "accounting.entry.menuHelper": "Trial balance, P&L, balance sheet",
 
   // ── Footer ──
   "accounting.note.version": "Projection",

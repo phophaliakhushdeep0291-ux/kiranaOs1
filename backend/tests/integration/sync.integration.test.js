@@ -677,7 +677,7 @@ if (ctx.skip) {
         clientMovementId: "adjust-stock:test:dmg:1",
         ownerPin: tenant.ownerPin,
       };
-      const event = { type: "ADJUST_STOCK", ownerPin: tenant.ownerPin, payload };
+      const event = { type: "ADJUST_STOCK", ownerPin: tenant.ownerPin, payload, client_created_at: "2026-09-02T08:30:00.000Z" };
 
       const first = assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "dmg-1" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       assert.equal(first.summary.failed, 0, JSON.stringify(first.results));
@@ -693,6 +693,10 @@ if (ctx.skip) {
         where: { shopId: tenant.shop.id, productId: product.id, action: "damage" },
       });
       assert.equal(damageRows.length, 1, "exactly one damage ledger row despite the retry");
+      const financial = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, sourceType: "stock_damage" } });
+      assert.equal(financial.length, 2, "one balanced loss posting across different sync event IDs");
+      assert.ok(financial.every(row => row.sourceId === damageRows[0].id && row.businessDate.toISOString() === event.client_created_at));
+      assert.equal(await ctx.db.journalEntry.count({ where: { shopId: tenant.shop.id, sourceType: "stock_damage" } }), 1);
       const damageAudits = await ctx.db.auditLog.findMany({
         where: { shopId: tenant.shop.id, action: "STOCK_DAMAGED", entityId: product.id },
       });
