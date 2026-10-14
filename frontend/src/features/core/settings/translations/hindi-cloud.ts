@@ -1,3 +1,4 @@
+import { accountingHi } from "./accounting.hi";
 import { tallyHi } from "./tally.hi";
 // The Hindi mirror of english-cloud.ts: the tables only an `onlineOnly` route can
 // render, kept out of the offline precache.
@@ -14,6 +15,7 @@ import { devicesHi } from "./devices.hi";
 import { marketPreviewHi } from "./market-preview.hi";
 
 export const hindiCloudTranslations = {
+  ...accountingHi,
   ...tallyHi,
   ...marketPreviewHi,
   ...assuranceHi,
@@ -22,6 +24,7 @@ export const hindiCloudTranslations = {
 
 /** Registered cloud-only modules. `hindi.ts` re-exports these into HI_MODULES. */
 export const HI_CLOUD_MODULES = {
+  accounting: accountingHi,
   tally: tallyHi,
   marketPreview: marketPreviewHi,
   assurance: assuranceHi,

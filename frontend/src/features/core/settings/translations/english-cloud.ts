@@ -1,3 +1,4 @@
+import { accountingEn } from "./accounting";
 import { tallyEn } from "./tally";
 // The English tables that only an `onlineOnly` route can ever render.
 //
@@ -23,9 +24,8 @@ import { tallyEn } from "./tally";
 //   devices    -> read only by DevicesPage, which is onlineOnly. Qualifies.
 //   marketPreview -> read only by the online UAE setup preview. Its navigation
 //                    labels stay in settings-pages so the offline shell is complete.
-//   accounting -> REJECTED. Layout.tsx and MobileAppChrome.tsx read accounting.*
-//                 for the nav, and ReportsPage reads it too. Both are shell/core
-//                 and must render offline.
+//   accounting -> screen-only keys qualify. The four navigation/Reports keys
+//                 stay in accounting-navigation in the offline deferred tier.
 //   assistant  -> REJECTED. BillingAssistantStrip reads assistant.* on the
 //                 BILLING screen, the highest-frequency offline surface there is.
 //
@@ -41,6 +41,7 @@ import { assuranceEn } from "./assurance";
 import { devicesEn } from "./devices";
 
 export const englishCloudTranslations = {
+  ...accountingEn,
   ...tallyEn,
   ...marketPreviewEn,
   ...assuranceEn,
@@ -49,6 +50,7 @@ export const englishCloudTranslations = {
 
 /** Registered cloud-only modules. `english.ts` re-exports these into EN_MODULES. */
 export const EN_CLOUD_MODULES = {
+  accounting: accountingEn,
   tally: tallyEn,
   marketPreview: marketPreviewEn,
   assurance: assuranceEn,

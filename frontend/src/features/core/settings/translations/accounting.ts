@@ -8,7 +8,6 @@
 // make the page harder to read, not easier.
 export const accountingEn = {
   // ── Page ──
-  "accounting.title": "Accounting",
   "accounting.subtitle": "Posted journals, balances and financial statements.",
   "accounting.ownerOnly": "Only the owner can open the shop's books.",
   "accounting.loadFailed": "Books unavailable. Connect to the server and retry.",
@@ -104,10 +103,7 @@ export const accountingEn = {
   "accounting.empty.body": "No journal lines carry a business date inside these dates.",
 
   // ── Entry point on the Reports screen ──
-  "accounting.entry.body": "Trial balance, P&L, balance sheet and chart of accounts.",
-  "accounting.entry.action": "Open",
   // One clipped line in the phone's More sheet — keep it short; see entry.body for the card.
-  "accounting.entry.menuHelper": "Trial balance, P&L, balance sheet",
 
   // ── Footer ──
   "accounting.note.version": "Projection",
