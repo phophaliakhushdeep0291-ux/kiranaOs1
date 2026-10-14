@@ -2,6 +2,7 @@ import express from "express";
 import crypto from "crypto";
 import helmet from "helmet";
 import compression from "compression";
+import { apiJsonReplacer } from "./utils/json.js";
 import cors from "cors";
 import { env } from "./config/env.js";
 import { database as db } from "./infrastructure/database/index.js";
@@ -80,11 +81,7 @@ app.disable("x-powered-by");
 app.set("trust proxy", 1);
 // Prisma BigInt shadow paise columns must not break res.json().
 // Keep API compatible by serializing safe BigInt values as numbers.
-app.set("json replacer", (_key, value) => {
-  if (typeof value !== "bigint") return value;
-  const asNumber = Number(value);
-  return Number.isSafeInteger(asNumber) ? asNumber : value.toString();
-});
+app.set("json replacer", apiJsonReplacer);
 app.use(requestId);
 app.use(helmet());
 // Gzip JSON responses — sync pulls and report payloads shrink 5-10x on shop

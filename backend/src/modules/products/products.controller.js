@@ -14,8 +14,8 @@ function actor(req) {
 
 export async function list(req, res, next) {
   try {
-    const products = await svc.listProducts(req.shopId, { ...req.query, locationId: requestLocationId(req) });
-    res.json({ success: true, data: products });
+    const body = await svc.listProductsJson(req.shopId, { ...req.query, locationId: requestLocationId(req) });
+    res.type("json").send(body);
   } catch (err) { next(err); }
 }
 

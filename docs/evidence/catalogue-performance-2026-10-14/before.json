@@ -1,0 +1,91 @@
+{
+  "status": "failed",
+  "generatedAt": "2026-10-14T09:15:40.455Z",
+  "revision": "c24b3d90fa4a1f63f3d0d3d039725699865453e7",
+  "databaseEngine": "sqlite",
+  "durationSeconds": 10,
+  "connections": 25,
+  "latencyPercentile": 97.5,
+  "budgets": {
+    "latencyMs": 800,
+    "errorRate": 0.01
+  },
+  "seeded": {
+    "products": 1000,
+    "customers": 200,
+    "bills": 400
+  },
+  "closingBills": 400,
+  "rows": [
+    {
+      "scenario": "health (no auth)",
+      "requests": 122305,
+      "requestsPerSecond": 11118.19,
+      "p50Ms": 1,
+      "p97_5Ms": 4,
+      "p99Ms": 5,
+      "non2xx": 0,
+      "transportErrors": 0,
+      "errorRate": 0
+    },
+    {
+      "scenario": "products list",
+      "requests": 178,
+      "requestsPerSecond": 17.8,
+      "p50Ms": 1372,
+      "p97_5Ms": 1506,
+      "p99Ms": 1514,
+      "non2xx": 0,
+      "transportErrors": 0,
+      "errorRate": 0
+    },
+    {
+      "scenario": "product search",
+      "requests": 183,
+      "requestsPerSecond": 18.3,
+      "p50Ms": 1303,
+      "p97_5Ms": 1699,
+      "p99Ms": 1769,
+      "non2xx": 0,
+      "transportErrors": 0,
+      "errorRate": 0
+    },
+    {
+      "scenario": "customers list",
+      "requests": 2603,
+      "requestsPerSecond": 260.3,
+      "p50Ms": 88,
+      "p97_5Ms": 153,
+      "p99Ms": 183,
+      "non2xx": 0,
+      "transportErrors": 0,
+      "errorRate": 0
+    },
+    {
+      "scenario": "bills list",
+      "requests": 1110,
+      "requestsPerSecond": 111,
+      "p50Ms": 168,
+      "p97_5Ms": 644,
+      "p99Ms": 692,
+      "non2xx": 0,
+      "transportErrors": 0,
+      "errorRate": 0
+    },
+    {
+      "scenario": "daily closing (400 bills)",
+      "requests": 1109,
+      "requestsPerSecond": 110.9,
+      "p50Ms": 209,
+      "p97_5Ms": 426,
+      "p99Ms": 635,
+      "non2xx": 0,
+      "transportErrors": 0,
+      "errorRate": 0
+    }
+  ],
+  "limitations": [
+    "Local read workload; not a production capacity or concurrent-write guarantee.",
+    "Physical hardware and external providers are not exercised."
+  ]
+}

@@ -1,5 +1,6 @@
 import assert from "assert";
 import fs from "fs";
+import { apiJsonReplacer } from "../src/utils/json.js";
 
 function read(file) {
   return fs.readFileSync(file, "utf8");
@@ -64,7 +65,8 @@ for (const snippet of [
 }
 
 assert.ok(app.includes('app.set("json replacer"'), "Express must serialize BigInt shadow columns safely");
-assert.ok(app.includes('typeof value !== "bigint"'), "JSON replacer must explicitly handle BigInt");
+assert.ok(app.includes('app.set("json replacer", apiJsonReplacer)'), "Express must use the shared exact-money JSON serializer");
+assert.deepEqual(JSON.parse(JSON.stringify({ safe: 123n, large: 9007199254740993n, label: "Rice" }, apiJsonReplacer)), { safe: 123, large: "9007199254740993", label: "Rice" });
 
 assert.ok(billsService.includes("moneyShadows({ subtotal"), "bill create must write bill paise shadow fields");
 assert.ok(billsService.includes("payments: { create: paymentRows }"), "bill payments must use paise-aware paymentRows");

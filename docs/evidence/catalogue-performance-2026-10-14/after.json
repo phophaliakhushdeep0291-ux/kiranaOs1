@@ -1,0 +1,92 @@
+{
+  "status": "passed",
+  "generatedAt": "2026-10-14T09:37:33.805Z",
+  "revision": "a80b6919abf33adab29734a28ed4451432450f7f",
+  "databaseEngine": "sqlite",
+  "workingTreeDirty": true,
+  "durationSeconds": 10,
+  "connections": 25,
+  "latencyPercentile": 97.5,
+  "budgets": {
+    "latencyMs": 800,
+    "errorRate": 0.01
+  },
+  "seeded": {
+    "products": 1000,
+    "customers": 200,
+    "bills": 400
+  },
+  "closingBills": 400,
+  "rows": [
+    {
+      "scenario": "health (no auth)",
+      "requests": 116210,
+      "requestsPerSecond": 11621.6,
+      "p50Ms": 1,
+      "p97_5Ms": 3,
+      "p99Ms": 4,
+      "non2xx": 0,
+      "transportErrors": 0,
+      "errorRate": 0
+    },
+    {
+      "scenario": "products list",
+      "requests": 445,
+      "requestsPerSecond": 44.5,
+      "p50Ms": 552,
+      "p97_5Ms": 659,
+      "p99Ms": 680,
+      "non2xx": 0,
+      "transportErrors": 0,
+      "errorRate": 0
+    },
+    {
+      "scenario": "product search",
+      "requests": 433,
+      "requestsPerSecond": 43.3,
+      "p50Ms": 562,
+      "p97_5Ms": 630,
+      "p99Ms": 653,
+      "non2xx": 0,
+      "transportErrors": 0,
+      "errorRate": 0
+    },
+    {
+      "scenario": "customers list",
+      "requests": 3141,
+      "requestsPerSecond": 314.11,
+      "p50Ms": 77,
+      "p97_5Ms": 96,
+      "p99Ms": 103,
+      "non2xx": 0,
+      "transportErrors": 0,
+      "errorRate": 0
+    },
+    {
+      "scenario": "bills list",
+      "requests": 2174,
+      "requestsPerSecond": 217.4,
+      "p50Ms": 112,
+      "p97_5Ms": 129,
+      "p99Ms": 143,
+      "non2xx": 0,
+      "transportErrors": 0,
+      "errorRate": 0
+    },
+    {
+      "scenario": "daily closing (400 bills)",
+      "requests": 1338,
+      "requestsPerSecond": 133.81,
+      "p50Ms": 184,
+      "p97_5Ms": 201,
+      "p99Ms": 206,
+      "non2xx": 0,
+      "transportErrors": 0,
+      "errorRate": 0
+    }
+  ],
+  "limitations": [
+    "Local read workload; not a production capacity or concurrent-write guarantee.",
+    "Physical hardware and external providers are not exercised."
+  ]
+}

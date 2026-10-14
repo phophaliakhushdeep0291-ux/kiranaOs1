@@ -1,0 +1,20 @@
+{
+  "type": "backup_drill",
+  "status": "passed",
+  "seed": 20260808,
+  "durationSeconds": 6.9,
+  "restoreDurationSeconds": 0.349,
+  "bills": 216,
+  "records": 4032,
+  "totalSalesPaise": "7767200",
+  "gstTotalPaise": "683097",
+  "tablesReconciled": 108,
+  "databaseEngine": "sqlite",
+  "storageProvider": "local",
+  "workingTreeDirty": true,
+  "baseRevision": "a80b6919abf33adab29734a28ed4451432450f7f",
+  "limitations": [
+    "Synthetic data in a disposable database, not production.",
+    "Does not prove offsite recovery or production RPO/RTO."
+  ]
+}

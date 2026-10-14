@@ -1,4 +1,4 @@
-import db from "../../db.js";
+import db, { databaseEngine } from "../../db.js";
 import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -22,6 +22,17 @@ import {
 } from "../stores/location-context.service.js";
 import { readLocationProductStockBatches } from "../stores/location-stock-read.js";
 import { stockLedgerProvenance } from "../inventory/stock-ledger-provenance.js";
+import { createCatalogueReader } from "./catalogue-read.js";
+import { apiJsonReplacer } from "../../utils/json.js";
+
+const readCatalogue = createCatalogueReader(db, { engine: databaseEngine });
+const catalogueJson = products => JSON.stringify({ success: true, data: products }, apiJsonReplacer);
+const readCatalogueJson = createCatalogueReader(db, {
+  engine: databaseEngine,
+  project: products => catalogueJson(products.map(deserializeProduct)),
+  // A serialized response is immutable; no per-request clone is necessary.
+  copy: value => value,
+});
 
 async function writeRequiredProductAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
@@ -164,8 +175,8 @@ async function applyLocationInventory(shopId, products, locationId) {
   });
 }
 
-export async function listProducts(shopId, { category, search, lowStock, locationId } = {}) {
-  const where = {
+function catalogueWhere(shopId, { category, search } = {}) {
+  return {
     shopId,
     deletedAt: null,
     ...(category && { category }),
@@ -178,12 +189,10 @@ export async function listProducts(shopId, { category, search, lowStock, locatio
       ],
     }),
   };
+}
 
-  const products = await db.product.findMany({
-    where,
-    orderBy: { name: "asc" },
-    include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
-  });
+export async function listProducts(shopId, { category, search, lowStock, locationId } = {}) {
+  const products = await readCatalogue(catalogueWhere(shopId, { category, search }));
 
   // Parse aliasesJson back to array for response
   const parsed = await applyLocationInventory(shopId, products.map(deserializeProduct), locationId);
@@ -195,6 +204,13 @@ export async function listProducts(shopId, { category, search, lowStock, locatio
   }
 
   return parsed;
+}
+
+export async function listProductsJson(shopId, options = {}) {
+  // Branch rows and location metadata have their own lifecycle. Always read
+  // them afresh; only global catalogue responses share their serialization.
+  if (options.locationId || options.lowStock) return catalogueJson(await listProducts(shopId, options));
+  return readCatalogueJson(catalogueWhere(shopId, options));
 }
 
 /**
