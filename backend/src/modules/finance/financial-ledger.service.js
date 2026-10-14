@@ -17,6 +17,26 @@
 // cancel→restore→cancel cycle posts distinct rows instead of colliding.
 import { round2, toPaiseBigInt } from "../../utils/money.js";
 import { postFinancialLedgerRows } from "./general-ledger.service.js";
+import { AppError } from "../../shared/errors/index.js";
+
+// Use the immutable stock movement's recorded cost, never the product's later
+// price. Source identity is the movement, so two losses of one product remain
+// distinct while an offline retry of the same movement cannot post twice.
+export async function postStockDamageLedger(tx, { shopId, movement, businessDate }) {
+  const amount = movement.damageLossValue;
+  if (movement.shopId !== shopId || movement.action !== "damage" || !movement.id
+    || !Number.isFinite(amount) || amount < 0) {
+    throw new AppError("Invalid stock damage accounting evidence", 422, "STOCK_DAMAGE_EVIDENCE_INVALID");
+  }
+  if (toPaiseBigInt(amount) === 0n) return [];
+  return postFinancialLedgerRows(tx, [
+    ["inventory_loss", "debit"], ["inventory_write_off", "credit"],
+  ].map(([entryType, direction]) => ledgerRow({
+    shopId, sourceType: "stock_damage", sourceId: movement.id, entryType, direction, amount,
+    businessDate: businessDate ?? movement.createdAt,
+    idempotencyKey: `stock-damage:${movement.id}:${entryType}`,
+  })));
+}
 
 const TENDER_ENTRY = {
   cash: { entryType: "cash_in", direction: "debit" },

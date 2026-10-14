@@ -52,6 +52,10 @@ async function main() {
     assert.equal(ledger.sellingUnitId, box.id, "the movement remembers the packaging");
     assert.equal(ledger.sellingUnitQty, 2, "and how many of it, which base units cannot recover");
     assert.equal(ledger.changeBaseQty, -1120);
+    const damagePosting = await db.financialLedger.findMany({ where: { shopId: shop.id, sourceType: "stock_damage", sourceId: ledger.id } });
+    assert.equal(ledger.damageLossValue, 176, "two boxes contain sixteen default packs at cost 11 each");
+    assert.equal(damagePosting.length, 2);
+    assert.ok(damagePosting.every(row => row.amountPaise === 17600n));
 
     // ── a replay does not remove the stock twice ────────────────────
     // The offline outbox retries; the replay check derives base units the same way

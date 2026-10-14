@@ -2561,6 +2561,7 @@ async function applyAdjustStock(shopId, event, user, context) {
   identity.userName = user?.userName ?? user?.userEmail ?? null;
   identity.sourceDeviceId = identity.sourceDeviceId ?? user?.deviceId ?? null;
   identity.syncEventId = getClientEventId(event);
+  identity.businessDate = event.client_created_at ?? event.clientCreatedAt ?? event.createdAt ?? new Date().toISOString();
 
   if (payload.adjustmentType === "damage") {
     if (!payload.quantity || !payload.enteredUnit) {

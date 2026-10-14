@@ -25,7 +25,7 @@ async function lockAccountingShop(shopId, client) {
   }
 }
 
-async function assertPeriodOpen(shopId, businessDate, client) {
+export async function assertPeriodOpen(shopId, businessDate, client) {
   if (!client.accountingPeriod) return;
   await lockAccountingShop(shopId, client);
   const locked = await client.accountingPeriod.findFirst({ where: { shopId, status: "closed", startsAt: { lte: businessDate }, endsAt: { gte: businessDate } } });
