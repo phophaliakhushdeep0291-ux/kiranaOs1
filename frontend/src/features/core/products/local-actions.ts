@@ -1,4 +1,5 @@
-import { offlineDB } from "@/lib/offline/db";
+import { getOfflineScope } from "@/lib/offline/context";
+import { offlineDB, assertCurrentOfflineScope } from "@/lib/offline/db";
 import { ownerPinRequiredActionSchema, productCreationSchema } from "@/lib/validation";
 import {
   createLocalId,
@@ -137,11 +138,16 @@ async function commitProductWrite(input: {
   product: Product;
   auditLogs: AuditLogRow[];
   outbox: EnqueueOutboxOperationInput;
+  assistantReceiptKey?: string;
 }) {
   const auditOutboxRows = input.auditLogs.map((row) => buildOutboxOperation(buildAuditLogOutboxInput(row)));
   const productOutboxRow = buildOutboxOperation(input.outbox);
 
-  await offlineDB.transaction(PRODUCT_WRITE_TRANSACTION_TABLES, async (tx) => {
+  return offlineDB.transaction(input.assistantReceiptKey ? [...PRODUCT_WRITE_TRANSACTION_TABLES, "settings"] : PRODUCT_WRITE_TRANSACTION_TABLES, async (tx) => {
+    if (input.assistantReceiptKey) {
+      const receipt = await offlineDB.getSetting<Product>(input.assistantReceiptKey);
+      if (receipt) return receipt;
+    }
     await tx.put("products", input.product);
     for (const auditLog of input.auditLogs) {
       await tx.put("local_audit_logs", auditLog);
@@ -150,6 +156,8 @@ async function commitProductWrite(input: {
       await tx.enqueueOutboxOperation(auditOutbox);
     }
     await tx.enqueueOutboxOperation(productOutboxRow);
+    if (input.assistantReceiptKey) await tx.setSetting(input.assistantReceiptKey, input.product);
+    return input.product;
   });
 }
 
@@ -495,7 +503,16 @@ export async function bindProductBarcodeLocalFirst(productId: string, barcode: s
   return product;
 }
 
-export async function createProductLocalFirst(data: ProductInput): Promise<Product> {
+export async function createProductLocalFirst(data: ProductInput, options?: { assistantActionId: string }): Promise<Product> {
+  // One receipt and the product/outbox commit atomically, including concurrent
+  // callers. A lost UI acknowledgement must not create a second product.
+  const assistantScope = options ? getOfflineScope() : null;
+  const assistantReceiptKey = options ? `assistant:product:${options.assistantActionId}` : undefined;
+  if (assistantReceiptKey) {
+    const receipt = await offlineDB.getSetting<Product>(assistantReceiptKey);
+    assertCurrentOfflineScope(assistantScope!);
+    if (receipt) return receipt;
+  }
   const validated = parseOrThrow(productCreationSchema, data) as unknown as ProductInput;
   await assertNoLocalProductNameConflict(validated.name);
   await assertNoLocalProductCodeConflict(validated);
@@ -515,7 +532,9 @@ export async function createProductLocalFirst(data: ProductInput): Promise<Produ
   const priceAudit = buildPriceBelowMinimumAudit(product, undefined, validated.ownerPin, validated.ownerPinReason);
   if (priceAudit) auditLogs.push(priceAudit);
 
-  await commitProductWrite({
+  if (assistantScope) assertCurrentOfflineScope(assistantScope);
+  const saved = await commitProductWrite({
+    assistantReceiptKey,
     product,
     auditLogs,
     outbox: {
@@ -525,10 +544,10 @@ export async function createProductLocalFirst(data: ProductInput): Promise<Produ
       payload: { localProductId: product.id, product: data, locationId: getActiveLocationId(), ownerPin: validated.ownerPin, reason: validated.ownerPinReason, ownerPinProvided: Boolean(validated.ownerPin) },
     },
   });
-  upsertCachedListItem<Product>(CACHE_KEY, product, 1000);
-  upsertCachedListItem<Product>(INVENTORY_CACHE_KEY, product, 1000);
-  emitLocalDataChanged({ entityType: "product", action: "created", entityId: product.id });
-  return product;
+  upsertCachedListItem<Product>(CACHE_KEY, saved, 1000);
+  upsertCachedListItem<Product>(INVENTORY_CACHE_KEY, saved, 1000);
+  emitLocalDataChanged({ entityType: "product", action: "created", entityId: saved.id });
+  return saved;
 }
 
 export async function updateProductLocalFirst(id: string, data: ProductInput): Promise<Product> {

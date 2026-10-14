@@ -1,4 +1,5 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { ASSISTANT_COMMAND_EVENT } from "./task-commands";
 import { Sparkles } from "lucide-react";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 
@@ -18,12 +19,24 @@ const AssistantPanel = lazy(() =>
 export function AssistantLauncher() {
   const { t } = useAppLanguage();
   const [open, setOpen] = useState(false);
+  const [initialMessage, setInitialMessage] = useState("");
+  useEffect(() => {
+    const accept = (event: Event) => {
+      const message = (event as CustomEvent<{ message?: unknown }>).detail?.message;
+      if (typeof message !== "string" || !message.trim() || open) return;
+      event.preventDefault();
+      setInitialMessage(message.slice(0, 2000));
+      setOpen(true);
+    };
+    window.addEventListener(ASSISTANT_COMMAND_EVENT, accept);
+    return () => window.removeEventListener(ASSISTANT_COMMAND_EVENT, accept);
+  }, [open]);
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => { setInitialMessage(""); setOpen(true); }}
         aria-label={t("assistant.open")}
         className="fixed bottom-[var(--app-mobile-bottom-nav-clearance)] right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-[var(--brand)] text-white shadow-lg transition hover:scale-105 lg:bottom-6"
       >
@@ -31,7 +44,7 @@ export function AssistantLauncher() {
       </button>
       {open ? (
         <Suspense fallback={null}>
-          <AssistantPanel open onClose={() => setOpen(false)} />
+          <AssistantPanel open initialMessage={initialMessage} onClose={() => setOpen(false)} />
         </Suspense>
       ) : null}
     </>

@@ -783,14 +783,67 @@ function decorateTransfer(transfer) {
   };
 }
 
-export async function createTransfer(shopId, data, userId, userRole = "staff", req = null) {
+// Read-only approvals for assistant transfers. Complex packaging and registered
+// dispatch documents continue through the dedicated stock-transfer screen.
+export const transferApprovalToken = value => crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
+function assertTransferApproval(preview, approval) {
+  if (approval && transferApprovalToken(preview) !== approval) throw new AppError("Transfer details or stock changed. Review a new plan.", 409, "TRANSFER_APPROVAL_CHANGED");
+}
+export async function previewTransferDispatch(client, shopId, data, userId, role) {
+  if (data.fromLocationId === data.toLocationId) throw new AppError("Choose a different destination branch", 422, "SAME_TRANSFER_LOCATION");
+  for (const locationId of [data.fromLocationId, data.toLocationId]) await assertLocationCapability({ shopId, userId, role, locationId, capability: "transfer", client });
+  const locations = await client.storeLocation.findMany({ where: { shopId, id: { in: [data.fromLocationId, data.toLocationId] }, active: true } });
+  if (locations.length !== 2) throw new AppError("Active source or destination not found", 404, "STORE_LOCATION_NOT_FOUND");
+  const from = locations.find(row => row.id === data.fromLocationId), to = locations.find(row => row.id === data.toLocationId);
+  const classification = classifyTransfer(from, to);
+  if (classification.registered || data.fulfillmentMode !== "shipment" || data.movementReason !== "branch_transfer") throw new AppError("Use Stock transfers to review registered documents or other movement types", 422, "TRANSFER_MANUAL_REVIEW_REQUIRED");
+  const stock = new Map((await inventorySnapshot(client, shopId, from)).map(row => [row.id, row]));
+  const ids = data.items.map(row => row.productId);
+  if (new Set(ids).size !== ids.length) throw new AppError("Combine repeated products into one transfer line", 422, "TRANSFER_DUPLICATE_LINE");
+  const products = await client.product.findMany({ where: { shopId, id: { in: ids }, deletedAt: null }, select: { id: true, packagingMode: true, batchTrackingEnabled: true } });
+  const lines = data.items.map(input => {
+    const product = products.find(row => row.id === input.productId), row = stock.get(input.productId);
+    if (!product || !row) throw new AppError("Transfer product not found", 404, "PRODUCT_NOT_FOUND");
+    if (product.packagingMode === "per_pack" || product.batchTrackingEnabled || input.sellingUnitId) throw new AppError("Use Stock transfers to select sizes or batches", 422, "TRANSFER_MANUAL_REVIEW_REQUIRED");
+    if (row.stockBaseQty < input.quantityBaseQty) throw new AppError(`${row.name} has only ${row.stockBaseQty} ${row.baseUnit} at ${from.name}`, 409, "INSUFFICIENT_LOCATION_STOCK");
+    return { productId: row.id, productName: row.name, baseUnit: row.baseUnit, available: row.stockBaseQty, quantityBaseQty: input.quantityBaseQty };
+  });
+  return { fromLocationId: from.id, fromName: from.name, fromUpdatedAt: from.updatedAt, toLocationId: to.id, toName: to.name, toUpdatedAt: to.updatedAt, lines, data };
+}
+export async function getTransferForAssistant(shopId, id, userId, role, client = db) {
+  const row = await client.stockTransfer.findFirst({ where: { shopId, id }, include: transferInclude });
+  if (!row) throw new AppError("Stock transfer not found", 404, "STOCK_TRANSFER_NOT_FOUND");
+  for (const locationId of [row.fromLocationId, row.toLocationId]) await assertLocationCapability({ shopId, userId, role, locationId, capability: "transfer", client });
+  return decorateTransfer(row);
+}
+export async function previewTransferAction(client, shopId, id, action, data, userId, role) {
+  const row = await getTransferForAssistant(shopId, id, userId, role, client);
+  if (row.fulfillmentMode !== "shipment" || !["in_transit", "partially_received"].includes(row.status)) throw new AppError("Only an open shipment can be received or cancelled", 409, "TRANSFER_NOT_OPEN");
+  if (!row.fromLocation.active || !row.toLocation.active) throw new AppError("Review the inactive branch in Stock transfers", 409, "STORE_LOCATION_INACTIVE");
+  if (row.items.some(item => item.sellingUnitId || item.lotAllocations.length)) throw new AppError("Use Stock transfers to review sizes or batches", 422, "TRANSFER_MANUAL_REVIEW_REQUIRED");
+  if (action === "receive") {
+    const ids = data.items.map(item => item.transferItemId);
+    if (new Set(ids).size !== ids.length) throw new AppError("Combine repeated receipt lines", 422, "TRANSFER_DUPLICATE_LINE");
+    for (const input of data.items) {
+      const item = row.items.find(item => item.id === input.transferItemId);
+      if (!item) throw new AppError("Receipt line not found in this transfer", 404, "TRANSFER_ITEM_NOT_FOUND");
+      if (input.quantityBaseQty > item.remainingBaseQty) throw new AppError(`${item.productName} has only ${item.remainingBaseQty} ${item.baseUnit} left to receive`, 409, "TRANSFER_RECEIPT_EXCEEDS_REMAINING");
+    }
+  }
+  return { id: row.id, referenceNo: row.referenceNo, updatedAt: row.updatedAt, fromLocationId: row.fromLocationId, fromName: row.fromLocation.name,
+    toLocationId: row.toLocationId, toName: row.toLocation.name, status: row.status, action, data,
+    lines: row.items.map(item => ({ id: item.id, productId: item.productId, productName: item.productName, baseUnit: item.baseUnit, quantityBaseQty: item.quantityBaseQty, receivedBaseQty: item.receivedBaseQty, remainingBaseQty: item.remainingBaseQty })) };
+}
+
+export async function createTransfer(shopId, data, userId, userRole = "staff", req = null, approval = null) {
   if (data.fromLocationId === data.toLocationId) {
     throw new AppError("Source and destination locations must be different", 400, "SAME_TRANSFER_LOCATION");
   }
   const items = normalizeItems(data.items);
   const fulfillmentMode = data.fulfillmentMode || "instant";
   try {
-    const transfer = await db.$transaction(async (tx) => {
+    const transfer = await serializableTransaction(async (tx) => {
+      if (approval) assertTransferApproval(await previewTransferDispatch(tx, shopId, data, userId, userRole), approval);
       await assertLocationCapability({ shopId, userId, role: userRole, locationId: data.fromLocationId, capability: "transfer", client: tx });
       await assertLocationCapability({ shopId, userId, role: userRole, locationId: data.toLocationId, capability: "transfer", client: tx });
       const locations = await tx.storeLocation.findMany({
@@ -1082,9 +1135,10 @@ function normalizeReceiptItems(items) {
   return [...totals].map(([transferItemId, quantityBaseQty]) => ({ transferItemId, quantityBaseQty }));
 }
 
-export async function receiveTransfer(shopId, transferId, data, userId, userRole = "staff", req = null) {
+export async function receiveTransfer(shopId, transferId, data, userId, userRole = "staff", req = null, approval = null) {
   const receiptItems = normalizeReceiptItems(data.items);
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
+    if (approval) assertTransferApproval(await previewTransferAction(tx, shopId, transferId, "receive", data, userId, userRole), approval);
     const current = await tx.stockTransfer.findFirst({
       where: { id: transferId, shopId },
       include: transferInclude,
@@ -1202,8 +1256,9 @@ export async function receiveTransfer(shopId, transferId, data, userId, userRole
   });
 }
 
-export async function cancelTransfer(shopId, transferId, data, userId, userRole = "staff", req = null) {
-  return db.$transaction(async (tx) => {
+export async function cancelTransfer(shopId, transferId, data, userId, userRole = "staff", req = null, approval = null) {
+  return serializableTransaction(async (tx) => {
+    if (approval) assertTransferApproval(await previewTransferAction(tx, shopId, transferId, "cancel", data, userId, userRole), approval);
     const current = await tx.stockTransfer.findFirst({
       where: { id: transferId, shopId },
       include: transferInclude,

@@ -54,7 +54,7 @@ export const CORE_READ_TOOLS = [
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:
-      "Search this shop's catalogue by name or alias and return matching products with their stock, unit and price. Use this to resolve any product the shopkeeper names before referring to it, and to check whether something exists at all.",
+      "Search this shop's catalogue by name or alias and return matching products with their stock, unit and price. Use this to resolve any product the shopkeeper names before referring to it, and to check whether something exists at all. To list existing products use an empty search; returns up to 25 with total matchCount and truncation, not the entire catalogue.",
     parameters: {
       type: "object",
       additionalProperties: false,

@@ -20,7 +20,7 @@ type LocalExpense = Expense & {
   mergedIntoId?: string | null;
 };
 
-export async function createExpenseLocalFirst(data: ExpenseInput): Promise<Expense> {
+export async function createExpenseLocalFirst(data: ExpenseInput, options?: { assistantActionId: string }): Promise<Expense> {
   const scope = getOfflineScope();
   const now = nowIso();
   const id = data.clientExpenseId?.trim() || createLocalId("expense");
@@ -63,12 +63,21 @@ export async function createExpenseLocalFirst(data: ExpenseInput): Promise<Expen
       expense: { ...data, locationId, clientExpenseId: id, idempotencyKey },
     },
   });
-  await offlineDB.transaction(["expenses", "sync_outbox"], async (tx) => {
+  const receiptKey = options ? `assistant:expense:${options.assistantActionId}` : undefined;
+  const saved = await offlineDB.transaction(["expenses", "sync_outbox", ...(receiptKey ? ["settings"] : [])], async (tx) => {
+    assertCurrentOfflineScope(scope);
+    if (receiptKey) {
+      const previous = await offlineDB.getSetting<Expense>(receiptKey);
+      if (previous) return previous;
+    }
     await tx.put("expenses", expense);
     await tx.enqueueOutboxOperation(outbox);
+    if (receiptKey) await tx.setSetting(receiptKey, expense);
+    return expense;
   });
-  emitLocalDataChanged({ type: "expense", id, action: "created" });
-  return expense;
+  assertCurrentOfflineScope(scope);
+  emitLocalDataChanged({ type: "expense", id: saved.id, action: "created" });
+  return saved;
 }
 
 export async function updateExpenseLocalFirst(id: string, data: ExpenseInput, ownerPin: string): Promise<Expense> {

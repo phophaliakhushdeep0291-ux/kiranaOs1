@@ -1,3 +1,4 @@
+import type { ProductInput, ExpenseInput, Supplier } from "@/types/api";
 import { apiRequest, ApiClientError } from "@/lib/api/http";
 
 /**
@@ -31,7 +32,7 @@ export interface AgentProposal {
   ref: string;
   tool: string;
   risk: AgentRisk;
-  /** The sentence the shopkeeper confirms. Already localised by the backend's data. */
+  /** Canonical server-written summary; machine translation never changes the approval. */
   summary: string;
 }
 
@@ -51,6 +52,19 @@ export interface AgentTurn {
   trace: AgentTraceStep[];
   stoppedBecause: string;
   provider: { name: string; model: string; toolsOffered: number };
+  handoffs?: Array<{ id: string; title: string }>;
+  localization?: { requested: string; language: string; status: "native" | "translated" | "fallback"; originalReply?: string };
+}
+
+export interface AgentCapabilities {
+  businessType: string;
+  role: string;
+  tools: Array<{ name: string; kind: "read" | "write"; risk: AgentRisk; feature: string | null }>;
+  assistant: { title: { en: string; hi: string }; examples: Array<{ en: string; hi: string }> } | null;
+}
+
+export function getAgentCapabilities(signal?: AbortSignal): Promise<AgentCapabilities> {
+  return apiRequest<AgentCapabilities>("/ai/agent/capabilities", { signal, timeoutMs: 10_000 });
 }
 
 /**
@@ -64,6 +78,9 @@ export interface AgentClientAction {
   ref: string;
   action: "add_bill_lines" | string;
   payload: {
+    product?: ProductInput;
+    expense?: ExpenseInput;
+    supplier?: Partial<Supplier>;
     lines?: Array<{ productId: string; name: string; quantity: number; unit: string; rate: number; sellingUnitId?: string; conversionToBase?: number }>;
     problems?: Array<{ query: string; reason: string; candidates?: string[] }>;
   };
@@ -74,7 +91,7 @@ export interface AgentExecutionResult {
   allSucceeded: boolean;
   executionStatus: "executed" | "failed" | "uncertain";
   requiresReview: boolean;
-  results: Array<{ ref: string; ok: boolean; summary?: string; error?: string; outcomeUnknown?: boolean; warning?: string }>;
+  results: Array<{ ref: string; ok: boolean; summary?: string; error?: string; outcomeUnknown?: boolean; warning?: string; skipped?: boolean; target?: "client" | "server"; output?: { receipt?: string } }>;
   clientActions?: AgentClientAction[];
 }
 
@@ -99,13 +116,13 @@ export interface AgentCartLine {
 export async function sendAgentMessage(
   message: string,
   history: AgentChatMessage[],
-  init?: { signal?: AbortSignal; language?: "hi" | "en"; cart?: AgentCartLine[] },
+  init?: { signal?: AbortSignal; language?: string; cart?: AgentCartLine[] },
 ): Promise<AgentTurn> {
   return apiRequest<AgentTurn>("/ai/agent/chat", {
     method: "POST",
     body: JSON.stringify({
       message,
-      history: history.slice(-12),
+      history: history.slice(-12).map(({ role, content }) => ({ role, content: content.slice(0, 4000) })),
       ...(init?.language ? { language: init.language } : {}),
       // Sent only from the till, and only as context — "make it three kilo" has
       // no referent without it. The agent never writes back through this.
@@ -142,4 +159,23 @@ export async function rejectAgentPlan(planId: string): Promise<{ planId: string;
     method: "POST",
     body: JSON.stringify({ planId }),
   });
+}
+
+/** A correction cannot advance until the superseded plan is cancelled. */
+export async function supersedeAgentPlan(planId: string): Promise<void> {
+  const result = await rejectAgentPlan(planId);
+  if (result.status !== "rejected") {
+    throw new ApiClientError("The previous plan could not be cancelled", 409, { code: "AI_PLAN_ALREADY_RESOLVED" });
+  }
+}
+
+export interface AgentExecutionStatus {
+  planId: string;
+  status: "parsed" | "executing" | "executed" | "failed" | "uncertain" | "rejected";
+  results: AgentExecutionResult["results"];
+}
+
+/** Read-only recovery: asking again cannot repeat a financial or stock write. */
+export function getAgentPlanStatus(planId: string): Promise<AgentExecutionStatus> {
+  return apiRequest<AgentExecutionStatus>("/ai/agent/status", { method: "POST", body: JSON.stringify({ planId }), timeoutMs: 10_000 });
 }

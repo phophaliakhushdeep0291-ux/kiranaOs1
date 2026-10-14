@@ -45,13 +45,14 @@ function audioFileExtension(mimeType: string) {
 
 export async function requestAiAudioTranscription(
   audio: Blob,
-  init?: { signal?: AbortSignal; fileName?: string },
+  init?: { signal?: AbortSignal; fileName?: string; language?: string },
 ): Promise<AudioTranscriptionResult> {
   if (!(audio instanceof Blob) || audio.size === 0) throw new Error("Recorded audio is empty");
 
   const form = new FormData();
   const fileName = init?.fileName ?? `voice-command.${audioFileExtension(audio.type)}`;
   form.append("audio", audio, fileName);
+  if (init?.language) form.append("language", init.language);
 
   return apiRequest<AudioTranscriptionResult>("/ai/transcribe", {
     method: "POST",

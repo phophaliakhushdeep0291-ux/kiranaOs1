@@ -333,12 +333,13 @@ function chatInvoke(body) {
  * same one would upload nothing and be told, confusingly, that the audio was
  * empty. Each attempt opens its own and closes it again.
  */
-function transcriptionInvoke({ openAudio, prompt }) {
+function transcriptionInvoke({ openAudio, prompt, language }) {
   return async (candidate, options) => {
     const audio = openAudio();
     try {
       return await candidate.client.audio.transcriptions.create(
-        { file: audio, model: candidate.model, response_format: "json", prompt },
+        { file: audio, model: candidate.model, response_format: "json", ...(prompt ? { prompt } : {}),
+          ...(/^[a-z]{2}$/.test(language ?? "") ? { language } : {}) },
         options,
       );
     } finally {
@@ -488,13 +489,13 @@ export async function runChatCompletion({ purpose = "chat", body, deadline, cand
  *
  * `openAudio` must be a factory. See `transcriptionInvoke`.
  */
-export async function runTranscription({ purpose = "transcription", openAudio, prompt, deadline, candidates = null } = {}) {
+export async function runTranscription({ purpose = "transcription", openAudio, prompt, language, deadline, candidates = null } = {}) {
   const available = requireProviders(candidates ?? transcriptionProviders());
   const answered = await runWithFailover({
     purpose,
     deadline,
     available,
-    invoke: transcriptionInvoke({ openAudio, prompt }),
+    invoke: transcriptionInvoke({ openAudio, prompt, language }),
   });
   return { ...answered, transcript: String(answered.result?.text ?? "").trim() };
 }

@@ -1,4 +1,5 @@
-import { offlineDB } from "@/lib/offline/db";
+import { assertCurrentOfflineScope, offlineDB } from "@/lib/offline/db";
+import { getOfflineScope } from "@/lib/offline/context";
 import { ownerPinRequiredActionSchema, supplierCreationSchema } from "@/lib/validation";
 import { createLocalId, emitLocalDataChanged, removeCachedListItem, upsertCachedListItem } from "@/lib/offline/instant-cache";
 import { buildOutboxOperation, type EnqueueOutboxOperationInput } from "@/features/core/sync/outbox";
@@ -7,15 +8,26 @@ import type { Supplier } from "@/types/api";
 import { buildAuditLogOutboxInput, buildAuditLogRow, type WriteAuditLogInput } from "@/features/core/audit-logs/local-actions";
 
 const CACHE_KEY = "suppliers";
-async function commitSupplierMutation(supplier: Supplier, auditInput: WriteAuditLogInput, outboxInput: EnqueueOutboxOperationInput) {
+async function commitSupplierMutation(supplier: Supplier, auditInput: WriteAuditLogInput, outboxInput: EnqueueOutboxOperationInput, receiptKey?: string) {
   const audit = buildAuditLogRow(auditInput);
   const auditOutbox = buildOutboxOperation(buildAuditLogOutboxInput(audit));
   const operationOutbox = buildOutboxOperation(outboxInput);
-  await offlineDB.transaction(["suppliers", "local_audit_logs", "sync_outbox"], async (tx) => {
+  return offlineDB.transaction(["suppliers", "local_audit_logs", "sync_outbox", ...(receiptKey ? ["settings"] : [])], async (tx) => {
+    if (receiptKey) {
+      const previous = await offlineDB.getSetting<Supplier>(receiptKey);
+      if (previous) return previous;
+      const normalize = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+      const existing = await offlineDB.getAll<Supplier & { deleted_at?: string | null; deletedAt?: string | null }>("suppliers");
+      if (existing.some(row => !row.deleted_at && !row.deletedAt && (normalize(row.name) === normalize(supplier.name) || (supplier.mobile && row.mobile === supplier.mobile)))) {
+        throw new Error("A matching supplier already exists");
+      }
+    }
     await tx.put("suppliers", supplier);
     await tx.put("local_audit_logs", audit);
     await tx.enqueueOutboxOperation(auditOutbox);
     await tx.enqueueOutboxOperation(operationOutbox);
+    if (receiptKey) await tx.setSetting(receiptKey, supplier);
+    return supplier;
   });
 }
 
@@ -32,17 +44,21 @@ function toSupplier(data: Partial<Supplier>, id = createLocalId("supplier"), exi
   };
 }
 
-export async function createSupplierLocalFirst(data: Partial<Supplier>): Promise<Supplier> {
+export async function createSupplierLocalFirst(data: Partial<Supplier>, options?: { assistantActionId: string }): Promise<Supplier> {
+  const scope = getOfflineScope();
   const validated = parseOrThrow(supplierCreationSchema, { ...data, name: data.name ?? "" }) as unknown as Partial<Supplier>;
   const supplier = makeLocalEntity(toSupplier(validated), "supplier", "pending_sync");
-  await commitSupplierMutation(
+  assertCurrentOfflineScope(scope);
+  const saved = await commitSupplierMutation(
     supplier,
     { action: "supplier_created", entityType: "supplier", entityId: supplier.id, entityLabel: supplier.name, newValue: supplier, summary: `Supplier ${supplier.name} created` },
     { entity_type: "supplier", entity_id: supplier.id, operation_type: "CREATE_SUPPLIER", idempotency_key: `create-supplier:${supplier.id}`, payload: { localSupplierId: supplier.id, supplier: data } },
+    options ? `assistant:supplier:${options.assistantActionId}` : undefined,
   );
-  upsertCachedListItem<Supplier>(CACHE_KEY, supplier, 1000);
-  emitLocalDataChanged({ type: "supplier", id: supplier.id, action: "created" });
-  return supplier;
+  assertCurrentOfflineScope(scope);
+  upsertCachedListItem<Supplier>(CACHE_KEY, saved, 1000);
+  emitLocalDataChanged({ type: "supplier", id: saved.id, action: "created" });
+  return saved;
 }
 
 export async function updateSupplierLocalFirst(id: string, data: Partial<Supplier>): Promise<Supplier> {

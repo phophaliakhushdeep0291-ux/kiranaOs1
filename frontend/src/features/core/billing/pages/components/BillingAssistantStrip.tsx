@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Sparkles, X } from "lucide-react";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import {
@@ -11,6 +11,8 @@ import {
 } from "@/features/core/assistant/agent-client";
 import type { StagedBillLine } from "../../assistant-staging";
 import { submitAiFeedback, type AiFeedbackOutcome } from "@/lib/ai/ai-feedback-client";
+
+const FullAssistant = lazy(() => import("@/features/core/assistant/AssistantPanel"));
 
 /**
  * The assistant, inline on the till.
@@ -44,6 +46,7 @@ export function BillingAssistantStrip({
   onDismiss: () => void;
 }) {
   const { t, language } = useAppLanguage();
+  const [fullAssistant, setFullAssistant] = useState(false);
   const [turn, setTurn] = useState<AgentTurn | null>(null);
   const [busy, setBusy] = useState(true);
   const [note, setNote] = useState<string | null>(null);
@@ -82,8 +85,21 @@ export function BillingAssistantStrip({
     return () => { cancelled = true; };
   }, [command, language, t]);
 
+  const continueConversation = async () => {
+    if (applyBusy.current) return;
+    applyBusy.current = true;
+    setApplying(true);
+    try {
+      if (turn?.planId) await rejectAgentPlan(turn.planId);
+      setTurn(null);
+      setFullAssistant(true);
+    } catch { setNote(t("assistant.cancelFailed")); }
+    finally { applyBusy.current = false; setApplying(false); }
+  };
+  const billOnly = !!turn?.plan.length && turn.plan.every(item => item.tool === "add_items_to_bill");
+
   const apply = useCallback(async () => {
-    if (!turn?.planId || applyBusy.current) return;
+    if (!turn?.planId || applyBusy.current || !billOnly) return;
     applyBusy.current = true;
     setApplying(true);
     try {
@@ -109,7 +125,7 @@ export function BillingAssistantStrip({
       applyBusy.current = false;
       setApplying(false);
     }
-  }, [turn, onApplyLines, t]);
+  }, [turn, billOnly, onApplyLines, t]);
 
   const dismiss = useCallback(() => {
     if (applyBusy.current) return;
@@ -186,6 +202,8 @@ export function BillingAssistantStrip({
         </button>
       </div>
 
+      {fullAssistant ? <Suspense fallback={null}><FullAssistant open initialMessage={command} cart={cart} onApplyBillLines={onApplyLines} onClose={() => { setFullAssistant(false); onDismiss(); }} /></Suspense> : null}
+      {turn?.stoppedBecause === "clarification_requested" ? <button type="button" onClick={continueConversation} disabled={applying} className="mt-2 min-h-11 w-full rounded-xl bg-[var(--brand)] text-sm font-bold text-white">{t("assistant.continueTask")}</button> : null}
       {turn?.requiresConfirmation && turn.planId ? (
         <div className="mt-2 flex gap-2">
           <button
@@ -198,11 +216,11 @@ export function BillingAssistantStrip({
           </button>
           <button
             type="button"
-            onClick={apply}
+            onClick={billOnly ? apply : continueConversation}
             disabled={applying}
             className="min-h-11 flex-1 rounded-xl bg-[var(--brand)] py-2 text-[13px] font-black text-white disabled:opacity-50"
           >
-            {applying ? <Loader2 size={14} className="mx-auto animate-spin" /> : t("assistant.till.apply")}
+            {applying ? <Loader2 size={14} className="mx-auto animate-spin" /> : t(billOnly ? "assistant.till.apply" : "assistant.continueTask")}
           </button>
         </div>
       ) : null}

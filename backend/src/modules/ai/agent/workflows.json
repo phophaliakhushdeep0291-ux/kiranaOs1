@@ -1,0 +1,682 @@
+[
+  {
+    "id": "dashboard",
+    "path": "/dashboard",
+    "title": {
+      "en": "Dashboard",
+      "hi": "डैशबोर्ड"
+    }
+  },
+  {
+    "id": "billing",
+    "path": "/billing",
+    "title": {
+      "en": "Billing and checkout",
+      "hi": "बिल और भुगतान"
+    },
+    "changesData": true
+  },
+  {
+    "id": "import_order",
+    "path": "/import-order",
+    "title": {
+      "en": "Import an order",
+      "hi": "ऑर्डर इम्पोर्ट"
+    },
+    "changesData": true
+  },
+  {
+    "id": "returns",
+    "path": "/returns/new",
+    "title": {
+      "en": "Returns and refunds",
+      "hi": "वापसी और रिफंड"
+    },
+    "changesData": true
+  },
+  {
+    "id": "bills",
+    "path": "/bills",
+    "title": {
+      "en": "Bill history, receipts and cancellation",
+      "hi": "बिल इतिहास, रसीद और रद्द करना"
+    }
+  },
+  {
+    "id": "orders_received",
+    "path": "/orders-received",
+    "title": {
+      "en": "Received orders",
+      "hi": "मिले हुए ऑर्डर"
+    }
+  },
+  {
+    "id": "sales_overview",
+    "path": "/sales-overview",
+    "title": {
+      "en": "Sales overview",
+      "hi": "बिक्री विवरण"
+    }
+  },
+  {
+    "id": "products",
+    "path": "/products",
+    "title": {
+      "en": "Products and product details",
+      "hi": "सामान और उसकी जानकारी"
+    }
+  },
+  {
+    "id": "categories",
+    "path": "/categories",
+    "title": {
+      "en": "Product categories",
+      "hi": "सामान की श्रेणियाँ"
+    }
+  },
+  {
+    "id": "customers",
+    "path": "/customers",
+    "title": {
+      "en": "Customers and accounts",
+      "hi": "ग्राहक और खाते"
+    }
+  },
+  {
+    "id": "udhar",
+    "path": "/udhar",
+    "title": {
+      "en": "Credit balances and repayments",
+      "hi": "उधार और भुगतान"
+    }
+  },
+  {
+    "id": "stock_in",
+    "path": "/inventory/stock-in",
+    "title": {
+      "en": "Receive stock",
+      "hi": "माल प्राप्ति"
+    },
+    "changesData": true
+  },
+  {
+    "id": "stock_out",
+    "path": "/inventory/stock-out",
+    "title": {
+      "en": "Stock removal and wastage",
+      "hi": "स्टॉक निकासी और नुकसान"
+    },
+    "changesData": true
+  },
+  {
+    "id": "stock_adjustment",
+    "path": "/inventory/adjustments",
+    "title": {
+      "en": "Stock corrections",
+      "hi": "स्टॉक सुधार"
+    },
+    "changesData": true
+  },
+  {
+    "id": "stock_transfers",
+    "path": "/inventory/stock-transfers",
+    "title": {
+      "en": "Transfer stock between branches",
+      "hi": "शाखाओं में स्टॉक ट्रांसफर"
+    },
+    "feature": "multi_store",
+    "changesData": true
+  },
+  {
+    "id": "stock_counts",
+    "path": "/inventory/stock-counts",
+    "title": {
+      "en": "Physical stock counts",
+      "hi": "स्टॉक की गिनती"
+    },
+    "feature": "stock_adjustment",
+    "changesData": true
+  },
+  {
+    "id": "batches",
+    "path": "/inventory/batches",
+    "title": {
+      "en": "Batches and expiry",
+      "hi": "बैच और समाप्ति"
+    },
+    "feature": "batch_expiry",
+    "capability": "BATCH_TRACKING"
+  },
+  {
+    "id": "inventory",
+    "path": "/inventory",
+    "title": {
+      "en": "Inventory",
+      "hi": "स्टॉक"
+    }
+  },
+  {
+    "id": "purchases",
+    "path": "/purchase-bills",
+    "title": {
+      "en": "Purchase bills and receiving",
+      "hi": "खरीद बिल और माल प्राप्ति"
+    },
+    "changesData": true
+  },
+  {
+    "id": "suppliers",
+    "path": "/suppliers",
+    "title": {
+      "en": "Suppliers and settlements",
+      "hi": "सप्लायर और निपटान"
+    },
+    "changesData": true
+  },
+  {
+    "id": "expenses",
+    "path": "/expenses",
+    "title": {
+      "en": "Expenses",
+      "hi": "खर्च"
+    },
+    "changesData": true
+  },
+  {
+    "id": "offers",
+    "path": "/offers",
+    "title": {
+      "en": "Offers and discounts",
+      "hi": "ऑफर और छूट"
+    },
+    "feature": "dynamic_customer_pricing"
+  },
+  {
+    "id": "loyalty",
+    "path": "/loyalty",
+    "title": {
+      "en": "Loyalty programme",
+      "hi": "लॉयल्टी प्रोग्राम"
+    },
+    "feature": "loyalty_program"
+  },
+  {
+    "id": "gift_cards",
+    "path": "/gift-cards",
+    "title": {
+      "en": "Gift cards",
+      "hi": "गिफ्ट कार्ड"
+    },
+    "feature": "loyalty_program"
+  },
+  {
+    "id": "reports",
+    "path": "/reports",
+    "title": {
+      "en": "Business reports and exports",
+      "hi": "व्यवसाय रिपोर्ट और एक्सपोर्ट"
+    }
+  },
+  {
+    "id": "channel_settlements",
+    "path": "/channel-settlements",
+    "title": {
+      "en": "Channel settlements",
+      "hi": "चैनल निपटान"
+    },
+    "feature": "channel_settlement",
+    "permission": "view_profit"
+  },
+  {
+    "id": "accounting",
+    "path": "/accounting",
+    "title": {
+      "en": "Accounting and Tally",
+      "hi": "लेखा और Tally"
+    },
+    "permission": "view_profit"
+  },
+  {
+    "id": "money_statement",
+    "path": "/money-statement",
+    "title": {
+      "en": "Money statement",
+      "hi": "रकम का विवरण"
+    }
+  },
+  {
+    "id": "daily_closing",
+    "path": "/daily-closing",
+    "title": {
+      "en": "Daily closing",
+      "hi": "दिन का हिसाब"
+    }
+  },
+  {
+    "id": "setup",
+    "path": "/settings/setup",
+    "title": {
+      "en": "Shop setup",
+      "hi": "दुकान सेटअप"
+    },
+    "changesData": true
+  },
+  {
+    "id": "settings",
+    "path": "/settings",
+    "title": {
+      "en": "Settings",
+      "hi": "सेटिंग"
+    }
+  },
+  {
+    "id": "store_profile",
+    "path": "/settings/store-profile",
+    "title": {
+      "en": "Store profile and locale",
+      "hi": "दुकान की जानकारी और भाषा"
+    },
+    "changesData": true
+  },
+  {
+    "id": "modules",
+    "path": "/settings/modules",
+    "title": {
+      "en": "Enabled modules",
+      "hi": "चालू मॉड्यूल"
+    },
+    "changesData": true
+  },
+  {
+    "id": "printer",
+    "path": "/settings/printer",
+    "title": {
+      "en": "Printer setup",
+      "hi": "प्रिंटर सेटअप"
+    }
+  },
+  {
+    "id": "billing_settings",
+    "path": "/settings/billing",
+    "title": {
+      "en": "Billing settings",
+      "hi": "बिल सेटिंग"
+    },
+    "changesData": true
+  },
+  {
+    "id": "staff_settings",
+    "path": "/settings/staff",
+    "title": {
+      "en": "Staff settings",
+      "hi": "कर्मचारी सेटिंग"
+    },
+    "feature": "staff_login",
+    "permission": "manage_staff"
+  },
+  {
+    "id": "device_settings",
+    "path": "/settings/devices",
+    "title": {
+      "en": "Device settings",
+      "hi": "डिवाइस सेटिंग"
+    }
+  },
+  {
+    "id": "sync_settings",
+    "path": "/settings/sync",
+    "title": {
+      "en": "Sync settings",
+      "hi": "सिंक सेटिंग"
+    }
+  },
+  {
+    "id": "uae_pilot",
+    "path": "/settings/uae-pilot",
+    "title": {
+      "en": "UAE pilot setup",
+      "hi": "UAE पायलट सेटअप"
+    }
+  },
+  {
+    "id": "taxes",
+    "path": "/settings/taxes",
+    "title": {
+      "en": "Tax settings",
+      "hi": "टैक्स सेटिंग"
+    },
+    "changesData": true
+  },
+  {
+    "id": "security",
+    "path": "/settings/security",
+    "title": {
+      "en": "Security and PIN settings",
+      "hi": "सुरक्षा और PIN सेटिंग"
+    }
+  },
+  {
+    "id": "notifications",
+    "path": "/settings/notifications",
+    "title": {
+      "en": "Notifications",
+      "hi": "सूचनाएँ"
+    },
+    "changesData": true
+  },
+  {
+    "id": "integrations",
+    "path": "/settings/integrations",
+    "title": {
+      "en": "Integrations",
+      "hi": "इंटीग्रेशन"
+    },
+    "feature": "api_webhook_later",
+    "permission": "change_settings"
+  },
+  {
+    "id": "advanced",
+    "path": "/settings/advanced",
+    "title": {
+      "en": "Backup, export and advanced settings",
+      "hi": "बैकअप, एक्सपोर्ट और उन्नत सेटिंग"
+    },
+    "changesData": true
+  },
+  {
+    "id": "plans",
+    "path": "/plans",
+    "title": {
+      "en": "Subscription plans",
+      "hi": "सदस्यता प्लान"
+    }
+  },
+  {
+    "id": "subscription",
+    "path": "/subscription",
+    "title": {
+      "en": "Subscription management",
+      "hi": "सदस्यता प्रबंधन"
+    }
+  },
+  {
+    "id": "devices",
+    "path": "/devices",
+    "title": {
+      "en": "Connected devices",
+      "hi": "जुड़े हुए डिवाइस"
+    }
+  },
+  {
+    "id": "help",
+    "path": "/help",
+    "title": {
+      "en": "Help and support",
+      "hi": "मदद और सहायता"
+    }
+  },
+  {
+    "id": "activity",
+    "path": "/activity-insights",
+    "title": {
+      "en": "Activity insights",
+      "hi": "गतिविधि विवरण"
+    },
+    "permission": "view_profit"
+  },
+  {
+    "id": "staff",
+    "path": "/staff",
+    "title": {
+      "en": "Staff management",
+      "hi": "कर्मचारी प्रबंधन"
+    },
+    "feature": "staff_login",
+    "permission": "manage_staff"
+  },
+  {
+    "id": "audit",
+    "path": "/audit-logs",
+    "title": {
+      "en": "Audit history",
+      "hi": "ऑडिट इतिहास"
+    },
+    "feature": "audit_logs"
+  },
+  {
+    "id": "assurance_findings",
+    "path": "/assurance/findings",
+    "title": {
+      "en": "Assurance findings",
+      "hi": "जाँच के निष्कर्ष"
+    }
+  },
+  {
+    "id": "assurance_evidence",
+    "path": "/assurance/evidence",
+    "title": {
+      "en": "Assurance evidence",
+      "hi": "जाँच के प्रमाण"
+    }
+  },
+  {
+    "id": "assurance_review",
+    "path": "/assurance/review-queue",
+    "title": {
+      "en": "Assurance review queue",
+      "hi": "जाँच समीक्षा सूची"
+    }
+  },
+  {
+    "id": "assurance_runs",
+    "path": "/assurance/runs",
+    "title": {
+      "en": "Assurance runs",
+      "hi": "जाँच कार्य"
+    }
+  },
+  {
+    "id": "assurance_rules",
+    "path": "/assurance/rules",
+    "title": {
+      "en": "Assurance rules",
+      "hi": "जाँच नियम"
+    }
+  },
+  {
+    "id": "assurance_report",
+    "path": "/assurance/report",
+    "title": {
+      "en": "Assurance report",
+      "hi": "जाँच रिपोर्ट"
+    }
+  },
+  {
+    "id": "assurance_cases",
+    "path": "/assurance/cases",
+    "title": {
+      "en": "Assurance cases",
+      "hi": "जाँच मामले"
+    }
+  },
+  {
+    "id": "assurance",
+    "path": "/assurance",
+    "title": {
+      "en": "Assurance dashboard",
+      "hi": "जाँच डैशबोर्ड"
+    }
+  },
+  {
+    "id": "recycle_bin",
+    "path": "/recycle-bin",
+    "title": {
+      "en": "Restore deleted records",
+      "hi": "हटाए रिकॉर्ड वापस लाना"
+    },
+    "changesData": true
+  },
+  {
+    "id": "smart_tools",
+    "path": "/smart-tools",
+    "title": {
+      "en": "Smart tools",
+      "hi": "स्मार्ट टूल"
+    }
+  },
+  {
+    "id": "recovery",
+    "path": "/recovery-mode",
+    "title": {
+      "en": "Recovery mode",
+      "hi": "रिकवरी मोड"
+    }
+  },
+  {
+    "id": "sync_status",
+    "path": "/sync-status",
+    "title": {
+      "en": "Pending sync and conflicts",
+      "hi": "लंबित सिंक और टकराव"
+    }
+  },
+  {
+    "id": "tables",
+    "path": "/tables",
+    "title": {
+      "en": "Restaurant tables",
+      "hi": "रेस्टोरेंट टेबल"
+    },
+    "feature": "restaurant_tables",
+    "businessType": "restaurant"
+  },
+  {
+    "id": "kitchen",
+    "path": "/kitchen",
+    "title": {
+      "en": "Kitchen tickets and status",
+      "hi": "किचन टिकट और स्थिति"
+    },
+    "feature": "restaurant_kot",
+    "businessType": "restaurant"
+  },
+  {
+    "id": "menu",
+    "path": "/menu",
+    "title": {
+      "en": "Restaurant menu",
+      "hi": "रेस्टोरेंट मेन्यू"
+    },
+    "feature": "restaurant_menu",
+    "businessType": "restaurant"
+  },
+  {
+    "id": "kitchen_stock",
+    "path": "/kitchen-stock",
+    "title": {
+      "en": "Recipes and kitchen stock",
+      "hi": "रेसिपी और किचन स्टॉक"
+    },
+    "feature": "restaurant_recipe_inventory",
+    "businessType": "restaurant"
+  },
+  {
+    "id": "reservations",
+    "path": "/reservations",
+    "title": {
+      "en": "Table reservations",
+      "hi": "टेबल बुकिंग"
+    },
+    "feature": "restaurant_tables",
+    "businessType": "restaurant"
+  },
+  {
+    "id": "prescriptions",
+    "path": "/prescriptions",
+    "title": {
+      "en": "Prescriptions and dispensing",
+      "hi": "पर्चे और दवा देना"
+    },
+    "feature": "prescription_tracking",
+    "businessType": "pharmacy"
+  },
+  {
+    "id": "rentals",
+    "path": "/rentals",
+    "title": {
+      "en": "Clothing rentals",
+      "hi": "कपड़ों का किराया"
+    },
+    "feature": "clothing_rentals",
+    "businessType": "clothing"
+  },
+  {
+    "id": "serial_units",
+    "path": "/serial-units",
+    "title": {
+      "en": "Serial numbers and warranties",
+      "hi": "सीरियल नंबर और वारंटी"
+    },
+    "feature": "serial_imei_tracking",
+    "businessType": "electronics"
+  },
+  {
+    "id": "fitment",
+    "path": "/fitment",
+    "title": {
+      "en": "Vehicle fitment",
+      "hi": "वाहन फिटमेंट"
+    },
+    "feature": "vehicle_fitment",
+    "businessType": "auto_parts"
+  },
+  {
+    "id": "size_runs",
+    "path": "/size-runs",
+    "title": {
+      "en": "Footwear sizes",
+      "hi": "जूतों की साइज़"
+    },
+    "feature": "footwear_size_runs",
+    "businessType": "footwear"
+  },
+  {
+    "id": "book_lists",
+    "path": "/book-lists",
+    "title": {
+      "en": "School book lists",
+      "hi": "स्कूल किताब सूची"
+    },
+    "feature": "academic_book_lists",
+    "businessType": "stationery"
+  },
+  {
+    "id": "furniture_orders",
+    "path": "/orders",
+    "title": {
+      "en": "Furniture orders",
+      "hi": "फर्नीचर ऑर्डर"
+    },
+    "feature": "furniture_order_book",
+    "businessType": "furniture"
+  },
+  {
+    "id": "testers",
+    "path": "/testers",
+    "title": {
+      "en": "Cosmetics testers",
+      "hi": "कॉस्मेटिक टेस्टर"
+    },
+    "feature": "tester_stock",
+    "businessType": "cosmetics"
+  },
+  {
+    "id": "manufacturing",
+    "path": "/manufacturing",
+    "title": {
+      "en": "Manufacturing operations",
+      "hi": "उत्पादन कार्य"
+    },
+    "businessType": "manufacturing"
+  }
+]

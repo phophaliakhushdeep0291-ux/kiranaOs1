@@ -1,3 +1,4 @@
+import { assistantLanguageSchema } from "./ai.schema.js";
 import * as svc from "./ai.service.js";
 import { AppError } from "../../middleware/error.js";
 import { getUploadedAudioFile, removeUploadedAudioFile } from "./ai.upload.js";
@@ -71,7 +72,10 @@ export async function transcribe(req, res, next) {
   if (!file) return next(new AppError("Audio file is required", 400, "AUDIO_FILE_REQUIRED"));
 
   try {
-    const data = await svc.transcribeAudio(file);
+    const parsed = assistantLanguageSchema.safeParse(req.body?.language ?? "auto");
+    if (!parsed.success) throw new AppError("Choose a valid audio language", 400, "AI_LANGUAGE_INVALID");
+    const language = parsed.data;
+    const data = await svc.transcribeAudio(file, { language });
     res.json({ success: true, data });
   } catch (err) {
     if (sendAiProviderError(err, res)) return;

@@ -1946,7 +1946,7 @@ if (exists("src/modules/ai/ai.service.js") && exists("src/modules/ai/ai.controll
       errors.push(`${file} constructs its own OpenAI client; route the call through provider-gateway.js instead`);
     }
   }
-  for (const snippet of ["getUploadedAudioFile", "removeUploadedAudioFile", "finally", "svc.transcribeAudio(file)"]) {
+  for (const snippet of ["getUploadedAudioFile", "removeUploadedAudioFile", "finally", "svc.transcribeAudio(file, { language })", "assistantLanguageSchema.safeParse"]) {
     if (!aiController.includes(snippet)) errors.push(`ai.controller.js missing safe transcription lifecycle behavior: ${snippet}`);
   }
   for (const snippet of ["25 * 1024 * 1024", "removeUploadedAudioFile", "fs.promises.unlink"]) {

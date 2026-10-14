@@ -1,7 +1,11 @@
 import { formatDateInTimeZone } from "../../../utils/dates.js";
+import { renderBusinessHelp, renderClarification } from "./business-help.js";
+import { renderTaskCapabilities, renderWorkflowHelp } from "./workflow-directory.js";
+
+import { replyText } from "./reply-localization.js";
 
 const MAX_ROWS = 5;
-const text = (en, hi, language) => language === "en" ? en : hi;
+const text = replyText;
 const unavailable = (language) => text("unavailable", "उपलब्ध नहीं", language);
 const label = (value) => JSON.stringify(String(value ?? "").replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, " ").slice(0, 120));
 const scalar = (value) => {
@@ -41,7 +45,7 @@ function fields(row, specs, language) {
 
 function rows(values, render, language, total = values.length) {
   const shown = values.slice(0, MAX_ROWS).map(render).filter(Boolean);
-  if (total > shown.length) shown.push(text(`Showing ${shown.length} of ${total} records.`, `${total} में से ${shown.length} रिकॉर्ड दिखाए गए हैं।`, language));
+  if (total > shown.length) shown.push(text("Showing {shown} of {total} records.", "{total} में से {shown} रिकॉर्ड दिखाए गए हैं।", language, { shown: shown.length, total }));
   return shown;
 }
 
@@ -109,6 +113,51 @@ const WORKFLOW_TITLES = {
 /** A human-readable snapshot composed exclusively from a successful tool result. */
 export function renderToolEvidence({ tool, result }, language = "hi", timeZone = "Asia/Kolkata") {
   if (!result || typeof result !== "object" || result.error || result.ok === false || result.success === false) return null;
+  if (tool === "get_app_help") return renderBusinessHelp(result, language);
+  if (tool === "request_clarification") return renderClarification(result, language);
+  if (tool === "get_workflow") return renderWorkflowHelp(result, language);
+  if (tool === "get_available_tasks") return renderTaskCapabilities(result, language);
+  if (["list_purchase_orders", "get_purchase_order", "get_reorder_suggestions"].includes(tool)) {
+    const money = value => String(Number(value).toFixed(2));
+    const heading = text("Purchasing at this counter branch (amounts in shop currency)", "इस काउंटर शाखा की खरीद (दुकान की मुद्रा में रकम)", language);
+    if (tool === "get_reorder_suggestions") {
+      return [heading, text("Suggestions only; no order has been placed.", "केवल सुझाव हैं; कोई ऑर्डर नहीं दिया गया है।", language),
+        ...rows(result.suggestions ?? [], row => text("{product}: stock {stock} {unit}; suggested order {quantity} {unit}; expected rate {rate}/{rateUnit}",
+          "{product}: स्टॉक {stock} {unit}; सुझाया ऑर्डर {quantity} {unit}; अनुमानित रेट {rate}/{rateUnit}", language,
+          { product: label(row.productName), stock: scalar(row.stockBaseQty), unit: row.baseUnit, quantity: scalar(row.recommendedOrderBaseQty), rate: money(row.expectedRate), rateUnit: row.rateUnit }), language, result.total)].join("\n");
+    }
+    const orderLine = row => text("{order}; supplier {supplier}; branch {branch}; status {status}; expected total {total}",
+      "{order}; सप्लायर {supplier}; शाखा {branch}; स्थिति {status}; अनुमानित कुल {total}", language,
+      { order: label(row.orderNumber), supplier: label(row.supplierName), branch: label(row.locationName), status: row.status, total: money(row.expectedTotal) });
+    if (tool === "list_purchase_orders") return [heading, text("Up to {limit} recent orders.", "हाल के अधिकतम {limit} ऑर्डर।", language, { limit: result.limit }), ...rows(result.orders ?? [], orderLine, language)].join("\n");
+    return [heading, orderLine(result), ...rows(result.items ?? [], row => text("{product}: ordered {ordered}, received {received} {unit}; rate {rate}/{rateUnit}",
+      "{product}: ऑर्डर {ordered}, प्राप्त {received} {unit}; रेट {rate}/{rateUnit}", language,
+      { product: label(row.productName), ordered: scalar(row.orderedBaseQty), received: scalar(row.receivedBaseQty), unit: row.baseUnit, rate: money(row.expectedRate), rateUnit: row.rateUnit }), language)].join("\n");
+  }
+  if (tool === "list_supplier_dues") {
+    const purchases = result.purchases ?? [];
+    return [text("Supplier dues at {branch} (amounts in shop currency)", "{branch} में सप्लायर बकाया (दुकान की मुद्रा में रकम)", language, { branch: label(result.locationName) }),
+      ...(purchases.length ? rows(purchases, row => text("{supplier}; invoice {invoice}; product {product}; total {amount}; paid {paid}; due {due}",
+        "{supplier}; इनवॉइस {invoice}; सामान {product}; कुल {amount}; भुगतान {paid}; बकाया {due}", language,
+        { supplier: label(row.supplierName), invoice: label(row.invoiceNumber || "—"), product: label(row.productName), amount: scalar(row.amount), paid: scalar(row.paid), due: scalar(row.due) }), language, result.count)
+        : [text("No unpaid purchase rows returned.", "कोई बकाया खरीद पंक्ति नहीं मिली।", language)])].join("\n");
+  }
+  if (tool === "list_store_locations") return [text("Active branches", "सक्रिय शाखाएँ", language), ...rows(result.locations ?? [], row => `${label(row.name)}; ${label(row.code)}`, language, result.count)].join("\n");
+  if (tool === "get_transfer_stock") return [text("Available stock at {branch}", "{branch} में उपलब्ध स्टॉक", language, { branch: label(result.locationName) }),
+    ...rows(result.products ?? [], row => `${label(row.name)}: ${scalar(row.stockBaseQty)} ${label(row.baseUnit)}`, language)].join("\n");
+  if (tool === "list_stock_transfers" || tool === "get_stock_transfer") {
+    const transferLine = row => text("{reference}: {from} → {to}; status {status}", "{reference}: {from} → {to}; स्थिति {status}", language,
+      { reference: label(row.referenceNo), from: label(row.fromName), to: label(row.toName), status: label(row.status) });
+    if (tool === "list_stock_transfers") return [text("Recent transfers at this counter (up to 25 from the latest 100 accessible transfers)", "इस काउंटर के हाल के ट्रांसफर (पिछले 100 सुलभ ट्रांसफर में से अधिकतम 25)", language), ...rows(result.transfers ?? [], transferLine, language)].join("\n");
+    return [transferLine(result), ...rows(result.items ?? [], row => text("{product}: sent {sent}; received {received}; remaining {remaining} {unit}",
+      "{product}: भेजा {sent}; प्राप्त {received}; बाकी {remaining} {unit}", language,
+      { product: label(row.productName), sent: scalar(row.sent), received: scalar(row.received), remaining: scalar(row.remaining), unit: label(row.baseUnit) }), language)].join("\n");
+  }
+  if (tool === "find_supplier") {
+    const suppliers = Array.isArray(result.suppliers) ? result.suppliers : [];
+    if (!suppliers.length) return text("No matching suppliers returned.", "कोई मिलता सप्लायर नहीं मिला।", language);
+    return [text("Suppliers", "सप्लायर", language), ...rows(suppliers, row => `${label(row.name)}${row.mobile ? `; ${label(row.mobile)}` : ""}`, language, result.matchCount)].join("\n");
+  }
   let title;
   let lines = [];
   const customer = (row) => `${label(row.name)}; ${text("outstanding credit", "बकाया उधार", language)}: ${evidenceMoney(row.udharAmountPaise ?? row.udharBalance ?? row.udharAmount, row.udharAmountPaise != null) ?? unavailable(language)}${row.udharBalanceNeedsRepair ? `; ${text("balance needs review", "बैलेंस की जाँच ज़रूरी", language)}` : ""}`;

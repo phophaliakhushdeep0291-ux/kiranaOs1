@@ -1,3 +1,6 @@
+import { assertLocationCapability } from "../../../stores/location-access.service.js";
+import { resolveOperationalLocation } from "../../../stores/location-context.service.js";
+import { correctionSchema } from "../../../inventory/inventory.schema.js";
 /**
  * What the agent may propose. Nothing here runs on the model's say-so.
  *
@@ -15,6 +18,7 @@
  * Handlers call the same services the routes call, so the stock ledger, audit
  * rows and sync events are written exactly as a manual edit would write them.
  */
+import { CREATE_PRODUCT_TOOL } from "./product-create.js";
 import { defineTool, TOOL_RISK } from "../tool-contract.js";
 import { createCustomer, recordUdharPayment } from "../../../customers/customers.service.js";
 import { updateProduct, getProduct, listProducts, legacySellingUnit } from "../../../products/products.service.js";
@@ -107,6 +111,7 @@ function carryUnit(unit) {
 }
 
 export const CORE_WRITE_TOOLS = [
+  CREATE_PRODUCT_TOOL,
   defineTool({
     name: "set_pack_size",
     keywords: [
@@ -378,6 +383,7 @@ export const CORE_WRITE_TOOLS = [
 
   defineTool({
     name: "correct_stock",
+    feature: "stock_adjustment",
     keywords: ["count", "counted", "correct", "correction", "adjust", "stock set", "ginti", "स्टॉक", "गिनती", "सुधार", "ठीक", "सही"],
     kind: "write",
     risk: TOOL_RISK.OWNER_PIN,
@@ -389,20 +395,21 @@ export const CORE_WRITE_TOOLS = [
       properties: {
         productId: { type: "string", description: "Product id from search_products." },
         newStock: {
-          type: "number",
+          type: "number", minimum: 0, maximum: 1000000000,
           description:
-            "The counted quantity in the product's base unit. Negative is permitted: some shops deliberately sell past zero and reconcile later.",
+            "The nonnegative counted quantity in the product's base unit at the current counter branch.",
         },
         note: { type: "string", description: "Why the correction is being made." },
       },
       required: ["productId", "newStock"],
     },
     summarize: ({ productId, newStock }, ctx) =>
-      `Correct ${ctx.labelFor?.(productId) ?? "this product"}'s counted stock to ${newStock}`,
-    handler: async ({ productId, newStock, note }, ctx) => correctStock(
-      ctx.shopId,
-      { productId, newStockBaseQty: newStock, note: note ?? "Corrected via assistant" },
-      actorOf(ctx),
-    ),
+      `Correct ${ctx.labelFor?.(productId) ?? "this product"}'s counted stock to ${newStock} base units at the current counter branch`,
+    handler: async ({ productId, newStock, note }, ctx) => {
+      const location = await resolveOperationalLocation(ctx.shopId, ctx.locationId);
+      await assertLocationCapability({ ...ctx, locationId: location.id, capability: "inventory" });
+      const data = correctionSchema.omit({ idempotencyKey: true }).parse({ productId, newStockBaseQty: newStock, locationId: location.id, note: note ?? "Corrected via assistant" });
+      return correctStock(ctx.shopId, data, { ...actorOf(ctx), idempotencyKey: ctx.actionKey });
+    },
   }),
 ];

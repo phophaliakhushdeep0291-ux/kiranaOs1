@@ -97,20 +97,20 @@ function parseMultipartAudio(buffer, boundary) {
   const marker = `--${boundary}`;
   const parts = body.split(marker);
 
+  let audio = null;
+  let language;
   for (const rawPart of parts) {
     if (!rawPart || rawPart === "--\r\n" || rawPart === "--") continue;
 
     let part = rawPart;
     if (part.startsWith("\r\n")) part = part.slice(2);
     if (part.endsWith("\r\n")) part = part.slice(0, -2);
-    if (part.endsWith("--")) part = part.slice(0, -2);
 
     const headerEnd = part.indexOf("\r\n\r\n");
     if (headerEnd === -1) continue;
 
     const headerText = part.slice(0, headerEnd);
-    let contentText = part.slice(headerEnd + 4);
-    if (contentText.endsWith("\r\n")) contentText = contentText.slice(0, -2);
+    const contentText = part.slice(headerEnd + 4);
 
     const headers = {};
     for (const line of headerText.split("\r\n")) {
@@ -124,9 +124,14 @@ function parseMultipartAudio(buffer, boundary) {
     const disposition = parseContentDisposition(headers["content-disposition"]);
     const fieldname = disposition.name;
 
+    if (fieldname === "language" && !disposition.filename) {
+      if (language !== undefined || contentText.length > 35) throw Object.assign(new Error("Invalid audio language"), { status: 400, code: "AI_LANGUAGE_INVALID" });
+      language = contentText;
+      continue;
+    }
     if (!["audio", "file"].includes(fieldname)) continue;
-
-    return {
+    if (audio) throw Object.assign(new Error("Only one audio file is allowed"), { status: 400 });
+    audio = {
       buffer: Buffer.from(contentText, "latin1"),
       originalname: disposition.filename || "audio.webm",
       mimetype: headers["content-type"] || "application/octet-stream",
@@ -134,7 +139,7 @@ function parseMultipartAudio(buffer, boundary) {
     };
   }
 
-  return null;
+  return audio ? { ...audio, ...(language !== undefined ? { language } : {}) } : null;
 }
 
 function getJsonBodyAudio(req) {
@@ -179,6 +184,7 @@ export async function uploadAiAudio(req, _res, next) {
         throw new Error("Audio file is required. Upload multipart/form-data field named audio or file.");
       }
 
+      req.body = { ...(filePart.language !== undefined ? { language: filePart.language } : {}) };
       req.aiAudioFile = await writeTempAudioFile(filePart);
       return next();
     }

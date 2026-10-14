@@ -112,7 +112,7 @@ const AssuranceCasesPage = lazy(cloudPage(() => import("@/features/core/assuranc
 const RecycleBinPage = lazy(() => import("@/features/core/recycle-bin/pages/RecycleBinPage"));
 const SmartToolsPage = lazy(() => import("@/features/core/innovation/pages/SmartToolsPage"));
 const RecoveryModePage = lazy(() => import("@/features/core/recovery/pages/RecoveryModePage"));
-const AppLayout = lazy(() => import("@/components/layout").then((module) => ({ default: module.Layout })));
+const AppLayout = lazy(() => import("@/components/layout/Layout").then((module) => ({ default: module.Layout })));
 
 /**
  * The trade-specific screens, declared here alongside every other route import

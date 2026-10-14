@@ -81,7 +81,7 @@ export function buildNavigation(verticalItems = [], sharedItems = SHARED_NAVIGAT
 const KNOWN_CAPABILITIES = new Set(CAPABILITIES);
 const KNOWN_NAVIGATION_KEYS = new Set(NAVIGATION_KEYS);
 
-export function defineBusinessProfile({ businessType, engine, capabilities, navigation }) {
+export function defineBusinessProfile({ businessType, engine, capabilities, navigation, assistant }) {
   if (!BUSINESS_TYPES.includes(businessType)) throw new Error(`Unknown business type: ${businessType}`);
   if (!isEngineId(engine)) throw new Error(`${businessType} uses unknown engine: ${engine}`);
 
@@ -94,6 +94,7 @@ export function defineBusinessProfile({ businessType, engine, capabilities, navi
   return Object.freeze({
     businessType,
     engine,
+    ...(assistant ? { assistant: Object.freeze(assistant) } : {}),
     capabilities: Object.freeze([...capabilities]),
     /** Trade-specific entries only — what this vertical adds to the spine. */
     verticalNavigation: Object.freeze([...navigation]),

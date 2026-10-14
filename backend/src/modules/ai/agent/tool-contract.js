@@ -114,7 +114,9 @@ export function defineTool(definition) {
     parameters = { type: "object", properties: {}, additionalProperties: false },
     roles = null,
     feature = null,
+    excludedBusinessTypes = [],
     summarize = null,
+    prepare = null,
     handler,
   } = definition ?? {};
 
@@ -132,8 +134,14 @@ export function defineTool(definition) {
   if (roles !== null && (!Array.isArray(roles) || roles.length === 0)) {
     throw new Error(`Tool ${name}: roles must be null (any role) or a non-empty array`);
   }
+  if (!Array.isArray(excludedBusinessTypes) || excludedBusinessTypes.some(value => typeof value !== "string" || !value)) {
+    throw new Error(`Tool ${name}: excludedBusinessTypes must contain business type names`);
+  }
   if (kind === "write" && typeof summarize !== "function") {
     throw new Error(`Tool ${name}: a write tool must supply summarize() — the shopkeeper confirms a sentence, not JSON`);
+  }
+  if (prepare !== null && (kind !== "write" || typeof prepare !== "function")) {
+    throw new Error(`Tool ${name}: prepare must be a read-only write-proposal builder`);
   }
 
   assertRiskMatchesKind(name, kind, risk);
@@ -145,7 +153,8 @@ export function defineTool(definition) {
   }
 
   return Object.freeze({
-    name, kind, risk, target, description, parameters, roles, feature, summarize, handler,
+    name, kind, risk, target, description, parameters, roles, feature, summarize, prepare, handler,
+    excludedBusinessTypes: Object.freeze([...excludedBusinessTypes]),
     keywords: Object.freeze(keywords.map((word) => String(word).toLowerCase())),
     always,
   });
@@ -168,6 +177,7 @@ export function toProviderTool(tool) {
  * shopkeeper does not have.
  */
 export function toolAvailableTo(tool, ctx) {
+  if (tool.excludedBusinessTypes?.includes(ctx.businessType)) return false;
   if (tool.roles && !tool.roles.includes(ctx.role)) return false;
   // A view-only login may ask, never propose: its confirm call would be refused
   // anyway, and a model offered a write it cannot land keeps narrating it.

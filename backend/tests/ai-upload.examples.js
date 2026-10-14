@@ -28,6 +28,14 @@ assert.equal(file.originalname, "voice.webm");
 assert.equal(file.mimetype, "audio/webm");
 assert.equal(file.buffer.toString(), "fake-audio-bytes");
 
+for (const before of [true, false]) {
+  const languagePart = `--${boundary}\r\nContent-Disposition: form-data; name="language"\r\n\r\nar-AE\r\n`;
+  const audioPart = `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="voice.webm"\r\nContent-Type: audio/webm\r\n\r\naudio-bytes\r\n\r\n`;
+  const multipart = Buffer.from((before ? languagePart + audioPart : audioPart + languagePart) + `--${boundary}--\r\n`, "latin1");
+  const parsed = __uploadTestUtils.parseMultipartAudio(multipart, boundary);
+  assert.equal(parsed.language, "ar-AE");
+  assert.equal(parsed.buffer.toString(), "audio-bytes\r\n", "multipart language must not corrupt trailing audio bytes");
+}
 const tempAudioPath = path.join(os.tmpdir(), `kiranaos-transcription-test-${process.pid}.webm`);
 await fs.promises.writeFile(tempAudioPath, audioBytes);
 
@@ -60,7 +68,12 @@ try {
   });
   assert.equal(transcriptionRequest.model, "test-transcription-model");
   assert.equal(transcriptionRequest.response_format, "json");
-  assert.match(transcriptionRequest.prompt, /Hindi, Hinglish, or English/);
+  assert.equal(transcriptionRequest.prompt, undefined, "automatic audio must not be biased toward Hindi/English");
+  assert.equal(transcriptionRequest.language, undefined);
+  await transcribeAudio({ path: tempAudioPath }, { providerOverride, language: "ar-AE" });
+  assert.equal(transcriptionRequest.language, "ar", "send the provider's ISO language hint");
+  await transcribeAudio({ path: tempAudioPath }, { providerOverride, language: "yue" });
+  assert.equal(transcriptionRequest.language, undefined, "unsupported hint formats use provider detection");
   assert.equal(typeof transcriptionRequest.file.pipe, "function", "provider must receive a readable audio stream");
 } finally {
   await fs.promises.rm(tempAudioPath, { force: true });
