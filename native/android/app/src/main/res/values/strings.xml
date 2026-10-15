@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">KiranaOS</string>
+    <string name="title_activity_main">KiranaOS</string>
+    <string name="package_name">com.kiranaos.counter</string>
+    <string name="custom_url_scheme">com.kiranaos.counter</string>
+</resources>

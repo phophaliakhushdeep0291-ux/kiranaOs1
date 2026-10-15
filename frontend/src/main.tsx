@@ -1,3 +1,4 @@
+import { abortableFetch } from "@/lib/native/abortable-fetch";
 import { createRoot } from "react-dom/client";
 import App from "./app/App";
 import "./index.css";
@@ -6,6 +7,8 @@ import { installGlobalErrorHandlers } from "@/lib/diagnostics";
 import { ACTIVITY_EVENTS, startActivityTracking, trackEvent } from "@/lib/activity";
 import { getInitialLanguage, loadCriticalHindiDictionary } from "@/features/core/settings/i18n";
 
+// Native HTTP handles cross-origin requests; retain cancellation for POST uploads.
+if (import.meta.env.VITE_NATIVE_APP === "mobile") window.fetch = abortableFetch(window.fetch.bind(window));
 registerServiceWorker();
 installGlobalErrorHandlers();
 startActivityTracking();

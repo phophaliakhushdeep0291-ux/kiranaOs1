@@ -22,6 +22,7 @@ import {
   speechRecognitionLocale,
 } from "./voice-recognition";
 import type { SpeechRecognitionLike } from "./voice-types";
+import { backendTranscriptionErrorMessage, canRecordAudio, startBackendTranscription, type BackendTranscriptionSession } from "./backend-transcription";
 import { normalizeSpokenText } from "./voice-text";
 
 const SPEAK_PREFERENCE_KEY = "kirana:voice-dictation-speak";
@@ -82,12 +83,14 @@ function speakThen(text: string, locale: string, enabled: boolean, done: () => v
   const synth = typeof window === "undefined" ? undefined : window.speechSynthesis;
   if (!enabled || !synth || typeof SpeechSynthesisUtterance === "undefined") {
     done();
-    return;
+    return () => {};
   }
   let finished = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const finish = () => {
     if (finished) return;
     finished = true;
+    clearTimeout(timer);
     done();
   };
   try {
@@ -96,13 +99,19 @@ function speakThen(text: string, locale: string, enabled: boolean, done: () => v
     utterance.lang = locale;
     utterance.onend = finish;
     utterance.onerror = finish;
-    synth.speak(utterance);
     // Some builds never fire onend for a cancelled utterance; the shop should not
     // be left with a dead mic because of it.
-    window.setTimeout(finish, 6000);
+    timer = setTimeout(() => {
+      // Stop our prompt before opening the microphone, even if onend is missing.
+      utterance.onend = null; utterance.onerror = null;
+      synth.cancel();
+      finish();
+    }, 12_000);
+    synth.speak(utterance);
   } catch {
     finish();
   }
+  return () => { finished = true; clearTimeout(timer); synth.cancel(); };
 }
 
 export type VoiceDictationOptions<TField extends string> = {
@@ -161,10 +170,14 @@ export function useVoiceDictation<TField extends string>(
   const [speakPrompts, setSpeakPrompts] = useState(readSpeakPreference);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const recordingRef = useRef<BackendTranscriptionSession | null>(null);
+  const requestRef = useRef<AbortController | null>(null);
+  const turnRef = useRef(0);
+  const promptRef = useRef(0);
+  const cancelPromptRef = useRef<() => void>(() => {});
   const activeRef = useRef(false);
   const handledRef = useRef<Set<TField>>(new Set());
   const pendingRef = useRef<TField | null>(null);
-  const heardThisTurnRef = useRef(false);
   const speakRef = useRef(speakPrompts);
   // The recognition callbacks are rebuilt every turn and would otherwise close
   // over the first render's handler.
@@ -172,7 +185,7 @@ export function useVoiceDictation<TField extends string>(
 
   const Recognition = useMemo(() => getSpeechRecognitionConstructor(), []);
   const locale = speechRecognitionLocale(language);
-  const supported = Boolean(Recognition);
+  const supported = Boolean(Recognition) || canRecordAudio();
 
   useEffect(() => {
     speakRef.current = speakPrompts;
@@ -180,6 +193,13 @@ export function useVoiceDictation<TField extends string>(
 
   const stop = useCallback(() => {
     activeRef.current = false;
+    turnRef.current += 1;
+    promptRef.current += 1;
+    cancelPromptRef.current();
+    requestRef.current?.abort();
+    requestRef.current = null;
+    recordingRef.current?.cancel();
+    recordingRef.current = null;
     pendingRef.current = null;
     recognitionRef.current?.abort?.();
     recognitionRef.current = null;
@@ -195,40 +215,54 @@ export function useVoiceDictation<TField extends string>(
   }, [open, stop]);
 
   const listen = useCallback(() => {
-    if (!Recognition || !activeRef.current) return;
-    heardThisTurnRef.current = false;
-
-    const recognition = createOneShotRecognition(
-      Recognition,
-      {
-        onStart: () => setListening(true),
-        onTranscript: (text) => {
-          heardThisTurnRef.current = true;
-          handleUtteranceRef.current(text);
-        },
-        onError: (message, _variant, errorCode) => {
-          setNote(message);
-          // A blocked mic will not un-block by asking again; anything else is
-          // worth one more turn, which onEnd will start.
-          if (errorCode === "not-allowed" || errorCode === "service-not-allowed") stop();
-        },
-        onEnd: () => {
-          setListening(false);
-          recognitionRef.current = null;
-          if (activeRef.current && !heardThisTurnRef.current) stop();
-        },
-      },
-      locale,
-    );
-
-    recognitionRef.current = recognition;
-    try {
-      recognition.start();
-    } catch {
-      setNote(notUnderstoodPrompt);
+    if (!activeRef.current) return;
+    const turn = ++turnRef.current;
+    const isCurrent = () => activeRef.current && turn === turnRef.current;
+    let transcript = "";
+    let starting = true;
+    const onStart = () => { starting = false; if (isCurrent()) setListening(true); };
+    const onTranscript = (text: string) => { transcript = text; };
+    const onError = (message: string) => {
+      if (!isCurrent()) return;
+      setNote(message);
       stop();
+    };
+    const onEnd = () => {
+      if (!isCurrent() || starting) return;
+      setListening(false);
+      recordingRef.current = null;
+      recognitionRef.current = null;
+      requestRef.current = null;
+      // Only start the next question after the previous mic has been released.
+      if (transcript) handleUtteranceRef.current(transcript);
+      else stop();
+    };
+    if (!Recognition) {
+      const request = new AbortController();
+      requestRef.current = request;
+      void startBackendTranscription({
+        onStart,
+        onTranscribing: () => { if (isCurrent()) setListening(false); },
+        onTranscript: result => onTranscript(result.transcript),
+        onError,
+        onEnd,
+      }, undefined, language, request.signal).then(session => {
+        if (isCurrent()) recordingRef.current = session;
+        else session.cancel();
+      }).catch(error => {
+        if (!request.signal.aborted && isCurrent()) onError(backendTranscriptionErrorMessage(error));
+      });
+      return;
     }
-  }, [Recognition, locale, notUnderstoodPrompt, stop]);
+    try {
+      const recognition = createOneShotRecognition(Recognition, { onStart, onTranscript, onError, onEnd }, locale);
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (error) {
+      if (isCurrent()) onError(backendTranscriptionErrorMessage(error));
+
+    }
+  }, [Recognition, language, locale, stop]);
 
   const ask = useCallback(
     (field: TField | null) => {
@@ -238,7 +272,9 @@ export function useVoiceDictation<TField extends string>(
       if (!field) setNote(readyNote ?? line);
       // Nothing more is needed, but the shop may still want to add a detail, so
       // the mic stays open for one more turn and silence ends it.
-      speakThen(line, locale, speakRef.current, listen);
+      const prompt = ++promptRef.current;
+      cancelPromptRef.current();
+      cancelPromptRef.current = speakThen(line, locale, speakRef.current, () => { if (prompt === promptRef.current) listen(); });
     },
     [listen, locale, promptFor, readyNote, readyPrompt],
   );

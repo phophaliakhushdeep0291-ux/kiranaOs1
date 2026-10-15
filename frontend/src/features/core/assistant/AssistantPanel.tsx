@@ -80,7 +80,8 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
   const [pin, setPin] = useState("");
   const planRequestBusy = useRef(false);
   const [showTrace, setShowTrace] = useState(false);
-  const [mic, setMic] = useState<"idle" | "listening" | "transcribing">("idle");
+  const [mic, setMic] = useState<"idle" | "starting" | "listening" | "transcribing">("idle");
+  const micRequest = useRef<AbortController | null>(null);
   const micSession = useRef<BackendTranscriptionSession | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -295,12 +296,16 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
   // reason everything else is — a mis-heard word can start a lookup, but every
   // change still stops at a confirmation the shopkeeper reads.
   const toggleMic = useCallback(async () => {
+    if (micRequest.current && startingMic.current) { micRequest.current.abort(); return; }
     if (micSession.current) {
       micSession.current.stop();
       return;
     }
     if (startingMic.current || asking.current || planRequestBusy.current || planState.status === "pin") return;
     startingMic.current = true;
+    const controller = new AbortController();
+    micRequest.current = controller;
+    setMic("starting");
     if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
     setError(null);
     try {
@@ -316,13 +321,13 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
           micSession.current = null;
           setMic("idle");
         },
-      }, undefined, assistantLanguage);
+      }, undefined, assistantLanguage, controller.signal);
       if (!mounted.current) { micSession.current.cancel(); micSession.current = null; }
     } catch (caught) {
       micSession.current = null;
       setMic("idle");
-      setError(backendTranscriptionErrorMessage(caught) || t("assistant.micDenied"));
-    } finally { startingMic.current = false; }
+      if (!controller.signal.aborted) setError(backendTranscriptionErrorMessage(caught) || t("assistant.micDenied"));
+    } finally { startingMic.current = false; micRequest.current = null; }
   }, [ask, t, planState.status, assistantLanguage]);
 
   // Closing the panel mid-recording has to release the microphone, or a shared
@@ -334,10 +339,15 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
     return () => {
       mounted.current = false;
       request.current?.abort();
+      micRequest.current?.abort();
       micSession.current?.cancel();
       if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
     };
   }, [conversation.store]);
+
+  useEffect(() => {
+    if (!open) { micRequest.current?.abort(); micSession.current?.cancel(); }
+  }, [open]);
 
   if (!open) return null;
 
@@ -375,7 +385,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
           <button type="button" onClick={() => { setReadAloud(value => !value); if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel(); }} aria-label={t("assistant.readAloud")} aria-pressed={readAloud} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-slate-100">
             <Volume2 size={18} />
           </button>
-          <button type="button" onClick={onClose} disabled={busy || mic !== "idle" || planState.status === "working"} aria-label={t("assistant.close")} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
+          <button type="button" onClick={() => { micRequest.current?.abort(); micSession.current?.cancel(); onClose(); }} disabled={busy || planState.status === "working"} aria-label={t("assistant.close")} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
             <X size={18} />
           </button>
         </header>
@@ -590,7 +600,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
             type="button"
             onClick={toggleMic}
             disabled={busy || mic === "transcribing" || planState.status === "working" || planState.status === "pin"}
-            aria-label={mic === "listening" ? t("assistant.listening") : t("assistant.speak")}
+            aria-label={mic === "starting" ? t("assistant.micStarting") : mic === "listening" ? t("assistant.listening") : t("assistant.speak")}
             aria-pressed={mic === "listening"}
             className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border transition disabled:opacity-40 ${
               mic === "listening"
@@ -598,14 +608,14 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
                 : "border-slate-300 text-slate-600 hover:border-[var(--brand)] hover:text-[var(--brand)]"
             }`}
           >
-            {mic === "transcribing" ? <Loader2 size={17} className="animate-spin" /> : mic === "listening" ? <Square size={15} /> : <Mic size={17} />}
+            {mic === "starting" || mic === "transcribing" ? <Loader2 size={17} className="animate-spin" /> : mic === "listening" ? <Square size={15} /> : <Mic size={17} />}
           </button>
           <input
             ref={inputRef}
             dir="auto"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder={mic === "idle" ? t("assistant.inputPlaceholder") : mic === "listening" ? t("assistant.listening") : t("assistant.transcribing")}
+            placeholder={mic === "idle" ? t("assistant.inputPlaceholder") : mic === "listening" ? t("assistant.listening") : mic === "starting" ? t("assistant.micStarting") : t("assistant.transcribing")}
             disabled={mic !== "idle" || planState.status === "pin"}
             className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-[var(--brand)] disabled:bg-slate-50"
           />

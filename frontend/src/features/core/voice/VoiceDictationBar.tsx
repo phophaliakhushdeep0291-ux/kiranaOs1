@@ -67,8 +67,8 @@ export function VoiceDictationBar({
           <Mic size={14} />
           {labels.start}
         </button>
-        <p className="min-w-0 flex-1 truncate text-[11px] text-[#6d7c98]">
-          {supported ? labels.hint : labels.unsupported}
+        <p role="status" className="min-w-0 flex-1 text-[11px] text-[#6d7c98]">
+          {note || (supported ? labels.hint : labels.unsupported)}
         </p>
       </div>
     );
