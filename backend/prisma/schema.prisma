@@ -35,6 +35,7 @@ datasource db {
 // SHOP — top-level tenant. All data is shopId-scoped.
 // ─────────────────────────────────────────────
 model Shop {
+  accountantAccess AccountantAccess[]
   tallyCompanyGuid String?
   tallyCompanyName String?
 
@@ -440,6 +441,7 @@ model BillCounter {
 // USER — owner / staff / admin
 // ─────────────────────────────────────────────
 model User {
+  accountantAccess AccountantAccess[]
   id              String    @id @default(cuid())
   shopId          String
   name            String
@@ -468,6 +470,28 @@ model User {
   @@unique([shopId, mobile])
   @@unique([shopId, email])
   @@index([googleSub])
+}
+
+// Explicit, revocable, read-only access to a client's accounting reports.
+// Invite secrets are hashed; accepting one binds access to an immutable user id.
+model AccountantAccess {
+  id              String   @id @default(cuid())
+  shopId          String
+  accountantUserId String?
+  tokenHash       String   @unique
+  inviteExpiresAt DateTime
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+  createdByUserId String
+  note            String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  shop       Shop  @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  accountant User? @relation(fields: [accountantUserId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, revokedAt])
+  @@index([accountantUserId, revokedAt])
 }
 
 model AuthToken {

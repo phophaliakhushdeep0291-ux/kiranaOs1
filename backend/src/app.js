@@ -73,6 +73,7 @@ import activityRoutes from "./modules/activity/activity.routes.js";
 import assuranceRoutes from "./modules/assurance/assurance.routes.js";
 import platformAdminRoutes from "./modules/platform-admin/platformAdmin.routes.js";
 import remoteSupportRoutes from "./modules/remote-support/remoteSupport.routes.js";
+import caPortalRoutes from "./modules/ca-portal/ca-portal.routes.js";
 
 const app = express();
 
@@ -325,6 +326,7 @@ app.use("/api/activity", activityRoutes);
 app.use("/api/audit", assuranceRoutes);
 app.use("/api/support", remoteSupportRoutes);
 app.use("/api/platform-admin", platformAdminRoutes);
+app.use("/api/ca", caPortalRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────
 app.use((_req, res) => {

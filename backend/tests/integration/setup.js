@@ -341,6 +341,7 @@ export async function resetDatabase(db) {
     db.dishRecipeComponent.deleteMany(),
     db.product.deleteMany(),
     db.customer.deleteMany(),
+    db.accountantAccess.deleteMany(),
     db.authToken.deleteMany(),
     db.session.deleteMany(),
     db.user.deleteMany(),
