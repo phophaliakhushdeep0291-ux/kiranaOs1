@@ -2,13 +2,45 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { __uploadTestUtils } from "../src/modules/ai/ai.upload.js";
+import { Readable } from "node:stream";
+import { __uploadTestUtils, uploadAiAudio, removeUploadedAudioFile } from "../src/modules/ai/ai.upload.js";
 import { transcribeAudio } from "../src/modules/ai/ai.service.js";
 
 assert.ok(__uploadTestUtils.allowedMimeTypes.has("audio/webm"), "webm audio should be accepted");
 assert.ok(__uploadTestUtils.allowedMimeTypes.has("audio/wav"), "wav audio should be accepted");
 assert.equal(__uploadTestUtils.getMultipartBoundary('multipart/form-data; boundary=abc123'), "abc123");
 assert.equal(__uploadTestUtils.getMultipartBoundary('multipart/form-data; boundary="xyz"'), "xyz");
+
+// Exercise real FormData serialization and the upload middleware together.
+// The previous parser-only fixture missed MediaRecorder's codec parameters.
+for (const [mimeType, mediaType, filename] of [
+  ["audio/webm;codecs=opus", "audio/webm", "voice.webm"],
+  ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "voice.m4a"],
+  ["audio/ogg;codecs=opus", "audio/ogg", "voice.ogg"],
+  ["text/html;charset=utf-8", null, "voice.html"],
+]) {
+  const bytes = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0, 255, 13, 10]);
+  const form = new FormData();
+  form.append("audio", new Blob([bytes], { type: mimeType }), filename);
+  form.append("language", "en");
+  const wire = new Request("http://localhost/ai/transcribe", { method: "POST", body: form });
+  const req = Readable.from([Buffer.from(await wire.arrayBuffer())]);
+  req.headers = { "content-type": wire.headers.get("content-type") };
+  let failure;
+  await uploadAiAudio(req, {}, error => { failure = error; });
+  try {
+    if (!mediaType) {
+      assert.equal(failure?.status, 415);
+      assert.equal(failure?.code, "AUDIO_TYPE_UNSUPPORTED");
+      assert.equal(req.aiAudioFile, undefined);
+    } else {
+      assert.equal(failure, undefined);
+      assert.equal(req.aiAudioFile.mimetype, mediaType);
+      assert.equal(req.body.language, "en");
+      assert.deepEqual(await fs.promises.readFile(req.aiAudioFile.path), bytes);
+    }
+  } finally { await removeUploadedAudioFile(req.aiAudioFile); }
+}
 
 const boundary = "kirana-boundary";
 const audioBytes = Buffer.from("fake-audio-bytes");

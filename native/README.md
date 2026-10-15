@@ -62,6 +62,11 @@ creates real shop records. The smoke probes public API health, checks permission
 retry, real MediaRecorder bytes/track cleanup and the offline login shell. It then
 uses an isolated fixture shop and transcription response to verify that one tap
 on the real voice button starts recording and displays the returned transcript.
+The smoke sends mouse input through the draggable mic button, uploads the captured
+WebM over HTTP through the desktop proxy, and runs the actual server upload parser.
+It checks the audio header, payload and compatible MIME type before returning the
+fixture transcript. Version 1.0.1 also sends a plain audio media type so it works
+with older servers that rejected MediaRecorder's `;codecs=opus` parameter.
 
 Do not equate a successful build or synthetic audio with live provider accuracy.
 Test actual speech with an authenticated shop and configured provider on each target

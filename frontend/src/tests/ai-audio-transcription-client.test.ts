@@ -41,7 +41,21 @@ describe("AI audio transcription client", () => {
     expect(options?.headers).toBeUndefined();
     expect(options?.body).toBeInstanceOf(FormData);
     expect((options?.body as FormData).get("audio")).toBeInstanceOf(Blob);
+    const uploaded = (options?.body as FormData).get("audio") as File;
+    expect(uploaded.type).toBe("audio/webm");
+    expect(uploaded.name).toBe("voice-command.webm");
+    expect(await uploaded.text()).toBe(await audio.text());
     expect((options?.body as FormData).get("language")).toBe("ar-AE");
+  });
+
+  it("preserves MP4 recording bytes and uses an m4a filename for Safari and iOS", async () => {
+    vi.mocked(apiRequest).mockResolvedValue({ transcript: "open products", model: "test", provider: "fixture" });
+    const audio = new Blob([new Uint8Array([0, 255, 13, 10, 1])], { type: "audio/mp4;codecs=mp4a.40.2" });
+    await requestAiAudioTranscription(audio);
+    const file = (vi.mocked(apiRequest).mock.calls[0][1]?.body as FormData).get("audio") as File;
+    expect(file.name).toBe("voice-command.m4a");
+    expect(file.type).toBe("audio/mp4");
+    expect(await file.arrayBuffer()).toEqual(await audio.arrayBuffer());
   });
 
   it("chooses the first recorder format supported by the browser", () => {
