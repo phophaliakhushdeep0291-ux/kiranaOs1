@@ -33,7 +33,7 @@ describe("the assistant is reachable on a phone", () => {
   });
 
   it("still has a mic to reach", () => {
-    expect(panel).toContain('aria-label={mic === "listening" ? t("assistant.listening") : t("assistant.speak")}');
+    expect(panel).toContain('aria-label={mic === "starting" ? t("assistant.micStarting") : mic === "listening" ? t("assistant.listening") : t("assistant.speak")}');
   });
 
   it("floats the launcher above the mobile nav rather than a guessed offset", () => {
