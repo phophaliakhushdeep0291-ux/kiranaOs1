@@ -1,3 +1,4 @@
+import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -7,7 +8,7 @@ test('only the fixed HTTPS API configuration is accepted', () => {
   for (const value of ['http://example.com/api', 'https://user:pass@example.com/api', 'https://example.com/api?target=x', 'https://localhost/api', 'file:///api']) assert.throws(() => validateApiBase(value));
 });
 test('packaged files cannot escape their directory', () => {
-  assert.equal(assetPath('/bundle', '/assets/app.js'), '/bundle/assets/app.js');
+  assert.equal(assetPath('/bundle', '/assets/app.js'), path.resolve('/bundle/assets/app.js'));
   for (const value of ['/../secret', '/%2e%2e/secret', '/%5c..%5csecret', '/%00', '/%zz']) assert.equal(assetPath('/bundle', value), null);
 });
 test('navigation and external links never enable script/file execution', () => {
