@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import { caPeriodQuerySchema, caLinkClientSchema, caGenerateCodeSchema, caTallyExportQuerySchema } from "../src/modules/ca-portal/ca-portal.schema.js";
+assert.equal(caPeriodQuerySchema.parse({}).status, "all");
+assert.equal(caPeriodQuerySchema.parse({ from: "2026-10-01", status: "not_reviewed" }).from, "2026-10-01");
+for (const from of ["invalid", "2026-02-30", "2026-13-01"]) assert.throws(() => caPeriodQuerySchema.parse({ from }));
+assert.throws(() => caPeriodQuerySchema.parse({ status: "reconciled" }));
+assert.throws(() => caPeriodQuerySchema.parse({ month: "2026-13" }));
+const code = `CA-${"AB".repeat(24)}`;
+assert.equal(caLinkClientSchema.parse({ linkCode: ` ${code.toLowerCase()} ` }).linkCode, code);
+assert.throws(() => caLinkClientSchema.parse({ linkCode: "CA-A1B2C3" }));
+assert.throws(() => caLinkClientSchema.parse({ linkCode: code, note: "x".repeat(201) }));
+assert.equal(caGenerateCodeSchema.parse({}).expiresInHours, 72);
+for (const expiresInHours of [0, 73, 1.5]) assert.throws(() => caGenerateCodeSchema.parse({ expiresInHours }));
+for (const inventory of ["false", "0"]) assert.equal(caTallyExportQuerySchema.parse({ inventory }).inventory, false);
+for (const inventory of ["true", "1"]) assert.equal(caTallyExportQuerySchema.parse({ inventory }).inventory, true);
+assert.throws(() => caTallyExportQuerySchema.parse({ inventory: "yes" }));
+console.log("CA portal request validation passed");

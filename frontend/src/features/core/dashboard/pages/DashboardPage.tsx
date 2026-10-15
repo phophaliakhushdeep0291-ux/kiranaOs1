@@ -341,10 +341,18 @@ export default function Dashboard() {
     };
   }, [today, yesterday]);
 
-  const pnl = useGetPnL({ from: today, to: today }, { query: { enabled: canFetchBackendPnL, staleTime: 2 * 60_000, retry: 0 } });
-  const udharSummary = useGetUdharSummary({ query: { staleTime: 2 * 60_000, retry: 1 } });
-  const paymentSummary = useGetPaymentSummary({ from: today, to: today }, { query: { staleTime: 2 * 60_000, retry: 1 } });
-  const billsToday = useListBills({ from: today, to: today, limit: 1 }, { query: { staleTime: 2 * 60_000, retry: 1 } });
+  // The server's reports are buildDashboardStats' last resort: every figure takes
+  // the device's own first. Once the device has figures they are never shown, and
+  // fetching them anyway cost every counter on Home four requests a sale. The
+  // udhar summary also refreshes the cached server balances, but that cache is
+  // the udhar screens' to keep fresh, as on a till that sits on Billing all day.
+  const needsServerFigures = !financialSnapshot && !ownerReport && !localSnapshot.hasCache;
+  // The debtor list falls through the report when its pending udhar is not zero.
+  const needsServerDebtors = !financialSnapshot && !localSnapshot.hasCache;
+  const pnl = useGetPnL({ from: today, to: today }, { query: { enabled: canFetchBackendPnL && needsServerFigures, staleTime: 2 * 60_000, retry: 0 } });
+  const udharSummary = useGetUdharSummary({ query: { enabled: needsServerDebtors, staleTime: 2 * 60_000, retry: 1 } });
+  const paymentSummary = useGetPaymentSummary({ from: today, to: today }, { query: { enabled: needsServerFigures, staleTime: 2 * 60_000, retry: 1 } });
+  const billsToday = useListBills({ from: today, to: today, limit: 1 }, { query: { enabled: needsServerFigures, staleTime: 2 * 60_000, retry: 1 } });
   const backendPnL = canFetchBackendPnL ? pnl.data : undefined;
 
   const dashboard = useMemo(() => buildDashboardStats({

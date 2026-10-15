@@ -2,7 +2,7 @@
 // subscriptions, device identity, integration secrets, active sync transport,
 // support telemetry, and the backup/maintenance control plane of this install.
 export const PRESERVED_SHOP_MODELS = Object.freeze([
-  "ShopMaintenanceLock", "User", "AuthToken", "Session", "UserLocationAccess",
+  "ShopMaintenanceLock", "User", "AccountantAccess", "AuthToken", "Session", "UserLocationAccess",
   "ReportExportJob", "BackupArtifact", "OfflineSyncEvent", "SyncConflict",
   "SyncCommand", "ChangeLog", "SyncIdMapping", "ErrorGroup", "ErrorEvent",
   // Behavioural telemetry and its counter read model sit with the other
