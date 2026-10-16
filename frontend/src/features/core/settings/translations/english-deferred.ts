@@ -42,8 +42,10 @@ import { shopTypesEn } from "./shop-types";
 import { suppliersEn } from "./suppliers";
 import { syncEn } from "./sync";
 import { workflowsEn } from "./workflows";
+import { nativeAuthEn } from "./native-auth";
 
 export const englishDeferredTranslations = {
+  ...nativeAuthEn,
   ...productsEn,
   ...accountingNavigationEn,
   ...assistantEn,
@@ -62,6 +64,7 @@ export const englishDeferredTranslations = {
 
 /** Registered deferred modules. `english.ts` re-exports these into EN_MODULES. */
 export const EN_DEFERRED_MODULES = {
+  nativeAuth: nativeAuthEn,
   products: productsEn,
   accountingNavigation: accountingNavigationEn,
   assistant: assistantEn,

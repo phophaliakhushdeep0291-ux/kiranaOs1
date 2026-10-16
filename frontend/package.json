@@ -31,6 +31,8 @@
         "qa:offline-two-counter": "node scripts/verify-offline-two-counter.mjs"
     },
     "dependencies": {
+        "@capacitor/browser": "8.0.5",
+        "@capacitor/core": "8.5.3",
         "@hookform/resolvers": "^3.10.0",
         "@radix-ui/react-alert-dialog": "^1.1.7",
         "@radix-ui/react-checkbox": "^1.1.5",

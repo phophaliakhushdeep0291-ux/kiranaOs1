@@ -1,6 +1,6 @@
 import * as authService from "./auth.service.js";
 
-function requestMeta(req) {
+export function requestMeta(req) {
   const bodyDevice = req.body?.device && typeof req.body.device === "object" ? req.body.device : {};
   const deviceId = getRequestDeviceId(req);
   return {

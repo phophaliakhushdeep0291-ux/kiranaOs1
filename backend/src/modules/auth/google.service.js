@@ -50,7 +50,7 @@ async function getGoogleCert(kid) {
 }
 
 /** Verifies a GIS ID token; returns { sub, email, name } or throws a typed AppError. */
-export async function verifyGoogleIdToken(credential) {
+export async function verifyGoogleIdToken(credential, expectedNonce) {
   if (!isGoogleLoginConfigured()) {
     throw new AppError("Google sign-in is not configured on this server.", 503, "GOOGLE_LOGIN_NOT_CONFIGURED");
   }
@@ -73,6 +73,9 @@ export async function verifyGoogleIdToken(credential) {
   }
 
   const emailVerified = claims.email_verified === true || claims.email_verified === "true";
+  if (expectedNonce && claims.nonce !== expectedNonce) {
+    throw new AppError("This Google sign-in belongs to another request. Start again in the app.", 401, "GOOGLE_NONCE_INVALID");
+  }
   if (!claims.email || !emailVerified) {
     throw new AppError("This Google account has no verified email address.", 401, "GOOGLE_EMAIL_UNVERIFIED");
   }

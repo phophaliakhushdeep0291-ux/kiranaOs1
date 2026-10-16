@@ -13,8 +13,10 @@ import {
 } from "./auth.schema.js";
 import * as ctrl from "./auth.controller.js";
 import { z } from "zod";
+import nativeLoginRoutes from "./native-login.routes.js";
 
 const router = Router();
+router.use("/native", nativeLoginRoutes);
 
 // Public
 router.post("/register", validate(registerSchema), ctrl.register);

@@ -35,6 +35,38 @@ needs an Apple developer team and provisioning. Windows trusted signing and macO
 Developer ID signing/notarization are separate release steps. No store upload or
 public release is performed by the workflow.
 
+## Google sign-in (1.0.2)
+
+The installed login screen always offers **Continue with Google**. Desktop opens
+the system browser; Android/iOS use the official Capacitor Browser plugin (Custom
+Tabs/Safari). The Google page runs on the HTTPS website in `app-config.json`, never
+inside the desktop renderer or mobile app WebView. The app itself remains installed
+and uses its bundled screens after signing in.
+
+Deploy the matching frontend `/native-sign-in` page and backend `/auth/native/*`
+routes before distributing this build. Keep the existing matching
+`VITE_GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_ID` and Google's authorized JavaScript
+website origin. Production also requires `REDIS_URL`; handoff storage fails closed
+when Redis is unavailable. No additional Google client secret belongs in the app.
+An older backend produces a visible update-required message, not a dead button.
+
+The user enters the app's eight-digit code on the browser page, selects their
+Google account/shop, and explicitly approves the app. Return to KiranaOS (close
+the browser sheet on mobile if needed) to finish. Requests expire after five
+minutes. The private 256-bit verifier stays in app memory and travels only in POST
+bodies, never the browser URL; stored verifiers/codes are hashed. Google ID tokens
+are bound to the request nonce. Redis performs atomic single-use redemption across
+replicas. Approval creates no browser session/device slot. Redemption uses normal
+device-bound authentication, plan limits and owner-PIN replacement. Cancel or a
+changed/disabled account prevents sign-in. A lost final response requires starting
+again; replay never issues another session.
+
+`npm run smoke:google` clicks the real desktop button in a disposable profile,
+checks external-browser dispatch, cancellation, missing-server feedback, and a
+fixture approval returning to the dashboard. It does not prove real Google consent
+or live deployment. Backend integration tests separately exercise signed ID-token
+verification, nonce rejection, shop selection, device binding and device caps.
+
 ## Voice and permissions
 
 The first floating mic tap opens the panel and requests recording. Permission
