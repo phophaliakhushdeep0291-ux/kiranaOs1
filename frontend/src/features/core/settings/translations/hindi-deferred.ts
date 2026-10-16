@@ -24,8 +24,10 @@ import { ordersHi } from "./orders.hi";
 import { shopTypesHi } from "./shop-types.hi";
 import { syncHi } from "./sync.hi";
 import { workflowsHi } from "./workflows.hi";
+import { nativeAuthHi } from "./native-auth.hi";
 
 export const hindiDeferredTranslations = {
+  ...nativeAuthHi,
   ...productsHi,
   ...accountingNavigationHi,
   ...assistantHi,
@@ -44,6 +46,7 @@ export const hindiDeferredTranslations = {
 
 /** Registered deferred modules. `hindi.ts` re-exports these into HI_MODULES. */
 export const HI_DEFERRED_MODULES = {
+  nativeAuth: nativeAuthHi,
   products: productsHi,
   accountingNavigation: accountingNavigationHi,
   assistant: assistantHi,

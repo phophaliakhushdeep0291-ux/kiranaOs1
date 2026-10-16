@@ -37,6 +37,7 @@ function cloudPage<T>(load: () => Promise<{ default: T }>): () => Promise<{ defa
 }
 
 const Login = lazy(() => import("@/features/core/auth/pages/LoginPage"));
+const NativeSignIn = lazy(() => import("@/features/core/auth/pages/NativeSignInPage"));
 const Register = lazy(() => import("@/features/core/auth/pages/RegisterPage"));
 const ForgotPassword = lazy(() => import("@/features/core/auth/pages/ForgotPasswordPage"));
 const ResetPassword = lazy(() => import("@/features/core/auth/pages/ResetPasswordPage"));
@@ -415,6 +416,9 @@ export function AppRoutes() {
 
   return (
     <Switch>
+      <Route path="/native-sign-in">
+        <ErrorBoundary><LazyPage component={NativeSignIn} /></ErrorBoundary>
+      </Route>
       <Route path="/login">
         <PublicRoute component={Login} />
       </Route>

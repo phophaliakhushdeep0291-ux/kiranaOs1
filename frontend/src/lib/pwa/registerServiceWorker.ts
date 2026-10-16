@@ -130,6 +130,9 @@ function releaseServiceWorkerForPublicRoute(): void {
 }
 
 export function registerServiceWorker(): void {
+  // Installed packages already contain their versioned assets. Never overlay
+  // those assets with a service worker from a different app release.
+  if (import.meta.env.VITE_NATIVE_APP) return;
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
   if (isPublicCustomerRoute(window.location.pathname)) {
     releaseServiceWorkerForPublicRoute();

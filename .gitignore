@@ -94,3 +94,17 @@ archive/
 # waiting to be swept into the next one; nothing reads them and they are recreated
 # on every run. A leading dash is not a name any real source file here carries.
 /frontend/-*/
+
+# Reproducible installed-app builds and local signing assets.
+/native/web/
+/native/release/
+/native/runtime-config.json
+/native/android/.gradle/
+/native/android/**/build/
+/native/android/local.properties
+/native/ios/App/App/public/
+/native/ios/App/CapApp-SPM/.build/
+/native/ios/App/Pods/
+/native/**/*.keystore
+/native/**/*.jks
+/native/**/*.p12

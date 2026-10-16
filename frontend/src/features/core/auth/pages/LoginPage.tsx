@@ -8,6 +8,8 @@ import { useMutation } from "@tanstack/react-query";
 import { useLogin, type AuthResponse } from "@/lib/api/client";
 import { googleLogin as googleLoginRequest } from "@/features/core/auth/api";
 import { GoogleSignInButton, isGoogleSignInConfigured } from "@/features/core/auth/GoogleSignInButton";
+import { NativeGoogleSignIn } from "@/features/core/auth/NativeGoogleSignIn";
+import { isNativeApp } from "@/features/core/auth/native-login";
 import { stashGoogleSignupPrefill } from "@/features/core/auth/google-signup";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { getLandingRoute } from "@/features/core/settings/landing-page";
@@ -172,9 +174,11 @@ export default function Login() {
     },
   });
 
-  const authPending = loginMutation.isPending || googleMutation.isPending;
+  const [nativePending, setNativePending] = useState(false);
+  const authPending = loginMutation.isPending || googleMutation.isPending || nativePending;
 
   const onGoogleCredential = (credential: string) => {
+    if (authPending) return;
     setServerError(null);
     setShopChoices(null);
     setLoginShopId(null);
@@ -184,6 +188,7 @@ export default function Login() {
   };
 
   const onSubmit = (values: FormData) => {
+    if (authPending) return;
     setServerError(null);
     setShopChoices(null);
     setLoginShopId(null);
@@ -193,6 +198,7 @@ export default function Login() {
   };
 
   const selectShop = (shopId: string) => {
+    if (authPending) return;
     setLoginShopId(shopId);
     setServerError(null);
     if (googleCredential) {
@@ -404,7 +410,7 @@ export default function Login() {
           <>
           <h2 className="mb-5 text-lg font-bold text-card-foreground">{t("auth.signInToShop")}</h2>
 
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form hidden={nativePending} onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div>
               <Label htmlFor="mobile">{t("auth.identifier")}</Label>
               <Input
@@ -484,15 +490,17 @@ export default function Login() {
             </Button>
           </form>
 
-          {isGoogleSignInConfigured() && (
+          {(isNativeApp || isGoogleSignInConfigured()) && (
             <div className="mt-5">
-              <div className="flex items-center gap-3">
+              <div className={nativePending ? "hidden" : "flex items-center gap-3"}>
                 <span className="h-px flex-1 bg-border" />
                 <span className="text-xs font-semibold uppercase text-muted-foreground">{t("auth.or")}</span>
                 <span className="h-px flex-1 bg-border" />
               </div>
               <div className="mt-4">
-                <GoogleSignInButton onCredential={onGoogleCredential} />
+                {isNativeApp
+                  ? <NativeGoogleSignIn disabled={loginMutation.isPending || googleMutation.isPending} onSuccess={handleAuthSuccess} onError={handleAuthError} onBusy={setNativePending} />
+                  : <GoogleSignInButton onCredential={onGoogleCredential} />}
               </div>
             </div>
           )}

@@ -238,7 +238,11 @@ export async function login({ mobile, email, identifier, password, shopId }, req
  */
 export async function googleLogin({ credential, shopId }, reqMeta = {}) {
   const identity = await verifyGoogleIdToken(credential);
+  const user = await findGoogleUser(identity, shopId);
+  return finishGoogleLogin(user, identity, reqMeta);
+}
 
+async function findGoogleUser(identity, shopId) {
   const users = await db.user.findMany({
     where: {
       disabledAt: null,
@@ -270,7 +274,10 @@ export async function googleLogin({ credential, shopId }, reqMeta = {}) {
     throw err;
   }
 
-  let user = candidates[0];
+  return candidates[0];
+}
+
+async function finishGoogleLogin(user, identity, reqMeta) {
   if (user.googleSub !== identity.sub || !user.emailVerifiedAt) {
     const updatedUser = await db.user.update({
       where: { id: user.id },
@@ -284,6 +291,26 @@ export async function googleLogin({ credential, shopId }, reqMeta = {}) {
   }
 
   return issueAuthResponse(user, user.shop, { ...reqMeta, loginMethod: "google" });
+}
+
+// Browser approval never creates a browser session or consumes another device
+// slot. The originating installation alone can redeem it via the usual login.
+export async function approveNativeGoogleIdentity(credential, nonce, shopId) {
+  const identity = await verifyGoogleIdToken(credential, nonce);
+  const user = await findGoogleUser(identity, shopId);
+  return {
+    identity, userId: user.id, shopId: user.shopId,
+    accountVersion: crypto.createHash("sha256").update(user.passwordHash || "").digest("hex"),
+  };
+}
+
+export async function completeNativeGoogleLogin(approval, reqMeta) {
+  const user = await findGoogleUser(approval.identity, approval.shopId);
+  const accountVersion = crypto.createHash("sha256").update(user.passwordHash || "").digest("hex");
+  if (user.id !== approval.userId || accountVersion !== approval.accountVersion) {
+    throw new AppError("The account changed. Start Google sign-in again in the app.", 401, "NATIVE_LOGIN_ACCOUNT_CHANGED");
+  }
+  return finishGoogleLogin(user, approval.identity, reqMeta);
 }
 
 export async function verifyEmail(token, reqMeta = {}) {

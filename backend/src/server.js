@@ -3,6 +3,7 @@ import app from "./app.js";
 import db, { databaseEngine } from "./db.js";
 import { initErrorTracking, captureException, closeErrorTracking } from "./lib/errorTracking.js";
 import { closeRedis } from "./lib/redis.js";
+import { closeNativeLoginStore } from "./modules/auth/native-login.store.js";
 import { closeAllLiveStreams } from "./core/sync/index.js";
 import { seedPlans } from "./modules/subscription/subscription.service.js";
 import { assessStorageVolume } from "./lib/storageVolume.js";
@@ -128,6 +129,7 @@ async function shutdown(signal, exitCode = 0) {
     closeAllLiveStreams();
     await closeHttpServer();
     await closeRedis();
+    closeNativeLoginStore();
     await db.$disconnect();
     await closeErrorTracking();
     console.log(JSON.stringify({ type: "shutdown", signal, time: new Date().toISOString() }));

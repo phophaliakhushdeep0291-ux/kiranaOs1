@@ -167,6 +167,8 @@ const RATE_LIMITED_AUTH_PATHS = new Set([
   "/register",
   "/login",
   "/google",
+  "/native/start",
+  "/native/approve",
   "/verify-email",
   "/resend-verification",
   "/password/forgot",

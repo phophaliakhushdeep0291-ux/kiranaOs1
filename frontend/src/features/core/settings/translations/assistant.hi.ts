@@ -45,6 +45,7 @@ export const assistantHi: Record<keyof typeof assistantEn, string> = {
   "assistant.speak": "बोलें",
   "assistant.listening": "सुन रहे हैं… रोकने के लिए दबाएँ",
   "assistant.transcribing": "आपकी बात लिखी जा रही है…",
+  "assistant.micStarting": "माइक की अनुमति दें… रद्द करने के लिए टैप करें",
   "assistant.micDenied": "माइक की अनुमति नहीं मिली। टाइप करके बताएँ।",
 
   "assistant.emptyTitle": "क्या जानना चाहते हैं?",

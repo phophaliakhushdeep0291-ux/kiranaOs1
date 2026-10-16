@@ -41,6 +41,7 @@ export const assistantEn = {
   "assistant.speak": "Speak",
   "assistant.listening": "Listening… tap to stop",
   "assistant.transcribing": "Writing down what you said…",
+  "assistant.micStarting": "Allow microphone access… tap to cancel",
   "assistant.micDenied": "Microphone access was refused. Type instead.",
 
   "assistant.emptyTitle": "What would you like to know?",

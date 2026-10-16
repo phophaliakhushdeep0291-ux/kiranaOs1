@@ -32,8 +32,12 @@ function makeTempPath(originalname) {
 }
 
 function assertAllowedMimeType(mimetype) {
-  if (!mimetype || allowedMimeTypes.has(mimetype)) return;
-  throw new Error(`Unsupported audio type: ${mimetype}`);
+  const mediaType = String(mimetype || "application/octet-stream").split(";", 1)[0].trim().toLowerCase();
+  if (allowedMimeTypes.has(mediaType)) return mediaType;
+  throw Object.assign(new Error("Unsupported audio type. Record WebM, MP4, WAV, Ogg, MP3 or FLAC audio."), {
+    status: 415,
+    code: "AUDIO_TYPE_UNSUPPORTED",
+  });
 }
 
 function parseContentDisposition(headerValue = "") {
@@ -70,7 +74,7 @@ async function readRequestBuffer(req, maxBytes = MAX_AUDIO_BYTES) {
 }
 
 async function writeTempAudioFile({ buffer, originalname, mimetype, fieldname }) {
-  assertAllowedMimeType(mimetype);
+  const mediaType = assertAllowedMimeType(mimetype);
 
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
     throw new Error("Uploaded audio file is empty");
@@ -86,7 +90,7 @@ async function writeTempAudioFile({ buffer, originalname, mimetype, fieldname })
     fieldname: fieldname ?? "audio",
     originalname: originalname ?? "audio.webm",
     encoding: "7bit",
-    mimetype: mimetype ?? "application/octet-stream",
+    mimetype: mediaType,
     path: filePath,
     size: buffer.length,
   };

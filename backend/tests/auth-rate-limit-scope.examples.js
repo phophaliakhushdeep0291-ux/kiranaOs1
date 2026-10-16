@@ -13,6 +13,7 @@ for (const path of ["/me", "/pin/check", "/staff"]) {
 
 for (const path of [
   "/register", "/login", "/google", "/password/forgot", "/password/reset",
+  "/native/start", "/native/approve",
   "/refresh", "/device-replacement/complete", "/pin/verify", "/change-password",
 ]) {
   assert.equal(
@@ -21,6 +22,8 @@ for (const path of [
     `${path} must retain brute-force protection`,
   );
 }
+
+assert.equal(shouldSkipAuthRateLimit(request("POST", "/native/poll")), true, "native polls use their dedicated limiter, not password attempts");
 
 assert.equal(shouldSkipAuthRateLimit(request("OPTIONS", "/login")), true, "CORS preflight must not consume attempts");
 assert.equal(

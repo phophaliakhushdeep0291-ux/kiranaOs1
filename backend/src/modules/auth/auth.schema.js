@@ -42,7 +42,7 @@ const optionalIndianMobile = z.preprocess((value) => {
   return normalized === "" ? undefined : normalized;
 }, z.string().regex(/^(?:[6-9]\d{9}|\+9715[024568]\d{7})$/, "Valid mobile number required").optional());
 
-const deviceMetadataSchema = z.object({
+export const deviceMetadataSchema = z.object({
   deviceId: z.string().min(3).max(128),
   deviceName: z.string().trim().min(1).max(120).optional(),
   deviceType: z.enum(["desktop", "laptop", "mobile", "tablet"]).optional(),

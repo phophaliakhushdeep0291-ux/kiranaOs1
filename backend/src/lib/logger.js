@@ -1,5 +1,5 @@
 // Redacts JWT, passwords, PINs, refresh tokens, API keys, and provider secrets.
-const SENSITIVE_KEY_PATTERN = /password|pin|ownerPin|token|jwt|secret|signature|authorization|apiKey|accessKey|refresh|razorpay|redis_url|database_url|storage_secret|phone|mobile|email/i;
+const SENSITIVE_KEY_PATTERN = /password|pin|ownerPin|token|jwt|secret|credential|verifier|userCode|signature|authorization|apiKey|accessKey|refresh|razorpay|redis_url|database_url|storage_secret|phone|mobile|email/i;
 const SECRET_VALUE_PATTERN = /(bearer\s+)[A-Za-z0-9._-]+|([?&]?(?:password|pin|token|secret|signature|authorization)=)[^\s&]+/gi;
 
 export function redactSensitive(value, depth = 0) {

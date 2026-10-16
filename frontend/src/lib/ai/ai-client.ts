@@ -51,7 +51,11 @@ export async function requestAiAudioTranscription(
 
   const form = new FormData();
   const fileName = init?.fileName ?? `voice-command.${audioFileExtension(audio.type)}`;
-  form.append("audio", audio, fileName);
+  // MediaRecorder includes codec parameters (e.g. audio/webm;codecs=opus).
+  // Older deployed upload handlers accept only the base media type. Relabel
+  // the same bytes so installed clients work before the server is upgraded.
+  const mediaType = audio.type.split(";", 1)[0].trim().toLowerCase();
+  form.append("audio", audio.slice(0, audio.size, mediaType || "application/octet-stream"), fileName);
   if (init?.language) form.append("language", init.language);
 
   return apiRequest<AudioTranscriptionResult>("/ai/transcribe", {

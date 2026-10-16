@@ -9,7 +9,7 @@ const GIS_SRC = "https://accounts.google.com/gsi/client";
 const CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim();
 
 interface GisIdApi {
-  initialize: (config: { client_id: string; callback: (response: { credential?: string }) => void }) => void;
+  initialize: (config: { client_id: string; nonce?: string; callback: (response: { credential?: string }) => void }) => void;
   renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
 }
 
@@ -70,9 +70,11 @@ export function googleButtonWidth(available: number): number {
   return Math.round(Math.min(GOOGLE_BUTTON_MAX_WIDTH, Math.max(GOOGLE_BUTTON_MIN_WIDTH, available)));
 }
 
-export function GoogleSignInButton({ onCredential }: { onCredential: (credential: string) => void }) {
+export function GoogleSignInButton({ onCredential, nonce, onFailure }: { onCredential: (credential: string) => void; nonce?: string; onFailure?: () => void }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onCredentialRef = useRef(onCredential);
+  const onFailureRef = useRef(onFailure);
+  onFailureRef.current = onFailure;
   const cleanupRef = useRef<(() => void) | null>(null);
   const [failed, setFailed] = useState(false);
   onCredentialRef.current = onCredential;
@@ -85,6 +87,7 @@ export function GoogleSignInButton({ onCredential }: { onCredential: (credential
         if (!active || !containerRef.current) return;
         api.initialize({
           client_id: CLIENT_ID,
+          ...(nonce ? { nonce } : {}),
           callback: (response) => {
             if (response.credential) onCredentialRef.current(response.credential);
           },
@@ -126,13 +129,13 @@ export function GoogleSignInButton({ onCredential }: { onCredential: (credential
         };
       })
       .catch(() => {
-        if (active) setFailed(true); // offline / blocked — hide quietly, password login still works
+        if (active) { setFailed(true); onFailureRef.current?.(); }
       });
     return () => {
       active = false;
       cleanupRef.current?.();
     };
-  }, []);
+  }, [nonce]);
 
   if (!CLIENT_ID || failed) return null;
 

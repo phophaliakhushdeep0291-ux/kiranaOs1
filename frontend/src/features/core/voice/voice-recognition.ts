@@ -31,7 +31,8 @@ export function speechRecognitionLocale(language: string): string {
 }
 
 export function getSpeechRecognitionConstructor() {
-  if (typeof window === "undefined") return undefined;
+  // Embedded Chromium/WebViews can expose Web Speech without a speech service.
+  if (typeof window === "undefined" || import.meta.env.VITE_NATIVE_APP) return undefined;
   const speechWindow = window as SpeechWindow;
   return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
 }
@@ -88,7 +89,7 @@ export function shouldAcceptFinalTranscript(
 
 export function voiceRecognitionErrorMessage(error: string) {
   if (error === "not-allowed" || error === "service-not-allowed") {
-    return "Mic is blocked. Click the site controls icon near localhost, allow Microphone, refresh, then try again.";
+    return "Mic is blocked. Allow Microphone in your browser's site settings and your device's Privacy settings, then retry.";
   }
   if (error === "network") return "Chrome speech service is unavailable. Type the command manually.";
   if (error === "no-speech") return "No voice heard. Speak closer to the mic or type the command.";
@@ -102,14 +103,47 @@ export function createOneShotRecognition(
 ): SpeechRecognitionLike {
   const recognition = new Recognition();
   let lastFinal: { key: string; at: number } | null = null;
+  let ended = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const finish = () => {
+    if (ended) return;
+    ended = true;
+    clearTimeout(timer);
+    callbacks.onEnd();
+  };
+  const originalStart = recognition.start.bind(recognition);
+  const originalAbort = recognition.abort?.bind(recognition);
+  const originalStop = recognition.stop?.bind(recognition);
+  const expire = () => {
+    if (ended) return;
+    callbacks.onError("Microphone did not respond. Check microphone permission, then retry.", "destructive", "timeout");
+    recognition.abort?.();
+  };
+  recognition.start = () => {
+    timer = setTimeout(expire, 20_000);
+    try { originalStart(); } catch (error) { finish(); throw error; }
+  };
+  recognition.abort = () => { finish(); originalAbort?.(); };
+  recognition.stop = () => {
+    if (ended) return;
+    clearTimeout(timer);
+    timer = setTimeout(finish, 3_000);
+    originalStop?.();
+  };
 
   recognition.lang = locale;
   recognition.continuous = false;
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
 
-  recognition.onstart = callbacks.onStart;
+  recognition.onstart = () => {
+    if (ended) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => recognition.stop(), 15_000);
+    callbacks.onStart();
+  };
   recognition.onresult = (event) => {
+    if (ended) return;
     const text = collectFinalTranscript(event);
     if (!text) return;
 
@@ -120,10 +154,12 @@ export function createOneShotRecognition(
     callbacks.onTranscript(text);
   };
   recognition.onerror = (event) => {
+    if (ended) return;
     const error = event.error ?? "unknown";
     callbacks.onError(voiceRecognitionErrorMessage(error), error === "no-speech" ? "default" : "destructive", error);
+    finish();
   };
-  recognition.onend = callbacks.onEnd;
+  recognition.onend = finish;
 
   return recognition;
 }

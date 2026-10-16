@@ -1,0 +1,79 @@
+{
+  "name": "kiranaos-native",
+  "version": "1.0.2",
+  "private": true,
+  "description": "KiranaOS installable desktop and mobile counter",
+  "author": "KiranaOS",
+  "type": "module",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "prepare:desktop": "node scripts/prepare.mjs desktop",
+    "prepare:mobile": "node scripts/prepare.mjs mobile",
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --publish never",
+    "sync": "node scripts/sync.mjs",
+    "smoke:desktop": "electron scripts/smoke-desktop.cjs",
+    "smoke:google": "electron scripts/smoke-google-login.cjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/browser": "8.0.5",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3",
+    "electron": "44.7.2",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.kiranaos.counter",
+    "productName": "KiranaOS",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**/*",
+      "web/**/*",
+      "runtime-config.json",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "KiranaOS uses your microphone only when you start a voice command. Audio is sent to your shop server for transcription.",
+        "NSCameraUsageDescription": "KiranaOS uses your camera when you scan a product barcode."
+      },
+      "entitlements": "desktop/entitlements.mac.plist",
+      "entitlementsInherit": "desktop/entitlements.mac.plist"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "KiranaOS-${version}-${arch}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office"
+    },
+    "icon": "assets/icon.png",
+    "beforePack": "desktop/check-package.cjs"
+  }
+}

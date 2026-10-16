@@ -1,0 +1,8 @@
+{
+  "appId": "com.kiranaos.counter",
+  "appName": "KiranaOS",
+  "webDir": "web",
+  "server": { "androidScheme": "https", "hostname": "localhost" },
+  "ios": { "contentInset": "automatic" },
+  "plugins": { "CapacitorHttp": { "enabled": true } }
+}

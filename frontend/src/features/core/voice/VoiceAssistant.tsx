@@ -22,7 +22,7 @@ import { createOneShotRecognition, getSpeechRecognitionConstructor, shouldAccept
 import type { SpeechRecognitionLike, VoiceToastPayload } from "./voice-types";
 import { AssistantLanguageSelect } from "@/features/core/assistant/AssistantLanguageSelect";
 import { useAssistantLanguage } from "@/features/core/assistant/use-assistant-language";
-import { startBackendTranscription, type BackendTranscriptionSession } from "./backend-transcription";
+import { backendTranscriptionErrorMessage, startBackendTranscription, type BackendTranscriptionSession } from "./backend-transcription";
 import { submitAiFeedback, type AiFeedbackOutcome } from "@/lib/ai/ai-feedback-client";
 
 type AssistantPosition = { x: number; y: number };
@@ -83,6 +83,8 @@ export function VoiceAssistant() {
   const [feedback, setFeedback] = useState<AiFeedbackOutcome | "submitting" | "failed" | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const backendRecordingRef = useRef<BackendTranscriptionSession | null>(null);
+  const pendingMicRef = useRef<AbortController | null>(null);
+  const [startingMic, setStartingMic] = useState(false);
   const preferBackendRecordingRef = useRef(false);
   const lastCapturedTranscriptRef = useRef<{ key: string; at: number } | null>(null);
   const lastProcessedTranscriptRef = useRef<{ key: string; at: number } | null>(null);
@@ -107,6 +109,7 @@ export function VoiceAssistant() {
     return () => {
       if (dragFrameRef.current !== null) window.cancelAnimationFrame(dragFrameRef.current);
       recognitionRef.current?.abort?.();
+      pendingMicRef.current?.abort();
       backendRecordingRef.current?.cancel();
     };
   }, []);
@@ -214,6 +217,7 @@ export function VoiceAssistant() {
   }, []);
 
   function stopMic() {
+    if (startingMic) { pendingMicRef.current?.abort(); recognitionRef.current?.abort?.(); setStartingMic(false); return; }
     if (backendRecordingRef.current) {
       setStatus("Recording stopped. Transcribing securely...");
       backendRecordingRef.current.stop();
@@ -226,10 +230,15 @@ export function VoiceAssistant() {
 
   async function startBackendMic() {
     setOpen(true);
+    if (pendingMicRef.current) return;
+    const request = new AbortController();
+    pendingMicRef.current = request;
+    setStartingMic(true);
     setStatus("Requesting microphone access for cloud transcription...");
     try {
       backendRecordingRef.current = await startBackendTranscription({
         onStart: () => {
+          setStartingMic(false);
           setListening(true);
           setStatus("Recording securely. Speak one command, then press Stop. Auto-stops after 15 seconds.");
         },
@@ -255,60 +264,68 @@ export function VoiceAssistant() {
           backendRecordingRef.current = null;
           setListening(false);
         },
-      }, undefined, assistantLanguage);
+      }, undefined, assistantLanguage, request.signal);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Voice recording could not start.";
+      if (request.signal.aborted) return;
+      const message = backendTranscriptionErrorMessage(error);
       backendRecordingRef.current = null;
       setListening(false);
       setStatus(message);
       toast({ title: "Voice assistant", description: message, variant: "destructive" });
-    }
+    } finally { pendingMicRef.current = null; setStartingMic(false); }
   }
 
   function startMic() {
-    if (listening) {
+    setOpen(true);
+    if (listening || startingMic) {
       stopMic();
       return;
     }
-    if (assistantLanguage === "auto" || !Recognition || preferBackendRecordingRef.current) {
+    if (backendRecordingRef.current) return;
+    if (import.meta.env.VITE_NATIVE_APP || assistantLanguage === "auto" || !Recognition || preferBackendRecordingRef.current) {
       void startBackendMic();
       return;
     }
 
-    const recognition = createOneShotRecognition(Recognition, {
-      onStart: () => {
-        setOpen(true);
-        setListening(true);
-        setStatus("Listening once. Speak one complete command, then wait.");
-      },
-      onTranscript: (text) => {
-        const now = Date.now();
-        if (!shouldAcceptFinalTranscript(text, lastCapturedTranscriptRef.current, now)) {
-          setStatus("Duplicate voice result ignored. Review the captured command and press Run.");
-          return;
-        }
-        lastCapturedTranscriptRef.current = { key: voiceTranscriptKey(text), at: now };
-        setCommand(text);
-        setStatus("Command captured. Review it and press Run.");
-      },
-      onError: (message, variant, errorCode) => {
-        if (errorCode === "network" || errorCode === "service-not-allowed") {
-          preferBackendRecordingRef.current = true;
-          message = `${message} Press Speak again to use Artha cloud transcription.`;
-        }
-        setStatus(message);
-        toast({ title: "Voice assistant", description: message, variant });
-      },
-      onEnd: () => {
-        setListening(false);
-        recognitionRef.current = null;
-      },
-    }, speechRecognitionLocale(assistantLanguage));
-
-    recognitionRef.current = recognition;
     try {
+      const recognition = createOneShotRecognition(Recognition, {
+        onStart: () => {
+          setOpen(true);
+          setStartingMic(false);
+          setListening(true);
+          setStatus("Listening once. Speak one complete command, then wait.");
+        },
+        onTranscript: (text) => {
+          const now = Date.now();
+          if (!shouldAcceptFinalTranscript(text, lastCapturedTranscriptRef.current, now)) {
+            setStatus("Duplicate voice result ignored. Review the captured command and press Run.");
+            return;
+          }
+          lastCapturedTranscriptRef.current = { key: voiceTranscriptKey(text), at: now };
+          setCommand(text);
+          setStatus("Command captured. Review it and press Run.");
+        },
+        onError: (message, variant, errorCode) => {
+          if (errorCode === "network" || errorCode === "service-not-allowed") {
+            preferBackendRecordingRef.current = true;
+            message = `${message} Press Speak again to use Artha cloud transcription.`;
+          }
+          setStatus(message);
+          toast({ title: "Voice assistant", description: message, variant });
+        },
+        onEnd: () => {
+          setStartingMic(false);
+          setListening(false);
+          recognitionRef.current = null;
+        },
+      }, speechRecognitionLocale(assistantLanguage));
+
+      recognitionRef.current = recognition;
+      setStartingMic(true);
+      setStatus(t("assistant.micStarting"));
       recognition.start();
     } catch {
+      setStartingMic(false);
       setStatus("Mic could not start. Refresh the page or type the command.");
       setListening(false);
       recognitionRef.current = null;
@@ -338,6 +355,7 @@ export function VoiceAssistant() {
     if (navigator.onLine !== false && !["navigate", "search", "sync_count"].includes(local.action)
       && openAssistantCommand(spoken)) {
       recognitionRef.current?.abort?.();
+      pendingMicRef.current?.abort();
       backendRecordingRef.current?.cancel();
       setListening(false);
       setOpen(false);
@@ -396,7 +414,7 @@ export function VoiceAssistant() {
               <Bot className="h-4 w-4 text-primary" />
               AI voice assistant
             </div>
-            <Button type="button" size="icon" variant="ghost" aria-label={t("actions.close")} title={t("actions.close")} className="h-8 w-8" onClick={() => setOpen(false)}><X className="h-4 w-4" /></Button>
+            <Button type="button" size="icon" variant="ghost" aria-label={t("actions.close")} title={t("actions.close")} className="h-8 w-8" onClick={() => { pendingMicRef.current?.abort(); recognitionRef.current?.abort?.(); backendRecordingRef.current?.cancel(); setStartingMic(false); setListening(false); setOpen(false); }}><X className="h-4 w-4" /></Button>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">Control app pages and prepare product, customer, inventory, billing, payment, and search drafts. Nothing financial or sensitive is saved without review.</p>
           <div className="mt-2"><AssistantLanguageSelect value={assistantLanguage} onChange={setAssistantLanguage} disabled={listening || !!backendRecordingRef.current} /></div>
@@ -410,7 +428,7 @@ export function VoiceAssistant() {
           <div className="mt-2 grid grid-cols-2 gap-2 min-[420px]:flex min-[420px]:flex-wrap">
             <Button type="button" variant={listening ? "destructive" : "outline"} onClick={() => startMic()}>
               {listening ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
-              {listening ? "Stop" : "Speak"}
+              {startingMic ? t("assistant.micStarting") : listening ? "Stop" : "Speak"}
             </Button>
             <Button type="button" onClick={() => void runCommand()}><SendHorizonal className="mr-2 h-4 w-4" />Run</Button>
             <Button type="button" variant="secondary" onClick={() => void runCommand("add product chini cost 40 selling 45 stock 10 kg")}>Product demo</Button>
@@ -467,8 +485,7 @@ export function VoiceAssistant() {
               suppressMicClickRef.current = false;
               return;
             }
-            if (open) startMic();
-            else setOpen(true);
+            startMic();
           }}
         >
           <Mic className="h-4 w-4" aria-hidden="true" />

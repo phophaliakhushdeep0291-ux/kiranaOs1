@@ -56,7 +56,7 @@ import { recoverSpecialistBill } from "@/features/core/billing/specialist-handof
 import { useBusinessTypeKey } from "@/features/core/settings/business-type-store";
 import { activeSellingUnits, defaultSellingUnit, mergeCartProduct, type CartProductOptions } from "../cart-product";
 import { productConfiguratorFor, type ProductConfigurator } from "@/features/core/billing/product-configurators";
-import { SPLIT_PAYMENT, addonUnitPrice, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceNewProductLine, type VoiceParsedDraft } from "./billing-types";
+import { SPLIT_PAYMENT, addonUnitPrice, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type VoiceNewProductLine, type VoiceParsedDraft } from "./billing-types";
 import { createRetailPaymentQr, getRetailPaymentReadiness, verifyRetailPayment, type RetailQrCheckout } from "../retail-payment";
 import { RetailDynamicQrDialog } from "./components/RetailDynamicQrDialog";
 import { CardTerminalDialog } from "./components/CardTerminalDialog";
@@ -64,11 +64,12 @@ import { getCardTerminalReadiness, newCardTerminalRequestId, startCardTerminalCh
 import { getActiveLocationId } from "@/features/core/stores/location-context";
 import { getLoyaltyAccount, getLoyaltyProgram } from "@/features/core/loyalty/api";
 import { lookupGiftCard } from "@/features/core/gift-cards/api";
-import { startBackendTranscription, type BackendTranscriptionSession } from "@/features/core/voice/backend-transcription";
+import { backendTranscriptionErrorMessage, startBackendTranscription, type BackendTranscriptionSession } from "@/features/core/voice/backend-transcription";
 import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity, showCustomerDisplayViaHardwareBridge, type HardwareCustomerDisplayState } from "@/features/core/hardware/local-hardware-bridge";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { translateCategory } from "@/features/core/settings/business-types";
-import { speechRecognitionLocale } from "@/features/core/voice/voice-recognition";
+import type { SpeechRecognitionLike } from "@/features/core/voice/voice-types";
+import { createOneShotRecognition, getSpeechRecognitionConstructor, speechRecognitionLocale } from "@/features/core/voice/voice-recognition";
 import { Loader2 } from "lucide-react";
 import { UNAFFECTED_BY_LOCAL_DATA } from "@/lib/api/query-meta";
 import {
@@ -344,10 +345,12 @@ export default function Billing() {
   const [localProductRows, setLocalProductRows] = useState<Product[]>([]);
   const voiceRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const voiceBackendRecordingRef = useRef<BackendTranscriptionSession | null>(null);
+  const voiceRequestRef = useRef<AbortController | null>(null);
   const preferBackendVoiceRef = useRef(false);
   const customerDisplayRevisionRef = useRef(Date.now());
 
   useEffect(() => () => {
+    voiceRequestRef.current?.abort();
     voiceRecognitionRef.current?.abort?.();
     voiceBackendRecordingRef.current?.cancel();
   }, []);
@@ -1445,7 +1448,9 @@ export default function Billing() {
 
   async function startBackendVoiceListening() {
     const existingText = voiceCommand.trim();
-    setVoiceMicMessage(t("billing.page.micRequesting"));
+    const request = new AbortController();
+    voiceRequestRef.current = request;
+    setVoiceMicMessage(t("assistant.micStarting"));
     try {
       voiceBackendRecordingRef.current = await startBackendTranscription({
         onStart: () => {
@@ -1468,9 +1473,10 @@ export default function Billing() {
           voiceBackendRecordingRef.current = null;
           setVoiceListening(false);
         },
-      });
+      }, undefined, language, request.signal);
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("billing.page.voiceRecordingFailed");
+      if (request.signal.aborted) return;
+      const message = backendTranscriptionErrorMessage(error);
       voiceBackendRecordingRef.current = null;
       setVoiceListening(false);
       setVoiceMicMessage(message);
@@ -1479,126 +1485,48 @@ export default function Billing() {
   }
 
   async function startVoiceListening() {
-    if (voiceListening) {
-      if (voiceBackendRecordingRef.current) {
-        setVoiceMicMessage(t("billing.page.micStopped"));
-        voiceBackendRecordingRef.current.stop();
-        return;
-      }
-      voiceRecognitionRef.current?.stop?.();
-      setVoiceListening(false);
-      return;
-    }
-
-    const speechWindow = window as typeof window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor };
-    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+    if (voiceRequestRef.current) { voiceRequestRef.current.abort(); setVoiceMicMessage(t("billing.page.micStopped")); return; }
+    if (voiceBackendRecordingRef.current) { voiceBackendRecordingRef.current.stop(); return; }
+    if (voiceRecognitionRef.current) { voiceRecognitionRef.current.stop(); return; }
+    const Recognition = getSpeechRecognitionConstructor();
     if (!Recognition || preferBackendVoiceRef.current) {
-      await startBackendVoiceListening();
+      try { await startBackendVoiceListening(); }
+      finally { voiceRequestRef.current = null; }
       return;
     }
-
-    const isLocalhost = ["localhost", "127.0.0.1", "0.0.0.0"].includes(window.location.hostname);
-    if (!window.isSecureContext && !isLocalhost) {
-      const message = t("billing.page.micNeedsHttps");
-      setVoiceMicMessage(message);
-      toast({ title: t("billing.page.micBlockedByBrowser"), description: message, variant: "destructive" });
-      return;
-    }
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      const message = t("billing.page.micNoPermissionApi");
-      setVoiceMicMessage(message);
-      toast({ title: t("billing.page.micNotAvailable"), description: message, variant: "destructive" });
-      return;
-    }
-
-    try {
-      setVoiceMicMessage(t("billing.page.micRequestingPermission"));
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((track) => track.stop());
-    } catch (error) {
-      const name = error instanceof DOMException ? error.name : "PermissionError";
-      const message = name === "NotAllowedError" || name === "SecurityError"
-        ? t("billing.page.micBlockedDetail")
-        : name === "NotFoundError"
-          ? t("billing.page.micNotFound")
-          : t("billing.page.micPermissionFailed", { name });
-      setVoiceMicMessage(message);
-      toast({ title: t("billing.page.micPermissionNeeded"), description: message, variant: "destructive" });
-      return;
-    }
-
     let gotResult = false;
-    let heardText = "";
+    let hadError = false;
     const existingText = voiceCommand.trim();
-    let autoStopTimer: number | undefined;
-    const recognition = new Recognition();
-    voiceRecognitionRef.current = recognition;
-    recognition.lang = speechRecognitionLocale(language);
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      setVoiceListening(true);
-      setVoiceMicMessage(t("billing.page.micLive"));
-      autoStopTimer = window.setTimeout(() => recognition.stop?.(), 12000);
-    };
-
-    recognition.onresult = (event) => {
-      const parts: string[] = [];
-      const startIndex = event.resultIndex ?? 0;
-      for (let index = startIndex; index < event.results.length; index += 1) {
-        const transcript = event.results[index]?.[0]?.transcript?.trim();
-        if (transcript) parts.push(transcript);
-      }
-      const transcript = parts.join(" ").replace(/\s+/g, " ").trim();
-      if (!transcript) return;
-      gotResult = true;
-      heardText = transcript;
-      setVoiceCommand(existingText ? `${existingText} ${heardText}` : heardText);
-      setVoiceMicMessage(t("billing.page.micCapturedOnce"));
-    };
-
-    recognition.onerror = (event) => {
-      const error = event?.error ?? "unknown";
-      const message = error === "not-allowed" || error === "service-not-allowed"
-        ? t("billing.page.micPermissionBlocked")
-        : error === "audio-capture"
-          ? t("billing.page.micNoDevice")
-          : error === "no-speech"
-            ? t("billing.page.micNoSpeech")
-            : error === "network"
-              ? t("billing.page.micServiceUnreachable")
-              : t("billing.page.voiceCaptureFailed", { error });
-      const useBackendNext = error === "network" || error === "service-not-allowed";
-      if (useBackendNext) preferBackendVoiceRef.current = true;
-      const actionableMessage = useBackendNext
-        ? `${message} Press Start mic again to use Artha cloud transcription.`
-        : message;
-      setVoiceMicMessage(actionableMessage);
-      if (error !== "aborted") {
-        toast({ title: t("billing.page.micIssue"), description: actionableMessage, variant: error === "no-speech" ? "default" : "destructive" });
-      }
-    };
-
-    recognition.onend = () => {
-      if (autoStopTimer) window.clearTimeout(autoStopTimer);
-      setVoiceListening(false);
-      voiceRecognitionRef.current = null;
-      if (gotResult) {
-        setVoiceMicMessage(t("billing.page.micCaptured"));
-      } else {
-        setVoiceMicMessage(t("billing.page.micNothingCaptured"));
-      }
-    };
-
+    setVoiceMicMessage(t("assistant.micStarting"));
     try {
+      const recognition = createOneShotRecognition(Recognition, {
+        onStart: () => {
+          setVoiceListening(true);
+          setVoiceMicMessage(t("billing.page.micLive"));
+        },
+        onTranscript: (transcript) => {
+          gotResult = true;
+          setVoiceCommand(existingText ? `${existingText} ${transcript}` : transcript);
+          setVoiceMicMessage(t("billing.page.micCapturedOnce"));
+        },
+        onError: (message, variant, error) => {
+          hadError = true;
+          if (error === "network" || error === "service-not-allowed") preferBackendVoiceRef.current = true;
+          setVoiceMicMessage(message);
+          toast({ title: t("billing.page.micIssue"), description: message, variant });
+        },
+        onEnd: () => {
+          setVoiceListening(false);
+          voiceRecognitionRef.current = null;
+          if (!hadError) setVoiceMicMessage(t(gotResult ? "billing.page.micCaptured" : "billing.page.micNothingCaptured"));
+        },
+      }, speechRecognitionLocale(language));
+      voiceRecognitionRef.current = recognition;
       recognition.start();
     } catch (error) {
       setVoiceListening(false);
       voiceRecognitionRef.current = null;
-      const message = error instanceof Error ? error.message : t("billing.page.micRefresh");
+      const message = backendTranscriptionErrorMessage(error);
       setVoiceMicMessage(message);
       toast({ title: t("billing.page.micCouldNotStart"), description: message, variant: "destructive" });
     }
