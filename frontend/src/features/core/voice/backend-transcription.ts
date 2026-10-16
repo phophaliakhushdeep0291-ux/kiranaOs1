@@ -1,5 +1,6 @@
 import { ApiClientError } from "@/lib/api/http";
 import { requestAiAudioTranscription, type AudioTranscriptionResult } from "@/lib/ai/ai-client";
+import { selectedMicrophone, type MicrophoneFeedback } from "./microphone-input";
 
 export const BACKEND_RECORDING_MAX_MS = 15_000;
 export const MICROPHONE_PERMISSION_TIMEOUT_MS = 20_000;
@@ -10,12 +11,14 @@ export type BackendTranscriptionCallbacks = {
   onStart: () => void; onTranscribing: () => void;
   onTranscript: (result: AudioTranscriptionResult) => void;
   onError: (message: string) => void; onEnd: () => void;
+  onInput?: (input: MicrophoneFeedback) => void;
 };
 export function chooseRecorderMimeType(supports: (mimeType: string) => boolean = mime => MediaRecorder.isTypeSupported(mime)) {
   return RECORDER_MIME_TYPES.find(supports) ?? "";
 }
 export function backendTranscriptionErrorMessage(error: unknown) {
   if (error instanceof ApiClientError) {
+    if (error.data.code === "AI_TRANSCRIPTION_EMPTY") return "No speech was heard. Choose the correct microphone, check its input level, and try again.";
     if (error.data.code === "AI_KEY_MISSING") return "Cloud transcription is not configured on this server. Type the command or ask the owner to configure an AI provider.";
     if (error.data.code === "AI_RATE_LIMITED") return "Cloud transcription is busy. Wait a moment or type the command.";
     if (error.data.code === "AI_QUOTA_EXCEEDED") return "Cloud transcription quota is unavailable. Type the command while the owner checks provider billing.";
@@ -23,6 +26,7 @@ export function backendTranscriptionErrorMessage(error: unknown) {
   }
   if (error instanceof DOMException && ["NotAllowedError", "SecurityError"].includes(error.name)) return "Microphone access is blocked. Allow it in this app or browser and in your device's Privacy settings, then retry.";
   if (error instanceof DOMException && error.name === "NotFoundError") return "No microphone was found. Select an input device in your system settings.";
+  if (error instanceof DOMException && error.name === "OverconstrainedError") return "The selected microphone is disconnected. Choose another microphone or the system default, then retry.";
   if (error instanceof DOMException && error.name === "NotReadableError") return "The microphone is busy or unavailable. Close the other recording app and retry.";
   if (typeof navigator !== "undefined" && navigator.onLine === false) return "Cloud transcription needs a connection. Type the command while offline.";
   return error instanceof Error && error.message ? error.message : "Voice could not be transcribed. Type the command or retry.";
@@ -37,7 +41,7 @@ function assertBackendRecordingAvailable() {
   if (navigator.onLine === false) throw new Error("Cloud transcription needs a connection. Type the command while offline.");
 }
 /** Bound a permission prompt without leaking a stream if the user accepts it later. */
-export async function requestMicrophone(signal?: AbortSignal): Promise<MediaStream> {
+export async function requestMicrophone(signal?: AbortSignal, deviceId = selectedMicrophone()): Promise<MediaStream> {
   if (signal?.aborted) throw new DOMException("Recording cancelled", "AbortError");
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -51,7 +55,7 @@ export async function requestMicrophone(signal?: AbortSignal): Promise<MediaStre
     const abort = () => finish(new DOMException("Recording cancelled", "AbortError"));
     const timer = setTimeout(() => finish(new Error("Microphone permission is still waiting. Allow access in the permission prompt, then press Speak again.")), MICROPHONE_PERMISSION_TIMEOUT_MS);
     signal?.addEventListener("abort", abort, { once: true });
-    try { navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => finish(undefined, stream), error => finish(error)); }
+    try { navigator.mediaDevices.getUserMedia({ audio: deviceId ? { deviceId: { exact: deviceId } } : true }).then(stream => finish(undefined, stream), error => finish(error)); }
     catch (error) { finish(error as Error); }
   });
 }
@@ -63,8 +67,9 @@ export async function startBackendTranscription(callbacks: BackendTranscriptionC
   let recorder: MediaRecorder | undefined;
   let cancelled = false, ended = false, tracksStopped = false;
   let autoStopTimer: ReturnType<typeof setTimeout> | undefined;
+  let monitor: ReturnType<typeof import("./microphone-monitor").monitorMicrophone> | undefined;
   const upload = new AbortController();
-  const stopTracks = () => { if (!tracksStopped) { tracksStopped = true; stream?.getTracks().forEach(track => track.stop()); } };
+  const stopTracks = () => { monitor?.stop(); if (!tracksStopped) { tracksStopped = true; stream?.getTracks().forEach(track => track.stop()); } };
   const endOnce = () => {
     if (ended) return;
     ended = true; microphoneBusy = false;
@@ -89,6 +94,7 @@ export async function startBackendTranscription(callbacks: BackendTranscriptionC
     audioRecorder.onstop = async () => {
       clearTimeout(autoStopTimer); stopTracks();
       if (cancelled) { endOnce(); return; }
+      if (monitor?.isSilent()) { callbacks.onError("No sound reached this microphone. Choose a different microphone and check the input level while speaking."); endOnce(); return; }
       const audio = new Blob(chunks, { type: audioRecorder.mimeType || mimeType || "audio/webm" });
       if (!audio.size) { callbacks.onError("No audio was captured. Speak closer to the microphone or type the command."); endOnce(); return; }
       callbacks.onTranscribing();
@@ -100,6 +106,12 @@ export async function startBackendTranscription(callbacks: BackendTranscriptionC
     };
     signal?.addEventListener("abort", cancel, { once: true });
     audioRecorder.start(250);
+    const recordingStream = stream;
+    // The meter is optional cloud-recording UI, not an offline-counter dependency.
+    // A cancelled recording must not acquire an audio graph after this loads.
+    void import("./microphone-monitor").then(({ monitorMicrophone }) => {
+      if (!ended && !cancelled && audioRecorder.state === "recording") monitor = monitorMicrophone(recordingStream, callbacks.onInput);
+    }).catch(() => {});
     autoStopTimer = setTimeout(stop, Math.max(1_000, Math.min(maxDurationMs, BACKEND_RECORDING_MAX_MS)));
     callbacks.onStart();
     return { stop, cancel };

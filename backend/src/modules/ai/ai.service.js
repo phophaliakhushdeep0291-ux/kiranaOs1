@@ -96,7 +96,7 @@ export async function transcribeAudio(file, { providerOverride, language = "auto
     openAudio: () => fs.createReadStream(file.path),
   });
 
-  if (!answered.transcript) {
+  if (!/[\p{L}\p{N}]/u.test(answered.transcript || "")) {
     const error = new Error("The transcription provider returned no speech text");
     error.code = "AI_TRANSCRIPTION_EMPTY";
     error.status = 502;

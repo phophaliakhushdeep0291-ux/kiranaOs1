@@ -72,6 +72,7 @@ const tempAudioPath = path.join(os.tmpdir(), `kiranaos-transcription-test-${proc
 await fs.promises.writeFile(tempAudioPath, audioBytes);
 
 let transcriptionRequest;
+let transcriptText = "  Mohan ka bill banao shakkar 2 kilo  ";
 const providerOverride = {
   provider: "test-provider",
   model: "test-transcription-model",
@@ -80,7 +81,7 @@ const providerOverride = {
       transcriptions: {
         async create(request) {
           transcriptionRequest = request;
-          return { text: "  Mohan ka bill banao shakkar 2 kilo  " };
+          return { text: transcriptText };
         },
       },
     },
@@ -107,6 +108,14 @@ try {
   await transcribeAudio({ path: tempAudioPath }, { providerOverride, language: "yue" });
   assert.equal(transcriptionRequest.language, undefined, "unsupported hint formats use provider detection");
   assert.equal(typeof transcriptionRequest.file.pipe, "function", "provider must receive a readable audio stream");
+  for (const empty of [".", "...", "।", " !? "]) {
+    transcriptText = empty;
+    await assert.rejects(transcribeAudio({ path: tempAudioPath }, { providerOverride }), { code: "AI_TRANSCRIPTION_EMPTY" });
+  }
+  for (const speech of ["ओपन बिलिंग", "افتح المنتجات", "打开商品"]) {
+    transcriptText = speech;
+    assert.equal((await transcribeAudio({ path: tempAudioPath }, { providerOverride })).transcript, speech);
+  }
 } finally {
   await fs.promises.rm(tempAudioPath, { force: true });
 }

@@ -1,5 +1,5 @@
 import { executionFeedback } from "./execution-feedback";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, Check, Loader2, Mic, Send, ShoppingCart, Sparkles, Square, Volume2, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAppLanguage } from "@/features/core/settings/i18n";
@@ -28,6 +28,8 @@ import {
   type BackendTranscriptionSession,
 } from "@/features/core/voice/backend-transcription";
 import { submitAiFeedback, type AiFeedbackOutcome } from "@/lib/ai/ai-feedback-client";
+import type { MicrophoneFeedback } from "@/features/core/voice/microphone-input";
+const MicrophoneInput = lazy(() => import("@/features/core/voice/MicrophoneInput"));
 
 /**
  * The assistant panel.
@@ -81,6 +83,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
   const planRequestBusy = useRef(false);
   const [showTrace, setShowTrace] = useState(false);
   const [mic, setMic] = useState<"idle" | "starting" | "listening" | "transcribing">("idle");
+  const [microphoneInput, setMicrophoneInput] = useState<MicrophoneFeedback | null>(null);
   const micRequest = useRef<AbortController | null>(null);
   const micSession = useRef<BackendTranscriptionSession | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -310,6 +313,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
     setError(null);
     try {
       micSession.current = await startBackendTranscription({
+        onInput: setMicrophoneInput,
         onStart: () => setMic("listening"),
         onTranscribing: () => setMic("transcribing"),
         onTranscript: (result) => {
@@ -320,6 +324,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
         onEnd: () => {
           micSession.current = null;
           setMic("idle");
+          setMicrophoneInput(null);
         },
       }, undefined, assistantLanguage, controller.signal);
       if (!mounted.current) { micSession.current.cancel(); micSession.current = null; }
@@ -592,6 +597,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
           ) : null}
         </div>
 
+        {navigator.onLine !== false && <div className="px-3"><Suspense fallback={null}><MicrophoneInput busy={mic !== "idle"} input={microphoneInput} /></Suspense></div>}
         <form
           onSubmit={(event) => { event.preventDefault(); ask(draft); }}
           className="flex items-center gap-2 border-t border-slate-200 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"

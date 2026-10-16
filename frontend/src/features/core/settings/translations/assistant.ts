@@ -5,6 +5,11 @@
 // what someone reads before agreeing to a change to their stock or their prices.
 // They stay plain and concrete for that reason.
 export const assistantEn = {
+  "assistant.microphoneInput": "Microphone",
+  "assistant.microphoneDefault": "System default",
+  "assistant.microphoneDisconnected": "Saved microphone (unavailable)",
+  "assistant.microphoneRecording": "Recording: {name} · {seconds}s",
+  "assistant.microphoneHelp": "Speak while the level moves. If it stays empty, stop and choose another microphone.",
   "assistant.planExpired": "This plan expired. Ask again and review the current details.",
   "assistant.stepCompleted": "Completed",
   "assistant.stepPrepared": "Prepared for this device",

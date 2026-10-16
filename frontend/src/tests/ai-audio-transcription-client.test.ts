@@ -63,6 +63,15 @@ describe("AI audio transcription client", () => {
     expect(chooseRecorderMimeType(() => false)).toBe("");
   });
 
+  it.each(["", ".", "...", "।", "  !? "])("rejects a non-speech transcript %j", async transcript => {
+    vi.mocked(apiRequest).mockResolvedValue({ transcript, model: "test", provider: "fixture" });
+    await expect(requestAiAudioTranscription(new Blob(["audio"]))).rejects.toThrow(/No speech was heard/);
+  });
+  it.each(["ओपन बिलिंग", "افتح المنتجات", "打开商品", "500"])("preserves words and digits in any script: %s", async transcript => {
+    vi.mocked(apiRequest).mockResolvedValue({ transcript, model: "test", provider: "fixture" });
+    expect((await requestAiAudioTranscription(new Blob(["audio"]))).transcript).toBe(transcript);
+  });
+
   it("turns provider configuration failures into an actionable message", () => {
     const error = new ApiClientError("missing", 503, { code: "AI_KEY_MISSING" });
     expect(backendTranscriptionErrorMessage(error)).toMatch(/not configured/i);

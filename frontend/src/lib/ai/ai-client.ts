@@ -58,11 +58,13 @@ export async function requestAiAudioTranscription(
   form.append("audio", audio.slice(0, audio.size, mediaType || "application/octet-stream"), fileName);
   if (init?.language) form.append("language", init.language);
 
-  return apiRequest<AudioTranscriptionResult>("/ai/transcribe", {
+  const result = await apiRequest<AudioTranscriptionResult>("/ai/transcribe", {
     method: "POST",
     body: form,
     signal: init?.signal,
   });
+  if (!/[\p{L}\p{N}]/u.test(result.transcript || "")) throw new Error("No speech was heard. Choose the correct microphone, check its input level, and try again.");
+  return result;
 }
 
 export async function requestAiAppCommand(

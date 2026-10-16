@@ -6,6 +6,8 @@ import {
   useMemo,
   useRef,
   useState,
+  lazy,
+  Suspense,
 } from "react";
 import { useLocation } from "wouter";
 import { Bot, GripVertical, Mic, MicOff, SendHorizonal, X } from "lucide-react";
@@ -15,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { openAssistantCommand } from "@/features/core/assistant/task-commands";
 import { executeVoiceAction } from "./voice-actions";
-import { parseLocalVoiceIntent } from "./voice-command-parser";
+import { parseLocalVoiceIntent, parseSpokenNavigation } from "./voice-command-parser";
 import { askAiIntent } from "./voice-ai-client";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { createOneShotRecognition, getSpeechRecognitionConstructor, shouldAcceptFinalTranscript, speechRecognitionLocale, voiceTranscriptKey } from "./voice-recognition";
@@ -24,6 +26,8 @@ import { AssistantLanguageSelect } from "@/features/core/assistant/AssistantLang
 import { useAssistantLanguage } from "@/features/core/assistant/use-assistant-language";
 import { backendTranscriptionErrorMessage, startBackendTranscription, type BackendTranscriptionSession } from "./backend-transcription";
 import { submitAiFeedback, type AiFeedbackOutcome } from "@/lib/ai/ai-feedback-client";
+import { selectedMicrophone, type MicrophoneFeedback } from "./microphone-input";
+const MicrophoneInput = lazy(() => import("./MicrophoneInput"));
 
 type AssistantPosition = { x: number; y: number };
 
@@ -78,13 +82,15 @@ export function VoiceAssistant() {
   const [open, setOpen] = useState(false);
   const [command, setCommand] = useState("");
   const [listening, setListening] = useState(false);
-  const [status, setStatus] = useState("Say: open billing, search product chini, add customer Ramesh, record payment Ramesh 500 cash, or pending sync count.");
+  const [status, setStatus] = useState(t("assistant.inputPlaceholder"));
   const [feedbackTarget, setFeedbackTarget] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<AiFeedbackOutcome | "submitting" | "failed" | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const backendRecordingRef = useRef<BackendTranscriptionSession | null>(null);
   const pendingMicRef = useRef<AbortController | null>(null);
   const [startingMic, setStartingMic] = useState(false);
+  const [microphoneInput, setMicrophoneInput] = useState<MicrophoneFeedback | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
   const preferBackendRecordingRef = useRef(false);
   const lastCapturedTranscriptRef = useRef<{ key: string; at: number } | null>(null);
   const lastProcessedTranscriptRef = useRef<{ key: string; at: number } | null>(null);
@@ -237,6 +243,7 @@ export function VoiceAssistant() {
     setStatus("Requesting microphone access for cloud transcription...");
     try {
       backendRecordingRef.current = await startBackendTranscription({
+        onInput: setMicrophoneInput,
         onStart: () => {
           setStartingMic(false);
           setListening(true);
@@ -244,6 +251,7 @@ export function VoiceAssistant() {
         },
         onTranscribing: () => {
           setListening(false);
+          setTranscribing(true);
           setStatus(t("assistant.transcribingAny"));
         },
         onTranscript: ({ transcript, provider }) => {
@@ -263,6 +271,8 @@ export function VoiceAssistant() {
         onEnd: () => {
           backendRecordingRef.current = null;
           setListening(false);
+          setTranscribing(false);
+          setMicrophoneInput(null);
         },
       }, undefined, assistantLanguage, request.signal);
     } catch (error) {
@@ -282,7 +292,7 @@ export function VoiceAssistant() {
       return;
     }
     if (backendRecordingRef.current) return;
-    if (import.meta.env.VITE_NATIVE_APP || assistantLanguage === "auto" || !Recognition || preferBackendRecordingRef.current) {
+    if (import.meta.env.VITE_NATIVE_APP || selectedMicrophone() || assistantLanguage === "auto" || !Recognition || preferBackendRecordingRef.current) {
       void startBackendMic();
       return;
     }
@@ -363,7 +373,7 @@ export function VoiceAssistant() {
       return;
     }
     const preferLocalContext = location.startsWith("/products") && local.action === "product_draft";
-    const aiIntent = preferLocalContext ? null : await askAiIntent(spoken, location);
+    const aiIntent = preferLocalContext || parseSpokenNavigation(spoken) || ["search", "sync_count"].includes(local.action) ? null : await askAiIntent(spoken, location);
     const intent = aiIntent && aiIntent.action !== "noop" ? aiIntent : local;
 
     await executeVoiceAction({
@@ -418,19 +428,20 @@ export function VoiceAssistant() {
           </div>
           <p className="mt-1 text-xs text-muted-foreground">Control app pages and prepare product, customer, inventory, billing, payment, and search drafts. Nothing financial or sensitive is saved without review.</p>
           <div className="mt-2"><AssistantLanguageSelect value={assistantLanguage} onChange={setAssistantLanguage} disabled={listening || !!backendRecordingRef.current} /></div>
+          {navigator.onLine !== false && <Suspense fallback={null}><MicrophoneInput busy={startingMic || listening || transcribing} input={microphoneInput} /></Suspense>}
           <Textarea
             dir="auto"
             value={command}
             onChange={(event) => setCommand(event.target.value)}
             className="mt-3 min-h-20 resize-none"
-            placeholder="Try: open products / search product chini / add product chini cost 40 selling 45 / record payment Ramesh 500 cash / pending sync count"
+            placeholder={t("assistant.inputPlaceholder")}
           />
           <div className="mt-2 grid grid-cols-2 gap-2 min-[420px]:flex min-[420px]:flex-wrap">
-            <Button type="button" variant={listening ? "destructive" : "outline"} onClick={() => startMic()}>
+            <Button type="button" disabled={transcribing} variant={listening ? "destructive" : "outline"} onClick={() => startMic()}>
               {listening ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
               {startingMic ? t("assistant.micStarting") : listening ? "Stop" : "Speak"}
             </Button>
-            <Button type="button" onClick={() => void runCommand()}><SendHorizonal className="mr-2 h-4 w-4" />Run</Button>
+            <Button type="button" disabled={startingMic || listening || transcribing || !command.trim()} onClick={() => void runCommand()}><SendHorizonal className="mr-2 h-4 w-4" />Run</Button>
             <Button type="button" variant="secondary" onClick={() => void runCommand("add product chini cost 40 selling 45 stock 10 kg")}>Product demo</Button>
             <Button type="button" variant="secondary" onClick={() => void runCommand("purchase 10 kilo chini cost 40")}>Inventory demo</Button>
           </div>
