@@ -1,3 +1,4 @@
+import { discoverScriptedTools } from "./helpers/agent-tool-discovery.js";
 import assert from "node:assert/strict";
 import db from "../src/db.js";
 import { seedEvalShop } from "./helpers/agent-eval-shop.js";
@@ -10,7 +11,7 @@ import "../src/modules/ai/agent/register-core.js";
 import { executionStatus } from "../src/modules/ai/agent/agent.controller.js";
 function provider(calls) {
   let index = 0;
-  return { provider: "fixture", model: "purchasing", client: { chat: { completions: { create: async () => ({ choices: [{ message: index++ === 0
+  return { provider: "fixture", model: "purchasing", client: { chat: { completions: { create: async body => discoverScriptedTools(body, calls.map(([name]) => name)) ?? ({ choices: [{ message: index++ === 0
     ? { role: "assistant", tool_calls: calls.map(([name, args], i) => ({ id: String(i), type: "function", function: { name, arguments: JSON.stringify(args) } })) }
     : { role: "assistant", content: "I have done everything" } }] }) } } } };
 }

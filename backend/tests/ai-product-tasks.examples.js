@@ -6,6 +6,7 @@ import { validateArgs } from "../src/modules/ai/agent/argument-validation.js";
 import { toolAvailableTo } from "../src/modules/ai/agent/tool-contract.js";
 import { runAgentTurn, executeApprovedPlan } from "../src/modules/ai/agent/agent.service.js";
 import "../src/modules/ai/agent/register-core.js";
+import { discoverScriptedTools } from "./helpers/agent-tool-discovery.js";
 
 const args = { name: "New rice", unit: "kg", sellingPrice: 64.5, costPrice: 50, openingStock: 2.5, taxRate: 5 };
 for (const field of CREATE_PRODUCT_TOOL.parameters.required) {
@@ -25,6 +26,8 @@ function provider(steps, inspect = () => {}) {
   let index = 0;
   return { provider: "fixture", model: "task-contract", client: { chat: { completions: { create: async body => {
     inspect(body);
+    const discovery = discoverScriptedTools(body, (steps[index] ?? []).map(([name]) => name));
+    if (discovery) return discovery;
     const calls = steps[index++];
     return { choices: [{ message: calls ? { role: "assistant", tool_calls: calls.map(([name, arguments_], i) => ({ id: `${index}-${i}`, type: "function", function: { name, arguments: JSON.stringify(arguments_) } })) } : { role: "assistant", content: "Not displayed" } }] };
   } } } } };

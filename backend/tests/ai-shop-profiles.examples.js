@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { discoverScriptedTools } from "./helpers/agent-tool-discovery.js";
+import { DISCOVERY_TOOL } from "../src/modules/ai/agent/tool-discovery.js";
 import db from "../src/db.js";
 import { BUSINESS_TYPES, BUSINESS_PROFILES, BUSINESS_TYPE_DIRECTORIES, settingsForBusinessType } from "../src/verticals/registry.js";
 import { seedEvalShop, dropEvalShop } from "./helpers/agent-eval-shop.js";
@@ -73,10 +75,13 @@ try {
     }
     let calls = 0;
     const provider = { provider: "fixture", model: "trade-context", client: { chat: { completions: { create: async body => {
-      calls++;
       const system = body.messages.filter(message => message.role === "system").map(message => message.content).join("\n");
       assert.ok(system.includes(BUSINESS_PROFILES[businessType].assistant.guidance));
-      assert.ok(body.tools.every(tool => ownerOf(tool.function.name) === "core" || ownerOf(tool.function.name) === businessType));
+      const offeredNames = body.tools.flatMap(tool => tool.function.name === DISCOVERY_TOOL ? tool.function.parameters.properties.names.items.enum : [tool.function.name]);
+      assert.ok(offeredNames.every(name => ownerOf(name) === "core" || ownerOf(name) === businessType));
+      const discovery = discoverScriptedTools(body, ["request_clarification"]);
+      if (discovery) return discovery;
+      calls++;
       return { choices: [{ message: { role: "assistant", tool_calls: [{ id: "clarify", type: "function", function: { name: "request_clarification", arguments: JSON.stringify({ field: BUSINESS_PROFILES[businessType].assistant.clarificationFields[0] }) } }] } }] };
     } } } } };
     const answer = await runAgentTurn(ctx, { message: "help with this item", language: "en" }, { provider });

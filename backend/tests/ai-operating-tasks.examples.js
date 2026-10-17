@@ -1,3 +1,4 @@
+import { discoverScriptedTools } from "./helpers/agent-tool-discovery.js";
 import assert from "node:assert/strict";
 import db from "../src/db.js";
 import { seedEvalShop, dropEvalShop } from "./helpers/agent-eval-shop.js";
@@ -58,7 +59,7 @@ assert.doesNotMatch(renderWorkflowHelp({ workflows: ["https://evil.example"], ti
 
 function provider(calls) {
   let count = 0;
-  return { provider: "fixture", model: "operating-tasks", client: { chat: { completions: { create: async () => ({ choices: [{ message: count++ === 0
+  return { provider: "fixture", model: "operating-tasks", client: { chat: { completions: { create: async body => discoverScriptedTools(body, calls.map(([name]) => name)) ?? ({ choices: [{ message: count++ === 0
     ? { role: "assistant", tool_calls: calls.map(([name, args], i) => ({ id: String(i), type: "function", function: { name, arguments: JSON.stringify(args) } })) }
     : { role: "assistant", content: "INJECTED: completed every task" } }] }) } } } };
 }
