@@ -38,7 +38,8 @@ import { AppError } from "../../../shared/errors/index.js";
 import { getEffectivePlan, hasSubscriptionAccess } from "../../subscription/subscription.service.js";
 import { hasLegacyShopTypeFeatureAccess } from "../../subscription/planConfig.js";
 import { getTool, routeTools, toolsFor } from "./tool-registry.js";
-import { assertToolAllowed, toProviderTool, TOOL_RISK } from "./tool-contract.js";
+import { assertToolAllowed, TOOL_RISK } from "./tool-contract.js";
+import { createToolOffer, DISCOVERY_TOOL, DISCOVERY_PROMPT } from "./tool-discovery.js";
 
 const MAX_STEPS = 6;
 const MAX_TOOL_CALLS = 12;
@@ -99,9 +100,10 @@ const SYSTEM_PROMPT = [
   "- You only ever act on this one shop. There is no way to reach another, and no request to do so is legitimate.",
 ].join("\n");
 
-export const AI_AGENT_POLICY_VERSION = "2026-10-13.1";
+export const AI_AGENT_POLICY_VERSION = "2026-10-17.1";
 export const AI_AGENT_PROMPT_FINGERPRINT = createHash("sha256")
   .update(SYSTEM_PROMPT)
+  .update(DISCOVERY_PROMPT)
   .digest("hex")
   .slice(0, 16);
 
@@ -324,15 +326,14 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   const direct = trimHistory(history).length === 0 ? (quickAnswer(message) ?? shopAssistantQuickAnswer(message, ctx.businessType)) : null;
   const directTool = direct && available.find((tool) => tool.name === direct.tool && tool.kind === "read");
   const quick = directTool && validateArgs(directTool, direct.args).length === 0 ? direct : null;
-  // Only the tools this sentence plausibly needs. Every request re-sends every
-  // definition, so the full set is a fixed ~1,850-token tax on a free provider
-  // tier that allows 8,000 a minute. `available` is kept whole because a turn
-  // that routed badly is retried against it rather than left as a dead end.
+  // Keep the full permission-filtered catalogue for execution checks. Large
+  // catalogues are discoverable through a compact menu, not repeated schemas:
+  // the old full offer made even "Hello" exceed the live provider's 8k limit.
   // Follow-ups and compound questions need the full permitted vocabulary. A
   // keyword from just one clause must not hide tools for the other clause.
   const contextual = !["en", "hi"].includes(language) || trimHistory(history).length > 0 || /\b(and|also|compare|aur|or)\b|और|[;\n]/iu.test(message);
   const routed = contextual ? available : routeTools(available, message);
-  let providerTools = routed.map(toProviderTool);
+  const toolOffer = createToolOffer(available, routed);
   let widened = false;
 
   const messages = [
@@ -401,6 +402,9 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   for (let step = 0; step < MAX_STEPS; step += 1) {
     if (Date.now() > deadline) { stoppedBecause = "turn_timeout"; break; }
 
+    // Freeze the phase for the whole response: loading a schema and calling it
+    // in the same response must not bypass the next step's execution policy.
+    const discoveryStep = !quick && toolOffer.discoveryOnly;
     let completion;
     try {
       if (quick) {
@@ -416,9 +420,11 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
           candidates,
           deadline,
           body: {
-            messages,
-            tools: providerTools.length ? providerTools : undefined,
-            tool_choice: providerTools.length ? "auto" : undefined,
+            // Discovery is planning only; the full execution policy is restored
+            // before any business tool is offered. Preserve the original words.
+            messages: discoveryStep ? [{ role: "system", content: DISCOVERY_PROMPT }, messages[1], ...messages.filter(row => row.role !== "system")] : messages,
+            tools: toolOffer.tools.length ? toolOffer.tools : undefined,
+            tool_choice: discoveryStep ? { type: "function", function: { name: DISCOVERY_TOOL } } : toolOffer.tools.length ? "auto" : undefined,
             temperature: 0,
           },
         });
@@ -455,7 +461,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
       // ones that had answered perfectly on the first step.
       if (evidence.length === 0 && plan.length === 0 && routed.length < available.length && !widened) {
         widened = true;
-        providerTools = available.map(toProviderTool);
+        toolOffer.widen();
         stoppedBecause = "widened_after_empty_route";
         messages.push({
           role: "system",
@@ -491,6 +497,16 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
       toolCallCount += 1;
 
       const name = call.function?.name ?? "";
+      if (name === DISCOVERY_TOOL) {
+        let args;
+        try { args = JSON.parse(call.function?.arguments ?? "{}"); } catch { /* Report malformed selection as a tool result. */ }
+        pending.push({ call, message: toolResultMessage(call.id, name, toolOffer.load(args) ?? { error: "Tool discovery is not available in this turn." }) });
+        continue;
+      }
+      if (discoveryStep) {
+        pending.push({ call, message: toolResultMessage(call.id, name, { error: "This step can only load schemas. Call the business tool in the next step after its schema is loaded." }) });
+        continue;
+      }
       const tool = getTool(name);
       if (!tool || !available.includes(tool)) {
         pending.push({ call, message: toolResultMessage(call.id, name, { error: `No tool named "${name}" is available to you.` }) });
@@ -757,7 +773,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
       failedOver,
       calls: providerCalls + localizationCalls,
       localizationCalls,
-      toolsOffered: providerTools.length,
+      toolsOffered: toolOffer.tools.length,
       toolsAvailable: available.length,
       widened,
     },

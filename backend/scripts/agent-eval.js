@@ -58,6 +58,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { runAgentTurn, AI_AGENT_POLICY_VERSION, AI_AGENT_PROMPT_FINGERPRINT } from "../src/modules/ai/agent/agent.service.js";
 import { chatProviders } from "../src/modules/ai/provider-gateway.js";
+import { discoverScriptedTools } from "../tests/helpers/agent-tool-discovery.js";
 
 export const DIMENSIONS = ["toolSelection", "argumentGrounding", "writeDiscipline", "evidence", "refusal", "language"];
 
@@ -91,8 +92,12 @@ export function replayProvider(steps, refs) {
   return {
     provider: "replay",
     model: `dataset-v1`,
-    client: { chat: { completions: { create: async () => {
+    client: { chat: { completions: { create: async body => {
       const calls = steps[step] ?? [];
+      if (calls.length) {
+        const discovery = discoverScriptedTools(body, calls.map(call => call.tool));
+        if (discovery) return discovery;
+      }
       step += 1;
       // Out of scripted steps, or this step deliberately calls nothing: the
       // model "answers". The loop discards that sentence and composes its own,
