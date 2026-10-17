@@ -85,6 +85,12 @@ by both the client and server. Short, quiet or unmeasurable recordings still rea
 the provider. Exact English/Hindi navigation phrases, including the observed
 “ओपन बिलेंग” transcription, can open their page without a model request.
 
+Version 1.0.4 also handles explicit English/Hindi page-opening commands in the
+chat assistant locally after transcription, using the reviewed workflow/role
+checks. It cancels any outstanding proposal before navigating, and stays put if
+cancellation fails. Bare nouns, negations and compound requests continue through
+the conversational path. Voice transcription itself still needs the server.
+
 For a live check, choose the built-in microphone, press Speak and verify that the
 input meter moves while talking. Stop, review the captured text, then press Run
 in the floating assistant. A typed command that opens a page is not speech proof.
@@ -116,3 +122,6 @@ with older servers that rejected MediaRecorder's `;codecs=opus` parameter.
 Do not equate a successful build or synthetic audio with live provider accuracy.
 Test actual speech with an authenticated shop and configured provider on each target
 OS. Customer rollout also needs signing and printer/scanner/device testing.
+
+The desktop smoke also checks chat voice navigation with the AI endpoint down,
+and failed/successful cancellation of an outstanding fixture proposal before navigation.

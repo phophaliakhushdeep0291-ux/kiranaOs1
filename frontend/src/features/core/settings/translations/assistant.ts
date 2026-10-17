@@ -27,6 +27,7 @@ export const assistantEn = {
   "assistant.transcribingAny": "Transcribing your audio…",
   "assistant.example.tasks": "What can you do?",
   "assistant.tradeChanged": "The shop type changed. Nothing from this plan was executed. Ask for a new plan for the current shop type.",
+  "assistant.openingWorkflow": "Opening the page.",
   "assistant.openWorkflow": "Open {name}",
   "assistant.example.createProduct": "Add a new product to my catalogue",
   "assistant.productSaved": "Saved {names} on this device and queued for sync. Check Sync status for server acceptance.",

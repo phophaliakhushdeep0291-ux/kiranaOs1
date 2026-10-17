@@ -39,7 +39,7 @@ import { getEffectivePlan, hasSubscriptionAccess } from "../../subscription/subs
 import { hasLegacyShopTypeFeatureAccess } from "../../subscription/planConfig.js";
 import { getTool, routeTools, toolsFor } from "./tool-registry.js";
 import { assertToolAllowed, TOOL_RISK } from "./tool-contract.js";
-import { createToolOffer, DISCOVERY_TOOL, DISCOVERY_PROMPT } from "./tool-discovery.js";
+import { createToolOffer, DISCOVERY_TOOL, DISCOVERY_PROMPT, CLARIFICATION_TOOL } from "./tool-discovery.js";
 
 const MAX_STEPS = 6;
 const MAX_TOOL_CALLS = 12;
@@ -100,7 +100,7 @@ const SYSTEM_PROMPT = [
   "- You only ever act on this one shop. There is no way to reach another, and no request to do so is legitimate.",
 ].join("\n");
 
-export const AI_AGENT_POLICY_VERSION = "2026-10-17.1";
+export const AI_AGENT_POLICY_VERSION = "2026-10-18.1";
 export const AI_AGENT_PROMPT_FINGERPRINT = createHash("sha256")
   .update(SYSTEM_PROMPT)
   .update(DISCOVERY_PROMPT)
@@ -424,7 +424,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
             // before any business tool is offered. Preserve the original words.
             messages: discoveryStep ? [{ role: "system", content: DISCOVERY_PROMPT }, messages[1], ...messages.filter(row => row.role !== "system")] : messages,
             tools: toolOffer.tools.length ? toolOffer.tools : undefined,
-            tool_choice: discoveryStep ? { type: "function", function: { name: DISCOVERY_TOOL } } : toolOffer.tools.length ? "auto" : undefined,
+            tool_choice: discoveryStep ? "required" : toolOffer.tools.length ? "auto" : undefined,
             temperature: 0,
           },
         });
@@ -503,8 +503,8 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
         pending.push({ call, message: toolResultMessage(call.id, name, toolOffer.load(args) ?? { error: "Tool discovery is not available in this turn." }) });
         continue;
       }
-      if (discoveryStep) {
-        pending.push({ call, message: toolResultMessage(call.id, name, { error: "This step can only load schemas. Call the business tool in the next step after its schema is loaded." }) });
+      if (discoveryStep && name !== CLARIFICATION_TOOL) {
+        pending.push({ call, message: toolResultMessage(call.id, name, { error: "This step can only load schemas or ask a clarification. Call the business tool in the next step after its schema is loaded." }) });
         continue;
       }
       const tool = getTool(name);

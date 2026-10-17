@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import paths from "@/features/core/assistant/workflow-paths.json";
-import { workflowPath } from "@/features/core/assistant/workflow-handoff";
+import { spokenWorkflowPath, workflowPath } from "@/features/core/assistant/workflow-handoff";
 import { loadAuthSession } from "@/lib/storage/auth-storage";
 import { routeAccessFor, normalizeStaffRole } from "@/features/core/staff/role-access";
 
@@ -56,6 +56,20 @@ describe("assistant workflow coverage", () => {
         if (!allowed) expect(Boolean(row.permission || (role === "viewer" && row.changesData)), `${role}: ${row.id}`).toBe(true);
       }
     }
+  });
+  it("handles exact spoken page requests with the same role checks", () => {
+    for (const command of ["Open Product", "open products, open products", "ओपन प्रोडक्ट", "उत्पाद खोलो"]) {
+      expect(spokenWorkflowPath(command)).toBe("/products");
+    }
+    expect(spokenWorkflowPath("कृपया रिपोर्ट खोलें")).toBe("/reports");
+    for (const command of ["products", "reports", "don't open products", "open products and change rice price", "open https://evil.example", "add product rice", "बिलिंग मत खोलो"]) {
+      expect(spokenWorkflowPath(command)).toBeNull();
+    }
+    vi.mocked(loadAuthSession).mockReturnValue({ user: { role: "viewer" } } as ReturnType<typeof loadAuthSession>);
+    expect(spokenWorkflowPath("open billing")).toBeNull();
+    expect(spokenWorkflowPath("open reports")).toBe("/reports");
+    vi.mocked(loadAuthSession).mockReturnValue({});
+    expect(spokenWorkflowPath("open products")).toBeNull();
   });
   it("only resolves reviewed IDs and respects current role permissions", () => {
     expect(workflowPath("expenses")).toBe("/expenses");

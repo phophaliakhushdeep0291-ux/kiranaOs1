@@ -11,7 +11,7 @@ import { useAssistantLanguage } from "./use-assistant-language";
 import { matchingSpeechVoice } from "./assistant-language";
 import { planDecision } from "./task-commands";
 import { useAssistantConversation, useConversationField } from "./use-assistant-conversation";
-import { workflowPath } from "./workflow-handoff";
+import { spokenWorkflowPath, workflowPath } from "./workflow-handoff";
 import { useAssistantCapabilities } from "./use-assistant-capabilities";
 import {
   sendAgentMessage,
@@ -225,7 +225,9 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
     let cancellingPrevious = !!pending?.planId;
 
     try {
-      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      const localPath = spokenWorkflowPath(question);
+      // An outstanding proposal must be cancelled online before navigating.
+      if (typeof navigator !== "undefined" && navigator.onLine === false && (!localPath || pending?.planId)) {
         setError(t("assistant.offline"));
         return;
       }
@@ -237,6 +239,12 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
         cancellingPrevious = false;
       }
       if (!mounted.current || !isCurrent()) return;
+      if (localPath) {
+        setMessages(current => [...current, { role: "assistant", content: t("assistant.openingWorkflow") }]);
+        navigate(localPath);
+        onClose();
+        return;
+      }
       request.current = new AbortController();
       const turn = await sendAgentMessage(question, history, { language: assistantLanguage, cart, signal: request.current.signal });
       if (!mounted.current || !isCurrent()) return;
@@ -268,7 +276,7 @@ export function AssistantPanel({ open, onClose, initialMessage = "", cart, onApp
       asking.current = false;
       setBusy(false);
     }
-  }, [messages, pending, planState.status, applyPlan, decline, speak, t, language, assistantLanguage, cart, isCurrent, setDraft, setPlanState, setMessages, setPending]);
+  }, [messages, pending, planState.status, applyPlan, decline, speak, t, language, assistantLanguage, cart, isCurrent, setDraft, setPlanState, setMessages, setPending, navigate, onClose]);
 
   useEffect(() => {
     if (initialMessage && !initialSent.current) {
