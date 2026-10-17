@@ -6,6 +6,11 @@
 import type { assistantEn } from "./assistant";
 
 export const assistantHi: Record<keyof typeof assistantEn, string> = {
+  "assistant.microphoneInput": "माइक्रोफ़ोन",
+  "assistant.microphoneDefault": "सिस्टम का चुना हुआ माइक्रोफ़ोन",
+  "assistant.microphoneDisconnected": "सहेजा हुआ माइक्रोफ़ोन (उपलब्ध नहीं)",
+  "assistant.microphoneRecording": "रिकॉर्डिंग: {name} · {seconds} सेकंड",
+  "assistant.microphoneHelp": "बोलते समय स्तर बढ़ना चाहिए। खाली रहे तो रोककर दूसरा माइक्रोफ़ोन चुनें।",
   "assistant.planExpired": "इस प्लान की समय सीमा खत्म हो गई। दोबारा पूछकर वर्तमान जानकारी जाँचें।",
   "assistant.stepCompleted": "पूरा हुआ",
   "assistant.stepPrepared": "इस डिवाइस के लिए तैयार",

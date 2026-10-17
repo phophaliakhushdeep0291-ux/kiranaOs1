@@ -6,9 +6,22 @@ import {
   parseLocalVoiceIntent,
   parseProductDraft,
   parseQuantityUnit,
+  parseSpokenNavigation,
 } from "@/features/core/voice/voice-command-parser";
 
 describe("voice command parser", () => {
+  it.each([
+    ["ओपन बिलेंग ओपन बिलेंग", "/billing"],
+    ["बिलिंग खोलो", "/billing"],
+    ["ओपन प्रोडक्ट", "/products"],
+    ["open products, open products", "/products"],
+    ["कृपया रिपोर्ट खोलें", "/reports"],
+  ])("handles transcribed navigation: %s", (speech, route) => {
+    expect(parseLocalVoiceIntent(speech)).toMatchObject({ action: "navigate", route });
+  });
+  it.each(["बिलिंग मत खोलो", "don't open billing", "open products and billing", "add product rice price 50", "बिल 500 बनाओ", "ओपन बिलिंग नहीं", "show report of unpaid bills"])("does not classify %s as an exact navigation phrase", speech => {
+    expect(parseSpokenNavigation(speech)).toBeNull();
+  });
   it("parses product drafts from local voice commands", () => {
     const draft = parseProductDraft("add product chini cost 40 selling 45 stock 10 kg alias sugar cheeni");
 

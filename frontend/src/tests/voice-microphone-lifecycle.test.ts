@@ -7,6 +7,13 @@ import { abortableFetch } from "@/lib/native/abortable-fetch";
 describe("microphone startup and cancellation", () => {
   beforeEach(() => vi.stubGlobal("window", { isSecureContext: true }));
   afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+  it("requests exactly the chosen input instead of silently recording a different device", async () => {
+    const stream = { getTracks: () => [] };
+    const getUserMedia = vi.fn().mockResolvedValue(stream);
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    expect(await requestMicrophone(undefined, "built-in-microphone")).toBe(stream);
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: { deviceId: { exact: "built-in-microphone" } } });
+  });
   it("times out an ignored permission prompt and releases a late grant", async () => {
     vi.useFakeTimers();
     let grant!: (stream: MediaStream) => void;

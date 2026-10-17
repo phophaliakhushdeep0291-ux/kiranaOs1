@@ -76,6 +76,19 @@ without a functioning provider. Product/customer dictation uses the same fallbac
 Permission errors remain visible and recordings stop after 15 seconds. Closing a
 voice panel cancels its recording/upload; a late permission grant releases its mic.
 
+Version 1.0.3 adds an app-specific microphone selector and a live input meter to
+both assistant panels. The selected device is requested explicitly; a disconnected
+selection produces a retry message rather than silently choosing another mic.
+The meter uses the recording stream and is closed with it. Measured digital
+silence is rejected before upload, and punctuation-only transcripts are rejected
+by both the client and server. Short, quiet or unmeasurable recordings still reach
+the provider. Exact English/Hindi navigation phrases, including the observed
+“ओपन बिलेंग” transcription, can open their page without a model request.
+
+For a live check, choose the built-in microphone, press Speak and verify that the
+input meter moves while talking. Stop, review the captured text, then press Run
+in the floating assistant. A typed command that opens a page is not speech proof.
+
 Microphone and camera permissions are declared for Android/iOS/macOS. Android
 backup is disabled so OS backup does not copy shop sessions/device identity to a
 second installation. Desktop has sandboxed renderers, no Node/preload bridge,
