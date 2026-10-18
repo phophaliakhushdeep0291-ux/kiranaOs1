@@ -182,7 +182,6 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
  console.log(JSON.stringify({passed:true,denied,recorded,requests,health,offlineShell:true,firstTapRecords:true,transcriptVisible:true,chatMicReachableInMobileLayout:true,chatVoiceNavigated:true,pendingPlanNavigationGuard:true,agentRequests,rejectRequests,uploads,uploadedAudio,errors}));
  console.log('Evidence:', proof);
  clearTimeout(timeout);
- window.destroy();
  uploadServer.close();
  app.exit(0);
 })().catch(error=>{clearTimeout(timeout);console.error(error);uploadServer.close();app.exit(1)});

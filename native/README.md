@@ -89,7 +89,9 @@ Version 1.0.4 also handles explicit English/Hindi page-opening commands in the
 chat assistant locally after transcription, using the reviewed workflow/role
 checks. It cancels any outstanding proposal before navigating, and stays put if
 cancellation fails. Bare nouns, negations and compound requests continue through
-the conversational path. Voice transcription itself still needs the server.
+the conversational path. The optional cloud command interpreter and its response
+normalizers load only when needed; local commands remain available offline. Voice
+transcription itself still needs the server.
 
 For a live check, choose the built-in microphone, press Speak and verify that the
 input meter moves while talking. Stop, review the captured text, then press Run

@@ -18,10 +18,9 @@ import { useToast } from "@/hooks/use-toast";
 import { openAssistantCommand } from "@/features/core/assistant/task-commands";
 import { executeVoiceAction } from "./voice-actions";
 import { parseLocalVoiceIntent, parseSpokenNavigation } from "./voice-command-parser";
-import { askAiIntent } from "./voice-ai-client";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { createOneShotRecognition, getSpeechRecognitionConstructor, shouldAcceptFinalTranscript, speechRecognitionLocale, voiceTranscriptKey } from "./voice-recognition";
-import type { SpeechRecognitionLike, VoiceToastPayload } from "./voice-types";
+import type { SpeechRecognitionLike, VoiceIntent, VoiceToastPayload } from "./voice-types";
 import { AssistantLanguageSelect } from "@/features/core/assistant/AssistantLanguageSelect";
 import { useAssistantLanguage } from "@/features/core/assistant/use-assistant-language";
 import { backendTranscriptionErrorMessage, startBackendTranscription, type BackendTranscriptionSession } from "./backend-transcription";
@@ -373,7 +372,15 @@ export function VoiceAssistant() {
       return;
     }
     const preferLocalContext = location.startsWith("/products") && local.action === "product_draft";
-    const aiIntent = preferLocalContext || parseSpokenNavigation(spoken) || ["search", "sync_count"].includes(local.action) ? null : await askAiIntent(spoken, location);
+    let aiIntent: VoiceIntent | null = null;
+    if (navigator.onLine !== false && !preferLocalContext && !parseSpokenNavigation(spoken) && !["search", "sync_count"].includes(local.action)) {
+      // Cloud interpretation is optional. Keep it out of the offline install,
+      // and retain the local command if loading it or contacting AI fails.
+      try {
+        const { askAiIntent } = await import("./voice-ai-client");
+        aiIntent = await askAiIntent(spoken, location);
+      } catch { /* The local parser remains available. */ }
+    }
     const intent = aiIntent && aiIntent.action !== "noop" ? aiIntent : local;
 
     await executeVoiceAction({
