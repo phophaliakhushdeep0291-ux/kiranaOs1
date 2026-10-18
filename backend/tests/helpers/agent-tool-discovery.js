@@ -4,7 +4,7 @@ import { DISCOVERY_TOOL } from "../../src/modules/ai/agent/tool-discovery.js";
 // Scripted providers still exercise their original business calls and security
 // assertions, but first answer a real schema-discovery request when offered.
 export function discoverScriptedTools(body, names) {
-  if (body.tool_choice?.function?.name !== DISCOVERY_TOOL) return null;
+  if (body.tool_choice !== "required" || !body.tools?.some(tool => tool.function.name === DISCOVERY_TOOL)) return null;
   const selected = [...new Set(names)];
   const allowed = body.tools.find(tool => tool.function.name === DISCOVERY_TOOL).function.parameters.properties.names.items.enum;
   assert.ok(selected.length > 0 && selected.length <= 4);

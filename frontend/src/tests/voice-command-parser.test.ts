@@ -1,6 +1,6 @@
+import { normalizeAiIntent } from "@/features/core/voice/voice-intent-normalizer";
 import { describe, expect, it } from "vitest";
 import {
-  normalizeAiIntent,
   parseCustomerDraft,
   parseInventoryDraft,
   parseLocalVoiceIntent,

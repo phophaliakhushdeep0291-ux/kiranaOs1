@@ -28,6 +28,7 @@ export const assistantHi: Record<keyof typeof assistantEn, string> = {
   "assistant.transcribingAny": "आपकी आवाज़ लिखी जा रही है…",
   "assistant.example.tasks": "आप क्या कर सकते हैं?",
   "assistant.tradeChanged": "दुकान का प्रकार बदल गया है। इस योजना का कोई काम नहीं हुआ। मौजूदा दुकान के प्रकार के लिए नई योजना माँगें।",
+  "assistant.openingWorkflow": "पेज खोल रहे हैं।",
   "assistant.openWorkflow": "{name} खोलें",
   "assistant.timeout": "सहायक को जवाब देने में ज़्यादा समय लगा। फिर से कोशिश करें।",
   "assistant.itemsUnresolved": "इन आइटम को जोड़ने से पहले प्रोडक्ट का नाम, मात्रा या पैक साइज़ जांचें:",

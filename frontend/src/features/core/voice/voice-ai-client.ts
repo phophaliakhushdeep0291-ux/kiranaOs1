@@ -1,5 +1,5 @@
 import { requestAiAppCommand } from "@/lib/ai/ai-client";
-import { normalizeAiIntent } from "./voice-command-parser";
+import { normalizeAiIntent } from "./voice-intent-normalizer";
 import type { VoiceIntent } from "./voice-types";
 
 // The AI enhancement is optional: a missing backend AI provider key (backend 503), an

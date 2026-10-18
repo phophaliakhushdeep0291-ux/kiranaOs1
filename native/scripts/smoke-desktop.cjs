@@ -9,8 +9,9 @@ const proof = fs.mkdtempSync(path.join(os.tmpdir(), 'kirana-desktop-proof-'));
 app.setPath('userData', path.join(proof, 'profile'));
 app.commandLine.appendSwitch('use-fake-device-for-media-stream');
 let allow = false, requests = 0;
-let fixture = false, uploads = 0;
+let fixture = false, uploads = 0, agentRequests = 0;
 let uploadedAudio = null;
+let proposalFixture = false, rejectFails = true, rejectRequests = 0;
 // Receive the actual Electron HTTP upload, then use the production parser.
 // Only the speech provider's answer is a fixture; capture, transport and parsing
 // must work together. This service has no shop database or production writes.
@@ -51,12 +52,25 @@ net.fetch = async (input, options) => {
       if (!headers.get('content-type')?.includes('multipart/form-data; boundary=')) throw new Error('Audio upload lost its boundary');
       return fetchNetwork(await uploadReady, options);
     }
+    if (String(input).includes('/ai/agent/chat')) {
+      agentRequests++;
+      if (proposalFixture) return Response.json({ success:true, data: {
+        turnId:'fixture-turn',planId:'fixture-plan',reply:'Review the test product.',
+        plan:[{ref:'1',tool:'create_product',risk:'confirm',summary:'Create fixture product'}],
+        requiresConfirmation:true,requiresOwnerPin:false,trace:[],stoppedBecause:'completed',
+        provider:{name:'fixture',model:'fixture',toolsOffered:1}
+      } });
+    }
+    if (String(input).includes('/ai/agent/reject')) {
+      rejectRequests++;
+      if (!rejectFails) return Response.json({ success:true, data:{status:'rejected'} });
+    }
     return Response.json({message:'Isolated fixture'}, {status:503});
   }
   return fetchNetwork(input, options);
 };
 let stage = "boot";
-setTimeout(() => {console.error("Timeout at",stage,"permission requests",requests); app.exit(1)}, 60000);
+const timeout = setTimeout(() => {console.error("Timeout at",stage,"permission requests",requests); app.exit(1)}, 60000);
 dialog.showMessageBox = async () => { requests++; console.log("permission decision",allow); return { response: allow ? 0 : 1 }; };
 systemPreferences.askForMediaAccess = async () => true;
 const { ready } = require('../desktop/main.cjs');
@@ -94,7 +108,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
  window.webContents.session.disableNetworkEmulation();
  const until = async expression => {
    for (let n=0;n<100;n++) { if(await window.webContents.executeJavaScript(expression)) return; await sleep(100); }
-   throw new Error('UI timed out: '+expression+'\n'+await window.webContents.executeJavaScript('document.body.innerText'));
+   throw new Error('UI timed out: '+expression+'\n'+await window.webContents.executeJavaScript('JSON.stringify({url:location.href,dialogs:[...document.querySelectorAll(\'[role="dialog"][aria-label="Assistant"]\')].map(e=>e.outerHTML.slice(0,350)),text:document.body.innerText})'));
  };
  const click = async expression => {
    const point = await window.webContents.executeJavaScript(`(()=>{const element=${expression};const rect=element.getBoundingClientRect();const point={x:Math.round(rect.x+rect.width/2),y:Math.round(rect.y+rect.height/2)};const hit=document.elementFromPoint(point.x,point.y);if(!element.contains(hit)) throw new Error('Button is covered by '+hit?.closest('button')?.outerHTML);return point})()`);
@@ -123,18 +137,51 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
  window.setContentSize(430, 850);
  await paint();
  await click(`document.querySelector('[data-assistant-launcher="true"]')`);
- await until(`Boolean(document.querySelector('[role="dialog"] button[aria-label="Speak"]'))`);
+ await until(`Boolean(document.querySelector('[role="dialog"][aria-label="Assistant"] button[aria-label="Speak"]'))`);
  await paint();
- await click(`document.querySelector('[role="dialog"] button[aria-label="Speak"]')`);
- await until(`Boolean(document.querySelector('[role="dialog"] button[aria-label="Listening… tap to stop"]'))`);
+ await click(`document.querySelector('[role="dialog"][aria-label="Assistant"] button[aria-label="Speak"]')`);
+ await until(`Boolean(document.querySelector('[role="dialog"][aria-label="Assistant"] button[aria-label="Listening… tap to stop"]'))`);
  await paint();
  fs.writeFileSync(path.join(proof,'mobile-layout-recording.png'),(await window.webContents.capturePage()).toPNG());
- await click(`document.querySelector('[role="dialog"] button[aria-label="Close"]')`);
- await until(`!document.querySelector('[role="dialog"]')`);
+ await click(`document.querySelector('[role="dialog"][aria-label="Assistant"] button[aria-label="Close"]')`);
+ await until(`!document.querySelector('[role="dialog"][aria-label="Assistant"]')`);
  if (uploads !== 1) throw new Error('Closing the chat microphone must cancel its upload');
- fs.writeFileSync(path.join(proof, 'result.json'), JSON.stringify({boot,denied,recorded,requests,health,storage,offline,microphoneFeedback,firstTapRecords:true,transcriptVisible:true,chatMicReachableInMobileLayout:true,uploads,uploadedAudio,errors},null,2));
- console.log(JSON.stringify({passed:true,denied,recorded,requests,health,offlineShell:true,firstTapRecords:true,transcriptVisible:true,chatMicReachableInMobileLayout:true,uploads,uploadedAudio,errors}));
+ // Complete the chat microphone path too. The provider is deliberately down:
+ // a clear page command must navigate after transcription without a model call.
+ stage='chat voice navigation';
+ await click(`document.querySelector('[data-assistant-launcher="true"]')`);
+ await until(`Boolean(document.querySelector('[role="dialog"][aria-label="Assistant"] button[aria-label="Speak"]'))`);
+ await click(`document.querySelector('[role="dialog"][aria-label="Assistant"] button[aria-label="Speak"]')`);
+ await until(`Boolean(document.querySelector('[role="dialog"][aria-label="Assistant"] [data-microphone-feedback="true"] meter')?.value > 0)`);
+ await click(`document.querySelector('[role="dialog"][aria-label="Assistant"] button[aria-label="Listening… tap to stop"]')`);
+ await until(`location.pathname === '/products' && !document.querySelector('[role="dialog"][aria-label="Assistant"]')`);
+ if (uploads !== 2 || agentRequests !== 0) throw new Error('Chat navigation incorrectly depended on the AI provider');
+ await paint();
+ fs.writeFileSync(path.join(proof,'chat-voice-products.png'),(await window.webContents.capturePage()).toPNG());
+ // A page command must not abandon a still-confirmable proposal. Exercise
+ // failed cancellation and successful cancellation through the actual panel.
+ stage='proposal navigation guard';
+ proposalFixture = true;
+ await click(`document.querySelector('[data-assistant-launcher="true"]')`);
+ await until(`Boolean(document.querySelector('[role="dialog"][aria-label="Assistant"] form input'))`);
+ const sendText = async text => {
+   await window.webContents.executeJavaScript(`(()=>{const input=document.querySelector('[role="dialog"][aria-label="Assistant"] form input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(text)});input.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+   await until(`!document.querySelector('[role="dialog"][aria-label="Assistant"] button[type="submit"]').disabled`);
+   await click(`document.querySelector('[role="dialog"][aria-label="Assistant"] button[type="submit"]')`);
+ };
+ await sendText('prepare a test product');
+ await until(`document.body.innerText.includes('Waiting for your confirmation')`);
+ await sendText('open billing');
+ await until(`document.body.innerText.includes('Cancellation could not be confirmed')`);
+ if (await window.webContents.executeJavaScript(`location.pathname !== '/products' || !document.body.innerText.includes('Waiting for your confirmation')`)) throw new Error('Navigation abandoned a pending proposal');
+ rejectFails = false;
+ await sendText('open billing');
+ await until(`location.pathname === '/billing' && !document.querySelector('[role="dialog"][aria-label="Assistant"]')`);
+ if (agentRequests !== 1 || rejectRequests !== 2) throw new Error('Navigation must cancel the old plan, not submit another AI request');
+ fs.writeFileSync(path.join(proof, 'result.json'), JSON.stringify({boot,denied,recorded,requests,health,storage,offline,microphoneFeedback,firstTapRecords:true,transcriptVisible:true,chatMicReachableInMobileLayout:true,chatVoiceNavigated:true,pendingPlanNavigationGuard:true,agentRequests,rejectRequests,uploads,uploadedAudio,errors},null,2));
+ console.log(JSON.stringify({passed:true,denied,recorded,requests,health,offlineShell:true,firstTapRecords:true,transcriptVisible:true,chatMicReachableInMobileLayout:true,chatVoiceNavigated:true,pendingPlanNavigationGuard:true,agentRequests,rejectRequests,uploads,uploadedAudio,errors}));
  console.log('Evidence:', proof);
+ clearTimeout(timeout);
  uploadServer.close();
  app.exit(0);
-})().catch(error=>{console.error(error);app.exit(1)});
+})().catch(error=>{clearTimeout(timeout);console.error(error);uploadServer.close();app.exit(1)});
