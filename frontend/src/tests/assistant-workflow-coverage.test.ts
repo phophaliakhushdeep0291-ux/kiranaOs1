@@ -62,6 +62,7 @@ describe("assistant workflow coverage", () => {
       expect(spokenWorkflowPath(command)).toBe("/products");
     }
     expect(spokenWorkflowPath("कृपया रिपोर्ट खोलें")).toBe("/reports");
+    expect(spokenWorkflowPath("ओपन डेश्बूर्ड")).toBe("/dashboard");
     for (const command of ["products", "reports", "don't open products", "open products and change rice price", "open https://evil.example", "add product rice", "बिलिंग मत खोलो"]) {
       expect(spokenWorkflowPath(command)).toBeNull();
     }

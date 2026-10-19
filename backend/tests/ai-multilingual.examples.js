@@ -66,7 +66,19 @@ for (const language of ["en", "en-AE", "hi", "hi-IN"]) {
 }
 const detected = await localizeReply(render, { ...options, language: "auto", message: "et maintenant?", history: [{ role: "user", content: "Réponds en français" }], candidates: [fake(payload => ({ language: "fr", translations: payload.templates.map(text => `Traduction : ${text}`) }))] });
 assert.equal(detected.localization.language, "fr");
-assert.deepEqual(captured.untrustedLanguageSample, ["Réponds en français", "et maintenant?"]);
+assert.equal(captured.currentLanguageSample, "et maintenant?");
+assert.deepEqual(captured.recentLanguageSamples, ["Réponds en français"]);
+
+const voiceLanguage = await localizeReply(render, { ...options, language: "auto", message: "ओपन डेश्बूर्ड", history: [
+  { role: "user", content: "Óvöld brödd." }, { role: "user", content: "Open product" },
+], candidates: [fake(payload => ({ language: payload.recentLanguageSamples.some(text => text.includes("Óvöld")) ? "is" : "hi", translations: [] }))] });
+assert.equal(voiceLanguage.localization.language, "hi", "a fresh Devanagari command cannot inherit a garbled Icelandic sample");
+assert.equal(captured.currentLanguageSample, "ओपन डेश्बूर्ड");
+assert.deepEqual(captured.recentLanguageSamples, []);
+for (const [message, earlier, language] of [["हो", "मराठीत उत्तर द्या", "mr"], ["نعم", "أجب بالعربية", "ar"], ["はい", "日本語で答えて", "ja"]]) {
+  await localizeReply(render, { ...options, language: "auto", message, history: [{ role: "user", content: earlier }], candidates: [fake(payload => ({ language, translations: payload.templates }))] });
+  assert.deepEqual(captured.recentLanguageSamples, [earlier], "same-script language context remains available without assuming Hindi");
+}
 
 registerTools("core", [...CONVERSATION_TOOLS,
   defineTool({ name: "get_sales_summary", description: "Read scoped sales summary for this shop", kind: "read", risk: TOOL_RISK.SAFE, keywords: ["sales"], handler: async () => ({ totalSalesPaise: 15000 }) }),
