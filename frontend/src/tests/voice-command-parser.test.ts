@@ -16,10 +16,14 @@ describe("voice command parser", () => {
     ["ओपन प्रोडक्ट", "/products"],
     ["open products, open products", "/products"],
     ["कृपया रिपोर्ट खोलें", "/reports"],
+    ["ओपन डेश्बूर्ड", "/dashboard"],
+    ["ओपन डैशबोर्ड", "/dashboard"],
+    ["डेशबोर्ड खोलो", "/dashboard"],
+    ["open dash board", "/dashboard"],
   ])("handles transcribed navigation: %s", (speech, route) => {
     expect(parseLocalVoiceIntent(speech)).toMatchObject({ action: "navigate", route });
   });
-  it.each(["बिलिंग मत खोलो", "don't open billing", "open products and billing", "add product rice price 50", "बिल 500 बनाओ", "ओपन बिलिंग नहीं", "show report of unpaid bills"])("does not classify %s as an exact navigation phrase", speech => {
+  it.each(["बिलिंग मत खोलो", "don't open billing", "open products and billing", "add product rice price 50", "बिल 500 बनाओ", "ओपन बिलिंग नहीं", "show report of unpaid bills", "डेश्बूर्ड मत खोलो", "ओपन डेश्बूर्ड और बिलिंग"])("does not classify %s as an exact navigation phrase", speech => {
     expect(parseSpokenNavigation(speech)).toBeNull();
   });
   it("parses product drafts from local voice commands", () => {

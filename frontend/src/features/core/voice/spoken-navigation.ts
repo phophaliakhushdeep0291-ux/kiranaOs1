@@ -8,7 +8,7 @@ export function parseSpokenNavigation(command: string): VoiceIntent | null {
   const aliases: [string, string, string][] = [
     ["/billing", "Billing", "billing|bill|बिलिंग|बिलेंग|बिल"],
     ["/products", "Products", "products?|प्रोडक्ट्स?|प्रोडक्ट|उत्पाद"],
-    ["/dashboard", "Dashboard", "dashboard|home|डैशबोर्ड|होम"],
+    ["/dashboard", "Dashboard", "dash ?board|home|ड[ैे]श्?ब[ोू]र्ड|होम"],
     ["/inventory", "Inventory", "inventory|stock|इन्वेंटरी|स्टॉक"],
     ["/customers", "Customers", "customers?|कस्टमर्स?|ग्राहक"],
     ["/reports", "Reports", "reports?|रिपोर्ट्स?|रिपोर्ट"],

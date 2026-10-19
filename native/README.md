@@ -127,3 +127,5 @@ OS. Customer rollout also needs signing and printer/scanner/device testing.
 
 The desktop smoke also checks chat voice navigation with the AI endpoint down,
 and failed/successful cancellation of an outstanding fixture proposal before navigation.
+
+Version 1.0.5 recognizes the observed Hindi dashboard transcript “ओपन डेश्बूर्ड” locally, without an AI round trip. Automatic response localization prioritizes the current message and filters unrelated earlier script samples. Choose the intended microphone explicitly in the assistant; the choice is saved on the device.
