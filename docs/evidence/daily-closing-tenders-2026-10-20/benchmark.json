@@ -1,0 +1,52 @@
+{
+  "measuredOn": "2026-10-20",
+  "baselineRevision": "47fb424",
+  "optimizedImplementationRevision": "df279dd",
+  "runtime": {
+    "database": "SQLite",
+    "node": "26.1.0",
+    "prisma": "5.14.0",
+    "concurrency": 1
+  },
+  "fixture": {
+    "shops": 1,
+    "primaryLocations": 1,
+    "rentalBookings": 5000,
+    "furnitureOrders": 5000,
+    "financialLedgerEvents": 10000,
+    "cashPaisePerEvent": 10001,
+    "activeSourcesPerTrade": 5,
+    "reportDate": "2026-10-01",
+    "activeEventTimestamp": "2026-10-01T10:00:00.000Z",
+    "historicalEventTimestamp": "2025-01-01T00:00:00.000Z",
+    "retailBills": 0,
+    "otherCashAdjustments": 0,
+    "expectedCashPaise": 100010
+  },
+  "method": {
+    "timedOperation": "getDailyClosing(shopId, { date, locationId })",
+    "totalCalls": 35,
+    "discardedWarmups": 5,
+    "measuredCalls": 30,
+    "medianSortedIndex": 14,
+    "p95SortedIndex": 28,
+    "sourceRows": "Returned RentalBooking/FurnitureOrder findMany rows, counted by Prisma middleware",
+    "outputComparison": "Exact deep equality excluding generatedAt and fixture-specific location identity",
+    "harnessRetained": false
+  },
+  "baseline": {
+    "medianMs": 20.844041999999945,
+    "p95Ms": 22.964082999999846,
+    "sourceRowsPerReport": 10000
+  },
+  "optimized": {
+    "medianMs": 4.773791000000074,
+    "p95Ms": 5.366790999999921,
+    "sourceRowsPerReport": 10
+  },
+  "limitations": [
+    "Local serial SQLite measurement of a fixture dominated by historical trade records.",
+    "Not production, PostgreSQL, HTTP, browser, or high-concurrency latency.",
+    "Recorded evidence; the one-off profiling harness was removed."
+  ]
+}
