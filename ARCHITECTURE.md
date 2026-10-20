@@ -267,6 +267,11 @@ practice — a double holds 2-decimal rupee values far past any shop's turnover 
 but a raw `SUM()` in SQL bypasses the helpers, and no audit-grade claim survives
 it. Finishing that migration is a known, deliberate piece of open work.
 
+Rental and furniture tender reporting sums the journal's existing integer
+`amountPaise` values before converting to rupees. The
+[daily-closing tender guide](docs/DAILY_CLOSING_TENDERS.md) covers those readers,
+their location and date rules, transaction behavior, tests, and performance evidence.
+
 ### 3. Packaging: one product, several sizes
 
 A product sells in several packagings (`ProductSellingUnit`) under one of two
